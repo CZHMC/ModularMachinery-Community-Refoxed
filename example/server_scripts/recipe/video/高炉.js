@@ -1,9 +1,8 @@
 ServerEvents.recipes(event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'kuebjs:hello_world',
+        machine: 'kubejs:hello_world',
         tick_time: 100,
-        parallelized: true,
         requirements: [
             {
                 type: 'minecraft:item',
