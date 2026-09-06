@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.recipe;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -236,16 +235,11 @@ public final class FactoryRecipeThread extends RecipeThread {
             lastRecipeModifierVersion = snapshot.modifierVersion();
             lastRecipeComponentStateVersion = snapshot.stateVersion();
             lastRecipeCatalogVersion = RecipeRegistry.catalog(recipe.machineId()).version();
-            MMCR.LOG.info("[last-recipe-debug] recipe cached: lane={} recipe={} parallelism={}",
-                    laneId, recipe.id(), runtime.parallelism());
         }
     }
     @Override
     protected void onFinished() {
         idleTicks = 0;
-        MMCR.LOG.info("[last-recipe-debug] recipe finished: gameTime={} lane={} recipe={} cachedVersions=[{},{},{},{}]",
-                currentSearchGameTime, laneId, lastRecipe == null ? null : lastRecipe.id(), lastRecipeStructureVersion,
-                lastRecipeCapabilityVersion, lastRecipeModifierVersion, lastRecipeComponentStateVersion);
         if (lastRecipe != null && lastRecipeCatalogVersion != Long.MIN_VALUE) {
             MachineRecipeCatalog catalog = RecipeRegistry.catalog(lastRecipe.machineId());
             MachineRecipe current = catalog.recipes().stream()
@@ -351,20 +345,10 @@ public final class FactoryRecipeThread extends RecipeThread {
                 && lastRecipeComponentStateVersion == componentStateVersion
                 && candidatesFor(candidates, catalogVersion).contains(retryRecipe);
         if (!canRestart) {
-            if (retryRecipe != null) {
-                MMCR.LOG.info("[last-recipe-debug] restart skipped: gameTime={} lane={} recipe={} locked={} parallelism={} "
-                                + "versions=[{}/{}, {}/{}, {}/{}, {}/{}] candidate={}",
-                        currentSearchGameTime, laneId, retryRecipe.id(), lockedRecipeId, availableParallelism,
-                        lastRecipeStructureVersion, structureVersion, lastRecipeCapabilityVersion, capabilityVersion,
-                        lastRecipeModifierVersion, modifierVersion, lastRecipeComponentStateVersion, componentStateVersion,
-                        candidatesFor(candidates, catalogVersion).contains(retryRecipe));
-            }
             return false;
         }
         failureCandidates = List.of(retryRecipe);
         boolean started = startRecipe(retryRecipe, availableParallelism, structureVersion, context);
-        MMCR.LOG.info("[last-recipe-debug] restart attempted: gameTime={} lane={} recipe={} started={} failure={}",
-                currentSearchGameTime, laneId, retryRecipe.id(), started, runtime.failure());
         return started;
     }
 
