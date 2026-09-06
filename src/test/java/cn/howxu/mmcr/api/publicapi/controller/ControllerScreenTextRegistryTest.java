@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.Proxy;
 import java.util.ArrayList;
@@ -159,6 +160,18 @@ class ControllerScreenTextRegistryTest {
     }
 
     @Test
+    void controllerTextHandlersDoNotApplyToAnUnformedStructure() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MACHINE_ID);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        ControllerScreenTextRegistry.register(MACHINE_ID, context -> context.screenText().append(
+                ControllerScreenTextScope.CONTROLLER, Identifier.parse("example:controller"), Component.literal("controller")));
+
+        applyControllerScreenText(controller);
+
+        assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+    }
+
+    @Test
     void startupRegistrationWorksBeforeServerExists() {
         assertThat(ServerLifecycleHooks.getCurrentServer()).isNull();
         List<String> calls = new ArrayList<>();
@@ -204,6 +217,12 @@ class ControllerScreenTextRegistryTest {
         Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
         field.setAccessible(true);
         return (MachineControllerRuntime) field.get(controller);
+    }
+
+    private static void applyControllerScreenText(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("applyControllerScreenText");
+        method.setAccessible(true);
+        method.invoke(controller);
     }
 
     private static Throwable attempt(Runnable action) {

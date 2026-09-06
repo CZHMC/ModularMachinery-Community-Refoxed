@@ -532,14 +532,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot current = runtimeSnapshot().structure();
         runtime.publishStructureState(isStructureAreaLoaded(current), f, current.configuredMachine(), current.matchedStage());
         if (f) registerFormedController();
-        else unregisterFormedController();
+        else {
+            unregisterFormedController();
+            runtime.clearAllText();
+        }
         if (before == f) {
             publishRuntimeState();
+            if (!f) syncOpenControllerScreenText();
             return;
         }
         updatePhysicalFormedState(f);
         if (f) notifyPreviewReceiversStructureFormed();
         publishRuntimeState();
+        if (!f) syncOpenControllerScreenText();
     }
 
     public void handleStructureChunkChanged(ServerLevel changedLevel, BlockPos controllerPos) {
@@ -1233,7 +1238,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void applyControllerScreenText() {
-        if (currentRuntimeSnapshot().structure().configuredMachine() != null) {
+        if (currentRuntimeSnapshot().structure().formed()) {
             ControllerScreenTextRegistry.apply(runtime.runtimeContext());
             runtime.screenText().flushReplacements();
         }

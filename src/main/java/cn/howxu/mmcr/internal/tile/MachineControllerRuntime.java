@@ -201,6 +201,7 @@ public final class MachineControllerRuntime {
             state.clear(ControllerScreenTextScope.CONTROLLER);
             state.clear(ControllerScreenTextScope.OPERATION);
         });
+        jadeText.clear();
     }
 
     ControllerRuntimeSnapshot currentSnapshot() {
