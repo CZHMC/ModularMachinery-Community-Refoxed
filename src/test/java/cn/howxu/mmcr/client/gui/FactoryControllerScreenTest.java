@@ -187,6 +187,11 @@ class FactoryControllerScreenTest {
     }
 
     @Test
+    void factory_detail_rows_include_the_screen_offset_before_scaling() {
+        assertThat(FactoryControllerScreen.detailTextY(19, 22)).isEqualTo(48);
+    }
+
+    @Test
     void factory_detail_rows_keep_uniform_spacing_in_scaled_pose() {
         int statusY = 100;
         int firstDetailY = FactoryControllerScreen.detailLineY(statusY, 22, 32);

@@ -1,11 +1,12 @@
 package cn.howxu.mmcr.config;
 
+import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class Config {
     public static final ModConfigSpec SPEC;
     public static final int DEFAULT_MACHINE_CHECK_INTERVAL_TICKS = 40;
-    public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = 131072;
+    public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = MultiblockAssemblyService.MAX_BLOCKS_PER_OPERATION;
     public static final int DEFAULT_BUILD_BLOCKS_PER_TICK = 256;
     public static final int DEFAULT_BUILD_TASK_TIMEOUT_TICKS = 20 * 60;
     public static final int DEFAULT_STRUCTURE_SCAN_BATCHES = 10;

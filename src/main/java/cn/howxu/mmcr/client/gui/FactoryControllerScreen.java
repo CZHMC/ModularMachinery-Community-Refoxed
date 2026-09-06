@@ -205,6 +205,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static int detailTitleY(int y) { return y; }
     static int nextDetailY(int y) { return y + DETAIL_LINE_SPACING; }
     static int detailTextY(int localY) { return (int) (localY / DETAIL_TEXT_SCALE); }
+    static int detailTextY(int screenTop, int localY) { return detailTextY(screenTop + localY); }
     static int detailLineY(int statusY, int statusLocalY, int localY) {
         return statusY + localY - statusLocalY;
     }
@@ -286,7 +287,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         int last = lastVisibleTextLineExclusive();
         for (int index = first; index < last; index++) {
             ControllerScreenTextComposer.VisualLine line = lines.get(index);
-            int textY = detailTextY(textLineY(visibleTextRow(index)));
+            int textY = detailTextY(topPos, textLineY(visibleTextRow(index)));
             graphics.text(font, line.text(), x, textY, line.color(), true);
         }
         graphics.pose().popMatrix();

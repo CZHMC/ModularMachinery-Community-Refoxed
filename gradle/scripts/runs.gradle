@@ -8,6 +8,7 @@ runs {
 
     client {
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        arguments.addAll('--username', "howxu")
     }
 
     server {

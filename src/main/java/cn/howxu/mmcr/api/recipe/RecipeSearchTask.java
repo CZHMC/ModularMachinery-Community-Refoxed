@@ -23,6 +23,7 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class RecipeSearchTask {
+    static final int LEVEL_FAILURE_PRIORITY = 2;
     private final ControllerRuntimeSnapshot snapshot;
     private final Identifier machineId;
     private final long structureVersion;
@@ -58,6 +59,7 @@ public final class RecipeSearchTask {
         @Nullable String bestFailureUnloc = null;
         @Nullable ExecutionStatus bestFailure = null;
         @Nullable PlanningResult bestPlanningResult = null;
+        @Nullable LevelInsufficientFailure bestLevelFailure = null;
         float bestValidity = 0.0F;
         List<MachineRecipe> ordered = searchCandidates();
 
@@ -67,32 +69,42 @@ public final class RecipeSearchTask {
                 ExecutionStatus moduleFailure = new ExecutionStatus(MMCR.id("crafting_runtime"),
                         StatusSeverity.BLOCKED, MMCR.id("crafting_runtime"), Map.of("reason", "module_connection"));
                 float validity = validity(moduleFailure);
-                if (validity > bestValidity) {
+                if (preferFailure(moduleFailure, validity, bestFailure, bestValidity)) {
                     bestValidity = validity;
                     bestFailure = moduleFailure;
                     bestFailureUnloc = failureUnloc(moduleFailure);
                 }
                 continue;
             }
-            LevelInsufficientFailure levelFailure = levelFailure(recipe);
-            if (levelFailure != null) {
-                return RecipeSearchResult.levelFailure(machineId, structureVersion,
-                        snapshot.capabilityVersion(), snapshot.modifierVersion(), levelFailure);
-            }
             PlanningResult result = planStart(recipe);
-            if (result.successful()) {
+            if (!result.successful()) {
+                float validity = validity(result.failure());
+                if (preferFailure(result.failure(), validity, bestFailure, bestValidity)) {
+                    bestValidity = validity;
+                    bestFailure = result.failure();
+                    bestFailureUnloc = failureUnloc(result.failure());
+                    bestPlanningResult = result;
+                }
+                continue;
+            }
+            LevelInsufficientFailure levelFailure = levelFailure(recipe);
+            if (levelFailure == null) {
                 boolean conflictProne = lockedRecipeId == null
                         && hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
                 return RecipeSearchResult.success(recipe, machineId, structureVersion,
                         snapshot.capabilityVersion(), snapshot.modifierVersion(), result, conflictProne);
             }
-            float validity = validity(result.failure());
-            if (validity > bestValidity) {
-                bestValidity = validity;
-                bestFailure = result.failure();
-                bestFailureUnloc = failureUnloc(result.failure());
-                bestPlanningResult = result;
-            }
+            if (bestLevelFailure == null) bestLevelFailure = levelFailure;
+        }
+        if (bestLevelFailure != null && (bestFailure == null
+                || LEVEL_FAILURE_PRIORITY < failurePriority(bestFailure))) {
+            return RecipeSearchResult.levelFailure(machineId, structureVersion,
+                    snapshot.capabilityVersion(), snapshot.modifierVersion(), bestLevelFailure);
+        }
+        if (bestFailure != null) {
+            return RecipeSearchResult.failure(machineId, structureVersion,
+                    snapshot.capabilityVersion(), snapshot.modifierVersion(), bestPlanningResult,
+                    bestFailureUnloc, bestFailure, bestValidity);
         }
         return RecipeSearchResult.failure(machineId, structureVersion,
                 snapshot.capabilityVersion(), snapshot.modifierVersion(), bestPlanningResult,
@@ -168,6 +180,24 @@ public final class RecipeSearchTask {
     private static float validity(@Nullable ExecutionStatus failure) {
         if (failure == null) return 0.0F;
         return failure.severity() == cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED ? 0.5F : 0.1F;
+    }
+
+    static int failurePriority(@Nullable ExecutionStatus failure) {
+        if (failure == null) return Integer.MAX_VALUE;
+        return switch (failure.details().getOrDefault("reason", "")) {
+            case "insufficient_energy" -> 0;
+            case "insufficient_resource" -> 1;
+            default -> 3;
+        };
+    }
+
+    private static boolean preferFailure(@Nullable ExecutionStatus candidate, float candidateValidity,
+                                         @Nullable ExecutionStatus current, float currentValidity) {
+        if (current == null) return true;
+        int candidatePriority = failurePriority(candidate);
+        int currentPriority = failurePriority(current);
+        return candidatePriority < currentPriority
+                || candidatePriority == currentPriority && candidateValidity > currentValidity;
     }
 
     private static @Nullable String failureUnloc(@Nullable ExecutionStatus failure) {

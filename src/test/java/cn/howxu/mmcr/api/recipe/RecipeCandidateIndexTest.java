@@ -1,8 +1,15 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import com.mojang.serialization.Lifecycle;
@@ -13,6 +20,7 @@ import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -22,6 +30,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.crafting.ICustomIngredient;
 import org.junit.jupiter.api.BeforeAll;
@@ -36,11 +45,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RecipeCandidateIndexTest {
 
     private static final Identifier MACHINE = Identifier.fromNamespaceAndPath("test", "machine");
+    private static final Identifier LEVEL_TYPE = Identifier.fromNamespaceAndPath("test", "recipe_search_level_type");
+    private static final Identifier LEVEL = Identifier.fromNamespaceAndPath("test", "recipe_search_level");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         bindComponents(Items.IRON_INGOT, Items.GOLD_INGOT, Items.DIAMOND);
+        TestBootstrap.registerType(new LevelType(LEVEL_TYPE, Component.literal("Recipe Search Level")));
+        TestBootstrap.registerLevel(new MachineLevel(LEVEL, LEVEL_TYPE, 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
     }
 
     @Test
@@ -203,6 +218,35 @@ class RecipeCandidateIndexTest {
         assertThat(locked.recipe()).isEqualTo(moreInputs);
     }
 
+    @Test
+    void search_failure_priority_prefers_energy_then_missing_inputs_then_levels() {
+        ExecutionStatus missingInput = failure("insufficient_resource");
+        ExecutionStatus missingEnergy = failure("insufficient_energy");
+        ExecutionStatus missingOutput = failure("no_output_capacity");
+
+        assertThat(RecipeSearchTask.failurePriority(missingEnergy))
+                .isLessThan(RecipeSearchTask.failurePriority(missingInput));
+        assertThat(RecipeSearchTask.failurePriority(missingInput))
+                .isLessThan(RecipeSearchTask.LEVEL_FAILURE_PRIORITY);
+        assertThat(RecipeSearchTask.LEVEL_FAILURE_PRIORITY)
+                .isLessThan(RecipeSearchTask.failurePriority(missingOutput));
+    }
+
+    @Test
+    void search_prefers_energy_over_missing_input_and_level_requirements() {
+        MachineRecipe levelLimited = RecipeTestSupport.create(id("level_limited"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)), false, java.util.Set.of());
+        MachineRecipe energyLimited = RecipeTestSupport.create(id("energy_limited"), MACHINE, 20,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)), List.of(), List.of(), 0, 1);
+        MachineRecipe inputLimited = itemRecipe("input_limited", Ingredient.of(Items.IRON_INGOT));
+
+        RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
+                List.of(levelLimited, energyLimited, inputLimited), null, List.of(), List.of()).compute();
+
+        assertThat(result.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_energy");
+    }
+
     private static ControllerRuntimeSnapshot emptySnapshot() {
         return new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 0L, 0L, 0L,
                 java.util.Map.of(), java.util.Map.of(), java.util.Set.of(),
@@ -237,6 +281,11 @@ class RecipeCandidateIndexTest {
 
     private static Identifier id(String path) {
         return Identifier.fromNamespaceAndPath("test", path);
+    }
+
+    private static ExecutionStatus failure(String reason) {
+        return new ExecutionStatus(MMCR.id("recipe_search_test"), StatusSeverity.BLOCKED,
+                MMCR.id("recipe_search_test"), Map.of("reason", reason));
     }
 
     private static void bindComponents(Item... items) {
