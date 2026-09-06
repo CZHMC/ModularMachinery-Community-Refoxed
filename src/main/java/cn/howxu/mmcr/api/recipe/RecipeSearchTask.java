@@ -78,7 +78,7 @@ public final class RecipeSearchTask {
             }
             PlanningResult result = planStart(recipe);
             if (!result.successful()) {
-                float validity = validity(result.failure());
+                float validity = validity(result);
                 if (preferFailure(result.failure(), validity, bestFailure, bestValidity)) {
                     bestValidity = validity;
                     bestFailure = result.failure();
@@ -182,11 +182,17 @@ public final class RecipeSearchTask {
         return failure.severity() == cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED ? 0.5F : 0.1F;
     }
 
+    private static float validity(PlanningResult result) {
+        if (result == null) return 0.0F;
+        int completedRequirements = result.failureRequirementIndex() == null ? 0 : result.failureRequirementIndex();
+        return completedRequirements + validity(result.failure());
+    }
+
     static int failurePriority(@Nullable ExecutionStatus failure) {
         if (failure == null) return Integer.MAX_VALUE;
         return switch (failure.details().getOrDefault("reason", "")) {
-            case "insufficient_energy" -> 0;
-            case "insufficient_resource" -> 1;
+            case "insufficient_resource" -> 0;
+            case "insufficient_energy" -> 1;
             default -> 3;
         };
     }
@@ -196,8 +202,8 @@ public final class RecipeSearchTask {
         if (current == null) return true;
         int candidatePriority = failurePriority(candidate);
         int currentPriority = failurePriority(current);
-        return candidatePriority < currentPriority
-                || candidatePriority == currentPriority && candidateValidity > currentValidity;
+        return candidateValidity > currentValidity
+                || candidateValidity == currentValidity && candidatePriority < currentPriority;
     }
 
     private static @Nullable String failureUnloc(@Nullable ExecutionStatus failure) {

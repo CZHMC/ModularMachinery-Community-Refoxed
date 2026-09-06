@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
@@ -113,6 +114,11 @@ public final class FactoryRuntime {
                 try {
                     finishCallback.run();
                 } finally {
+                    if (lane.tryRestartLastRecipe(context, context.orderedCandidates(), perThreadParallelLimit,
+                            structureVersion, capabilityVersion, modifierVersion, componentStateVersion,
+                            recipeLocks.get(lane))) {
+                        markLaneStateChanged();
+                    }
                     markFinishedLaneReady(lane);
                 }
             });
@@ -137,8 +143,9 @@ public final class FactoryRuntime {
                 if (!lane.canSearch(gameTime, key)) continue;
                 lane.setSearchGameTime(gameTime);
                 lane.setSearchContextKey(key);
-                if (lane.tryRestartLastRecipe(context, available, perThreadParallelLimit, structureVersion,
-                        capabilityVersion, modifierVersion, componentStateVersion, lock)) {
+                boolean restarted = lane.tryRestartLastRecipe(context, available, perThreadParallelLimit, structureVersion,
+                        capabilityVersion, modifierVersion, componentStateVersion, lock);
+                if (restarted) {
                     reserveStart(lane, true, activeCounts);
                     readyThisTick.remove(lane);
                     continue;
@@ -766,6 +773,8 @@ public final class FactoryRuntime {
     }
 
     private void markFinishedLaneReady(FactoryRecipeThread lane) {
+        MMCR.LOG.info("[last-recipe-debug] lane finished: gameTime={} lane={} recipe={} readyBeforeTick={}",
+                lane.searchGameTime(), lane.laneId(), lane.lastRecipeId(), readyLanes.contains(lane));
         if (readyLanes.add(lane)) markLaneStateChanged();
     }
 

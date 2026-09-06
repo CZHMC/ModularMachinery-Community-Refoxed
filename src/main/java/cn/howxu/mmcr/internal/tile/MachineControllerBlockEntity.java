@@ -3502,8 +3502,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     boolean wasActive = runtime.craftingRuntime().active();
                     runtime.craftingRuntime().finish();
                     completeSharedRuntime(wasActive);
+                    // SharedIoCoordinator resolves starts submitted while committing finishes in this tick.
+                    if (wasActive && !runtime.craftingRuntime().active()
+                            && runtime.craftingRuntime().failure() == null) {
+                        tryStartNewRecipe();
+                    }
                     return true;
-                 },
+                  },
                  () -> validateSharedRuntime(token, domain),
                  () -> runtimeSnapshot().structure().version(),
                  () -> runtimeSnapshot().stateVersion(),

@@ -219,13 +219,13 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
-    void search_failure_priority_prefers_energy_then_missing_inputs_then_levels() {
+    void search_failure_priority_prefers_missing_inputs_then_energy_then_levels() {
         ExecutionStatus missingInput = failure("insufficient_resource");
         ExecutionStatus missingEnergy = failure("insufficient_energy");
         ExecutionStatus missingOutput = failure("no_output_capacity");
 
-        assertThat(RecipeSearchTask.failurePriority(missingEnergy))
-                .isLessThan(RecipeSearchTask.failurePriority(missingInput));
+        assertThat(RecipeSearchTask.failurePriority(missingInput))
+                .isLessThan(RecipeSearchTask.failurePriority(missingEnergy));
         assertThat(RecipeSearchTask.failurePriority(missingInput))
                 .isLessThan(RecipeSearchTask.LEVEL_FAILURE_PRIORITY);
         assertThat(RecipeSearchTask.LEVEL_FAILURE_PRIORITY)
@@ -233,7 +233,7 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
-    void search_prefers_energy_over_missing_input_and_level_requirements() {
+    void search_prefers_missing_input_over_energy_and_level_requirements() {
         MachineRecipe levelLimited = RecipeTestSupport.create(id("level_limited"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
                 List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)), false, java.util.Set.of());
@@ -244,7 +244,7 @@ class RecipeCandidateIndexTest {
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
                 List.of(levelLimited, energyLimited, inputLimited), null, List.of(), List.of()).compute();
 
-        assertThat(result.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_energy");
+        assertThat(result.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_input");
     }
 
     private static ControllerRuntimeSnapshot emptySnapshot() {

@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
@@ -173,7 +174,11 @@ public final class RequirementPlanner {
     }
 
     private static @org.jetbrains.annotations.Nullable ExecutionStatus failure(MachineRequirement requirement) {
-        return failure(requirement, null);
+        if (requirement == null) return null;
+        String reason = requirement.io() == RecipeModifier.IOType.OUTPUT
+                ? "no_output_capacity"
+                : requirement instanceof EnergyRequirement ? "insufficient_energy" : "insufficient_resource";
+        return failure(requirement, reason);
     }
 
     private static @org.jetbrains.annotations.Nullable ExecutionStatus failure(MachineRequirement requirement, String reason) {
