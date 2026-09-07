@@ -1358,6 +1358,33 @@ class MachineControllerBlockEntityTest {
                         assertThat(failure.portId()).isEqualTo("duplicate_item_input_bus"));
     }
 
+    @Test
+    void structure_validation_does_not_count_multiple_aliases_from_one_bidirectional_family_twice() {
+        BlockPos controllerPos = BlockPos.ZERO;
+        BlockPos portPos = controllerPos.offset(-1, 0, 0);
+        Identifier machineId = MMCR.id("single_family_bidirectional_count");
+        DynamicMachine machine = new DynamicMachine(machineId, "Single Family Bidirectional Count",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.builder()
+                        .min("item_input_bus", 1)
+                        .min("duplicate_item_input_bus", 1)
+                        .build());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        BidirectionalPort port = new BidirectionalPort(portPos,
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState(), singleFamilyBidirectionalKind());
+
+        AssertionError formationFailure = null;
+        try {
+            RuntimeTestFixtures.formStructureWithComponents(controller, machine, port);
+        } catch (AssertionError exception) {
+            formationFailure = exception;
+        }
+
+        assertThat(formationFailure).hasMessageContaining("Unable to form test structure");
+        assertThat(controller.structureSnapshot().formed()).isFalse();
+    }
+
     private static final class CombinedPort extends IOPortBlockEntity {
         private static final IOPortKind INPUT_KIND = combinedKind(IOType.INPUT, "combined_input_test");
         private static final IOPortKind OUTPUT_KIND = combinedKind(IOType.OUTPUT, "combined_output_test");
@@ -1390,9 +1417,15 @@ class MachineControllerBlockEntityTest {
 
     private static final class BidirectionalPort extends IOPortBlockEntity {
         private static final IOPortKind KIND = bidirectionalKind();
+        private final IOPortKind kind;
 
         private BidirectionalPort(BlockPos pos, BlockState state) {
+            this(pos, state, KIND);
+        }
+
+        private BidirectionalPort(BlockPos pos, BlockState state, IOPortKind kind) {
             super(ModBlockEntities.BES.get("item_input_bus").get(), pos, state);
+            this.kind = kind;
         }
 
         @Override
@@ -1402,7 +1435,7 @@ class MachineControllerBlockEntityTest {
 
         @Override
         public IOPortKind kind() {
-            return KIND;
+            return kind;
         }
 
         @Override
@@ -1434,6 +1467,40 @@ class MachineControllerBlockEntityTest {
             @Override
             public String id() {
                 return "bidirectional_count_test";
+            }
+
+            @Override
+            public IOType ioType() {
+                return IOType.INPUT;
+            }
+
+            @Override
+            public net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+                return BidirectionalPort::new;
+            }
+
+            @Override
+            public PortDefinition definition() {
+                return PortDefinition.of(MMCR.id(id()), binding);
+            }
+
+            @Override
+            public List<PortFamilyDescriptor> families() {
+                return families;
+            }
+        };
+    }
+
+    private static IOPortKind singleFamilyBidirectionalKind() {
+        List<PortFamilyDescriptor> families = List.of(
+                new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, 0,
+                        List.of("item_input_bus", "duplicate_item_input_bus")));
+        CapabilityBinding binding = new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE,
+                CapabilityDirections.bidirectional(), context -> null, PortTierPolicy.always());
+        return new IOPortKind() {
+            @Override
+            public String id() {
+                return "single_family_bidirectional_count_test";
             }
 
             @Override
