@@ -33,6 +33,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
@@ -448,10 +449,10 @@ class RequirementPlannerTest {
     }
 
     @Test
-    void bidirectional_item_capability_rolls_back_input_simulation_when_output_cannot_fit() {
-        BulkItemStorage storage = new BulkItemStorage(1, null);
+    void bidirectional_item_plan_rolls_back_when_runtime_output_operation_fails() {
+        BulkItemStorage storage = new BulkItemStorage(2, null);
         storage.insert(ironResource(), 1, false);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
+        StorageCapability capability = new FailingOutputStorageCapability(ItemRequirement.TYPE.id(),
                 CapabilityDirections.bidirectional(), IOType.INPUT, storage);
 
         var result = new RequirementPlanner().plan(
@@ -459,8 +460,66 @@ class RequirementPlannerTest {
                         new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2))),
                 List.of(capability), new PlanningContext(1, 0));
 
-        assertThat(result.successful()).isFalse();
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).allSatisfy(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(capability.resourceRequests()).extracting(CapabilityRequests.ResourceRequest::ioType)
+                .containsExactly(IOType.INPUT, IOType.OUTPUT);
+        assertThat(result.plan().commit()).isFalse();
         assertThat(storage.amount(0)).isEqualTo(1);
+    }
+
+    @Test
+    void bidirectional_fluid_capability_uses_input_requirement_direction() {
+        LongFluidStorage storage = new LongFluidStorage(2_000, null);
+        storage.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        StorageCapability capability = new StorageCapability(FluidRequirement.TYPE.id(),
+                CapabilityDirections.bidirectional(), IOType.OUTPUT, storage);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                        FluidStack.EMPTY)), List.of(capability), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(capability.resourceRequests()).singleElement()
+                .extracting(CapabilityRequests.ResourceRequest::ioType).isEqualTo(IOType.INPUT);
+    }
+
+    @Test
+    void bidirectional_energy_capability_uses_input_requirement_direction() {
+        LongValueStorage storage = new LongValueStorage(100, 100, null);
+        storage.setAmount(4);
+        StorageCapability capability = new StorageCapability(EnergyRequirement.TYPE.id(),
+                CapabilityDirections.bidirectional(), IOType.OUTPUT, storage);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
+                List.of(capability), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(((CapabilityRequests.ValueRequest) capability.requests().getFirst()).ioType()).isEqualTo(IOType.INPUT);
+    }
+
+    @Test
+    void bidirectional_smart_interface_capability_uses_output_requirement_direction() {
+        FloatValueStorage storage = new FloatValueStorage();
+        storage.set("temperature", 0F);
+        StorageCapability capability = new StorageCapability(SmartInterfaceRequirement.TYPE.id(),
+                CapabilityDirections.bidirectional(), IOType.INPUT, storage);
+
+        var result = new RequirementPlanner().plan(
+                List.of(SmartInterfaceRequirement.output("temperature", 1F)),
+                List.of(capability), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).isNotEmpty());
+        assertThat(((CapabilityRequests.SmartValueRequest) capability.requests().getFirst()).ioType())
+                .isEqualTo(IOType.OUTPUT);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.value("temperature")).contains(1F);
     }
 
     @Test
@@ -1702,6 +1761,7 @@ class RequirementPlannerTest {
         private int prepareCalls;
         private CapabilityRequests.ResourceRequest<?> lastResourceRequest;
         private final List<CapabilityRequests.ResourceRequest<?>> resourceRequests = new ArrayList<>();
+        private final List<CapabilityRequest> requests = new ArrayList<>();
 
         private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
             this(type, ioType, storage, List.of());
@@ -1773,6 +1833,7 @@ class RequirementPlannerTest {
         @Override
         public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
             prepareCalls++;
+            requests.add(request);
             if (request instanceof CapabilityRequests.SmartValueRequest smartRequest
                     && storage instanceof FloatValueStorage floatStorage) {
                 return transaction -> floatStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
@@ -1814,6 +1875,36 @@ class RequirementPlannerTest {
 
         private List<CapabilityRequests.ResourceRequest<?>> resourceRequests() {
             return resourceRequests;
+        }
+
+        private List<CapabilityRequest> requests() {
+            return requests;
+        }
+    }
+
+    private static final class FailingOutputStorageCapability extends StorageCapability {
+        private final BulkItemStorage storage;
+
+        private FailingOutputStorageCapability(Identifier type, CapabilityDirections directions,
+                                               IOType ioType, CapabilityStorage storage) {
+            super(type, directions, ioType, storage);
+            this.storage = (BulkItemStorage) storage;
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            CapabilityOperation operation = super.prepare(request);
+            if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)
+                    || resourceRequest.ioType() != IOType.OUTPUT) {
+                return operation;
+            }
+            return transaction -> {
+                assertThat(storage.amount(0)).isZero();
+                CapabilityResult outputResult = operation.commit(transaction);
+                if (!outputResult.success()) return outputResult;
+                return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.FAILURE, type().id(),
+                        Map.of("reason", "forced_output_failure")));
+            };
         }
     }
 
