@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.port;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityFactory;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -53,6 +54,15 @@ class PortDefinitionRegistryTest {
                 .containsExactly(binding);
         assertThat(PortDefinitionRegistry.resolve(id("single"), IOType.INPUT, 1)).isEmpty();
         assertThat(PortDefinitionRegistry.resolve(id("single"), IOType.OUTPUT, 2)).isEmpty();
+    }
+
+    @Test
+    void resolves_one_bidirectional_binding_for_both_directions() {
+        CapabilityBinding binding = binding("item", CapabilityDirections.bidirectional(), PortTierPolicy.always());
+        PortDefinitionRegistry.register(PortDefinition.of(id("both"), binding));
+
+        assertThat(PortDefinitionRegistry.resolve(id("both"), IOType.INPUT, 0)).containsExactly(binding);
+        assertThat(PortDefinitionRegistry.resolve(id("both"), IOType.OUTPUT, 0)).containsExactly(binding);
     }
 
     @Test
@@ -154,6 +164,10 @@ class PortDefinitionRegistryTest {
 
     private static CapabilityBinding binding(String path, IOType ioType, PortTierPolicy tierPolicy) {
         return new CapabilityBinding(new CapabilityType(MMCR.id(path)), ioType, FACTORY, tierPolicy);
+    }
+
+    private static CapabilityBinding binding(String path, CapabilityDirections directions, PortTierPolicy tierPolicy) {
+        return new CapabilityBinding(new CapabilityType(MMCR.id(path)), directions, FACTORY, tierPolicy);
     }
 
     private static PortTierPolicy tierAtLeast(int minimum) {

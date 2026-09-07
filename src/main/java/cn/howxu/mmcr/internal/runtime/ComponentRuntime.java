@@ -152,7 +152,7 @@ public final class ComponentRuntime {
             snapshots.add(new ControllerRuntimeSnapshot.ComponentPresentation(
                     component.getPos(),
                     machineComponent == null || machineComponent.kind() == null ? null : machineComponent.kind().id(),
-                    machineComponent == null ? null : machineComponent.ioType(),
+                    machineComponent == null || machineComponent.kind() == null ? null : machineComponent.kind().ioType(),
                     component.tags()));
         }
         cachedComponentPresentations = List.copyOf(snapshots);

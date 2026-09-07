@@ -396,7 +396,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     @Override
     public MachineComponent provideComponent() {
-        return new MachineComponent(kind(), ioType());
+        return new MachineComponent(kind(), cn.howxu.mmcr.api.capability.CapabilityDirections.of(ioType()));
     }
 
     @Override

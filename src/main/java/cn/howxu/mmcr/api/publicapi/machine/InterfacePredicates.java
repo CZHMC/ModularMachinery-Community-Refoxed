@@ -139,9 +139,9 @@ public final class InterfacePredicates {
     private static BlockPredicate anyOfPorts(Identifier familyId, IOType ioType) {
         List<BlockPredicate> predicates = new ArrayList<>();
         for (IOPortKind kind : PortKinds.all()) {
-            if (kind.ioType() != ioType) continue;
             boolean exposesFamily = kind.families().stream()
-                    .anyMatch(family -> family.familyId().equals(familyId) && family.ioType() == ioType);
+                    .anyMatch(family -> family.familyId().equals(familyId) && family.ioType() == ioType
+                            && kind.bindings().stream().anyMatch(family::matches));
             if (exposesFamily) predicates.add(port(kind.id()));
         }
         return BlockPredicate.anyOf(predicates);

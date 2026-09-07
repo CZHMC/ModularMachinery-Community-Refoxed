@@ -3,6 +3,9 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -108,6 +111,14 @@ class MachineStructureRequirementsTest {
                 .noneMatch(MachineStructureRequirementsTest::isPositionBoundRequirementMap);
         assertThat(publicConstructorSignatures(MachineStructureStage.class))
                 .noneMatch(MachineStructureRequirementsTest::isPositionBoundRequirementMap);
+    }
+
+    @Test
+    void bidirectional_machine_component_satisfies_input_and_output_direction_conditions() {
+        MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, CapabilityDirections.bidirectional());
+
+        assertThat(component.directions().supports(cn.howxu.mmcr.util.IOType.INPUT)).isTrue();
+        assertThat(component.directions().supports(cn.howxu.mmcr.util.IOType.OUTPUT)).isTrue();
     }
 
     private static SingleBlockModifierReplacement replacement(String name, BlockPredicate predicate) {

@@ -103,7 +103,7 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         }
 
         private boolean sameFamily(IOPortKind port) {
-            if (port.ioType() != ioType) return false;
+            if (port.bindings().stream().noneMatch(binding -> binding.directions().supports(ioType))) return false;
             return family(port).isPresent();
         }
 
