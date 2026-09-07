@@ -533,8 +533,8 @@ class ComponentRuntimeTest {
         }
 
         @Override
-        public IOType ioType() {
-            return IOType.INPUT;
+        public CapabilityDirections directions() {
+            return CapabilityDirections.input();
         }
 
         @Override

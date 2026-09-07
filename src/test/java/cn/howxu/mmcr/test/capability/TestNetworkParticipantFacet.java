@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.test.capability;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
@@ -31,8 +32,8 @@ public final class TestNetworkParticipantFacet implements MachineCapability, Net
         }
 
         @Override
-        public IOType ioType() {
-            return TestNetworkParticipantFacet.this.ioType();
+        public CapabilityDirections directions() {
+            return TestNetworkParticipantFacet.this.directions();
         }
 
         @Override
@@ -74,8 +75,8 @@ public final class TestNetworkParticipantFacet implements MachineCapability, Net
     }
 
     @Override
-    public IOType ioType() {
-        return IOType.INPUT;
+    public CapabilityDirections directions() {
+        return CapabilityDirections.input();
     }
 
     @Override

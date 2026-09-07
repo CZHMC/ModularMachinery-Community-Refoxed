@@ -109,10 +109,11 @@ class CapabilityContractTest {
     }
 
     @Test
-    void directionless_legacy_access_rejects_bidirectional_capabilities() {
+    void bidirectional_capabilities_expose_both_directions() {
         TestCapability capability = new TestCapability(CapabilityDirections.bidirectional());
 
-        assertThatThrownBy(capability::ioType).isInstanceOf(IllegalStateException.class);
+        assertThat(capability.directions().supports(IOType.INPUT)).isTrue();
+        assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
         assertThatThrownBy(() -> TransferContext.simulate(capability, Direction.NORTH, 1L))
                 .isInstanceOf(IllegalStateException.class);
     }

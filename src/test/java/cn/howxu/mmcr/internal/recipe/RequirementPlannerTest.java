@@ -308,7 +308,7 @@ class RequirementPlannerTest {
                                     new CapabilityRequests.ResourceAction<>(0, ironResource(),
                                             parallelism, false);
                             return new RequirementPlan.OperationPlan(List.of(capability.prepare(
-                                    new CapabilityRequests.ResourceRequest<>(capability.type(), capability.ioType(),
+                                    new CapabilityRequests.ResourceRequest<>(capability.type(), IOType.INPUT,
                                             parallelism, List.of(action)))), null);
                         },
                         (parallelism, reservations) -> reservations.reserveExtract(
@@ -1743,8 +1743,8 @@ class RequirementPlannerTest {
         }
 
         @Override
-        public IOType ioType() {
-            return ioType;
+        public CapabilityDirections directions() {
+            return CapabilityDirections.of(ioType);
         }
 
         @Override
@@ -1756,8 +1756,8 @@ class RequirementPlannerTest {
                 }
 
                 @Override
-                public IOType ioType() {
-                    return TestCapability.this.ioType;
+                public CapabilityDirections directions() {
+                    return TestCapability.this.directions();
                 }
 
                 @Override
@@ -1839,11 +1839,6 @@ class RequirementPlannerTest {
         }
 
         @Override
-        public IOType ioType() {
-            return ioType;
-        }
-
-        @Override
         public CapabilityDirections directions() {
             return directions;
         }
@@ -1854,11 +1849,6 @@ class RequirementPlannerTest {
                 @Override
                 public CapabilityType type() {
                     return StorageCapability.this.type;
-                }
-
-                @Override
-                public IOType ioType() {
-                    return StorageCapability.this.ioType;
                 }
 
                 @Override

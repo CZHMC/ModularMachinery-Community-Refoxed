@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -790,8 +791,8 @@ class MachineBehaviorRuntimeTest {
         }
 
         @Override
-        public IOType ioType() {
-            return IOType.INPUT;
+        public CapabilityDirections directions() {
+            return CapabilityDirections.input();
         }
 
         @Override
@@ -803,8 +804,8 @@ class MachineBehaviorRuntimeTest {
                 }
 
                 @Override
-                public IOType ioType() {
-                    return TickCapability.this.ioType();
+                public CapabilityDirections directions() {
+                    return TickCapability.this.directions();
                 }
 
                 @Override

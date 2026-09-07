@@ -225,11 +225,11 @@ class CapabilityTransferPolicyTest {
             private final CapabilityType capabilityType = new CapabilityType(MMCR.id("unknown"));
 
             @Override public CapabilityType type() { return capabilityType; }
-            @Override public IOType ioType() { return IOType.INPUT; }
+            @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
             @Override public cn.howxu.mmcr.api.capability.CapabilityView view() {
                 return new cn.howxu.mmcr.api.capability.CapabilityView() {
                     @Override public CapabilityType type() { return capabilityType; }
-                    @Override public IOType ioType() { return IOType.INPUT; }
+                    @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
                 };
             }
             @Override public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) { return null; }

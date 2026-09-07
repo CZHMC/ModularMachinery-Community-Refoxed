@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.test.capability;
 
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -30,8 +31,8 @@ public final class TestResourceFacet implements MachineCapability, ResourceFacet
         }
 
         @Override
-        public IOType ioType() {
-            return TestResourceFacet.this.ioType();
+        public CapabilityDirections directions() {
+            return TestResourceFacet.this.directions();
         }
 
         @Override
@@ -56,8 +57,8 @@ public final class TestResourceFacet implements MachineCapability, ResourceFacet
     }
 
     @Override
-    public IOType ioType() {
-        return IOType.INPUT;
+    public CapabilityDirections directions() {
+        return CapabilityDirections.input();
     }
 
     @Override

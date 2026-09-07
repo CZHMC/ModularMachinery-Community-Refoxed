@@ -35,8 +35,10 @@ public class ItemBusCapabilityGameTest {
         ItemBusBlockEntity inputBus = helper.getBlockEntity(inputPos, ItemBusBlockEntity.class);
         ItemBusBlockEntity outputBus = helper.getBlockEntity(outputPos, ItemBusBlockEntity.class);
 
-        helper.assertTrue(inputBus.ioType() == IOType.INPUT, "Input bus is INPUT");
-        helper.assertTrue(outputBus.ioType() == IOType.OUTPUT, "Output bus is OUTPUT");
+        var inputCapability = inputBus.capabilitySnapshot().capabilities().getFirst();
+        var outputCapability = outputBus.capabilitySnapshot().capabilities().getFirst();
+        helper.assertTrue(inputCapability.directions().supports(IOType.INPUT), "Input capability accepts INPUT");
+        helper.assertTrue(outputCapability.directions().supports(IOType.OUTPUT), "Output capability accepts OUTPUT");
 
         ResourceHandler<ItemResource> input = ModCapabilities.ITEM_BLOCK.getCapability(
                 helper.getLevel(), inputWorldPos, helper.getLevel().getBlockState(inputWorldPos), inputBe, Direction.UP);

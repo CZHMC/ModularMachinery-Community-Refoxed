@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -184,8 +185,8 @@ class CapabilityOperationTest {
         }
 
         @Override
-        public IOType ioType() {
-            return IOType.INPUT;
+        public CapabilityDirections directions() {
+            return CapabilityDirections.input();
         }
 
         @Override
@@ -197,8 +198,8 @@ class CapabilityOperationTest {
                 }
 
                 @Override
-                public IOType ioType() {
-                    return OpaqueCapability.this.ioType();
+                public CapabilityDirections directions() {
+                    return OpaqueCapability.this.directions();
                 }
             };
         }

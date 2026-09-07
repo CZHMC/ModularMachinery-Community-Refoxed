@@ -29,8 +29,10 @@ public class EnergyHatchCapabilityGameTest {
         EnergyHatchBlockEntity inputHatch = helper.getBlockEntity(inputPos, EnergyHatchBlockEntity.class);
         EnergyHatchBlockEntity outputHatch = helper.getBlockEntity(outputPos, EnergyHatchBlockEntity.class);
 
-        helper.assertTrue(inputHatch.ioType() == IOType.INPUT, "Input hatch is INPUT");
-        helper.assertTrue(outputHatch.ioType() == IOType.OUTPUT, "Output hatch is OUTPUT");
+        var inputCapability = inputHatch.capabilitySnapshot().capabilities().getFirst();
+        var outputCapability = outputHatch.capabilitySnapshot().capabilities().getFirst();
+        helper.assertTrue(inputCapability.directions().supports(IOType.INPUT), "Input capability accepts INPUT");
+        helper.assertTrue(outputCapability.directions().supports(IOType.OUTPUT), "Output capability accepts OUTPUT");
 
         EnergyHandler input = ModCapabilities.ENERGY_BLOCK.getCapability(
                 helper.getLevel(), inputWorldPos, helper.getLevel().getBlockState(inputWorldPos), inputBe, Direction.UP);

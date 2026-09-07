@@ -79,11 +79,11 @@ class CapabilitySyncRegistryTest {
         }
 
         @Override public CapabilityType type() { return new CapabilityType(Identifier.fromNamespaceAndPath("test", "scalar")); }
-        @Override public IOType ioType() { return IOType.INPUT; }
+        @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
         @Override public CapabilityView view() {
             return new CapabilityView() {
                 @Override public CapabilityType type() { return TestCapability.this.type(); }
-                @Override public IOType ioType() { return TestCapability.this.ioType(); }
+                @Override public CapabilityDirections directions() { return TestCapability.this.directions(); }
                 @Override public Set<Class<? extends CapabilityFacet>> facets() { return Set.of(SyncFacet.class); }
             };
         }

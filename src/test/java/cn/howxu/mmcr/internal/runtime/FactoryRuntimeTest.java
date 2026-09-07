@@ -37,6 +37,7 @@ import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -939,7 +940,7 @@ class FactoryRuntimeTest {
         input.linkControllerAppearance(controller.getBlockPos(), null);
         ItemBusCapability capability = (ItemBusCapability) input.capabilitySnapshot().capabilities().getFirst();
         CapabilityRequests.ResourceRequest<ItemResource> request = new CapabilityRequests.ResourceRequest<>(
-                capability.type(), capability.ioType(), 1,
+                capability.type(), IOType.INPUT, 1,
                 List.of(new CapabilityRequests.ResourceAction<>(0, ItemResource.of(Items.IRON_INGOT), 1, true)));
 
         LevelStub.setGameTime(controller.getLevel(), 20L);
@@ -960,7 +961,7 @@ class FactoryRuntimeTest {
         energy.linkControllerAppearance(controller.getBlockPos(), null);
         EnergyHatchCapability capability = (EnergyHatchCapability) energy.capabilitySnapshot().capabilities().getFirst();
         CapabilityRequests.ValueRequest request = new CapabilityRequests.ValueRequest(
-                capability.type(), capability.ioType(), 1, 10L, true);
+                capability.type(), IOType.INPUT, 1, 10L, true);
 
         LevelStub.setGameTime(controller.getLevel(), 20L);
         long initial = controller.resourceAvailabilityEpoch();
@@ -980,7 +981,7 @@ class FactoryRuntimeTest {
         input.linkControllerAppearance(controller.getBlockPos(), null);
         ItemBusCapability capability = (ItemBusCapability) input.capabilitySnapshot().capabilities().getFirst();
         CapabilityRequests.ResourceRequest<ItemResource> request = new CapabilityRequests.ResourceRequest<>(
-                capability.type(), capability.ioType(), 1,
+                capability.type(), IOType.INPUT, 1,
                 List.of(new CapabilityRequests.ResourceAction<>(0, ItemResource.of(Items.IRON_INGOT), 1, true)));
 
         LevelStub.setGameTime(controller.getLevel(), 20L);

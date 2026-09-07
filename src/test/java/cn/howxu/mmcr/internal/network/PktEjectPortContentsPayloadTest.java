@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -244,11 +245,11 @@ class PktEjectPortContentsPayloadTest {
             CapabilityType type = BuiltinCapabilityDefinitions.ITEM_TYPE;
             MachineCapability capability = new MachineCapability() {
                 @Override public CapabilityType type() { return type; }
-                @Override public IOType ioType() { return ioType; }
+                @Override public CapabilityDirections directions() { return CapabilityDirections.of(ioType); }
                 @Override public CapabilityView view() {
                     return new CapabilityView() {
                         @Override public CapabilityType type() { return type; }
-                        @Override public IOType ioType() { return ioType; }
+                        @Override public CapabilityDirections directions() { return CapabilityDirections.of(ioType); }
                     };
                 }
                 @Override public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {

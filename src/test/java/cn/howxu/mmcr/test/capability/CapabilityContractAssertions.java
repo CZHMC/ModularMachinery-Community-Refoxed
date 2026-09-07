@@ -46,7 +46,8 @@ public final class CapabilityContractAssertions {
 
     public static void assertRollsBack(TestScalarFacet facet) {
         try (Transaction transaction = Transaction.openRoot()) {
-            assertCommitted(facet.prepareScalar(request(facet.ioType(), 1L)).commit(transaction));
+            IOType direction = facet.directions().values().iterator().next();
+            assertCommitted(facet.prepareScalar(request(direction, 1L)).commit(transaction));
         }
         Assertions.assertThat(facet.amount()).isZero();
     }

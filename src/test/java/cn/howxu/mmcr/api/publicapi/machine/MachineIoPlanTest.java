@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
@@ -443,7 +444,7 @@ class MachineIoPlanTest {
         }
     }
 
-    private record TestCapability(Object value, IOType ioType, List<String> tags)
+    private record TestCapability(Object value, IOType direction, List<String> tags)
             implements MachineCapability, ValueFacet<CapabilityStorage> {
         private TestCapability {
             tags = List.copyOf(tags);
@@ -455,6 +456,11 @@ class MachineIoPlanTest {
         }
 
         @Override
+        public CapabilityDirections directions() {
+            return CapabilityDirections.of(direction);
+        }
+
+        @Override
         public CapabilityView view() {
             return new CapabilityView() {
                 @Override
@@ -463,8 +469,8 @@ class MachineIoPlanTest {
                 }
 
                 @Override
-                public IOType ioType() {
-                    return TestCapability.this.ioType();
+                public CapabilityDirections directions() {
+                    return TestCapability.this.directions();
                 }
 
                 @Override

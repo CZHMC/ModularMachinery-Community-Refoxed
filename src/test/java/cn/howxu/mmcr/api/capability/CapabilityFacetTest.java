@@ -43,7 +43,7 @@ class CapabilityFacetTest {
 
         assertThat(resource.resourceType()).isEqualTo(String.class);
         assertThat(resource.storage()).isSameAs(capability.resourceStorage);
-        CapabilityOperation operation = scalar.prepareScalar(new TestRequest(capability.type(), capability.ioType(), 1L));
+        CapabilityOperation operation = scalar.prepareScalar(new TestRequest(capability.type(), IOType.INPUT, 1L));
         assertThat(operation.commit(null)).isEqualTo(CapabilityResult.successful());
     }
 
@@ -72,8 +72,8 @@ class CapabilityFacetTest {
             }
 
             @Override
-            public IOType ioType() {
-                return TestCapability.this.ioType();
+            public CapabilityDirections directions() {
+                return TestCapability.this.directions();
             }
 
             @Override
@@ -88,8 +88,8 @@ class CapabilityFacetTest {
         }
 
         @Override
-        public IOType ioType() {
-            return IOType.INPUT;
+        public CapabilityDirections directions() {
+            return CapabilityDirections.input();
         }
 
         @Override

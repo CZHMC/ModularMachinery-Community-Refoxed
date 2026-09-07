@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.autoio;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -91,8 +92,8 @@ class TransferStrategyRegistryTest {
             }
 
             @Override
-            public IOType ioType() {
-                return IOType.INPUT;
+            public CapabilityDirections directions() {
+                return CapabilityDirections.input();
             }
 
             @Override
@@ -104,8 +105,8 @@ class TransferStrategyRegistryTest {
                     }
 
                     @Override
-                    public IOType ioType() {
-                        return IOType.INPUT;
+                    public CapabilityDirections directions() {
+                        return CapabilityDirections.input();
                     }
                 };
             }

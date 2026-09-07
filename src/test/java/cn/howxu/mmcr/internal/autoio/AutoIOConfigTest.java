@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.autoio;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
@@ -215,11 +216,11 @@ class AutoIOConfigTest {
         public CapabilitySnapshot capabilitySnapshot() {
             MachineCapability capability = new MachineCapability() {
                 @Override public CapabilityType type() { return TYPE; }
-                @Override public IOType ioType() { return IOType.INPUT; }
+                @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
                 @Override public CapabilityView view() {
                     return new CapabilityView() {
                         @Override public CapabilityType type() { return TYPE; }
-                        @Override public IOType ioType() { return IOType.INPUT; }
+                        @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
                     };
                 }
                 @Override public cn.howxu.mmcr.api.capability.plan.CapabilityOperation prepare(

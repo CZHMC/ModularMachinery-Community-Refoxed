@@ -232,8 +232,8 @@ class CombinedPortBlockEntityTest {
                 .extracting(CapabilityBinding::type)
                 .containsExactly(new CapabilityType(PortFamilyIds.ITEM), new CapabilityType(PortFamilyIds.FLUID));
         assertThat(bindings)
-                .extracting(CapabilityBinding::ioType)
-                .containsExactly(ioType, ioType);
+                .extracting(binding -> binding.directions().supports(ioType))
+                .containsExactly(true, true);
     }
 
     private static CombinedPortBlockEntity combined(String id) {

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.capability.tick;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -127,8 +128,8 @@ class CapabilityTickContractTest {
         }
 
         @Override
-        public IOType ioType() {
-            return IOType.INPUT;
+        public CapabilityDirections directions() {
+            return CapabilityDirections.input();
         }
 
         @Override
@@ -140,8 +141,8 @@ class CapabilityTickContractTest {
                 }
 
                 @Override
-                public IOType ioType() {
-                    return TickCapability.this.ioType();
+                public CapabilityDirections directions() {
+                    return TickCapability.this.directions();
                 }
 
                 @Override

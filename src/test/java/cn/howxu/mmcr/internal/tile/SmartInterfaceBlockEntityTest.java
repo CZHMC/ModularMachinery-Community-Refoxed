@@ -61,7 +61,7 @@ class SmartInterfaceBlockEntityTest {
         assertThat(restored.setValue("mode", Float.NaN)).isFalse();
 
         MachineCapability capability = restored.capabilitySnapshot().capabilities().stream()
-                .filter(candidate -> candidate.ioType() == IOType.OUTPUT)
+                .filter(candidate -> candidate.directions().supports(IOType.OUTPUT))
                 .findFirst().orElseThrow();
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(capability.prepare(new CapabilityRequests.SmartValueRequest(
@@ -107,7 +107,7 @@ class SmartInterfaceBlockEntityTest {
                 "temperature", new SmartInterfaceType("temperature", 20F, 0)
         ), false)).isTrue();
         MachineCapability output = owner.capabilitySnapshot().capabilities().stream()
-                .filter(capability -> capability.ioType() == IOType.OUTPUT)
+                .filter(capability -> capability.directions().supports(IOType.OUTPUT))
                 .findFirst().orElseThrow();
         var request = new CapabilityRequests.SmartValueRequest(
                 output.type(), IOType.OUTPUT, 1, "temperature", 80F);

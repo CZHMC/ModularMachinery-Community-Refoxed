@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.capability;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
@@ -143,19 +144,19 @@ class CapabilityHostTest {
         assertThat(item.storage()).isSameAs(host.itemStorage());
         assertThat(fluid.storage()).isSameAs(host.fluidStorage());
         assertThat(energy.storage()).isSameAs(host.getEnergyStorage());
-        assertThat(item.ioType()).isEqualTo(IOType.INPUT);
-        assertThat(fluid.ioType()).isEqualTo(IOType.INPUT);
-        assertThat(energy.ioType()).isEqualTo(IOType.INPUT);
+        assertThat(item.directions().supports(IOType.INPUT)).isTrue();
+        assertThat(fluid.directions().supports(IOType.INPUT)).isTrue();
+        assertThat(energy.directions().supports(IOType.INPUT)).isTrue();
     }
 
     private static CapabilityRequest request(MachineCapability capability) {
         if (capability.facet(ResourceFacet.class).isPresent()) {
-            return new CapabilityRequests.ResourceRequest<>(capability.type(), capability.ioType(), 1, List.of());
+            return new CapabilityRequests.ResourceRequest<>(capability.type(), IOType.INPUT, 1, List.of());
         }
         if (capability.facet(ValueFacet.class).map(ValueFacet::storage).filter(LongValueStorage.class::isInstance).isPresent()) {
-            return new CapabilityRequests.ValueRequest(capability.type(), capability.ioType(), 1, 1, false);
+            return new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT, 1, 1, false);
         }
-        return new TestRequest(capability.type(), capability.ioType(), 1);
+        return new TestRequest(capability.type(), IOType.INPUT, 1);
     }
 
     private static ItemResource ironResource() {
@@ -233,10 +234,14 @@ class CapabilityHostTest {
 
     private record TestCapability(String id) implements MachineCapability {
         @Override public CapabilityType type() { return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", id)); }
-        @Override public IOType ioType() { return IOType.INPUT; }
+        @Override public CapabilityDirections directions() {
+            return CapabilityDirections.input();
+        }
         @Override public cn.howxu.mmcr.api.capability.CapabilityView view() { return new cn.howxu.mmcr.api.capability.CapabilityView() {
             @Override public CapabilityType type() { return TestCapability.this.type(); }
-            @Override public IOType ioType() { return TestCapability.this.ioType(); }
+            @Override public CapabilityDirections directions() {
+                return TestCapability.this.directions();
+            }
         }; }
         @Override public CapabilityOperation prepare(CapabilityRequest request) {
             return transaction -> CapabilityResult.successful();

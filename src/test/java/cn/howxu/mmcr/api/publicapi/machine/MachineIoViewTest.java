@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
@@ -82,14 +83,14 @@ class MachineIoViewTest {
         TestCapability(String id, Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet> facet) {
             this(new CapabilityType(cn.howxu.mmcr.MMCR.id(id)), new CapabilityView() {
                 @Override public CapabilityType type() { return new CapabilityType(cn.howxu.mmcr.MMCR.id(id)); }
-                @Override public IOType ioType() { return IOType.INPUT; }
+                @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
                 @Override public Set<Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet>> facets() {
                     return Set.of(facet);
                 }
             });
         }
 
-        @Override public IOType ioType() { return view.ioType(); }
+        @Override public CapabilityDirections directions() { return view.directions(); }
         @Override public CapabilityOperation prepare(CapabilityRequest request) { throw new UnsupportedOperationException(); }
     }
 }
