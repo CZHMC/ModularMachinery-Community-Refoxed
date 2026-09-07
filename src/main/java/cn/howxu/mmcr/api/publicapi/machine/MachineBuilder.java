@@ -4,6 +4,11 @@ import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
+import cn.howxu.mmcr.api.publicapi.network.MachineReference;
+import cn.howxu.mmcr.api.publicapi.network.RequestBody;
+import cn.howxu.mmcr.api.publicapi.network.RequestInfo;
+import java.util.Map;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashSet;
@@ -35,7 +40,7 @@ public final class MachineBuilder {
     private boolean allowModifiers;
     private boolean allowMultithreading;
     private int maxParallelAmount = 1;
-    private final java.util.Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
+    private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
     private boolean shareSmartInterfaces;
     private final List<SmartInterfaceModifier> smartInterfaceModifiers = new ArrayList<>();
     private Identifier runningSoundId;
@@ -43,8 +48,8 @@ public final class MachineBuilder {
     private MachineBehavior behavior = RecipeBehavior.defaults();
     private MachineBehavior.MachineCallback preServerTick;
     private MachineBehavior.MachineCallback postServerTick;
-    private final java.util.Map<Identifier, RequestProcess> requestProcessors = new LinkedHashMap<>();
-    private final java.util.Map<Identifier, RequestFailed> requestFailures = new LinkedHashMap<>();
+    private final Map<Identifier, RequestProcess> requestProcessors = new LinkedHashMap<>();
+    private final Map<Identifier, RequestFailed> requestFailures = new LinkedHashMap<>();
 
     private MachineBuilder(Identifier id) {
         this.id = Objects.requireNonNull(id, "id");
@@ -203,11 +208,11 @@ public final class MachineBuilder {
     public MachineBuilder requestProcess(Identifier requestId, cn.howxu.mmcr.api.publicapi.network.RequestProcess process) {
         Objects.requireNonNull(process, "process");
         return requestProcessInternal(requestId, (RequestProcess) (body, request, senderStorage, receiverStorage) -> process.process(
-                cn.howxu.mmcr.api.publicapi.network.RequestBody.fromInternal(body),
-                new cn.howxu.mmcr.api.publicapi.network.RequestInfo(request.requestId(),
-                        cn.howxu.mmcr.api.publicapi.network.MachineReference.fromInternal(request.peer())),
-                senderStorage == null ? null : cn.howxu.mmcr.api.publicapi.data.DataStorage.view(senderStorage),
-                receiverStorage == null ? null : cn.howxu.mmcr.api.publicapi.data.DataStorage.view(receiverStorage)));
+                RequestBody.fromInternal(body),
+                new RequestInfo(request.requestId(),
+                        MachineReference.fromInternal(request.peer())),
+                senderStorage == null ? null : DataStorage.view(senderStorage),
+                receiverStorage == null ? null : DataStorage.view(receiverStorage)));
     }
 
     public MachineBuilder requestFailed(Identifier requestId, RequestFailed failure) {

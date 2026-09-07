@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.compat.kubejs.Plugin;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
@@ -14,6 +15,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
@@ -184,7 +186,7 @@ public final class StartupContentRegistration {
         }
     }
 
-    public static void registerKubeJSStartupMachine(cn.howxu.mmcr.api.publicapi.machine.MachineDefinition definition) {
+    public static void registerKubeJSStartupMachine(MachineDefinition definition) {
         ContentRegistrationCoordinator.collectMachine(definition);
         registerDynamicControllers(Set.of(definition.id()));
     }
@@ -270,7 +272,7 @@ public final class StartupContentRegistration {
         }
     }
 
-    private static void registerDynamicControllers(Set<net.minecraft.resources.Identifier> machineIds) {
+    private static void registerDynamicControllers(Set<Identifier> machineIds) {
         ModBlocks.registerMachineControllers(machineIds);
         ModBlockEntities.registerMachineControllers(machineIds);
         ModItems.registerMachineControllerItems(machineIds);

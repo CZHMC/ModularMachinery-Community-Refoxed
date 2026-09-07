@@ -179,7 +179,7 @@ public final class RecipeSearchTask {
 
     private static float validity(@Nullable ExecutionStatus failure) {
         if (failure == null) return 0.0F;
-        return failure.severity() == cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED ? 0.5F : 0.1F;
+        return failure.severity() == StatusSeverity.BLOCKED ? 0.5F : 0.1F;
     }
 
     private static float validity(PlanningResult result) {

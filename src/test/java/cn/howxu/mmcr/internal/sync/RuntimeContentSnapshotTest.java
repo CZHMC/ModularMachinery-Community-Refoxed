@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.sync;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.controller.ControllerSpecCache;
+import cn.howxu.mmcr.client.model.MachineAppearanceCache;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -27,6 +29,9 @@ import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.RegistryAccess;
@@ -45,6 +50,7 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,7 +91,7 @@ class RuntimeContentSnapshotTest {
                 .forEach(holder -> Registry.register(enchantments,
                         holder.key().identifier(), holder.value()));
         enchantments.freeze();
-        List<Registry<?>> activeRegistries = new java.util.ArrayList<>();
+        List<Registry<?>> activeRegistries = new ArrayList<>();
         RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY).registries()
                 .forEach(entry -> activeRegistries.add(entry.value()));
         activeRegistries.add(enchantments);
@@ -404,8 +410,8 @@ class RuntimeContentSnapshotTest {
 
         assertThat(MachineStructureRegistry.effectiveSnapshot()).containsKey(machineId);
         assertThat(RecipeRegistry.effectiveSnapshot()).isEmpty();
-        assertThat(cn.howxu.mmcr.client.controller.ControllerSpecCache.snapshot()).isEmpty();
-        assertThat(cn.howxu.mmcr.client.model.MachineAppearanceCache.snapshot()).isEmpty();
+        assertThat(ControllerSpecCache.snapshot()).isEmpty();
+        assertThat(MachineAppearanceCache.snapshot()).isEmpty();
     }
 
     @Test
@@ -427,7 +433,7 @@ class RuntimeContentSnapshotTest {
                 MMCR.id("oversized_fluid_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 10_000_001))));
+                        new FluidStack(Fluids.WATER, 10_000_001))));
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 
         assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
@@ -471,7 +477,7 @@ class RuntimeContentSnapshotTest {
 
         assertThatThrownBy(() -> writeLevels.invoke(null, buf,
                 Collections.nCopies(1025, new LevelRequirement(MMCR.id("level_type"), MMCR.id("level")))))
-                .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+                .isInstanceOf(InvocationTargetException.class)
                 .hasCauseInstanceOf(IllegalArgumentException.class)
                 .hasRootCauseMessage("Invalid level requirement count: 1025");
     }
@@ -585,7 +591,7 @@ class RuntimeContentSnapshotTest {
     private static Set<Identifier> hostIds(int count) {
         return IntStream.range(0, count)
                 .mapToObj(index -> MMCR.id("host_" + index))
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private static String classBytes(Class<?> type) throws IOException {

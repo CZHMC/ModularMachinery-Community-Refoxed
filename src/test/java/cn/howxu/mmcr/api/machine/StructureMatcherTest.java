@@ -4,6 +4,7 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
@@ -89,7 +90,7 @@ class StructureMatcherTest {
         BlockArray pattern = new BlockArray(Map.of(position, new BlockPredicate.OfBlockState(expected)));
 
         assertThat(StructureMatcher.matchesRotated(pattern,
-                cn.howxu.mmcr.LevelStub.createStates(Map.of(position, actual)), BlockPos.ZERO)).isFalse();
+                LevelStub.createStates(Map.of(position, actual)), BlockPos.ZERO)).isFalse();
     }
 
     @Test
@@ -100,7 +101,7 @@ class StructureMatcherTest {
         BlockState actual = Blocks.DISPENSER.defaultBlockState()
                 .setValue(DirectionalBlock.FACING, Direction.SOUTH);
         BlockArray pattern = new BlockArray(Map.of(position, new BlockPredicate.OfBlockState(expected)));
-        Level level = cn.howxu.mmcr.LevelStub.createStates(Map.of(position, actual));
+        Level level = LevelStub.createStates(Map.of(position, actual));
 
         assertThat(StructureMatcher.matchesRotated(pattern, level, BlockPos.ZERO, Map.of(), false)).isTrue();
         assertThat(StructureMatcher.matchesRotated(pattern, level, BlockPos.ZERO, Map.of(), true)).isFalse();
@@ -333,7 +334,7 @@ class StructureMatcherTest {
         }
         BlockArray pattern = new BlockArray(entries);
         Map<BlockPos, Block> blocks = entries.keySet().stream()
-                .collect(java.util.stream.Collectors.toMap(pos -> pos, pos -> Blocks.STONE));
+                .collect(Collectors.toMap(pos -> pos, pos -> Blocks.STONE));
         Level level = LevelStub.create(blocks);
         StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,
                 StructureMatcher.ScanOptions.of(5, false, 0));
@@ -424,7 +425,7 @@ class StructureMatcherTest {
             entries.put(new BlockPos(index, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE));
         }
         Level level = LevelStub.create(entries.keySet().stream()
-                .collect(java.util.stream.Collectors.toMap(pos -> pos, pos -> Blocks.STONE)));
+                .collect(Collectors.toMap(pos -> pos, pos -> Blocks.STONE)));
         StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(entries), Map.of(), true,
                 StructureMatcher.ScanOptions.of(5, true, 2));
 

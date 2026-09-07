@@ -162,7 +162,7 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
 
             width = sliceWidth;
             height = rows.length;
-            java.util.List<List<String>> built = new java.util.ArrayList<>(this.slices.size() + 1);
+            List<List<String>> built = new ArrayList<>(this.slices.size() + 1);
             built.addAll(this.slices);
             built.add(List.of(rows));
             this.slices = List.copyOf(built);

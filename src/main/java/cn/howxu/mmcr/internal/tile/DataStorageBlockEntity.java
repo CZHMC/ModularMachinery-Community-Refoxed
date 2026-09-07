@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.data.DataValueType;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
@@ -146,7 +147,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
         }
     }
 
-    private void onStorageChanged(java.util.Map<String, DataValue> ignored) {
+    private void onStorageChanged(Map<String, DataValue> ignored) {
         if (loading) return;
         setChanged();
         storageSyncPending = true;

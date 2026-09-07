@@ -19,6 +19,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
@@ -103,7 +104,7 @@ public class PURE_TICK_MACHINE {
                         var plan = context.ioPlan();
                         plan.addInput(ItemRequirement.input(new ItemInput(Ingredient.of(Items.IRON_INGOT), 1)));
                         plan.add(ItemRequirement.output(new ItemOutput(
-                                new net.minecraft.world.item.ItemStack(Items.GOLD_NUGGET, 1))));
+                                new ItemStack(Items.GOLD_NUGGET, 1))));
 
                         var simulation = plan.simulate();
 

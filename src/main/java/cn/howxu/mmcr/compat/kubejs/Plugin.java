@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
+import dev.latvian.mods.kubejs.plugin.KubeJSPlugin;
 import dev.latvian.mods.kubejs.recipe.component.RecipeComponentTypeRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeFactoryRegistry;
 import dev.latvian.mods.kubejs.recipe.schema.RecipeSchemaRegistry;
@@ -24,7 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-public class Plugin implements dev.latvian.mods.kubejs.plugin.KubeJSPlugin {
+public class Plugin implements KubeJSPlugin {
     private static boolean startupScriptsLoaded;
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
     private static Consumer<RuntimeContentSnapshot> currentServerSync =

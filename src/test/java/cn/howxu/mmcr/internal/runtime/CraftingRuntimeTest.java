@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -51,6 +52,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.LevelStub;
+import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.HolderLookup;
@@ -59,6 +61,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -118,7 +121,7 @@ class CraftingRuntimeTest {
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         assertThat(input.itemStorage().amount(0)).isZero();
         assertThat(runtime.tick().isCrafting()).isTrue();
-        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
         ItemStack result = item(output.itemStorage(), 0);
         assertThat(result.getItem()).isEqualTo(Items.IRON_NUGGET);
         assertThat(result.getCount()).isEqualTo(1);
@@ -194,7 +197,7 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.start(recipe("runtime_cancelled_start", 20,
                 List.of(input(Items.IRON_INGOT, 1))), 1).getStatus())
-                .isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+                .isEqualTo(CraftingStatus.Status.IDLE);
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNull();
         assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
@@ -240,7 +243,7 @@ class CraftingRuntimeTest {
         assertThat(input.itemStorage().amount(0)).isZero();
         assertThat(inputEnergy.energyStorage().getAmountAsLong()).isEqualTo(1L);
         runtime.tick();
-        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
 
         assertThat(runtime.active()).isFalse();
         assertThat(input.itemStorage().amount(0)).isZero();
@@ -287,7 +290,7 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
-        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
 
         assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
         assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
@@ -344,7 +347,7 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
-        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
         assertThat(output.itemStorage().amount(0)).isEqualTo(2L);
     }
 
@@ -480,7 +483,7 @@ class CraftingRuntimeTest {
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
 
-        assertThat(runtime.finish()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.failure(
+        assertThat(runtime.finish()).isEqualTo(CraftingStatus.failure(
                 "gui.mmcr.controller.failure.smart_interface_changed"));
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNotNull();
@@ -581,7 +584,7 @@ class CraftingRuntimeTest {
         runtime.tick();
 
         assertThat(runtime.finishPending()).isTrue();
-        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.NO_RECIPE);
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.NO_RECIPE);
         assertThat(runtime.active()).isTrue();
         assertThat(runtime.shouldRetryFinish()).isFalse();
 
@@ -589,7 +592,7 @@ class CraftingRuntimeTest {
         LevelStub.setGameTime(level, 10);
 
         assertThat(runtime.shouldRetryFinish()).isTrue();
-        assertThat(runtime.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
         assertThat(item(output.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
     }
 
@@ -939,7 +942,7 @@ class CraftingRuntimeTest {
                     .isEqualTo(new CustomRequirement(RecipeModifier.IOType.INPUT, 7));
             restored.tick();
             restored.tick();
-            assertThat(restored.finish().getStatus()).isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+            assertThat(restored.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
         }
     }
 
@@ -1147,7 +1150,7 @@ class CraftingRuntimeTest {
 
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {
         return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), duration,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), new java.util.ArrayList<>(requirements));
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), new ArrayList<>(requirements));
     }
 
     private static void assertFinishRetryGate(MachineBehavior behavior, AtomicInteger callbacks) {
@@ -1170,22 +1173,22 @@ class CraftingRuntimeTest {
         assertThat(runtime.shouldRetryFinish()).isFalse();
     }
 
-    private static Machine machine(net.minecraft.resources.Identifier id, MachineBehavior behavior) {
+    private static Machine machine(Identifier id, MachineBehavior behavior) {
         return new DynamicMachine(id, id.toString(), new BlockArray(Map.of()),
                 MachineControllerSpec.defaultsFor(id), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(), MachineRole.NORMAL,
                 Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), behavior);
     }
 
-    private static ItemRequirement input(net.minecraft.world.item.Item item, int count) {
+    private static ItemRequirement input(Item item, int count) {
         return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), count, ItemStack.EMPTY);
     }
 
-    private static ItemRequirement output(net.minecraft.world.item.Item item, int count) {
+    private static ItemRequirement output(Item item, int count) {
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack(item, count));
     }
 
-    private static ItemStack stack(net.minecraft.world.item.Item item, int count) {
+    private static ItemStack stack(Item item, int count) {
         ItemStack stack = new ItemStack(item, count);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return stack;

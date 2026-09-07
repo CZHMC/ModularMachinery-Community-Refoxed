@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -20,8 +21,11 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -54,9 +58,9 @@ class MachineRecipeDataDrivenTest {
 
     @Test
     void canonical_json_dispatches_custom_requirement_and_output_payloads() {
-        try (var requirementScope = cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry.openTestScope();
+        try (var requirementScope = RequirementHandlerRegistry.openTestScope();
              var outputScope = OutputRegistry.openTestScope()) {
-            cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry.register(TEST_REQUIREMENT_TYPE);
+            RequirementHandlerRegistry.register(TEST_REQUIREMENT_TYPE);
             OutputRegistry.register(TEST_OUTPUT_TYPE);
 
             JsonObject json = recipeJson();
@@ -143,8 +147,8 @@ class MachineRecipeDataDrivenTest {
         outputs.add(MachineOutput.CODEC.encodeStart(ops,
                 new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET, 3), 1F)).getOrThrow());
         outputs.add(MachineOutput.CODEC.encodeStart(ops,
-                new MachineOutput.FluidOutput(new net.neoforged.neoforge.fluids.FluidStack(
-                        net.minecraft.world.level.material.Fluids.WATER, 250), 1F)).getOrThrow());
+                new MachineOutput.FluidOutput(new FluidStack(
+                        Fluids.WATER, 250), 1F)).getOrThrow());
         json.add("outputs", outputs);
         json.add("requirements", new JsonArray());
 
@@ -355,7 +359,7 @@ class MachineRecipeDataDrivenTest {
         return values;
     }
 
-    private static JsonObject stack(net.minecraft.world.item.Item item, int count) {
+    private static JsonObject stack(Item item, int count) {
         JsonObject stack = new JsonObject();
         stack.addProperty("id", BuiltInRegistries.ITEM.getKey(item).toString());
         stack.addProperty("count", count);

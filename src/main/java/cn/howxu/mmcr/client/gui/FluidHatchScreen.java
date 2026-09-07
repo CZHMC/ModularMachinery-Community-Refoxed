@@ -6,6 +6,7 @@ import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
+import java.util.Optional;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
@@ -57,7 +58,7 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
         if (menu.fluidCapacity() > 0) {
             int textY = titleLabelY + (fluid.isEmpty() ? 12 : 19);
             CapabilityDisplay display = menu.displayEntries().stream().findFirst()
-                    .orElse(new CapabilityDisplay("fluid", "0", "mB", java.util.Optional.empty()));
+                    .orElse(new CapabilityDisplay("fluid", "0", "mB", Optional.empty()));
             Component amount = Component.literal(ReadableNumber.format(menu.fluidAmount()) + " / "
                     + ReadableNumber.format(menu.fluidCapacity()) + " " + display.unit());
             graphics.text(font, amount, titleLabelX, textY, TITLE_COLOR, false);

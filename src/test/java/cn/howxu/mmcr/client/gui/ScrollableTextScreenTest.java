@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.client.gui;
 
+import java.lang.reflect.Field;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -76,19 +80,19 @@ class ScrollableTextScreenTest {
     }
 
     private static ControllerTextLine line(String text) {
-        return new ControllerTextLine(net.minecraft.network.chat.Component.literal(text), 0xFFFFFFFF);
+        return new ControllerTextLine(Component.literal(text), 0xFFFFFFFF);
     }
 
-    private static final class TestScreen extends AbstractScrollableTextScreen<net.minecraft.world.inventory.AbstractContainerMenu> {
+    private static final class TestScreen extends AbstractScrollableTextScreen<AbstractContainerMenu> {
         private List<ControllerTextLine> lines;
 
         private TestScreen() {
-            super(null, null, net.minecraft.network.chat.Component.empty(), 176, 213);
+            super(null, null, Component.empty(), 176, 213);
         }
 
         private static TestScreen create() throws Exception {
             TestScreen screen = (TestScreen) unsafe().allocateInstance(TestScreen.class);
-            java.lang.reflect.Field font = net.minecraft.client.gui.screens.Screen.class.getDeclaredField("font");
+            Field font = Screen.class.getDeclaredField("font");
             unsafe().putObject(screen, unsafe() .objectFieldOffset(font),
                     ControllerScreenTextComposerTest.testFont());
             screen.lines = new ArrayList<>();
@@ -119,7 +123,7 @@ class ScrollableTextScreenTest {
         }
 
         private static sun.misc.Unsafe unsafe() throws Exception {
-            java.lang.reflect.Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             field.setAccessible(true);
             return (sun.misc.Unsafe) field.get(null);
         }

@@ -23,6 +23,7 @@ import com.mojang.serialization.JsonOps;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
 import io.netty.buffer.Unpooled;
+import java.util.Map;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.Identifier;
@@ -104,7 +105,7 @@ public final class MachineRecipeSyncCodec {
         Set<Identifier> hosts = readRequiredHosts(buf);
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime, requirements, outputs, modifiers,
                 priority, maxThreads, cancelIfPerTickFails, parallelized, levels, allowPartialOutputs, hosts);
-        RecipeRegistry.validateClientSnapshot(java.util.Map.of(id, recipe));
+        RecipeRegistry.validateClientSnapshot(Map.of(id, recipe));
         return recipe;
     }
 

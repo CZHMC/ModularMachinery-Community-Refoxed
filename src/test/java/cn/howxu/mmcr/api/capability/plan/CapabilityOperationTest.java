@@ -18,6 +18,7 @@ import com.mojang.serialization.MapCodec;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
+import java.util.ArrayList;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
@@ -173,7 +174,7 @@ class CapabilityOperationTest {
 
     private static final class OpaqueCapability implements MachineCapability {
         private final LongValueStorage storage;
-        private final List<OpaqueRequest> requests = new java.util.ArrayList<>();
+        private final List<OpaqueRequest> requests = new ArrayList<>();
 
         private OpaqueCapability(LongValueStorage storage) {
             this.storage = storage;

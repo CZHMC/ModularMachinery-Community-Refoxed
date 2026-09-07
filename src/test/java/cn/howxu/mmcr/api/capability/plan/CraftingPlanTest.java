@@ -4,8 +4,10 @@ import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import java.util.Map;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +26,7 @@ class CraftingPlanTest {
             Identifier.fromNamespaceAndPath("mmcr_test", "first_failure"),
             StatusSeverity.FAILURE,
             Identifier.fromNamespaceAndPath("mmcr_test", "test"),
-            java.util.Map.of("reason", "test"));
+            Map.of("reason", "test"));
 
     @Test
     void commits_all_operations_in_requirement_order() {
@@ -56,7 +58,7 @@ class CraftingPlanTest {
     void uncommitted_transaction_does_not_mutate_capability_state() {
         JournalValue value = new JournalValue();
 
-        try (var transaction = net.neoforged.neoforge.transfer.transaction.Transaction.openRoot()) {
+        try (var transaction = Transaction.openRoot()) {
             operation(value, true).commit(transaction);
         }
 
@@ -69,7 +71,7 @@ class CraftingPlanTest {
                 Identifier.fromNamespaceAndPath("mmcr_test", "second_failure"),
                 StatusSeverity.FAILURE,
                 Identifier.fromNamespaceAndPath("mmcr_test", "test"),
-                java.util.Map.of());
+                Map.of());
         CraftingPlan plan = plan(
                 transaction -> CapabilityResult.failure(FIRST_FAILURE),
                 transaction -> CapabilityResult.failure(secondFailure));
@@ -170,7 +172,7 @@ class CraftingPlanTest {
                 Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_scale"),
                 StatusSeverity.FAILURE,
                 Identifier.fromNamespaceAndPath("mmcr_test", "test"),
-                java.util.Map.of());
+                Map.of());
 
         RequirementPlan resolved = RequirementPlan.withOutputSimulation(0, 2, List.of(operation), null, simulation)
                 .preparedAt(2)

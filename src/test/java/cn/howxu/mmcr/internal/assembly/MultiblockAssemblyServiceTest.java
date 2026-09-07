@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
@@ -139,7 +140,7 @@ class MultiblockAssemblyServiceTest {
 
     @Test
     void buildTaskConsumesOnlyItsTickBudget() {
-        List<BlockPos> placed = new java.util.ArrayList<>();
+        List<BlockPos> placed = new ArrayList<>();
         List<MultiblockAssemblyService.Placement> placements = IntStream.range(0, 5)
                 .mapToObj(index -> new MultiblockAssemblyService.Placement(
                         new BlockPos(index, 0, 0), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)))
@@ -156,7 +157,7 @@ class MultiblockAssemblyServiceTest {
 
     @Test
     void completedTaskCannotBeAdvancedTwice() {
-        List<BlockPos> placed = new java.util.ArrayList<>();
+        List<BlockPos> placed = new ArrayList<>();
         MultiblockAssemblyService.BuildTask task = MultiblockAssemblyService.BuildTask.create(
                 BlockPos.ZERO, List.of(new MultiblockAssemblyService.Placement(
                         BlockPos.ZERO, Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1))), 4);
@@ -229,7 +230,7 @@ class MultiblockAssemblyServiceTest {
 
     @Test
     void rejectedDropStopsBeforeRemovingCurrentAndLaterBlocks() {
-        List<MultiblockAssemblyService.Removal> removed = new java.util.ArrayList<>();
+        List<MultiblockAssemblyService.Removal> removed = new ArrayList<>();
         StructureItemSink sink = new StructureItemSink() {
             private int accepted;
 

@@ -9,6 +9,7 @@ import cn.howxu.mmcr.registry.ModRecipeTypes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
+import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.ListBuilder;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -558,7 +559,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     private static <T> int payloadSize(DynamicOps<T> ops, T value) {
         try {
-            return ops.convertTo(com.mojang.serialization.JsonOps.INSTANCE, value).toString().length();
+            return ops.convertTo(JsonOps.INSTANCE, value).toString().length();
         } catch (RuntimeException ignored) {
             return MAX_CHILD_PAYLOAD + 1;
         }

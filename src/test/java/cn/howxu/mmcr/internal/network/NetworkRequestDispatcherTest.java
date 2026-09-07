@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
+import cn.howxu.mmcr.api.network.RequestProcess;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -22,6 +25,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.HashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -35,6 +39,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.apache.logging.log4j.LogManager;
@@ -92,9 +97,9 @@ class NetworkRequestDispatcherTest {
         Identifier requestId = Identifier.parse("mmcr:fifo");
         Fixture fixture = fixture(requestId, null, new boolean[1][]);
         List<RequestBody> bodies = List.of(
-                RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(1))),
-                RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(2))),
-                RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(3))));
+                RequestBody.of(Map.of("value", DataValue.of(1))),
+                RequestBody.of(Map.of("value", DataValue.of(2))),
+                RequestBody.of(Map.of("value", DataValue.of(3))));
         NetworkServerState state = NetworkServerState.get(fixture.server);
         for (RequestBody body : bodies) {
             state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
@@ -127,8 +132,8 @@ class NetworkRequestDispatcherTest {
                 fixture.level.blockEntities.get(fixture.sourceEndpoint.pos());
         sourceNetwork.addConnection(new NetworkInterfaceBlockEntity.Connection(global(targetInterfacePos), secondReference, 2L));
         secondNetwork.addConnection(new NetworkInterfaceBlockEntity.Connection(fixture.sourceEndpoint, fixture.sourceMachine, 2L));
-        RequestBody body = RequestBody.of(Map.of("nested", cn.howxu.mmcr.api.data.DataValue.map(
-                Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(7)))));
+        RequestBody body = RequestBody.of(Map.of("nested", DataValue.map(
+                Map.of("value", DataValue.of(7)))));
         NetworkServerState state = NetworkServerState.get(fixture.server);
         state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
                 fixture.targetMachine, requestId, body, 0L));
@@ -282,8 +287,8 @@ class NetworkRequestDispatcherTest {
                 fixture.sourceOwner, fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
 
         assertEquals(2, storages[0].length);
-        org.junit.jupiter.api.Assertions.assertSame(storages[0][0], fixture.observedStorages[0][0]);
-        org.junit.jupiter.api.Assertions.assertSame(storages[0][1], fixture.observedStorages[0][1]);
+        Assertions.assertSame(storages[0][0], fixture.observedStorages[0][0]);
+        Assertions.assertSame(storages[0][1], fixture.observedStorages[0][1]);
     }
 
     @Test
@@ -292,8 +297,8 @@ class NetworkRequestDispatcherTest {
         Fixture fixture = fixture(requestId, null, null);
         fixture.processorExceptions.add(new IllegalStateException("processor"));
         NetworkServerState state = NetworkServerState.get(fixture.server);
-        RequestBody first = RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(1)));
-        RequestBody second = RequestBody.of(Map.of("value", cn.howxu.mmcr.api.data.DataValue.of(2)));
+        RequestBody first = RequestBody.of(Map.of("value", DataValue.of(1)));
+        RequestBody second = RequestBody.of(Map.of("value", DataValue.of(2)));
         state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
                 fixture.targetMachine, requestId, first, 0L));
         state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
@@ -431,7 +436,7 @@ class NetworkRequestDispatcherTest {
         TestServerLevel level = allocate(TestServerLevel.class);
         level.blockEntities = new HashMap<>();
         level.blocks = new HashMap<>();
-        level.loadedChunks = new java.util.HashSet<>();
+        level.loadedChunks = new HashSet<>();
         setField(Level.class, level, "dimension", Level.OVERWORLD);
         setField(ServerLevel.class, level, "players", List.of());
         MinecraftServer server = allocate(DedicatedServer.class);
@@ -491,14 +496,14 @@ class NetworkRequestDispatcherTest {
             @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(id); }
             @Override public NetworkInterfaceSpec networkInterface() { return new NetworkInterfaceSpec(1, 2,
                     Set.of(MMCR.id("source"), MMCR.id("target"), MMCR.id("target_two"))); }
-            @Override public Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> requestFailures() {
+            @Override public Map<Identifier, RequestFailed> requestFailures() {
                 return failure == null ? Map.of() : Map.of(requestId, (body, request, sender, reason) -> {
                     if (failure != null) failure[0] = reason;
                     if (failureReasons != null) failureReasons.add(reason);
                     if (failureExceptions != null && !failureExceptions.isEmpty()) throw failureExceptions.remove(0);
                 });
             }
-            @Override public Map<Identifier, cn.howxu.mmcr.api.network.RequestProcess> requestProcessors() {
+            @Override public Map<Identifier, RequestProcess> requestProcessors() {
                 return storage == null && processedBodies == null ? Map.of() : Map.of(requestId, (body, request, sender, receiver) -> {
                     if (processedBodies != null) processedBodies.add(body);
                     if (storage != null) storage[0] = new boolean[]{sender == null, receiver == null};
@@ -518,7 +523,7 @@ class NetworkRequestDispatcherTest {
         runtimeField.setAccessible(true);
         MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
         Method publish = MachineControllerRuntime.class.getDeclaredMethod("publishFormationState", Machine.class,
-                BlockArray.class, cn.howxu.mmcr.api.machine.CompiledMachinePattern.class, Direction.class, Direction.class, int.class);
+                BlockArray.class, CompiledMachinePattern.class, Direction.class, Direction.class, int.class);
         publish.setAccessible(true);
         publish.invoke(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine), Direction.SOUTH, Direction.NORTH, 1);
         setField(controller, "activeNetworkInterfacePositions", Set.of(interfacePos));
@@ -583,7 +588,7 @@ class NetworkRequestDispatcherTest {
     }
 
     private static final class RecordingAppender extends AbstractAppender {
-        private final List<LogEvent> events = new java.util.ArrayList<>();
+        private final List<LogEvent> events = new ArrayList<>();
 
         private RecordingAppender() {
             super("network-request-overload-test", null, null, true, Property.EMPTY_ARRAY);
@@ -598,7 +603,7 @@ class NetworkRequestDispatcherTest {
     private static class TestServerLevel extends ServerLevel {
         private Map<BlockPos, BlockEntity> blockEntities;
         private Map<BlockPos, BlockState> blocks;
-        private java.util.Set<ChunkPos> loadedChunks;
+        private Set<ChunkPos> loadedChunks;
         private MinecraftServer server;
 
         private TestServerLevel() {

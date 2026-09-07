@@ -55,7 +55,7 @@ public final class OptionalGameTestSource {
         acceptRecipes(event);
     }
 
-    public static void registerAll(net.neoforged.neoforge.event.RegisterGameTestsEvent event) {
+    public static void registerAll(RegisterGameTestsEvent event) {
         testsInvoked = true;
         Holder<TestEnvironmentDefinition<?>> environment = Holder.direct(new TestEnvironmentDefinition.AllOf());
         TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(environment,

@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Map;
 import net.minecraft.resources.Identifier;
 import dev.latvian.mods.rhino.ContextFactory;
 import dev.latvian.mods.rhino.Wrapper;
@@ -230,9 +231,9 @@ class MachineBuilderJSTest {
         assertThat(registration.requestProcessors()).containsEntry(processId, process);
         assertThat(registration.requestFailures()).containsEntry(failureId, failure);
 
-        registration.requestProcessors().get(processId).process(RequestBody.of(java.util.Map.of()),
+        registration.requestProcessors().get(processId).process(RequestBody.of(Map.of()),
                 new RequestInfo(processId, new MachineReference(targetId, 1L)), null, null);
-        registration.requestFailures().get(failureId).fail(RequestBody.of(java.util.Map.of()),
+        registration.requestFailures().get(failureId).fail(RequestBody.of(Map.of()),
                 new RequestInfo(failureId, new MachineReference(targetId, 1L)), null,
                 RequestFailureReason.UNREACHABLE);
         assertThat(processCalls).hasValue(1);

@@ -29,6 +29,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -67,19 +68,24 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.ChunkPos;
@@ -237,7 +243,7 @@ class MachineControllerBlockEntityTest {
         }
 
         assertThat(controller.runtimeSnapshot().crafting().status().getStatus())
-                .isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE);
+                .isEqualTo(CraftingStatus.Status.IDLE);
         assertThat(machineStatePackets(player)).hasSize(2);
         assertThat(machineStatePackets(player).getLast().dataStorageValues())
                 .containsEntry("mode", DataValue.of("changed"));
@@ -578,7 +584,7 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, networkInterface);
         assertThat(networkInterface.addConnection(new NetworkInterfaceBlockEntity.Connection(
                 globalPos("mmcr:network_endpoint", new BlockPos(4, 0, 0)),
-                new cn.howxu.mmcr.api.network.MachineReference(MMCR.id("network_target"), 4L), 1L))).isTrue();
+                new MachineReference(MMCR.id("network_target"), 4L), 1L))).isTrue();
 
         controller.invalidateFormedStructure();
 
@@ -983,8 +989,8 @@ class MachineControllerBlockEntityTest {
     void late_scan_mismatch_is_reused_by_diagnostic_without_a_second_full_matcher() throws Exception {
         TestBootstrap.registerRuntimeBuiltins();
         Identifier machineId = MMCR.id("late_scan_mismatch");
-        Map<BlockPos, BlockPredicate> entries = new java.util.LinkedHashMap<>();
-        Map<BlockPos, net.minecraft.world.level.block.Block> blocks = new java.util.LinkedHashMap<>();
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        Map<BlockPos, Block> blocks = new LinkedHashMap<>();
         for (int index = 0; index < 10; index++) {
             BlockPos position = new BlockPos(index + 1, 0, 0);
             entries.put(position, new BlockPredicate.OfBlock(Blocks.STONE));
@@ -1073,7 +1079,7 @@ class MachineControllerBlockEntityTest {
 
         RuntimeTestFixtures.setLoadedChunks(controller.getLevel(), Set.of(
                 LevelStub.chunkKey(controllerPos.getX() >> 4, controllerPos.getZ() >> 4)));
-        controller.handleStructureChunkChanged((net.minecraft.server.level.ServerLevel) controller.getLevel(), controllerPos);
+        controller.handleStructureChunkChanged((ServerLevel) controller.getLevel(), controllerPos);
 
         assertThat(controller.structureSnapshot().structureAreaLoaded()).isFalse();
         assertThat(controller.structureSnapshot().version()).isGreaterThan(formedVersion);
@@ -1238,7 +1244,7 @@ class MachineControllerBlockEntityTest {
         controller.onStructureBlockChanged(componentPos);
         for (int tick = 0; tick < 32 && controller.structureSnapshot().dirty(); tick++) {
             RuntimeTestFixtures.advanceGameTime(controller.getLevel());
-            controller.tickStructure((net.minecraft.server.level.ServerLevel) controller.getLevel(), controllerPos);
+            controller.tickStructure((ServerLevel) controller.getLevel(), controllerPos);
         }
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
@@ -1475,7 +1481,7 @@ class MachineControllerBlockEntityTest {
             }
 
             @Override
-            public net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+            public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
                 return BidirectionalPort::new;
             }
 
@@ -1509,7 +1515,7 @@ class MachineControllerBlockEntityTest {
             }
 
             @Override
-            public net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+            public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
                 return BidirectionalPort::new;
             }
 
@@ -1549,8 +1555,8 @@ class MachineControllerBlockEntityTest {
     }
 
     private static GlobalPos globalPos(String dimension, BlockPos pos) {
-        return GlobalPos.of(net.minecraft.resources.ResourceKey.create(
-                net.minecraft.core.registries.Registries.DIMENSION, Identifier.parse(dimension)), pos);
+        return GlobalPos.of(ResourceKey.create(
+                Registries.DIMENSION, Identifier.parse(dimension)), pos);
     }
 
     private static MachineControllerBlockEntity textController(Identifier machineId) {
@@ -1613,12 +1619,12 @@ class MachineControllerBlockEntityTest {
     private static AbstractContainerMenu closedMenu() {
         return new AbstractContainerMenu(null, 0) {
             @Override
-            public ItemStack quickMoveStack(net.minecraft.world.entity.player.Player player, int index) {
+            public ItemStack quickMoveStack(Player player, int index) {
                 return ItemStack.EMPTY;
             }
 
             @Override
-            public boolean stillValid(net.minecraft.world.entity.player.Player player) {
+            public boolean stillValid(Player player) {
                 return true;
             }
         };

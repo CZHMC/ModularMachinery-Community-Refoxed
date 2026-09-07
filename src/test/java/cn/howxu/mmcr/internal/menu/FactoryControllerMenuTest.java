@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Arrays;
 import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Inventory;
@@ -100,7 +101,7 @@ class FactoryControllerMenuTest {
 
     private static FactorySnapshot snapshot(int... indexes) {
          return new FactorySnapshot(true, false, List.of(), indexes.length, 0, 1L, false,
-                java.util.Arrays.stream(indexes).mapToObj(index -> lockedThread(index, false, "")).toList(),
+                Arrays.stream(indexes).mapToObj(index -> lockedThread(index, false, "")).toList(),
                 "", 0, null, List.of());
     }
 

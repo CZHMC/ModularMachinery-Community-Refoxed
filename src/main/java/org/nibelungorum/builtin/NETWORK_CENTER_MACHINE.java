@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import java.util.ArrayList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -72,7 +73,7 @@ public class NETWORK_CENTER_MACHINE {
                             }
                         }
 
-                        var staleKeys = new java.util.ArrayList<String>();
+                        var staleKeys = new ArrayList<String>();
                         if (iface != null) {
                             for (var entry : storage.values().entrySet()) {
                                 String keyString = entry.getKey();

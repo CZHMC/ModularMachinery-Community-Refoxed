@@ -10,6 +10,7 @@ import cn.howxu.mmcr.MMCR;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import java.util.EnumMap;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 
@@ -108,7 +109,7 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         TranslucentOrder translucentOrder() { return translucentOrder; }
 
         private static Map<ChunkSectionLayer, List<MeshData>> flattenLayers(List<MeshPart> parts) {
-            Map<ChunkSectionLayer, List<MeshData>> flattened = new java.util.EnumMap<>(ChunkSectionLayer.class);
+            Map<ChunkSectionLayer, List<MeshData>> flattened = new EnumMap<>(ChunkSectionLayer.class);
             for (MeshPart part : parts) {
                 part.meshes().forEach((layer, mesh) ->
                         flattened.computeIfAbsent(layer, ignored -> new ArrayList<>()).add(mesh));

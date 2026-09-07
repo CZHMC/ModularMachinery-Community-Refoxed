@@ -132,12 +132,12 @@ public final class OutputRegistry {
     private static boolean sameOutput(MachineOutput first, MachineOutput second) {
         if (first instanceof MachineOutput.ItemOutput firstItem && second instanceof MachineOutput.ItemOutput secondItem) {
             return firstItem.chance() == secondItem.chance() && firstItem.stack().getCount() == secondItem.stack().getCount()
-                    && net.minecraft.world.item.ItemStack.isSameItemSameComponents(firstItem.stack(), secondItem.stack());
+                    && ItemStack.isSameItemSameComponents(firstItem.stack(), secondItem.stack());
         }
         if (first instanceof MachineOutput.FluidOutput firstFluid && second instanceof MachineOutput.FluidOutput secondFluid) {
             return firstFluid.chance() == secondFluid.chance()
                     && firstFluid.stack().getAmount() == secondFluid.stack().getAmount()
-                    && net.neoforged.neoforge.fluids.FluidStack.isSameFluidSameComponents(firstFluid.stack(), secondFluid.stack());
+                    && FluidStack.isSameFluidSameComponents(firstFluid.stack(), secondFluid.stack());
         }
         return first.equals(second);
     }

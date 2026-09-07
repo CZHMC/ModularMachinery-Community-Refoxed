@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.neoforge.NeoForgeTypes;
+import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.Holder;
@@ -83,10 +84,10 @@ public final class JeiIngredientAdapterRegistry {
         @Override
         public Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
             if (!(entry.value() instanceof ItemRequirement item)) return Optional.empty();
-            if (entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT && item.item() == null) {
+            if (entry.role() == RecipeIngredientRole.INPUT && item.item() == null) {
                 return Optional.empty();
             }
-            if (entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT) {
+            if (entry.role() == RecipeIngredientRole.INPUT) {
                 List<ItemStack> stacks = safeItems(item.item())
                         .map(holder -> new ItemStack(holder.value()))
                         .toList();
@@ -118,10 +119,10 @@ public final class JeiIngredientAdapterRegistry {
         @Override
         public Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
             if (!(entry.value() instanceof FluidRequirement fluid)) return Optional.empty();
-            if (entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT && fluid.fluid() == null) {
+            if (entry.role() == RecipeIngredientRole.INPUT && fluid.fluid() == null) {
                 return Optional.empty();
             }
-            FluidStack stack = entry.role() == mezz.jei.api.recipe.RecipeIngredientRole.INPUT
+            FluidStack stack = entry.role() == RecipeIngredientRole.INPUT
                     ? safeFluids(fluid.fluid()).findFirst().map(holder -> new FluidStack(holder.value(), 1)).orElse(FluidStack.EMPTY)
                     : fluid.stack().copyWithAmount(1);
             return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),

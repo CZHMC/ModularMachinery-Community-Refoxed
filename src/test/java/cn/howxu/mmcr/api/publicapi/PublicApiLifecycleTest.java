@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
+import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -46,6 +47,10 @@ import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicReference;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
@@ -189,9 +194,9 @@ class PublicApiLifecycleTest {
     void lifecycle_events_are_ordered_and_each_phase_freezes_before_the_next() {
         List<String> observedEvents = new ArrayList<>();
         Identifier machineId = id("ordered_machine");
-        var definitions = new java.util.concurrent.atomic.AtomicReference<MMCRMachineDefinationsEvent>();
-        var structures = new java.util.concurrent.atomic.AtomicReference<MMCRMachineStructuresEvent>();
-        var recipes = new java.util.concurrent.atomic.AtomicReference<MMCRMachineRecipesEvent>();
+        var definitions = new AtomicReference<MMCRMachineDefinationsEvent>();
+        var structures = new AtomicReference<MMCRMachineStructuresEvent>();
+        var recipes = new AtomicReference<MMCRMachineRecipesEvent>();
         StartupContentRegistration.registerForTesting(
                 event -> {
                     observedEvents.add("MMCRMachineDefinationsEvent");
@@ -230,10 +235,10 @@ class PublicApiLifecycleTest {
         Identifier modifierId = id("snapshot_modifier");
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of(machineId));
         event.registerLevelType(new cn.howxu.mmcr.api.machine.level.LevelType(typeId,
-                net.minecraft.network.chat.Component.literal("Snapshot")));
+                Component.literal("Snapshot")));
         event.registerLevel(new cn.howxu.mmcr.api.machine.level.MachineLevel(levelId, typeId, 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock(Blocks.FURNACE),
-                net.minecraft.world.item.ItemStack.EMPTY,
+                ItemStack.EMPTY,
                 cn.howxu.mmcr.api.machine.level.LevelModifier.IDENTITY));
         event.registerModifier(modifierId, new ModifierDefinition(List.of()));
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
@@ -287,10 +292,10 @@ class PublicApiLifecycleTest {
         Identifier typeId = id("public_type");
         Identifier levelId = id("public_level");
         MMCRMachineStructuresEvent event = new MMCRMachineStructuresEvent(List.of());
-        event.registerLevelType(new LevelType(typeId, net.minecraft.network.chat.Component.literal("Public")));
+        event.registerLevelType(new LevelType(typeId, Component.literal("Public")));
         event.registerLevel(new MachineLevel(levelId, typeId, 2,
                 BlockPredicate.block(Blocks.FURNACE),
-                DisplayStack.of(new net.minecraft.world.item.ItemStack(Blocks.FURNACE)),
+                DisplayStack.of(new ItemStack(Blocks.FURNACE)),
                 new LevelModifier(0.5D, 1D, 1D, 1, 2)));
 
         var snapshot = event.freeze();
@@ -347,11 +352,11 @@ class PublicApiLifecycleTest {
                         assertThat(CapabilityRegistry.get(binding.type())).isNotNull()));
 
         List<MachineCapability> capabilities = List.of(
-                RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(14, 0, 0))
+                RuntimeTestFixtures.itemInput(new BlockPos(14, 0, 0))
                         .capabilitySnapshot().capabilities().getFirst(),
-                RuntimeTestFixtures.fluidInput(new net.minecraft.core.BlockPos(15, 0, 0))
+                RuntimeTestFixtures.fluidInput(new BlockPos(15, 0, 0))
                         .capabilitySnapshot().capabilities().getFirst(),
-                RuntimeTestFixtures.energyInput(new net.minecraft.core.BlockPos(16, 0, 0))
+                RuntimeTestFixtures.energyInput(new BlockPos(16, 0, 0))
                         .capabilitySnapshot().capabilities().getFirst());
         for (MachineCapability capability : capabilities) {
             CapabilityDefinition definition = CapabilityRegistry.get(capability.type());
@@ -364,10 +369,10 @@ class PublicApiLifecycleTest {
     void mutable_built_in_capability_facets_have_persistent_port_state() {
         PublicApiBootstrap.begin();
         List<CapabilitySnapshot> snapshots = List.of(
-                RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(10, 0, 0)).capabilitySnapshot(),
-                RuntimeTestFixtures.fluidInput(new net.minecraft.core.BlockPos(11, 0, 0)).capabilitySnapshot(),
-                RuntimeTestFixtures.energyInput(new net.minecraft.core.BlockPos(12, 0, 0)).capabilitySnapshot(),
-                new SmartInterfaceBlockEntity(new net.minecraft.core.BlockPos(13, 0, 0),
+                RuntimeTestFixtures.itemInput(new BlockPos(10, 0, 0)).capabilitySnapshot(),
+                RuntimeTestFixtures.fluidInput(new BlockPos(11, 0, 0)).capabilitySnapshot(),
+                RuntimeTestFixtures.energyInput(new BlockPos(12, 0, 0)).capabilitySnapshot(),
+                new SmartInterfaceBlockEntity(new BlockPos(13, 0, 0),
                         ModBlocks.SMART_INTERFACE.get().defaultBlockState()).capabilitySnapshot());
 
         for (CapabilitySnapshot snapshot : snapshots) {
@@ -386,7 +391,7 @@ class PublicApiLifecycleTest {
     void capability_registry_rejects_registration_after_runtime_snapshot_creation() {
         StartupContentRegistration.registerForTesting();
 
-        CapabilitySnapshot snapshot = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(14, 0, 0))
+        CapabilitySnapshot snapshot = RuntimeTestFixtures.itemInput(new BlockPos(14, 0, 0))
                 .capabilitySnapshot();
 
         assertThatThrownBy(() -> CapabilityRegistry.register(new CapabilityDefinition(
@@ -422,7 +427,7 @@ class PublicApiLifecycleTest {
 
     private static void collectStructures(MachineDefinition... definitions) {
         MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(
-                java.util.Arrays.stream(definitions).map(MachineDefinition::id).toList());
+                Arrays.stream(definitions).map(MachineDefinition::id).toList());
         for (MachineDefinition definition : definitions) {
             structures.registerStructure(definition.id(), PublicApiLifecycleTest::patternStructure);
         }
@@ -430,13 +435,13 @@ class PublicApiLifecycleTest {
         ContentRegistrationCoordinator.collectStructures(structures);
     }
 
-    private static cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder patternStructure(
-            cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder builder) {
+    private static MachineStructureBuilder patternStructure(
+            MachineStructureBuilder builder) {
         return builder.fullStructure(stage -> stage.pattern(PublicApiLifecycleTest::pattern));
     }
 
-    private static cn.howxu.mmcr.api.publicapi.machine.PatternBuilder pattern(
-            cn.howxu.mmcr.api.publicapi.machine.PatternBuilder builder) {
+    private static PatternBuilder pattern(
+            PatternBuilder builder) {
         return builder.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F');
     }
 

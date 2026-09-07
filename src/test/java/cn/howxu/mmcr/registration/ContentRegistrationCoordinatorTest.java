@@ -4,6 +4,11 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
@@ -13,13 +18,19 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -62,17 +73,17 @@ class ContentRegistrationCoordinatorTest {
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(machine);
         definitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(java.util.List.of(machineId));
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
         Identifier typeId = id("coordinated_type");
         Identifier levelId = id("coordinated_level");
         Identifier modifierId = id("coordinated_modifier");
-        structures.registerLevelType(new cn.howxu.mmcr.api.machine.level.LevelType(typeId,
-                net.minecraft.network.chat.Component.literal("Coil")));
-        structures.registerLevel(new cn.howxu.mmcr.api.machine.level.MachineLevel(levelId, typeId, 1,
+        structures.registerLevelType(new LevelType(typeId,
+                Component.literal("Coil")));
+        structures.registerLevel(new MachineLevel(levelId, typeId, 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
-                net.minecraft.world.item.ItemStack.EMPTY,
-                cn.howxu.mmcr.api.machine.level.LevelModifier.IDENTITY));
-        structures.registerModifier(modifierId, new cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition(java.util.List.of()));
+                ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
+        structures.registerModifier(modifierId, new ModifierDefinition(List.of()));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
                 .requirements(requirements -> requirements.levelSlot('F', typeId).modifier('F', modifierId))));
@@ -92,15 +103,15 @@ class ContentRegistrationCoordinatorTest {
         assertThat(MachineDefinitions.getRegistration(machineId)).isNotNull();
         assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
         assertThat(RecipeRegistry.getRecipe(recipe.id())).isNotNull();
-        assertThat(cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getType(typeId)).isNotNull();
-        assertThat(cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getLevel(levelId)).isNotNull();
-        assertThat(cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry.get(modifierId)).isNotNull();
+        assertThat(MachineLevelRegistry.getType(typeId)).isNotNull();
+        assertThat(MachineLevelRegistry.getLevel(levelId)).isNotNull();
+        assertThat(ModifierRegistry.get(modifierId)).isNotNull();
     }
 
     @Test
     void rejectsStructureWithoutMachine() {
         Identifier machineId = id("missing_machine");
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(java.util.List.of(machineId));
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
         structures.freeze();
@@ -156,7 +167,7 @@ class ContentRegistrationCoordinatorTest {
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(java.util.List.of(machineId));
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
         structures.registerStructure(machineId, builder -> {
             builder.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
                     .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')));
@@ -181,21 +192,21 @@ class ContentRegistrationCoordinatorTest {
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
         definitions.registerMachine(MachineBuilder.machine(machineId).build());
         definitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(java.util.List.of(machineId));
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                 .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
-        structures.registerLevelType(new cn.howxu.mmcr.api.machine.level.LevelType(
-                id("invalid_type"), net.minecraft.network.chat.Component.literal("Invalid")));
-        structures.registerLevel(new cn.howxu.mmcr.api.machine.level.MachineLevel(
+        structures.registerLevelType(new LevelType(
+                id("invalid_type"), Component.literal("Invalid")));
+        structures.registerLevel(new MachineLevel(
                 id("invalid_level"), id("invalid_type"), 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
-                net.minecraft.world.item.ItemStack.EMPTY,
-                cn.howxu.mmcr.api.machine.level.LevelModifier.IDENTITY));
-        structures.registerLevel(new cn.howxu.mmcr.api.machine.level.MachineLevel(
+                ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
+        structures.registerLevel(new MachineLevel(
                 id("duplicate_priority"), id("invalid_type"), 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.STONE.defaultBlockState()),
-                net.minecraft.world.item.ItemStack.EMPTY,
-                cn.howxu.mmcr.api.machine.level.LevelModifier.IDENTITY));
+                ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
         structures.freeze();
 
         ContentRegistrationCoordinator.beginStartup();
@@ -203,8 +214,8 @@ class ContentRegistrationCoordinatorTest {
         ContentRegistrationCoordinator.collectStructures(structures);
         assertThatThrownBy(ContentRegistrationCoordinator::commitStartup).isInstanceOf(RuntimeException.class);
         assertThat(MachineDefinitions.getRegistration(machineId)).isNull();
-        assertThat(cn.howxu.mmcr.api.machine.level.MachineLevelRegistry.getType(id("invalid_type"))).isNull();
-        assertThat(cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry.definitions()).isEmpty();
+        assertThat(MachineLevelRegistry.getType(id("invalid_type"))).isNull();
+        assertThat(ModifierRegistry.definitions()).isEmpty();
     }
 
     @Test
@@ -212,19 +223,19 @@ class ContentRegistrationCoordinatorTest {
         Identifier existingMachineId = id("atomic_existing_machine");
         Identifier existingRecipeId = id("atomic_existing_recipe");
         MachineDefinition existingMachine = MachineBuilder.machine(existingMachineId).build();
-        MachineDefinitions.register(cn.howxu.mmcr.internal.registration.MachineDefinitionConverter.toStartupRegistration(
+        MachineDefinitions.register(MachineDefinitionConverter.toStartupRegistration(
                 existingMachine, null));
-        RecipeRegistry.registerStatic(cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toRecipe(
+        RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(
                 MachineRecipeBuilder.recipe(existingRecipeId, existingMachineId).duration(1).build(),
-                new MMCRMachineStructuresEvent.Snapshot(java.util.Map.of(), java.util.Map.of(),
-                        java.util.Map.of(), java.util.Map.of())));
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(),
+                        Map.of(), Map.of())));
         ContentRegistrationCoordinator.beginStartup();
 
         Identifier newMachineId = id("atomic_new_machine");
         MMCRMachineDefinationsEvent newDefinitions = new MMCRMachineDefinationsEvent();
         newDefinitions.registerMachine(MachineBuilder.machine(newMachineId).build());
         newDefinitions.freeze();
-        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(java.util.List.of(newMachineId));
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(newMachineId));
         structures.registerStructure(newMachineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
         structures.freeze();

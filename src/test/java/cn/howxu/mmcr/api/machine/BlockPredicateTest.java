@@ -5,12 +5,15 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
+import java.lang.reflect.Method;
 import net.minecraft.network.chat.Component;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.core.Direction;
@@ -37,7 +40,7 @@ class BlockPredicateTest {
     }
 
     private static void bindHolderTag(Holder<?> holder, TagKey<?> tag) throws Exception {
-        java.lang.reflect.Method bindTags = Class.forName("net.minecraft.core.Holder$Reference")
+        Method bindTags = Class.forName("net.minecraft.core.Holder$Reference")
                 .getDeclaredMethod("bindTags", Collection.class);
         bindTags.setAccessible(true);
         bindTags.invoke(holder, Set.of(tag));
@@ -45,7 +48,7 @@ class BlockPredicateTest {
 
     @AfterEach
     void clearMachineLevels() {
-        cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
+        MMCRMachineStructuresEvent.resetCollector();
         MachineLevelRegistry.installSnapshot(List.of(), List.of());
     }
 
@@ -77,9 +80,9 @@ class BlockPredicateTest {
     @Test void ofBlockState_matches_equivalent_state_after_serialization() {
         var expected = Blocks.DISPENSER.defaultBlockState()
                 .setValue(DirectionalBlock.FACING, Direction.WEST);
-        var encoded = net.minecraft.world.level.block.state.BlockState.CODEC
+        var encoded = BlockState.CODEC
                 .encodeStart(JsonOps.INSTANCE, expected).getOrThrow();
-        var actual = net.minecraft.world.level.block.state.BlockState.CODEC
+        var actual = BlockState.CODEC
                 .parse(JsonOps.INSTANCE, encoded).getOrThrow();
 
         assertThat(new BlockPredicate.OfBlockState(expected).matches(actual)).isTrue();

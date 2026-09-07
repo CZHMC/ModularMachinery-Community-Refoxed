@@ -18,6 +18,8 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.MapCodec;
 import io.netty.buffer.Unpooled;
+import java.util.ArrayList;
+import java.util.function.Consumer;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
@@ -97,7 +99,7 @@ class MachineRecipeSyncCodecTest {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
     }
 
-    private static MachineRecipe decodeLegacy(int kind, java.util.function.Consumer<RegistryFriendlyByteBuf> writer) {
+    private static MachineRecipe decodeLegacy(int kind, Consumer<RegistryFriendlyByteBuf> writer) {
         RegistryFriendlyByteBuf buffer = buffer();
         Identifier.STREAM_CODEC.encode(buffer, MMCR.id("legacy"));
         Identifier.STREAM_CODEC.encode(buffer, MMCR.id("machine"));
@@ -110,7 +112,7 @@ class MachineRecipeSyncCodecTest {
     }
 
     private static RegistryFriendlyByteBuf newRequirementBuffer(Identifier type, int size,
-                                                                  java.util.function.Consumer<RegistryFriendlyByteBuf> writer) {
+                                                                  Consumer<RegistryFriendlyByteBuf> writer) {
         RegistryFriendlyByteBuf buffer = buffer();
         RegistryFriendlyByteBuf payload = buffer();
         writer.accept(payload);
@@ -160,7 +162,7 @@ class MachineRecipeSyncCodecTest {
                             int value = buffer.readVarInt();
                             int count = buffer.readVarInt();
                             if (count < 0 || count > 4) throw new IllegalArgumentException("Invalid scalar tag count: " + count);
-                            java.util.ArrayList<String> tags = new java.util.ArrayList<>(count);
+                            ArrayList<String> tags = new ArrayList<>(count);
                             for (int index = 0; index < count; index++) tags.add(buffer.readUtf());
                             return new ScalarRequirement(io, value, tags);
                         }, requirement -> {

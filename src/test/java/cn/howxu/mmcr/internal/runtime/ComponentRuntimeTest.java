@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -35,6 +36,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.ItemStack;
@@ -89,7 +91,7 @@ class ComponentRuntimeTest {
                         RecipeModifier.Operation.ADD, false)));
         Identifier levelId = Identifier.fromNamespaceAndPath("mmcr_test", "replacement_level");
         MachineLevel level = new MachineLevel(levelId, levelId, 1, new BlockPredicate.Any(),
-                net.minecraft.world.item.ItemStack.EMPTY, LevelModifier.IDENTITY);
+                ItemStack.EMPTY, LevelModifier.IDENTITY);
         ModuleConnectionStatus connection = ModuleConnectionStatus.connected(
                 Identifier.fromNamespaceAndPath("mmcr_test", "host"));
 
@@ -226,7 +228,7 @@ class ComponentRuntimeTest {
     void resource_presentation_saturates_multi_slot_long_amounts_and_capacity() {
         LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
                 ItemResource.class, 2, Long.MAX_VALUE, resource -> resource.isEmpty(), () -> {});
-        ItemResource iron = ItemResource.of(net.minecraft.world.item.Items.IRON_INGOT);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         storage.setContents(0, iron, Long.MAX_VALUE);
         storage.setContents(1, iron, Long.MAX_VALUE);
         ComponentRuntime runtime = new ComponentRuntime();
@@ -374,7 +376,7 @@ class ComponentRuntimeTest {
     void levels_links_and_module_state_are_published_in_immutable_component_views() {
         Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "level");
         MachineLevel level = new MachineLevel(id, id, 1, new BlockPredicate.Any(),
-                net.minecraft.world.item.ItemStack.EMPTY, LevelModifier.IDENTITY);
+                ItemStack.EMPTY, LevelModifier.IDENTITY);
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceLevels(Map.of(id, level));
         runtime.replaceLinkedPortPositions(Set.of(BlockPos.ZERO));
@@ -407,9 +409,9 @@ class ComponentRuntimeTest {
         ItemStack speedup = new ItemStack(Items.IRON_INGOT, 2);
         ItemStack sameSpeedup = new ItemStack(Items.IRON_INGOT, 3);
         ItemStack differentSpeedup = new ItemStack(Items.IRON_INGOT, 7);
-        differentSpeedup.set(net.minecraft.core.component.DataComponents.MAX_STACK_SIZE, 16);
+        differentSpeedup.set(DataComponents.MAX_STACK_SIZE, 16);
         ModifierRegistry.installSnapshot(Map.of(speedupId,
-                        new cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition(List.of(
+                        new ModifierDefinition(List.of(
                                 new RecipeModifier("item", RecipeModifier.IOType.INPUT, 1F,
                                         RecipeModifier.Operation.ADD, false)))),
                 Map.of(speedupId, List.of(speedup)));

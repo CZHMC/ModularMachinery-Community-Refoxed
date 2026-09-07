@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -24,11 +25,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
@@ -67,8 +70,8 @@ class PktEjectPortContentsPayloadTest {
     void wrong_menu_type_is_rejected_without_ejecting() throws Exception {
         ProbePort port = inputPort();
         ServerPlayer player = playerWith(port, new AbstractContainerMenu(null, 1) {
-            @Override public boolean stillValid(net.minecraft.world.entity.player.Player player) { return true; }
-            @Override public ItemStack quickMoveStack(net.minecraft.world.entity.player.Player player, int index) {
+            @Override public boolean stillValid(Player player) { return true; }
+            @Override public ItemStack quickMoveStack(Player player, int index) {
                 return ItemStack.EMPTY;
             }
         }, PORT_POS);
@@ -134,7 +137,7 @@ class PktEjectPortContentsPayloadTest {
         ProbePort port = inputPort();
         ItemBusMenu invalidMenu = new ItemBusMenu(1, new Inventory(null, null), port) {
             @Override
-            public boolean stillValid(net.minecraft.world.entity.player.Player ignored) {
+            public boolean stillValid(Player ignored) {
                 return false;
             }
         };
@@ -252,7 +255,7 @@ class PktEjectPortContentsPayloadTest {
                         @Override public CapabilityDirections directions() { return CapabilityDirections.of(ioType); }
                     };
                 }
-                @Override public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+                @Override public CapabilityOperation prepare(CapabilityRequest request) {
                     return null;
                 }
             };
@@ -275,7 +278,7 @@ class PktEjectPortContentsPayloadTest {
             super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
         }
 
-        @Override public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos pos) {
+        @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return PORT_POS.equals(pos) ? port : null;
         }
     }

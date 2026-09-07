@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.network.ControllerSpecSync;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
+import java.util.Collection;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -159,7 +160,7 @@ public final class RuntimeContentCoordinator {
                 throw new IllegalStateException("Structure key does not match machine id: " + id + " != " + structure.machineId());
             }
             structure.declarations().forEach(declaration -> declaration.requirements().modifierReplacements().values()
-                    .stream().flatMap(java.util.Collection::stream)
+                    .stream().flatMap(Collection::stream)
                     .forEach(replacement -> {
                         Identifier modifierId = replacement.getModifierId();
                         if (ModifierRegistry.get(modifierId) == null) {

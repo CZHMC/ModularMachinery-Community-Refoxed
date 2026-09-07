@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.util.IOType;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -47,7 +48,7 @@ public abstract class FluidHatchBlockEntity extends IOPortBlockEntity {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()
                     .map(this::createCapability)
-                    .toList(), java.util.List.of(new FluidPersistenceFacet()));
+                    .toList(), List.of(new FluidPersistenceFacet()));
         }
         return capabilitySnapshot;
     }

@@ -13,8 +13,11 @@ import cn.howxu.mmcr.api.network.KeyCardBinding;
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.network.NetworkApi;
 import cn.howxu.mmcr.api.network.RequestBody;
+import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
+import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -40,6 +43,7 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Rotation;
@@ -329,7 +333,7 @@ public final class NetworkInterfaceGameTests {
     private static MachineFixture placeMachineWithStorage(GameTestHelper helper, BlockPos controllerPos,
                                                            Identifier id, NetworkInterfaceSpec network,
                                                            Map<Identifier, RequestProcess> processors,
-                                                           Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> failures) {
+                                                           Map<Identifier, RequestFailed> failures) {
         return placeMachine(helper, controllerPos, id,
                 List.of(new BlockPos(1, 0, 0)), true, network, processors, failures);
     }
@@ -338,7 +342,7 @@ public final class NetworkInterfaceGameTests {
                                                 List<BlockPos> interfaceOffsets, boolean storage,
                                                 NetworkInterfaceSpec network,
                                                 Map<Identifier, RequestProcess> processors,
-                                                Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> failures) {
+                                                Map<Identifier, RequestFailed> failures) {
         Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
         for (BlockPos offset : interfaceOffsets) {
             helper.setBlock(controllerPos.offset(offset), ModBlocks.NETWORK_INTERFACE.get().defaultBlockState());
@@ -350,7 +354,7 @@ public final class NetworkInterfaceGameTests {
             pattern.put(storageOffset, new BlockPredicate.OfBlock(ModBlocks.DATA_STORAGE.get()));
         }
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
-                .setValue(cn.howxu.mmcr.internal.block.MachineControllerBlock.FACING, Direction.SOUTH));
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         Machine machine = machine(id, new BlockArray(pattern), network, processors, failures);
         if (!MachineRegistry.containsStatic(id)) MachineRegistry.register(machine);
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
@@ -366,8 +370,8 @@ public final class NetworkInterfaceGameTests {
         if (storage) forceChunk(helper.getLevel(), helper.absolutePos(controllerPos.offset(storageOffset)));
         List<NetworkInterfaceBlockEntity> interfaces = new ArrayList<>(interfaceOffsets.stream()
                 .map(offset -> helper.getBlockEntity(controllerPos.offset(offset), NetworkInterfaceBlockEntity.class)).toList());
-        cn.howxu.mmcr.internal.tile.DataStorageBlockEntity dataStorage = storage
-                ? helper.getBlockEntity(controllerPos.offset(storageOffset), cn.howxu.mmcr.internal.tile.DataStorageBlockEntity.class)
+        DataStorageBlockEntity dataStorage = storage
+                ? helper.getBlockEntity(controllerPos.offset(storageOffset), DataStorageBlockEntity.class)
                 : null;
         return new MachineFixture(controller, interfaces, dataStorage, machine);
     }
@@ -378,7 +382,7 @@ public final class NetworkInterfaceGameTests {
 
     private static Machine machine(Identifier id, BlockArray pattern, NetworkInterfaceSpec network,
                                    Map<Identifier, RequestProcess> processors,
-                                   Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> failures) {
+                                   Map<Identifier, RequestFailed> failures) {
         return new Machine() {
             @Override public Identifier registryName() { return id; }
             @Override public BlockArray pattern() { return pattern; }
@@ -388,7 +392,7 @@ public final class NetworkInterfaceGameTests {
             }
             @Override public NetworkInterfaceSpec networkInterface() { return network; }
             @Override public Map<Identifier, RequestProcess> requestProcessors() { return processors; }
-            @Override public Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> requestFailures() { return failures; }
+            @Override public Map<Identifier, RequestFailed> requestFailures() { return failures; }
         };
     }
 
@@ -406,7 +410,7 @@ public final class NetworkInterfaceGameTests {
 
     private static InteractionResult useOn(ServerLevel level, TestPlayer player, ItemStack stack, BlockPos position) {
         BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(position), Direction.UP, position, false);
-        return ModItems.KEY_CARD.get().useOn(new net.minecraft.world.item.context.UseOnContext(
+        return ModItems.KEY_CARD.get().useOn(new UseOnContext(
                 level, player, InteractionHand.MAIN_HAND, stack, hit));
     }
 
@@ -433,7 +437,7 @@ public final class NetworkInterfaceGameTests {
 
     private record MachineFixture(MachineControllerBlockEntity controller,
                                   List<NetworkInterfaceBlockEntity> interfaces,
-                                  cn.howxu.mmcr.internal.tile.DataStorageBlockEntity storage,
+                                  DataStorageBlockEntity storage,
                                   Machine machine) {
     }
 

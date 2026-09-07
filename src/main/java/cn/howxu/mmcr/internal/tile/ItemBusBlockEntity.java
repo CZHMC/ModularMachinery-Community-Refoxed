@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.IOType;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -56,7 +57,7 @@ public abstract class ItemBusBlockEntity extends IOPortBlockEntity {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()
                     .map(this::createCapability)
-                    .toList(), java.util.List.of(new ItemPersistenceFacet()));
+                    .toList(), List.of(new ItemPersistenceFacet()));
         }
         return capabilitySnapshot;
     }

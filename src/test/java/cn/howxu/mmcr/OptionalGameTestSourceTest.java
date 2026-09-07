@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.internal.registration.GameTestRegistration;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -18,7 +19,7 @@ class OptionalGameTestSourceTest {
         GameTestRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.OptionalGameTestSource", "accept",
                 new Class<?>[]{MMCRMachineDefinationsEvent.class}, new MMCRMachineDefinationsEvent());
         GameTestRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.OptionalGameTestSource", "acceptStructures",
-                new Class<?>[]{MMCRMachineStructuresEvent.class}, new MMCRMachineStructuresEvent(java.util.Set.of()));
+                new Class<?>[]{MMCRMachineStructuresEvent.class}, new MMCRMachineStructuresEvent(Set.of()));
         GameTestRegistration.invokeOptionalSourceForTesting("cn.howxu.mmcr.OptionalGameTestSource", "acceptRecipes",
                 new Class<?>[]{MMCRMachineRecipesEvent.class}, new MMCRMachineRecipesEvent());
 

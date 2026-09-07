@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.publicapi;
 
+import java.lang.reflect.Modifier;
 import org.junit.jupiter.api.Test;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistryBridge;
@@ -114,7 +115,7 @@ class PublicApiInventoryTest {
         assertThat(MachineLevelRegistry.class.getDeclaredMethods())
                 .filteredOn(method -> Set.of("beginRegistration", "freezeRegistration",
                         "registerType", "registerLevel").contains(method.getName()))
-                .allSatisfy(method -> assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isFalse());
+                .allSatisfy(method -> assertThat(Modifier.isPublic(method.getModifiers())).isFalse());
         assertThat(ModifierRegistry.class.getDeclaredMethods())
                 .noneMatch(method -> method.getName().equals("install"));
     }

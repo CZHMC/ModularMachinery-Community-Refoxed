@@ -94,12 +94,12 @@ class MachineRecipeLayoutTest {
                 IntStream.range(0, 22)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
-                java.util.List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
-                java.util.List.of(),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(),
                 0,
                 1,
                 true,
-                java.util.List.of()
+                List.of()
         );
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe), 4);
@@ -124,12 +124,12 @@ class MachineRecipeLayoutTest {
                 IntStream.range(0, 25)
                         .<MachineIngredient>mapToObj(index -> new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))
                         .toList(),
-                java.util.List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
-                java.util.List.of(),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)),
+                List.of(),
                 0,
                 1,
                 true,
-                java.util.List.of()
+                List.of()
         );
 
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe), 4);
@@ -146,8 +146,8 @@ class MachineRecipeLayoutTest {
                 MMCR.id("large_machine"),
                 200,
                 List.of(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                java.util.List.of(),
-                java.util.List.of(),
+                List.of(),
+                List.of(),
                 0,
                 1,
                 true,

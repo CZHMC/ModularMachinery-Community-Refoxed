@@ -8,12 +8,15 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Collection;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Rotation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -55,7 +58,7 @@ class MultiblockPreviewBuilderTest {
 
         var snapshot = MultiblockPreviewBuilder.build(LevelStub.create(Map.of()), BlockPos.ZERO, rotated, 16);
 
-        assertEquals(southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90),
+        assertEquals(southState.rotate(Rotation.COUNTERCLOCKWISE_90),
                 entriesByPosition(snapshot).get(rotatedPosition));
     }
 
@@ -150,9 +153,9 @@ class MultiblockPreviewBuilderTest {
     @Test
     void preview_state_returns_one_block_for_a_tag_predicate() throws Exception {
         TagKey<Block> tag = TagKey.create(BuiltInRegistries.BLOCK.key(), Identifier.fromNamespaceAndPath("mmcr", "preview_test"));
-        var bindTags = Class.forName("net.minecraft.core.Holder$Reference").getDeclaredMethod("bindTags", java.util.Collection.class);
+        var bindTags = Class.forName("net.minecraft.core.Holder$Reference").getDeclaredMethod("bindTags", Collection.class);
         bindTags.setAccessible(true);
-        bindTags.invoke(Blocks.OAK_LOG.builtInRegistryHolder(), java.util.Set.of(tag));
+        bindTags.invoke(Blocks.OAK_LOG.builtInRegistryHolder(), Set.of(tag));
         BlockPredicate unsupported = new BlockPredicate.OfTag(tag);
 
         assertTrue(MultiblockPreviewBuilder.previewState(unsupported).isPresent());

@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
+import java.util.stream.Collectors;
 import net.minecraft.core.Direction;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -80,7 +81,7 @@ public final class ModCapabilities {
         Set<CapabilityType> externallyExposed = externalBindings.stream()
                 .filter(binding -> !context.bindings(binding.type()).isEmpty())
                 .map(CapabilityBinding::type)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
         for (CapabilityBinding binding : externalBindings) {
             context.bindings(binding.type()).forEach(exposure -> registerExternalPort(event, kind, binding, exposure));
         }

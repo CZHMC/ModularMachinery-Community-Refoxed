@@ -111,7 +111,7 @@ public final class MachineStructureRegistry {
                 registration.allowParallelism(),
                 registration.allowMultithreading(),
                 1,
-                java.util.List.of(),
+                List.of(),
                 registration.role(),
                 registration.acceptedModuleIds(),
                 registration.networkInterface(),

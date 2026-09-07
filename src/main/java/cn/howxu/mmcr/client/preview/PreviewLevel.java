@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.preview;
 
+import java.lang.reflect.Field;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -229,7 +230,7 @@ public final class PreviewLevel extends Level {
         biomes.register(Biomes.PLAINS, biome, RegistrationInfo.BUILT_IN);
         MappedRegistry<DamageType> damageTypes =
                 new MappedRegistry<>(Registries.DAMAGE_TYPE, Lifecycle.stable());
-        for (java.lang.reflect.Field field : DamageTypes.class.getFields()) {
+        for (Field field : DamageTypes.class.getFields()) {
             if (field.getType() != ResourceKey.class) continue;
             try {
                 @SuppressWarnings("unchecked")

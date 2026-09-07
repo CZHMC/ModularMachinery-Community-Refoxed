@@ -237,7 +237,7 @@ class RequirementPlannerTest {
                         },
                         (parallelism, reservations) -> parallelism == 2
                                 ? new ExecutionStatus(factoryType.id(), StatusSeverity.BLOCKED, factoryType.id(),
-                                java.util.Map.of("reason", "shared_reservation"))
+                                Map.of("reason", "shared_reservation"))
                                 : null);
             }
         });
@@ -259,7 +259,7 @@ class RequirementPlannerTest {
         TestType failureType = type("materialization_failure");
         AtomicInteger factoryCalls = new AtomicInteger();
         ExecutionStatus materializationFailure = new ExecutionStatus(
-                failureType.id(), StatusSeverity.FAILURE, failureType.id(), java.util.Map.of("reason", "factory"));
+                failureType.id(), StatusSeverity.FAILURE, failureType.id(), Map.of("reason", "factory"));
         TestCapability capability = new TestCapability(failureType.id(), IOType.INPUT, 2);
         register(failureType, new RequirementHandler<TestRequirement>() {
             @Override
@@ -315,7 +315,7 @@ class RequirementPlannerTest {
                                 storage, 0, ironResource(), parallelism)
                                 ? null
                                 : new ExecutionStatus(reservationType.id(), StatusSeverity.BLOCKED, reservationType.id(),
-                                java.util.Map.of("reason", "shared_reservation")));
+                                Map.of("reason", "shared_reservation")));
             }
         });
 
@@ -335,7 +335,7 @@ class RequirementPlannerTest {
     @Test
     void carries_a_structured_handler_failure() {
         TestType failureType = type("planner_failure_requirement");
-        ExecutionStatus failure = new ExecutionStatus(failureType.id(), StatusSeverity.FAILURE, failureType.id(), java.util.Map.of());
+        ExecutionStatus failure = new ExecutionStatus(failureType.id(), StatusSeverity.FAILURE, failureType.id(), Map.of());
         register(failureType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
@@ -387,7 +387,7 @@ class RequirementPlannerTest {
             }
 
             @Override
-            public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+            public CapabilityOperation prepare(CapabilityRequest request) {
                 assertThat(request).isInstanceOf(CapabilityRequests.ValueRequest.class);
                 CapabilityRequests.ValueRequest valueRequest = (CapabilityRequests.ValueRequest) request;
                 return transaction -> {
@@ -397,7 +397,7 @@ class RequirementPlannerTest {
                             ? CapabilityResult.successful()
                             : CapabilityResult.failure(new ExecutionStatus(
                                     EnergyRequirement.TYPE.id(), StatusSeverity.BLOCKED,
-                                    EnergyRequirement.TYPE.id(), java.util.Map.of()));
+                                    EnergyRequirement.TYPE.id(), Map.of()));
                 };
             }
         };
@@ -1323,11 +1323,11 @@ class RequirementPlannerTest {
         FloatValueStorage storage = new FloatValueStorage();
         storage.set("mode", 1F);
         StorageCapability capability = new StorageCapability(
-                cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                SmartInterfaceRequirement.TYPE.id(),
                 CapabilityDirections.output(), storage);
 
         var result = new RequirementPlanner().plan(
-                List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("mode", 9F)),
+                List.of(SmartInterfaceRequirement.output("mode", 9F)),
                 List.of(capability), new PlanningContext(1, 0));
 
         assertThat(result.successful()).isTrue();
@@ -1442,8 +1442,8 @@ class RequirementPlannerTest {
     void smart_output_with_missing_interface_is_blocked_during_planning() {
         FloatValueStorage storage = new FloatValueStorage();
         var result = new RequirementPlanner().plan(
-                List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("missing", 9F)),
-                List.of(new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                List.of(SmartInterfaceRequirement.output("missing", 9F)),
+                List.of(new StorageCapability(SmartInterfaceRequirement.TYPE.id(),
                         CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0));
 
@@ -1458,11 +1458,11 @@ class RequirementPlannerTest {
         second.set("mode", 1F);
 
         var result = new RequirementPlanner().plan(
-                List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("mode", 9F)),
+                List.of(SmartInterfaceRequirement.output("mode", 9F)),
                 List.of(
-                        new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                        new StorageCapability(SmartInterfaceRequirement.TYPE.id(),
                                 CapabilityDirections.output(), first),
-                        new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                        new StorageCapability(SmartInterfaceRequirement.TYPE.id(),
                                 CapabilityDirections.output(), second)),
                 new PlanningContext(1, 0));
 
@@ -1491,7 +1491,7 @@ class RequirementPlannerTest {
                 return new RequirementPlan(context.requirementIndex(), 1,
                         List.of(transaction -> CapabilityResult.failure(new ExecutionStatus(
                                 ROLLBACK_FAILURE_TYPE.id(), StatusSeverity.FAILURE, ROLLBACK_FAILURE_TYPE.id(),
-                                java.util.Map.of("reason", "forced_failure")))), null);
+                                Map.of("reason", "forced_failure")))), null);
             }
         });
 
@@ -1712,7 +1712,7 @@ class RequirementPlannerTest {
         private final IOType ioType;
         private final int limit;
         private final List<String> tags;
-        private final java.util.ArrayList<Long> requestedParallelisms = new java.util.ArrayList<>();
+        private final ArrayList<Long> requestedParallelisms = new ArrayList<>();
 
         private TestCapability(Identifier type, IOType ioType, int limit) {
             this(type, ioType, limit, List.of());
@@ -1864,14 +1864,14 @@ class RequirementPlannerTest {
         }
 
         @Override
-        public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+        public CapabilityOperation prepare(CapabilityRequest request) {
             prepareCalls++;
             requests.add(request);
             return CapabilityFactories.operation(this, request);
         }
 
         @Override
-        public CapabilityOperation prepareOperation(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+        public CapabilityOperation prepareOperation(CapabilityRequest request) {
             if (request instanceof CapabilityRequests.SmartValueRequest smartRequest
                     && storage instanceof FloatValueStorage floatStorage) {
                 return transaction -> {
@@ -1879,7 +1879,7 @@ class RequirementPlannerTest {
                     return floatStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
                             ? CapabilityResult.successful()
                             : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
-                                    type.id(), java.util.Map.of()));
+                                    type.id(), Map.of()));
                 };
             }
             if (request instanceof CapabilityRequests.ValueRequest valueRequest
@@ -1893,7 +1893,7 @@ class RequirementPlannerTest {
                     return moved == valueRequest.amount()
                             ? CapabilityResult.successful()
                             : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
-                                    type.id(), java.util.Map.of()));
+                                    type.id(), Map.of()));
                 };
             }
             CapabilityRequests.ResourceRequest<?> resourceRequest = (CapabilityRequests.ResourceRequest<?>) request;
@@ -1901,7 +1901,7 @@ class RequirementPlannerTest {
             resourceRequests.add(resourceRequest);
             if (!(storage instanceof ResourceStorage<?> resourceStorage)) {
                 return transaction -> CapabilityResult.failure(new ExecutionStatus(
-                        type.id(), StatusSeverity.BLOCKED, type.id(), java.util.Map.of()));
+                        type.id(), StatusSeverity.BLOCKED, type.id(), Map.of()));
             }
             return transaction -> {
                 committedRequestDirections.add(resourceRequest.ioType());
@@ -1910,7 +1910,7 @@ class RequirementPlannerTest {
                             ? resourceStorage.insertResource(action.slot(), action.resource(), action.amount(), transaction)
                             : resourceStorage.extractResource(action.slot(), action.resource(), action.amount(), transaction);
                     if (moved != action.amount()) return CapabilityResult.failure(new ExecutionStatus(
-                            type.id(), StatusSeverity.BLOCKED, type.id(), java.util.Map.of()));
+                            type.id(), StatusSeverity.BLOCKED, type.id(), Map.of()));
                 }
                 return CapabilityResult.successful();
             };

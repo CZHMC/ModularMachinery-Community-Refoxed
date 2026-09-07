@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
+import java.util.function.Supplier;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
@@ -128,9 +129,9 @@ public sealed interface BlockPredicate {
         @Override public boolean matches(BlockState state) { return state.getBlock() == block; }
     }
 
-    record DeferredBlock(java.util.function.Supplier<? extends Block> supplier, boolean networkInterface)
+    record DeferredBlock(Supplier<? extends Block> supplier, boolean networkInterface)
             implements BlockPredicate {
-        public DeferredBlock(java.util.function.Supplier<? extends Block> supplier) {
+        public DeferredBlock(Supplier<? extends Block> supplier) {
             this(supplier, false);
         }
 

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.util.ReadableNumber;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
@@ -13,6 +14,7 @@ import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
+import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.component.DataComponents;
@@ -53,7 +55,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         icon = guiHelper.createDrawableItemLike(ModBlocks.BASIC_CASING.get());
     }
 
-    @Override public mezz.jei.api.recipe.types.IRecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
+    @Override public IRecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
     @Override public Component getTitle() { return Component.translatable("jei.mmcr.multiblock_structure"); }
     @Override
     public int getWidth() {
@@ -92,7 +94,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
                 int pageEntry = page * StructureMaterialWidget.SLOT_COUNT + entryIndex;
                 if (pageEntry < summary.entries().size()) {
                     tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count",
-                            cn.howxu.mmcr.util.ReadableNumber.formatExact(summary.entries().get(pageEntry).count())));
+                            ReadableNumber.formatExact(summary.entries().get(pageEntry).count())));
                 }
             });
         }

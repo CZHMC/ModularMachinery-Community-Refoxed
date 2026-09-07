@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mojang.serialization.Codec;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
@@ -34,9 +35,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MachineOutputCodecTest {
     private static final Identifier TEST_ID = Identifier.fromNamespaceAndPath("mmcr_test", "custom_output");
     private static final MapCodec<TestOutput> TEST_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-            com.mojang.serialization.Codec.STRING.fieldOf("type").forGetter(ignored -> TEST_ID.toString()),
-            com.mojang.serialization.Codec.INT.fieldOf("value").forGetter(TestOutput::value),
-            com.mojang.serialization.Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(TestOutput::chance)
+            Codec.STRING.fieldOf("type").forGetter(ignored -> TEST_ID.toString()),
+            Codec.INT.fieldOf("value").forGetter(TestOutput::value),
+            Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(TestOutput::chance)
     ).apply(instance, (ignored, value, chance) -> new TestOutput(value, chance)));
     private static final OutputType<TestOutput> TEST_TYPE = new OutputType.Definition<>(
             TEST_ID,
@@ -78,7 +79,7 @@ class MachineOutputCodecTest {
         JsonObject encoded = MachineOutput.CODEC.encodeStart(jsonOps(), decoded).getOrThrow().getAsJsonObject();
 
         assertThat(decoded).isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
-            assertThat(net.minecraft.world.item.ItemStack.isSameItemSameComponents(output.stack(), stack)).isTrue();
+            assertThat(ItemStack.isSameItemSameComponents(output.stack(), stack)).isTrue();
             assertThat(output.stack().getCount()).isEqualTo(stack.getCount());
             assertThat(output.chance()).isEqualTo(1F);
         });

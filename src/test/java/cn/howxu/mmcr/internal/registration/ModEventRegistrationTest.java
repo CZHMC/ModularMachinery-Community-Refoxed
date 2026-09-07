@@ -1,11 +1,30 @@
 package cn.howxu.mmcr.internal.registration;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
+import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
+import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
+import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
+import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
+import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockDetectorExportPayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
+import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
+import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
+import cn.howxu.mmcr.internal.network.PktRecipeLockPayload;
+import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
+import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
+import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
+import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
@@ -126,24 +145,24 @@ class ModEventRegistrationTest {
                  PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                  PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
-                cn.howxu.mmcr.internal.network.PktMachineStatePayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktControllerSpecsPayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktMachineAppearancePayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktRuntimeContentPayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktTerminalStatePayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktMultiblockDetectorExportPayload.TYPE,
-                cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktRecipeLockPayload.TYPE,
-                 cn.howxu.mmcr.internal.network.PktTerminalActionPayload.TYPE);
+                PktMachineStatePayload.TYPE,
+                PktFactoryControllerStatePayload.TYPE,
+                PktControllerSpecsPayload.TYPE,
+                PktControllerScreenTextPayload.TYPE,
+                PktMachineAppearancePayload.TYPE,
+                PktRuntimeContentPayload.TYPE,
+                PktPortStorageSyncPayload.TYPE,
+                 PktMultiblockMismatchHighlightPayload.TYPE,
+                 PktMultiblockPreviewPayload.TYPE,
+                 PktTerminalStatePayload.TYPE,
+                 PktMultiblockDetectorPickPayload.TYPE,
+                PktMultiblockDetectorUpdatePayload.TYPE,
+                PktMultiblockDetectorExportPayload.TYPE,
+                PktSmartInterfaceUpdatePayload.TYPE,
+                 PktAutoIOConfigPayload.TYPE,
+                 PktEjectPortContentsPayload.TYPE,
+                 PktRecipeLockPayload.TYPE,
+                 PktTerminalActionPayload.TYPE);
         assertThat(registrar.handlers).containsOnly(true);
     }
 
@@ -250,8 +269,8 @@ class ModEventRegistrationTest {
         DynamicOverlayItemModel.Description description = DynamicOverlayItemModel.describeItem(
                 ModItems.ITEMS.get("network_interface").get());
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
-        assertThat(description.baseModel()).isEqualTo(cn.howxu.mmcr.MMCR.id("block/dynamic_io_port"));
-        assertThat(description.overlayTexture()).isEqualTo(cn.howxu.mmcr.MMCR.id("block/overlay_network_interface"));
+        assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
+        assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_network_interface"));
     }
 
     private static ModEventRegistration.EventHandlers handlers(List<Class<?>> invoked) {

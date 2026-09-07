@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.tile.ExtendedFluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -88,7 +89,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload, cn.howxu.mmcr.internal.tile.IOPortBlockEntity port) {
+    public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
         List<FluidStorageEntry> nextEntries = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());
         for (FluidStorageEntry entry : nextEntries) {

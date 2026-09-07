@@ -20,6 +20,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
@@ -250,7 +251,7 @@ class CombinedPortBlockEntityTest {
         return (IOPortBlockEntity) ModBlockEntities.BES.get(id).get().create(BlockPos.ZERO, state);
     }
 
-    private static ItemResource itemResource(net.minecraft.world.item.Item item) {
+    private static ItemResource itemResource(Item item) {
         ItemStack stack = item.getDefaultInstance();
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
         return ItemResource.of(stack);

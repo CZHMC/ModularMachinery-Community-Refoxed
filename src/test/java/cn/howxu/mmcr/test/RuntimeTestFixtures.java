@@ -21,6 +21,8 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.Level;
@@ -45,7 +47,7 @@ public final class RuntimeTestFixtures {
         MachineControllerBlockEntity controller = controllerEntity(machineId, BlockPos.ZERO);
         BlockPos controllerPos = controller.getBlockPos();
 
-        Map<BlockPos, net.minecraft.world.level.block.Block> blocks = new HashMap<>();
+        Map<BlockPos, Block> blocks = new HashMap<>();
         blocks.put(controllerPos, ModBlocks.controllerFor(machineId).get());
         List<BlockEntity> entities = new ArrayList<>(List.of(controller));
         for (IOPortBlockEntity port : ports) {
@@ -221,7 +223,7 @@ public final class RuntimeTestFixtures {
         }
 
         @Override public BlockState getBlockState(BlockPos pos) {
-            return blocks.getOrDefault(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());
         }
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.capability.plan;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import java.util.Set;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -24,7 +25,7 @@ public final class CraftingPlan {
             Identifier.fromNamespaceAndPath("mmcr", "crafting_plan_operation_failure"),
             StatusSeverity.FAILURE,
             Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
-            java.util.Map.of("reason", "operation_failed_without_status"));
+            Map.of("reason", "operation_failed_without_status"));
     private final List<RequirementPlan> requirements;
     private final long parallelism;
     private final Map<Integer, RecipeModifier.IOType> directions;
@@ -72,8 +73,8 @@ public final class CraftingPlan {
         return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.OUTPUT);
     }
 
-    public boolean commitInputsExcept(java.util.Set<Integer> excludedRequirementIndexes) {
-        java.util.Set<Integer> excluded = excludedRequirementIndexes == null ? java.util.Set.of() : excludedRequirementIndexes;
+    public boolean commitInputsExcept(Set<Integer> excludedRequirementIndexes) {
+        Set<Integer> excluded = excludedRequirementIndexes == null ? Set.of() : excludedRequirementIndexes;
         return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT
                 && !excluded.contains(requirementIndex));
     }

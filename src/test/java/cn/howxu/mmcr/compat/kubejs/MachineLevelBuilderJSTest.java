@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Set;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -26,7 +27,7 @@ class MachineLevelBuilderJSTest {
     @BeforeEach
     void beginRegistration() {
         MMCRMachineStructuresEvent.resetCollector();
-        MMCRMachineStructuresEvent.prepare(java.util.Set.of());
+        MMCRMachineStructuresEvent.prepare(Set.of());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.preview.world;
 
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockColors;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -12,6 +13,7 @@ import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LevelLightEngine;
@@ -45,7 +47,7 @@ public final class WorldPreviewCompileInput {
     }
 
     public static WorldPreviewCompileInput capture(Level level, BlockPos controllerPos,
-            List<cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot.Entry> entries,
+            List<MultiblockPreviewSnapshot.Entry> entries,
             int selectedLayer, Minecraft minecraft) {
         var plan = WorldPreviewMeshCompiler.plan(controllerPos, entries, selectedLayer);
         Map<Long, BlockState> states = new HashMap<>();
@@ -103,7 +105,7 @@ public final class WorldPreviewCompileInput {
 
         @Override
         public BlockState getBlockState(BlockPos position) {
-            return states.getOrDefault(position.asLong(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            return states.getOrDefault(position.asLong(), Blocks.AIR.defaultBlockState());
         }
 
         @Override

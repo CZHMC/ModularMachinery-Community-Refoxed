@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +40,7 @@ class StructureRuntimeTest {
 
         assertThat(snapshot.dirty()).isTrue();
         assertThat(snapshot.criticalChunks()).isUnmodifiable();
-        assertThat(snapshot.criticalChunks()).containsExactlyInAnyOrderElementsOf(java.util.Set.of());
+        assertThat(snapshot.criticalChunks()).containsExactlyInAnyOrderElementsOf(Set.of());
     }
 
     @Test

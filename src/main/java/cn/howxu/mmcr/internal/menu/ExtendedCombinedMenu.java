@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -109,7 +110,7 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
-    public void applySnapshot(PktPortStorageSyncPayload payload, cn.howxu.mmcr.internal.tile.IOPortBlockEntity port) {
+    public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
         List<ItemStorageEntry> nextItems = PktPortStorageSyncPayload.itemEntries(port.itemStorage());
         List<FluidStorageEntry> nextFluids = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());

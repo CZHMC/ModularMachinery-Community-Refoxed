@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.internal.multiblock;
 
+import java.util.function.BooleanSupplier;
+import java.util.function.LongConsumer;
+import java.util.function.LongSupplier;
+import java.util.function.LongUnaryOperator;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
@@ -312,28 +316,28 @@ class SharedIoCoordinatorTest {
     private static SharedIoCoordinator.StartRequest start(StructureClaimRegistry.ResourceDomain domain,
                                                            BlockPos position, long structureVersion,
                                                             long maximumParallelism,
-                                                            java.util.function.LongUnaryOperator transaction,
-                                                            java.util.function.LongConsumer committer,
-                                                           java.util.function.BooleanSupplier validator,
-                                                           java.util.function.LongSupplier structureVersionSupplier) {
+                                                            LongUnaryOperator transaction,
+                                                            LongConsumer committer,
+                                                           BooleanSupplier validator,
+                                                           LongSupplier structureVersionSupplier) {
         return new SharedIoCoordinator.StartRequest(domain, lane(position), structureVersion, 0L,
                 maximumParallelism, transaction, committer, validator, structureVersionSupplier, () -> 0L);
     }
 
     private static SharedIoCoordinator.TickRequest tick(StructureClaimRegistry.ResourceDomain domain,
                                                          BlockPos position, long structureVersion,
-                                                         java.util.function.BooleanSupplier transaction,
-                                                         java.util.function.BooleanSupplier validator,
-                                                         java.util.function.LongSupplier structureVersionSupplier) {
+                                                         BooleanSupplier transaction,
+                                                         BooleanSupplier validator,
+                                                         LongSupplier structureVersionSupplier) {
         return new SharedIoCoordinator.TickRequest(domain, lane(position), structureVersion, 0L,
                 transaction, validator, structureVersionSupplier, () -> 0L);
     }
 
     private static SharedIoCoordinator.FinishRequest finish(StructureClaimRegistry.ResourceDomain domain,
                                                              BlockPos position, long structureVersion,
-                                                             java.util.function.BooleanSupplier transaction,
-                                                             java.util.function.BooleanSupplier validator,
-                                                             java.util.function.LongSupplier structureVersionSupplier) {
+                                                             BooleanSupplier transaction,
+                                                             BooleanSupplier validator,
+                                                             LongSupplier structureVersionSupplier) {
         return new SharedIoCoordinator.FinishRequest(domain, lane(position), structureVersion, 0L,
                 transaction, validator, structureVersionSupplier, () -> 0L);
     }

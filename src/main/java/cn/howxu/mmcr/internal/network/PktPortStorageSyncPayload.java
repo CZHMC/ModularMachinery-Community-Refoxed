@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
+import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -81,7 +82,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
 
     public static PktPortStorageSyncPayload from(IOPortBlockEntity port) {
         if (port == null) throw new IllegalArgumentException("Port must not be null");
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 port.getLevel().registryAccess());
         return new PktPortStorageSyncPayload(port.getBlockPos(), port.kind().id(),
                 CapabilitySyncRegistry.encode(port.capabilitySnapshot(), buffer));
@@ -120,7 +121,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
                     || !port.kind().id().equals(kind)) {
                 throw new IllegalArgumentException("Port sync target does not match packet");
             }
-            RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+            RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
                     context.player().level().registryAccess());
             for (CapabilitySyncEntry entry : entries) {
                 CapabilitySyncRegistry.decode(port.capabilitySnapshot(), entry, buffer);

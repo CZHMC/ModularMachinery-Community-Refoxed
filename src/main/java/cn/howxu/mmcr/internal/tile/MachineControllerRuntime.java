@@ -169,7 +169,7 @@ public final class MachineControllerRuntime {
         StructureSnapshot snapshot = structure.snapshot();
         Machine machine = snapshot.machine() == null ? snapshot.configuredMachine() : snapshot.machine();
         if (machine == null) throw new IllegalStateException("Machine behavior context requires a configured machine");
-        net.minecraft.world.level.Level currentLevel = controller.getLevel();
+        Level currentLevel = controller.getLevel();
         ServerLevel level = currentLevel instanceof ServerLevel serverLevel ? serverLevel : null;
         long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
         return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,

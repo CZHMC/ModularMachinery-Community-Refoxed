@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -51,6 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import net.minecraft.data.recipes.RecipeOutput;
+import org.nibelungorum.builtin.ALLOY_FURNACE;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -178,10 +180,10 @@ class PublicMachineBuilderTest {
     void alloy_furnace_builtin_registers_modifier_items_and_base_replacements() {
         Identifier machineId = MMCR.id("alloy_furnace");
         var definitions = new MMCRMachineDefinationsEvent();
-        org.nibelungorum.builtin.ALLOY_FURNACE.registerDefinitions(definitions);
+        ALLOY_FURNACE.registerDefinitions(definitions);
 
         var structures = new MMCRMachineStructuresEvent(List.of(machineId));
-        org.nibelungorum.builtin.ALLOY_FURNACE.registerStructures(structures);
+        ALLOY_FURNACE.registerStructures(structures);
 
         Identifier diamondId = MMCR.id("alloy_furnace_diamond_speedup");
         Identifier goldId = MMCR.id("alloy_furnace_gold_doubling");
@@ -278,8 +280,8 @@ class PublicMachineBuilderTest {
 
         assertThat(structure.machineId()).isEqualTo(MMCR.id("tower"));
         assertThat(structure.stages()).extracting("kind")
-                .containsExactly(cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.FULL,
-                        cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.EXTENSION);
+                .containsExactly(StructureStage.Kind.FULL,
+                        StructureStage.Kind.EXTENSION);
     }
 
     @Test
@@ -330,9 +332,9 @@ class PublicMachineBuilderTest {
                 .build(MMCR.id("expanded_levels"));
 
         assertThat(structure.stages()).extracting("kind")
-                .containsExactly(cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.FULL,
-                        cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.EXPANSION,
-                        cn.howxu.mmcr.api.publicapi.machine.StructureStage.Kind.EXPANSION);
+                .containsExactly(StructureStage.Kind.FULL,
+                        StructureStage.Kind.EXPANSION,
+                        StructureStage.Kind.EXPANSION);
     }
 
     @Test

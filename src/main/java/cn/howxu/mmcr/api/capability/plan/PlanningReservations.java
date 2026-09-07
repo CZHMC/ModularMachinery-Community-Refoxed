@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import java.util.HashMap;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
@@ -118,7 +119,7 @@ public final class PlanningReservations {
     public PlanningReservations copy() {
         PlanningReservations copy = new PlanningReservations();
         for (Map.Entry<ResourceStorage<?>, Map<Integer, ResourceReservation>> entry : resources.entrySet()) {
-            Map<Integer, ResourceReservation> copiedSlots = new java.util.HashMap<>();
+            Map<Integer, ResourceReservation> copiedSlots = new HashMap<>();
             for (Map.Entry<Integer, ResourceReservation> slot : entry.getValue().entrySet()) {
                 ResourceReservation source = slot.getValue();
                 ResourceReservation copied = new ResourceReservation();
@@ -143,7 +144,7 @@ public final class PlanningReservations {
         Map<Integer, ResourceReservation> bySlot = resources.get(storage);
         if (bySlot == null) {
             if (!create) return null;
-            bySlot = new java.util.HashMap<>();
+            bySlot = new HashMap<>();
             resources.put(storage, bySlot);
         }
         ResourceReservation reservation = bySlot.get(slot);

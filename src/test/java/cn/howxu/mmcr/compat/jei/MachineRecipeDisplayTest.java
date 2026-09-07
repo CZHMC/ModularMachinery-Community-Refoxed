@@ -11,6 +11,9 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
+import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
+import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
@@ -562,7 +565,7 @@ class MachineRecipeDisplayTest {
         ItemStack ingredient = new ItemStack(Items.GOLD_INGOT);
         JeiDisplayEntry customEntry = new JeiDisplayEntry(
                 RecipeIngredientRole.OUTPUT, MMCR.id("custom_item_stack"),
-                mezz.jei.api.constants.VanillaTypes.ITEM_STACK, ingredient, 1, 1F, null, false);
+                VanillaTypes.ITEM_STACK, ingredient, 1, 1F, null, false);
         SlotCapture capture = new SlotCapture();
 
         invokeAddEntry(recipeLayoutBuilder(capture), display,
@@ -570,7 +573,7 @@ class MachineRecipeDisplayTest {
 
         assertThat(capture.itemStacks).isEmpty();
         assertThat(capture.added).singleElement().satisfies(arguments -> {
-            assertThat(arguments[0]).isSameAs(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
+            assertThat(arguments[0]).isSameAs(VanillaTypes.ITEM_STACK);
             assertThat(arguments[1]).isSameAs(ingredient);
         });
     }
@@ -586,7 +589,7 @@ class MachineRecipeDisplayTest {
                 List.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         List<JeiDisplayEntry> fluidEntries = display.entries().stream()
-                .filter(entry -> entry.ingredientType() == mezz.jei.api.neoforge.NeoForgeTypes.FLUID_STACK)
+                .filter(entry -> entry.ingredientType() == NeoForgeTypes.FLUID_STACK)
                 .toList();
 
         assertThat(fluidEntries).hasSize(2);
@@ -677,7 +680,7 @@ class MachineRecipeDisplayTest {
         );
 
         assertThat(MachineRecipeDisplay.from(recipe).entries()).singleElement().satisfies(entry -> {
-            assertThat(entry.ingredientType()).isSameAs(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
+            assertThat(entry.ingredientType()).isSameAs(VanillaTypes.ITEM_STACK);
             assertThat(entry.ingredient()).isInstanceOf(List.class);
             assertThat((List<?>) entry.ingredient()).isEmpty();
         });
@@ -912,7 +915,7 @@ class MachineRecipeDisplayTest {
     private static Object recipeSlotBuilder(SlotCapture capture) {
         return Proxy.newProxyInstance(
                 MachineRecipeDisplayTest.class.getClassLoader(),
-                new Class<?>[]{mezz.jei.api.gui.builder.IRecipeSlotBuilder.class},
+                new Class<?>[]{IRecipeSlotBuilder.class},
                 (proxy, method, arguments) -> {
                     if (method.getName().equals("addItemStacks")) {
                         capture.itemStacks.add((List<ItemStack>) arguments[0]);
@@ -922,7 +925,7 @@ class MachineRecipeDisplayTest {
                         capture.tooltips.add((IRecipeSlotRichTooltipCallback) arguments[0]);
                     }
                     return method.getReturnType().isAssignableFrom(
-                            mezz.jei.api.gui.builder.IRecipeSlotBuilder.class) ? proxy : null;
+                            IRecipeSlotBuilder.class) ? proxy : null;
                 });
     }
 

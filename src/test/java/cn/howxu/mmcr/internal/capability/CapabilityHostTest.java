@@ -1,10 +1,12 @@
 package cn.howxu.mmcr.internal.capability;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
@@ -25,12 +27,15 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -105,15 +110,15 @@ class CapabilityHostTest {
         FluidHatchCapability fluid = (FluidHatchCapability) capability;
         ResourceStorage<FluidResource> storage = fluid.storage();
 
-        assertThat(fluid.storage()).isInstanceOf(cn.howxu.mmcr.internal.storage.LongFluidStorage.class);
+        assertThat(fluid.storage()).isInstanceOf(LongFluidStorage.class);
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(storage.insert(0, FluidResource.of(net.minecraft.world.level.material.Fluids.WATER), 750L, transaction))
+            assertThat(storage.insert(0, FluidResource.of(Fluids.WATER), 750L, transaction))
                     .isEqualTo(750L);
             transaction.commit();
         }
 
         assertThat(storage.amount(0)).isEqualTo(750L);
-        assertThat(storage.resource(0)).isEqualTo(FluidResource.of(net.minecraft.world.level.material.Fluids.WATER));
+        assertThat(storage.resource(0)).isEqualTo(FluidResource.of(Fluids.WATER));
     }
 
     @Test
@@ -177,11 +182,11 @@ class CapabilityHostTest {
         private static final IOPortKind KIND = new IOPortKind() {
             @Override public String id() { return "mixed_test"; }
             @Override public IOType ioType() { return IOType.INPUT; }
-            @Override public net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+            @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
                 return MixedPort::new;
             }
             @Override public PortDefinition definition() {
-                return PortDefinition.of(cn.howxu.mmcr.MMCR.id("mixed_test"));
+                return PortDefinition.of(MMCR.id("mixed_test"));
             }
         };
 
@@ -206,8 +211,8 @@ class CapabilityHostTest {
         return new CapabilityCreationContext() {
             @Override public CapabilityHost host() { return host; }
             @Override public IOType ioType() { return IOType.INPUT; }
-            @Override public <T> java.util.Optional<T> service(Class<T> serviceType) {
-                return serviceType.isInstance(host) ? java.util.Optional.of(serviceType.cast(host)) : java.util.Optional.empty();
+            @Override public <T> Optional<T> service(Class<T> serviceType) {
+                return serviceType.isInstance(host) ? Optional.of(serviceType.cast(host)) : Optional.empty();
             }
             @Override public Runnable onChanged() { return () -> {}; }
         };
@@ -237,7 +242,7 @@ class CapabilityHostTest {
         @Override public CapabilityDirections directions() {
             return CapabilityDirections.input();
         }
-        @Override public cn.howxu.mmcr.api.capability.CapabilityView view() { return new cn.howxu.mmcr.api.capability.CapabilityView() {
+        @Override public CapabilityView view() { return new CapabilityView() {
             @Override public CapabilityType type() { return TestCapability.this.type(); }
             @Override public CapabilityDirections directions() {
                 return TestCapability.this.directions();

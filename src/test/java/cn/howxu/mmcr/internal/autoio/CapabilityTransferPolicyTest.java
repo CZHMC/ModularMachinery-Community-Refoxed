@@ -226,13 +226,13 @@ class CapabilityTransferPolicyTest {
 
             @Override public CapabilityType type() { return capabilityType; }
             @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
-            @Override public cn.howxu.mmcr.api.capability.CapabilityView view() {
-                return new cn.howxu.mmcr.api.capability.CapabilityView() {
+            @Override public CapabilityView view() {
+                return new CapabilityView() {
                     @Override public CapabilityType type() { return capabilityType; }
                     @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
                 };
             }
-            @Override public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) { return null; }
+            @Override public CapabilityOperation prepare(CapabilityRequest request) { return null; }
         };
 
         assertThat(CapabilityTransferPolicies.policyFor(unknown)).isEmpty();

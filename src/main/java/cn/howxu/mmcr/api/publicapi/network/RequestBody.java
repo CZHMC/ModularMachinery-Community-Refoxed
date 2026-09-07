@@ -2,7 +2,10 @@ package cn.howxu.mmcr.api.publicapi.network;
 
 import cn.howxu.mmcr.api.publicapi.data.DataValue;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -49,9 +52,9 @@ public final class RequestBody {
         if (publicValue instanceof Long valueLong) return cn.howxu.mmcr.api.data.DataValue.of(valueLong);
         if (publicValue instanceof Float valueFloat) return cn.howxu.mmcr.api.data.DataValue.of(valueFloat);
         if (publicValue instanceof Double valueDouble) return cn.howxu.mmcr.api.data.DataValue.of(valueDouble);
-        if (publicValue instanceof java.math.BigInteger valueBigInteger) return cn.howxu.mmcr.api.data.DataValue.of(valueBigInteger);
-        if (publicValue instanceof java.math.BigDecimal valueBigDecimal) return cn.howxu.mmcr.api.data.DataValue.of(valueBigDecimal);
-        if (publicValue instanceof java.util.List<?> values) return cn.howxu.mmcr.api.data.DataValue.list(values.stream()
+        if (publicValue instanceof BigInteger valueBigInteger) return cn.howxu.mmcr.api.data.DataValue.of(valueBigInteger);
+        if (publicValue instanceof BigDecimal valueBigDecimal) return cn.howxu.mmcr.api.data.DataValue.of(valueBigDecimal);
+        if (publicValue instanceof List<?> values) return cn.howxu.mmcr.api.data.DataValue.list(values.stream()
                 .map(DataValue.class::cast).map(RequestBody::toInternal).toList());
         Map<String, cn.howxu.mmcr.api.data.DataValue> converted = new LinkedHashMap<>();
         value.asMap().orElseThrow().forEach((key, entry) -> converted.put(key, toInternal(entry)));

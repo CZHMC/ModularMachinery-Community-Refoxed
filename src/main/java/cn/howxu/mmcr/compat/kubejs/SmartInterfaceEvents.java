@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import dev.latvian.mods.kubejs.event.EventGroup;
+import dev.latvian.mods.kubejs.event.EventHandler;
 
 /**
  * KubeJS server events emitted by smart interface mutations.
@@ -31,7 +32,7 @@ public interface SmartInterfaceEvents {
 
     final class Holder {
         private static final EventGroup GROUP = EventGroup.of("mmcr.smart_interface");
-        private static final dev.latvian.mods.kubejs.event.EventHandler UPDATED = GROUP.server("updated",
+        private static final EventHandler UPDATED = GROUP.server("updated",
                 () -> SmartInterfaceUpdateEventJS.class);
 
         private Holder() {

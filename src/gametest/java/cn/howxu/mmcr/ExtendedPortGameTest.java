@@ -23,6 +23,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
+import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -153,7 +154,7 @@ public class ExtendedPortGameTest {
     }
 
     private static <T> T capability(GameTestHelper helper, BlockPos pos,
-                                     net.neoforged.neoforge.capabilities.BlockCapability<T, Direction> capability) {
+                                     BlockCapability<T, Direction> capability) {
         BlockPos worldPos = helper.absolutePos(pos);
         BlockEntity blockEntity = helper.getLevel().getBlockEntity(worldPos);
         return capability.getCapability(helper.getLevel(), worldPos, helper.getLevel().getBlockState(worldPos),

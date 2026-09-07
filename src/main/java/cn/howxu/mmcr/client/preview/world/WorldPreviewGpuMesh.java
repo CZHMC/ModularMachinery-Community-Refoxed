@@ -235,7 +235,7 @@ public final class WorldPreviewGpuMesh implements AutoCloseable {
 
         private Vec3 camera() { return camera; }
 
-        private void replaceIndices(com.mojang.blaze3d.vertex.ByteBufferBuilder.Result sorted, Vec3 camera) {
+        private void replaceIndices(ByteBufferBuilder.Result sorted, Vec3 camera) {
             if (sorted == null) return;
             GpuBuffer replacement = RenderSystem.getDevice().createBuffer(
                     () -> "MMCR preview translucent indices", GpuBuffer.USAGE_INDEX,

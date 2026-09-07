@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -115,7 +116,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
 
     @Override
     public List<CapabilityDisplay> displays(CapabilityView ignored) {
-        return java.util.stream.IntStream.range(0, storage.size())
+        return IntStream.range(0, storage.size())
                 .mapToObj(slot -> {
                     ItemResource resource = storage.resource(slot);
                     return new CapabilityDisplay("item", Long.toString(storage.amount(slot)), "item",

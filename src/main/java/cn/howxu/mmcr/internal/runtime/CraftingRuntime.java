@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
@@ -448,7 +449,7 @@ public final class CraftingRuntime {
         }
         consumedAtStart = Set.copyOf(consumed);
         retainedInputs = Set.copyOf(retained);
-        List<Integer> consumedBatches = new java.util.ArrayList<>(requirements.size());
+        List<Integer> consumedBatches = new ArrayList<>(requirements.size());
         for (int index = 0; index < requirements.size(); index++) {
             consumedBatches.add(consumed.contains(index) ? 1 : 0);
         }
@@ -621,7 +622,7 @@ public final class CraftingRuntime {
         }
         consumedAtStart = Set.copyOf(consumed);
         retainedInputs = Set.copyOf(retained);
-        List<Integer> consumedBatches = new java.util.ArrayList<>(requirements.size());
+        List<Integer> consumedBatches = new ArrayList<>(requirements.size());
         for (int index = 0; index < requirements.size(); index++) {
             consumedBatches.add(consumed.contains(index) ? 1 : 0);
         }
@@ -650,8 +651,8 @@ public final class CraftingRuntime {
                 .mapToDouble(level -> level.modifier().durationMultiplier())
                 .reduce(1D, (left, right) -> left * right);
         int levelModifiedDuration = (int) Math.round(recipe.getRecipeTotalTickTime() * levelMultiplier);
-        return Math.max(1, cn.howxu.mmcr.api.recipe.IntegrationTypeHelper.asInt(
-                cn.howxu.mmcr.api.recipe.IntegrationTypeHelper.applyDuration(modifiers, levelModifiedDuration)));
+        return Math.max(1, IntegrationTypeHelper.asInt(
+                IntegrationTypeHelper.applyDuration(modifiers, levelModifiedDuration)));
     }
 
     private int currentGameTime() {

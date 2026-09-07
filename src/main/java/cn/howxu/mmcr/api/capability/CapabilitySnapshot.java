@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.capability;
 import java.util.List;
 import java.util.Objects;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * An immutable snapshot of the capabilities hosted by a machine.
@@ -22,9 +24,9 @@ public record CapabilitySnapshot(List<MachineCapability> capabilities, List<Capa
 
     public <F extends CapabilityFacet> List<F> facets(Class<F> facetType) {
         Objects.requireNonNull(facetType, "facetType");
-        return java.util.stream.Stream.concat(
+        return Stream.concat(
                         capabilities.stream().map(capability -> capability.facet(facetType))
-                                .flatMap(java.util.Optional::stream),
+                                .flatMap(Optional::stream),
                         additionalFacets.stream().filter(facetType::isInstance).map(facetType::cast))
                 .toList();
     }

@@ -20,6 +20,8 @@ import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
+import java.util.Map;
+import java.util.stream.Collectors;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
@@ -637,7 +639,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 base.factory(), base.role(), base.acceptedModuleIds(), base.networkInterface(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
                 registration.allowModifiers(), registration.allowMultithreading(), factoryThreadLimit,
                 registration.expandableStructure(), registration.smartInterfaceTypes().entrySet().stream()
-                        .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey,
+                        .collect(Collectors.toMap(Map.Entry::getKey,
                                 entry -> toPublicSmartInterfaceType(entry.getValue()))),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers().stream()
                         .map(MachineBuilderJS::toPublicSmartInterfaceModifier).toList(),

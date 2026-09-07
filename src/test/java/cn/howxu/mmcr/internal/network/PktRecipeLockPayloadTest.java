@@ -2,8 +2,10 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
@@ -25,6 +27,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.world.entity.Entity;
@@ -108,7 +112,7 @@ class PktRecipeLockPayloadTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
         DynamicMachine machine = new DynamicMachine(MMCR.id("recipe_lock_boundary"), "Recipe Lock Boundary",
                 new BlockArray(Map.of()), MachineControllerSpec.defaultsFor(MMCR.id("recipe_lock_boundary")),
-                cn.howxu.mmcr.api.machine.PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
+                PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
         RuntimeTestFixtures.publishStructure(controller, machine, true);
         TestServerLevel level = serverLevel(controller);
         controller.setLevel(level);
@@ -126,11 +130,11 @@ class PktRecipeLockPayloadTest {
 
         setField(Entity.class, player, "position", Vec3.atCenterOf(controllerPos));
         player.containerMenu = new AbstractContainerMenu(null, 1) {
-            @Override public ItemStack quickMoveStack(net.minecraft.world.entity.player.Player ignored, int index) {
+            @Override public ItemStack quickMoveStack(Player ignored, int index) {
                 return ItemStack.EMPTY;
             }
 
-            @Override public boolean stillValid(net.minecraft.world.entity.player.Player ignored) {
+            @Override public boolean stillValid(Player ignored) {
                 return true;
             }
         };
@@ -150,7 +154,7 @@ class PktRecipeLockPayloadTest {
         BlockPos controllerPos = new BlockPos(1, 2, 3);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
-                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
         DynamicMachine machine = new DynamicMachine(MMCR.id("recipe_lock_success"), "Recipe Lock Success",
                 pattern,
                 MachineControllerSpec.defaultsFor(MMCR.id("recipe_lock_success")));
@@ -280,7 +284,7 @@ class PktRecipeLockPayloadTest {
             if (controller != null && controller.getBlockPos().equals(pos)) {
                 controllerState = state;
                 try {
-                    setField(net.minecraft.world.level.block.entity.BlockEntity.class, controller, "blockState", state);
+                    setField(BlockEntity.class, controller, "blockState", state);
                 } catch (Exception exception) {
                     throw new AssertionError("Unable to update controller test state", exception);
                 }
@@ -298,7 +302,7 @@ class PktRecipeLockPayloadTest {
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {
         }
 
-        @Override public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos pos) {
+        @Override public BlockEntity getBlockEntity(BlockPos pos) {
             return controller != null && controller.getBlockPos().equals(pos) ? controller : null;
         }
     }

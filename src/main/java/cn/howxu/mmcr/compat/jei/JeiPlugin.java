@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.registry.ModBlocks;
+import java.util.LinkedHashSet;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
@@ -11,6 +12,7 @@ import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IRecipeTransferRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -37,7 +39,7 @@ public final class JeiPlugin implements IModPlugin {
         JeiIngredientAdapterRegistry.registerBuiltIns();
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
         registration.addRecipeCategories(new MachineStructureCategory(guiHelper));
-        Map<Identifier, net.minecraft.network.chat.Component> machineTitles = new LinkedHashMap<>();
+        Map<Identifier, Component> machineTitles = new LinkedHashMap<>();
         MachineRegistry.getAll().values().forEach(machine -> machineTitles.put(machine.registryName(), machine.displayName()));
         MachineDefinitions.effectiveSnapshot().forEach((id, machine) -> machineTitles.putIfAbsent(id, machine.displayName()));
         JeiRuntimeReloader.markRegisteredMachineCategories(machineTitles.keySet());
@@ -86,7 +88,7 @@ public final class JeiPlugin implements IModPlugin {
     }
 
     static Set<Identifier> machineIds() {
-        Set<Identifier> ids = new java.util.LinkedHashSet<>(MachineRegistry.getAll().keySet());
+        Set<Identifier> ids = new LinkedHashSet<>(MachineRegistry.getAll().keySet());
         ids.addAll(MachineDefinitions.effectiveSnapshot().keySet());
         return ids;
     }

@@ -30,6 +30,7 @@ import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
@@ -135,7 +136,7 @@ public final class DataStorageGameTest {
         BlockPos inputPos = controllerPos.west();
         BlockPos outputPos = controllerPos.east();
         helper.setBlock(controllerPos, ModBlocks.controllerFor(machineId).get().defaultBlockState()
-                .setValue(MachineControllerBlock.FACING, net.minecraft.core.Direction.SOUTH));
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         helper.setBlock(inputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
         helper.setBlock(outputPos, ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
 

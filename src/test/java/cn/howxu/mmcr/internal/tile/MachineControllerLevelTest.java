@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockRotator;
@@ -203,7 +204,7 @@ class MachineControllerLevelTest {
                 .build(blockArray))));
 
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(cn.howxu.mmcr.MMCR.id("test_cube"), controllerPos);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
         controller.setMachine(MachineRegistry.getMachine(MACHINE_ID));
         var controllerState = controller.getBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
@@ -265,7 +266,7 @@ class MachineControllerLevelTest {
                 MACHINE_ID, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY)));
 
         BlockPos controllerPos = new BlockPos(10, 4, 10);
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(cn.howxu.mmcr.MMCR.id("test_cube"), controllerPos);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
         controller.setMachine(MachineRegistry.getMachine(MACHINE_ID));
         var controllerState = controller.getBlockState()
                 .setValue(MachineControllerBlock.FACING, facing)
@@ -286,7 +287,7 @@ class MachineControllerLevelTest {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", Machine.class, Direction.class);
         method.setAccessible(true);
         boolean formed = (boolean) method.invoke(controller, MachineRegistry.getMachine(MACHINE_ID), facing);
-        cn.howxu.mmcr.test.RuntimeTestFixtures.republish(controller);
+        RuntimeTestFixtures.republish(controller);
         return formed;
     }
 

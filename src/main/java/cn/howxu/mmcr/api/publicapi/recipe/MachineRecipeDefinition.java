@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
+import java.util.stream.Collectors;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
@@ -48,6 +49,6 @@ public record MachineRecipeDefinition(
     }
 
     public Set<Identifier> requiredHostIds() {
-        return requiredHosts.stream().map(RequiredHost::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return requiredHosts.stream().map(RequiredHost::id).collect(Collectors.toUnmodifiableSet());
     }
 }

@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.publicapi.recipe.FluidOutput;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
@@ -15,6 +17,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
@@ -34,6 +37,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.Set;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.MappedRegistry;
@@ -41,6 +45,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -48,7 +53,9 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import io.netty.buffer.Unpooled;
 
@@ -80,11 +87,11 @@ class PublicRecipeBuilderTest {
 
     @BeforeEach
     void restoreDefaultMachineLevels() {
-        cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
-        var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
+        MMCRMachineStructuresEvent.resetCollector();
+        var event = MMCRMachineStructuresEvent.prepare(Set.of());
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("Test Recipe Level")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
-                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
                 LevelModifier.IDENTITY));
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
@@ -95,10 +102,10 @@ class PublicRecipeBuilderTest {
                 .duration(20).priority(3).maxThreads(4).cancelIfPerTickFails(true)
                 .parallelized(true).allowPartialOutputs(true)
                 .inputItem(Items.IRON_INGOT, 2)
-                .inputFluid(net.minecraft.world.level.material.Fluids.WATER, 1000)
+                .inputFluid(Fluids.WATER, 1000)
                 .inputEnergy(40)
                 .outputItem(new ItemStack(Items.GOLD_INGOT, 2))
-                .outputFluid(net.minecraft.world.level.material.Fluids.WATER, 250)
+                .outputFluid(Fluids.WATER, 250)
                 .outputEnergy(10)
                 .build();
 
@@ -115,7 +122,7 @@ class PublicRecipeBuilderTest {
     void preserves_item_tag_component_and_consume_chance_and_output_chance() {
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("predicates"), id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2)
-                .inputItemTag(net.minecraft.tags.ItemTags.create(Identifier.parse("c:ingots/iron")), 3)
+                .inputItemTag(ItemTags.create(Identifier.parse("c:ingots/iron")), 3)
                 .inputItem(Ingredient.of(Items.GOLD_INGOT), 1, DataComponentPredicateSet.EMPTY, 0.25F)
                 .outputChance(new ItemStack(Items.DIAMOND), 0.4F)
                 .build();
@@ -163,13 +170,13 @@ class PublicRecipeBuilderTest {
     @Test
     void adapts_public_recipe_values_to_internal_recipe_semantics() {
         ItemStack itemOutput = new ItemStack(Items.GOLD_INGOT, 2);
-        FluidStack fluidOutput = new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 250);
+        FluidStack fluidOutput = new FluidStack(Fluids.WATER, 250);
         var definition = MachineRecipeBuilder.recipe(id("adapter"), id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2, components(), 0.25F)
-                .inputFluid(net.minecraft.world.level.material.Fluids.WATER, 1000)
+                .inputFluid(Fluids.WATER, 1000)
                 .inputEnergy(40)
                 .outputChance(itemOutput, 0.4F)
-                .outputFluid(net.minecraft.world.level.material.Fluids.WATER, 250)
+                .outputFluid(Fluids.WATER, 250)
                 .outputEnergy(10)
                 .levelRequirement(TEST_LEVEL_TYPE, TEST_LEVEL)
                 .requiredHost(id("host"))
@@ -179,15 +186,15 @@ class PublicRecipeBuilderTest {
                 Map.of(),
                 Map.of(),
                  Map.of(TEST_LEVEL, MachineLevelRegistry.getLevel(TEST_LEVEL)),
-                Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(new cn.howxu.mmcr.api.recipe.modifier.RecipeModifier(
-                        "item", cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT, 2F,
-                        cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY, true))))));
+                Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(new RecipeModifier(
+                        "item", RecipeModifier.IOType.OUTPUT, 2F,
+                        RecipeModifier.Operation.MULTIPLY, true))))));
 
         assertThat(recipe.requirements()).hasSize(6);
         assertThat(recipe.requirements()).anySatisfy(requirement -> {
             assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class);
             var item = (cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirement;
-            assertThat(item.io()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT);
+            assertThat(item.io()).isEqualTo(RecipeModifier.IOType.INPUT);
             assertThat(item.count()).isEqualTo(2);
             assertThat(item.consumeChance()).isEqualTo(0.25F);
             assertThat(item.components().values()).containsKey(DataComponents.REPAIR_COST);
@@ -203,14 +210,14 @@ class PublicRecipeBuilderTest {
             assertThat(smart.maxValue()).isEqualTo(2F);
         });
         assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement.type())
-                .isEqualTo(cn.howxu.mmcr.api.recipe.requirement.FluidRequirement.TYPE));
+                .isEqualTo(FluidRequirement.TYPE));
         assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement.type())
                 .isEqualTo(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.TYPE));
         assertThat(recipe.modifiers()).singleElement().satisfies(modifier -> {
             assertThat(modifier.getTarget()).isEqualTo("item");
-            assertThat(modifier.getIOTarget()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT);
+            assertThat(modifier.getIOTarget()).isEqualTo(RecipeModifier.IOType.OUTPUT);
             assertThat(modifier.getModifier()).isEqualTo(2F);
-            assertThat(modifier.getOperation()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.MULTIPLY);
+            assertThat(modifier.getOperation()).isEqualTo(RecipeModifier.Operation.MULTIPLY);
             assertThat(modifier.affectsChance()).isTrue();
         });
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
@@ -232,7 +239,7 @@ class PublicRecipeBuilderTest {
         assertThat(recipe.requirements()).singleElement().satisfies(requirement -> {
             assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class);
             var item = (cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirement;
-            assertThat(item.io()).isEqualTo(cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT);
+            assertThat(item.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
             assertThat(item.components().values()).containsKey(DataComponents.REPAIR_COST);
             assertThat(item.resolvedStack().get(DataComponents.REPAIR_COST)).isEqualTo(1);
         });
@@ -277,7 +284,7 @@ class PublicRecipeBuilderTest {
         MachineRecipe decoded = MachineRecipeSyncCodec.decode(buffer);
         assertThat(decoded.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
                 decodedOutput -> assertThat(decodedOutput.stack().get(DataComponents.ENCHANTMENTS)).isNotNull()
-                        .isNotEqualTo(net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY));
+                        .isNotEqualTo(ItemEnchantments.EMPTY));
     }
 
     private static RegistryAccess networkRegistryAccess() {
@@ -295,7 +302,7 @@ class PublicRecipeBuilderTest {
     @Test
     void rejects_non_exact_output_component_predicates() {
         DataComponentPredicateSet nonExactComponents = new DataComponentPredicateSet(Map.of(
-                net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(DataComponents.REPAIR_COST),
+                BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(DataComponents.REPAIR_COST),
                 new ComponentPredicate.Range(1, 2)));
 
         assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("non_exact_output"), id("machine"))
@@ -306,10 +313,10 @@ class PublicRecipeBuilderTest {
     @Test
     void defensively_copies_item_and_fluid_stacks_at_input_and_accessor_boundaries() {
         ItemStack item = new ItemStack(Items.IRON_INGOT, 2);
-        FluidStack fluid = new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 1000);
+        FluidStack fluid = new FluidStack(Fluids.WATER, 1000);
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("copies"), id("machine"))
-                .outputItem(item).outputFluid(net.minecraft.world.level.material.Fluids.WATER, 1000).build();
-        var fluidOutput = new cn.howxu.mmcr.api.publicapi.recipe.FluidOutput(fluid);
+                .outputItem(item).outputFluid(Fluids.WATER, 1000).build();
+        var fluidOutput = new FluidOutput(fluid);
         item.setCount(1);
         fluid.setAmount(1);
 
@@ -347,7 +354,7 @@ class PublicRecipeBuilderTest {
     @Test
     void custom_recipe_io_decodes_registered_requirement_and_output_without_exposing_runtime_types() {
         var input = new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(
-                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT, 12);
+                RecipeModifier.IOType.INPUT, 12);
         var output = new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F);
         var inputPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
         var outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
@@ -447,7 +454,7 @@ class PublicRecipeBuilderTest {
 
     private static DataComponentPredicateSet components() {
         return new DataComponentPredicateSet(Map.of(
-                net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(DataComponents.REPAIR_COST),
+                BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(DataComponents.REPAIR_COST),
                 new ComponentPredicate.Exact(JsonOps.INSTANCE.createInt(1))));
     }
 }

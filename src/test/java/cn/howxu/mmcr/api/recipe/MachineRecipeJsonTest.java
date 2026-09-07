@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -21,6 +22,10 @@ import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +51,7 @@ class MachineRecipeJsonTest {
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(id("test_level_type"), Component.literal("Test Level")));
         TestBootstrap.registerLevel(new MachineLevel(id("test_level"), id("test_level_type"), 0,
-                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
                 ItemStack.EMPTY, LevelModifier.IDENTITY));
         TestBootstrap.freezeRegistration();
         registries = VanillaRegistries.createLookup();
@@ -203,17 +208,17 @@ class MachineRecipeJsonTest {
     void machine_recipe_codec_round_trips_all_active_plan_requirements() {
         var recipe = RecipeTestSupport.create(id("codec_complete"), id("test_cube"), 40,
                 List.of(new MachineIngredient.ItemIngredient(
-                                net.minecraft.world.item.crafting.Ingredient.of(Items.IRON_INGOT), 2),
+                                Ingredient.of(Items.IRON_INGOT), 2),
                         new MachineIngredient.FluidIngredient(
-                                net.neoforged.neoforge.fluids.crafting.FluidIngredient.of(
-                                        net.minecraft.world.level.material.Fluids.WATER), 250),
+                                FluidIngredient.of(
+                                        Fluids.WATER), 250),
                         new MachineIngredient.EnergyIngredient(80)),
                 List.of(new ItemStack(Items.IRON_NUGGET, 3)),
                 List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 1.5F,
                         RecipeModifier.Operation.MULTIPLY, true)),
                 3, 2, true,
-                List.of(new net.neoforged.neoforge.fluids.FluidStack(
-                        net.minecraft.world.level.material.Fluids.WATER.builtInRegistryHolder(), 500)),
+                List.of(new FluidStack(
+                        Fluids.WATER.builtInRegistryHolder(), 500)),
                 List.of(), true, List.of(), true, Set.of(id("factory_controller")));
 
         var ops = RegistryOps.create(JsonOps.INSTANCE,

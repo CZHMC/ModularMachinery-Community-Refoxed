@@ -87,7 +87,7 @@ class CompiledMachinePatternTest {
                 id, "Compiled Replacement", new BlockArray(Map.of(
                         BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
                         rawPos, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
-                        new BlockPos(0, 0, 1), new BlockPredicate.AnyOf(java.util.List.of(
+                        new BlockPos(0, 0, 1), new BlockPredicate.AnyOf(List.of(
                                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
                                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get()))))),
                 MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(),
@@ -193,7 +193,7 @@ class CompiledMachinePatternTest {
         return new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.FURNACE),
                 new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE),
-                new BlockPos(0, 0, 1), new BlockPredicate.AnyOf(java.util.List.of(
+                new BlockPos(0, 0, 1), new BlockPredicate.AnyOf(List.of(
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()),
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_output_bus").get())))))
                 .tagged(new BlockPos(0, 0, 1), "port:item_input_bus");

@@ -255,7 +255,7 @@ class MenuScreenTest {
             return selectedCapabilityId(capabilityIds);
         }
 
-        @Override protected net.minecraft.core.BlockPos portPos() { return net.minecraft.core.BlockPos.ZERO; }
+        @Override protected BlockPos portPos() { return BlockPos.ZERO; }
         @Override protected IOType ownerIOType() { return IOType.INPUT; }
         @Override protected int portSlotCount() { return 0; }
         @Override protected Identifier texture(boolean autoIOPage) { return MMCR.id("textures/gui/test.png"); }

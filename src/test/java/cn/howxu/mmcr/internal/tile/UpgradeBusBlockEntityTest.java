@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
@@ -99,7 +100,7 @@ class UpgradeBusBlockEntityTest {
 
     private static UpgradeBusBlockEntity create(UpgradeBusSize size) {
         String id = "upgrade_bus_" + size.id();
-        return new UpgradeBusBlockEntity(size, net.minecraft.core.BlockPos.ZERO,
+        return new UpgradeBusBlockEntity(size, BlockPos.ZERO,
                 ModBlocks.BLOCKS.get(id).get().defaultBlockState());
     }
 

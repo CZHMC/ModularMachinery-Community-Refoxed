@@ -15,6 +15,7 @@ import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
+import java.util.Comparator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
@@ -161,7 +162,7 @@ public final class TerminalService {
                                 data.selectedLevels())
                         : MultiblockAssemblyService.demolish(player, controller, data.stage(),
                                 Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink);
-                player.sendSystemMessage(net.minecraft.network.chat.Component.translatable(result.message().key(), result.message().args()));
+                player.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
                 return result.interactionResult().consumesAction()
                         ? accepted(player, stack, result.message().key()) : rejected(player, stack, result.message().key());
             }
@@ -189,7 +190,7 @@ public final class TerminalService {
         for (LevelType type : MachineLevelRegistry.types()) {
             if (!levelTypes.contains(type.id())) continue;
             List<MachineLevel> available = MachineLevelRegistry.levelsForType(type.id()).stream()
-                    .sorted(java.util.Comparator.comparingInt(MachineLevel::priority)).toList();
+                    .sorted(Comparator.comparingInt(MachineLevel::priority)).toList();
             if (available.isEmpty()) continue;
             Identifier selected = data.selectedLevels().get(type.id());
             boolean validSelection = false;

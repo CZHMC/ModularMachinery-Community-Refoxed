@@ -15,6 +15,7 @@ import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
 import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -357,7 +358,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
-        @Override public mezz.jei.api.ingredients.IIngredientType<ItemStack> getType() { return VanillaTypes.ITEM_STACK; }
+        @Override public IIngredientType<ItemStack> getType() { return VanillaTypes.ITEM_STACK; }
         @Override public ItemStack getIngredient() { return stack; }
     }
 

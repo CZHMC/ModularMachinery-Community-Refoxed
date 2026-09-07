@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
@@ -8,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
@@ -15,10 +17,15 @@ import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import com.mojang.serialization.JsonOps;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import dev.latvian.mods.rhino.NativeJavaObject;
+import java.util.Arrays;
+import java.util.Set;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -27,6 +34,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import dev.latvian.mods.rhino.ScriptableObject;
 import dev.latvian.mods.rhino.ContextFactory;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -54,8 +62,8 @@ class KubeJSApiTest {
 
     @AfterEach
     void restoreMachineLevels() {
-        cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
-        var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
+        MMCRMachineStructuresEvent.resetCollector();
+        var event = MMCRMachineStructuresEvent.prepare(Set.of());
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("API Test")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY,
@@ -164,7 +172,7 @@ class KubeJSApiTest {
 
     @Test
     void custom_recipe_io_factory_uses_registered_type_and_codec_validation() {
-        var input = new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(
+        var input = new EnergyRequirement(
                 RecipeModifier.IOType.INPUT, 12);
         var payload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
 
@@ -232,10 +240,10 @@ class KubeJSApiTest {
                 "fluid-requirement-test", 1, null);
         Object requirement = builder.requirements.getFirst();
 
-        assertThat(requirement).isInstanceOfSatisfying(cn.howxu.mmcr.api.recipe.requirement.FluidRequirement.class,
+        assertThat(requirement).isInstanceOfSatisfying(FluidRequirement.class,
                 fluid -> {
                     assertThat(fluid.io()).isEqualTo(RecipeModifier.IOType.INPUT);
-                    assertThat(fluid.fluid().test(new net.neoforged.neoforge.fluids.FluidStack(Fluids.WATER, 1))).isTrue();
+                    assertThat(fluid.fluid().test(new FluidStack(Fluids.WATER, 1))).isTrue();
                     assertThat(fluid.amount()).isEqualTo(100);
                 });
     }
@@ -248,11 +256,11 @@ class KubeJSApiTest {
 
         Object value = context.evaluateString(scope,
                 "api.dataValue({answer: 42, items: ['a', 'b']})", "data-value-test", 1, null);
-        if (value instanceof dev.latvian.mods.rhino.NativeJavaObject wrapper) {
+        if (value instanceof NativeJavaObject wrapper) {
             value = wrapper.unwrap();
         }
 
-        assertThat(value).isInstanceOfSatisfying(cn.howxu.mmcr.api.data.DataValue.class, data -> {
+        assertThat(value).isInstanceOfSatisfying(DataValue.class, data -> {
             var values = data.asMap().orElseThrow();
             assertThat(values).containsKeys("answer", "items");
             assertThat(values.get("answer").doubleValue()).isEqualTo(42D);
@@ -302,7 +310,7 @@ class KubeJSApiTest {
 
     @Test
     void removed_modifier_factories_are_not_exposed() {
-        assertThat(java.util.Arrays.stream(KubeJSApi.class.getMethods())
+        assertThat(Arrays.stream(KubeJSApi.class.getMethods())
                 .filter(method -> method.getName().equals("singleBlockModifier")
                         || method.getName().equals("patternEntry")))
                 .isEmpty();

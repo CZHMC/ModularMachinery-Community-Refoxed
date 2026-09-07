@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
+
+import cn.howxu.mmcr.api.publicapi.RecipeApi;
+import com.google.gson.JsonElement;
+import net.minecraft.resources.Identifier;
 /** Public immutable recipe requirement boundary.
  * @author howxu <dev@howxu.cn>
  */
@@ -13,8 +17,8 @@ public sealed interface RecipeRequirement permits ItemRequirement, FluidRequirem
      * @param payload codec payload
      * @return validated custom recipe IO
      */
-    static CustomRecipeIo custom(net.minecraft.resources.Identifier typeId, RecipeIo ioType,
-                                 com.google.gson.JsonElement payload) {
-        return cn.howxu.mmcr.api.publicapi.RecipeApi.custom(typeId, ioType, payload);
+    static CustomRecipeIo custom(Identifier typeId, RecipeIo ioType,
+                                 JsonElement payload) {
+        return RecipeApi.custom(typeId, ioType, payload);
     }
 }

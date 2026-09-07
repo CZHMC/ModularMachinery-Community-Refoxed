@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
@@ -91,11 +93,11 @@ public final class RecipeStartContext {
         List<MachineRequirement> next = new ArrayList<>(requirements.size());
         boolean replaced = false;
         for (MachineRequirement requirement : requirements) {
-            if (!replaced && requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement input
+            if (!replaced && requirement instanceof ItemRequirement input
                     && input.io() == RecipeModifier.IOType.INPUT && input.count() == expectedCount
                     && input.item() != null && input.item().items().toList().size() == 1
                     && input.item().items().toList().getFirst().value() == item) {
-                next.add(new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(input.io(), input.item(), replacementCount,
+                next.add(new ItemRequirement(input.io(), input.item(), replacementCount,
                         input.stack(), input.chance(), input.tags(), input.components(), input.consumeChance()));
                 replaced = true;
             } else {
@@ -156,10 +158,10 @@ public final class RecipeStartContext {
     private static List<MachineOutput> outputsFromRequirements(List<MachineRequirement> requirements) {
         List<MachineOutput> result = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
-            if (requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement item
+            if (requirement instanceof ItemRequirement item
                     && item.io() == RecipeModifier.IOType.OUTPUT) {
                 result.add(new MachineOutput.ItemOutput(item.resolvedStack(), item.chance()));
-            } else if (requirement instanceof cn.howxu.mmcr.api.recipe.requirement.FluidRequirement fluid
+            } else if (requirement instanceof FluidRequirement fluid
                     && fluid.io() == RecipeModifier.IOType.OUTPUT) {
                 result.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
             }

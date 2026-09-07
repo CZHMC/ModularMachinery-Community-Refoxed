@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
+import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -36,6 +37,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
 import dev.latvian.mods.kubejs.util.RegistryOpsContainer;
+import java.lang.reflect.Method;
 import net.minecraft.core.BlockPos;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.core.component.DataComponentMap;
@@ -126,7 +128,7 @@ class PluginBindingTest {
         previous.commit();
         var previousStructures = MachineStructureRegistry.dynamicSnapshot();
         var previousRecipes = RecipeRegistry.dynamicSnapshot();
-        long previousVersion = cn.howxu.mmcr.internal.sync.RuntimeContentVersion.current();
+        long previousVersion = RuntimeContentVersion.current();
 
         var invalid = new KubeJSContentReloadTransaction();
         invalid.registerRecipe(RecipeTestSupport.create(MMCR.id("invalid_kubejs_transaction_recipe"), MMCR.id("missing_machine"), 1, List.of(), List.of()));
@@ -134,7 +136,7 @@ class PluginBindingTest {
         assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class);
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
-        assertThat(cn.howxu.mmcr.internal.sync.RuntimeContentVersion.current()).isEqualTo(previousVersion);
+        assertThat(RuntimeContentVersion.current()).isEqualTo(previousVersion);
     }
 
     @Test
@@ -481,7 +483,7 @@ class PluginBindingTest {
         assertThat(event.createMachine("mmcr:test_machine")).isInstanceOf(MachineBuilderJS.class);
         assertThat(event.createLevelType("mmcr:test_type")).isInstanceOf(LevelTypeBuilderJS.class);
         assertThat(event.createLevel("mmcr:test_level")).isInstanceOf(MachineLevelBuilderJS.class);
-        assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
+        assertThat(event.getClass().getMethods()).extracting(Method::getName)
                 .contains("registerControllerScreenText")
                 .doesNotContain("createStructure", "createRecipe");
     }
@@ -664,7 +666,7 @@ class PluginBindingTest {
 
         assertThat(event.getAPI()).isInstanceOf(KubeJSApi.class);
         assertThat(event.createStructure("mmcr:test_structure")).isInstanceOf(MachineStructureBuilderJS.class);
-        assertThat(event.getClass().getMethods()).extracting(java.lang.reflect.Method::getName)
+        assertThat(event.getClass().getMethods()).extracting(Method::getName)
                 .doesNotContain("registerControllerScreenText", "createMachine", "createLevelType", "createLevel",
                         "levelSlot", "createRecipe");
     }

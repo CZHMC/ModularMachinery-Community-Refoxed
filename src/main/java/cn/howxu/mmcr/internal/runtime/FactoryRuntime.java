@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import java.util.Collections;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.ValueInput;
@@ -40,7 +41,7 @@ public final class FactoryRuntime {
     private static final int MAX_LANES = 1024;
     private final List<FactoryRecipeThread> lanes = new ArrayList<>();
     private final Map<FactoryRecipeThread, Identifier> recipeLocks = new IdentityHashMap<>();
-    private final Set<FactoryRecipeThread> recipeLockUsed = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<FactoryRecipeThread> recipeLockUsed = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, Identifier> startReservations = new IdentityHashMap<>();
     private int laneLimit = 1;
     private long perThreadParallelLimit = 1L;
@@ -56,7 +57,7 @@ public final class FactoryRuntime {
     private int cachedActiveLaneCount;
     private long cachedSnapshotEpoch = Long.MIN_VALUE;
     private @Nullable FactorySnapshot cachedSnapshot;
-    private final Set<FactoryRecipeThread> readyLanes = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<FactoryRecipeThread> readyLanes = Collections.newSetFromMap(new IdentityHashMap<>());
     private List<MachineRecipe> cachedOrderedCandidateSource = List.of();
     private long cachedOrderedCandidateCatalogVersion = Long.MIN_VALUE;
     private List<MachineRecipe> cachedOrderedCandidates = List.of();
@@ -126,7 +127,7 @@ public final class FactoryRuntime {
             lane.tick();
         }
 
-        Set<FactoryRecipeThread> readyThisTick = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<FactoryRecipeThread> readyThisTick = Collections.newSetFromMap(new IdentityHashMap<>());
         for (FactoryRecipeThread lane : laneSnapshot) {
             if (readyLanes.remove(lane)) readyThisTick.add(lane);
         }

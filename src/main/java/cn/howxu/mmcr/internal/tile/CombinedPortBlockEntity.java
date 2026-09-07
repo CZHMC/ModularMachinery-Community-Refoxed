@@ -10,6 +10,7 @@ import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -83,7 +84,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
             capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
                     .filter(binding -> binding.directions().supports(kind.ioType()))
                     .map(this::createCapability)
-                    .toList(), java.util.List.of(new FluidPersistenceFacet()));
+                    .toList(), List.of(new FluidPersistenceFacet()));
         }
         return capabilitySnapshot;
     }

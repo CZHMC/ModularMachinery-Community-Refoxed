@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -259,8 +260,8 @@ class MachineRecipeSchemaTest {
 
     @Test
     void generic_schema_and_builder_paths_decode_registered_requirement_and_output() {
-        var input = new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(
-                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT, 12);
+        var input = new EnergyRequirement(
+                RecipeModifier.IOType.INPUT, 12);
         var output = new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F);
         var inputPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
         var outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();

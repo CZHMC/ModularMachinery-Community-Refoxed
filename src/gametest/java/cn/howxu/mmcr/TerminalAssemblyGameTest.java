@@ -16,6 +16,7 @@ import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
@@ -88,7 +89,7 @@ public class TerminalAssemblyGameTest {
         player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
         TerminalData staleData = TerminalData.DEFAULT.withController(GlobalPos.of(helper.getLevel().dimension(),
                 helper.absolutePos(controllerPos))).withStage(2);
-        terminal.set(cn.howxu.mmcr.registry.ModDataComponents.TERMINAL_DATA.get(), staleData);
+        terminal.set(ModDataComponents.TERMINAL_DATA.get(), staleData);
 
         TerminalService.Result build = TerminalService.execute(player, terminal, TerminalAction.BUILD, 0, null, null);
 
@@ -97,7 +98,7 @@ public class TerminalAssemblyGameTest {
                 "Build writes the controller's available stage back to terminal data");
         helper.runAtTickTime(2, () -> {
             TerminalData staleDemolishData = TerminalData.from(terminal).withStage(2);
-            terminal.set(cn.howxu.mmcr.registry.ModDataComponents.TERMINAL_DATA.get(), staleDemolishData);
+            terminal.set(ModDataComponents.TERMINAL_DATA.get(), staleDemolishData);
 
             TerminalService.Result demolish = TerminalService.execute(player, terminal, TerminalAction.DEMOLISH, 0, null, null);
 

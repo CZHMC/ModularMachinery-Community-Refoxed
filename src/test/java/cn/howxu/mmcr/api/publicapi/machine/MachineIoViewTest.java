@@ -1,11 +1,13 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ExchangeFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
@@ -80,11 +82,11 @@ class MachineIoViewTest {
      * @author howxu <dev@howxu.cn>
      */
     private record TestCapability(CapabilityType type, CapabilityView view) implements MachineCapability {
-        TestCapability(String id, Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet> facet) {
-            this(new CapabilityType(cn.howxu.mmcr.MMCR.id(id)), new CapabilityView() {
-                @Override public CapabilityType type() { return new CapabilityType(cn.howxu.mmcr.MMCR.id(id)); }
+        TestCapability(String id, Class<? extends CapabilityFacet> facet) {
+            this(new CapabilityType(MMCR.id(id)), new CapabilityView() {
+                @Override public CapabilityType type() { return new CapabilityType(MMCR.id(id)); }
                 @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
-                @Override public Set<Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet>> facets() {
+                @Override public Set<Class<? extends CapabilityFacet>> facets() {
                     return Set.of(facet);
                 }
             });

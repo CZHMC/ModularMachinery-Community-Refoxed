@@ -16,6 +16,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -124,7 +125,7 @@ class InterfaceBlockItemTest {
             String id = kind.id();
             IOPortBlockEntity port = (IOPortBlockEntity) ModBlockEntities.BES.get(id).get().create(
                     BlockPos.ZERO, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
-            var linkedTexture = net.minecraft.resources.Identifier.parse("kubejs:block/steel_casing");
+            var linkedTexture = Identifier.parse("kubejs:block/steel_casing");
             port.setAppearanceBaseTexture(linkedTexture);
 
             DynamicOverlayItemModel.Description description = DynamicOverlayItemModel.describeItem(

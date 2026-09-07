@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.multiblock;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -160,7 +161,7 @@ class SmartInterfaceBindingCoordinatorTest {
 
     private static MachineControllerBlockEntity controller(BlockPos pos, Identifier machineId,
                                                            Identifier texture) {
-        Machine machine = new cn.howxu.mmcr.api.machine.DynamicMachine(machineId, "Binding Test",
+        Machine machine = new DynamicMachine(machineId, "Binding Test",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
                 MachineControllerSpec.defaultsFor(machineId),
                 new MachineAppearanceSpec(MMCR.id("block/basic_casing"), MMCR.id("block/basic_casing"), texture),

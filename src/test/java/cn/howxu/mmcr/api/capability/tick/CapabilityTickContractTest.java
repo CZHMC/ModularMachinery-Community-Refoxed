@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.tick;
 
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -16,6 +18,8 @@ import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import java.util.Map;
+import java.util.Set;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -52,7 +56,7 @@ class CapabilityTickContractTest {
     @Test
     void failure_result_has_no_implicit_operations_or_state_change() {
         ExecutionStatus failure = new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"),
-                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr_test", "facet"), java.util.Map.of());
+                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr_test", "facet"), Map.of());
         CapabilityTickResult result = new CapabilityTickResult(List.of(), failure, false);
 
         assertThat(result.operations()).isEmpty();
@@ -64,7 +68,7 @@ class CapabilityTickContractTest {
     void rejected_operation_rolls_back_earlier_operations_in_the_same_phase() {
         LongValueStorage storage = new LongValueStorage(10L, 10L, null);
         ExecutionStatus blocked = new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"),
-                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr_test", "facet"), java.util.Map.of());
+                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr_test", "facet"), Map.of());
         TickCapability capability = new TickCapability(context -> new CapabilityTickResult(List.of(
                 transaction -> {
                     storage.insert(1L, transaction);
@@ -146,14 +150,14 @@ class CapabilityTickContractTest {
                 }
 
                 @Override
-                public java.util.Set<Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet>> facets() {
-                    return java.util.Set.of(TickFacet.class);
+                public Set<Class<? extends CapabilityFacet>> facets() {
+                    return Set.of(TickFacet.class);
                 }
             };
         }
 
         @Override
-        public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+        public CapabilityOperation prepare(CapabilityRequest request) {
             throw new UnsupportedOperationException();
         }
 

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.util.IOType;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -25,6 +26,6 @@ class BuiltinCapabilityPresentationTest {
 
         List<CapabilityDisplay> displays = new MachineIoView(new CapabilitySnapshot(List.of(capability))).displays();
 
-        assertThat(displays).containsExactly(new CapabilityDisplay("energy", "250", "FE", java.util.Optional.empty()));
+        assertThat(displays).containsExactly(new CapabilityDisplay("energy", "250", "FE", Optional.empty()));
     }
 }

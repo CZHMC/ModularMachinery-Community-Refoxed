@@ -117,10 +117,10 @@ class ModuleRecipeBuilderJSTest {
 
         MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:kubejs_full_recipe")
                 .machine(machineId.toString())
-                .inputs(java.util.List.of(itemInput, fluidInput, energyOutput))
-                .outputs(java.util.List.of(new ItemStack(Items.DIAMOND)))
-                .fluidOutputs(java.util.List.of(fluidOutput))
-                .requirements(java.util.List.of(smartRequirement))
+                .inputs(List.of(itemInput, fluidInput, energyOutput))
+                .outputs(List.of(new ItemStack(Items.DIAMOND)))
+                .fluidOutputs(List.of(fluidOutput))
+                .requirements(List.of(smartRequirement))
                 .priority(7).maxThreads(3).cancelIfPerTickFails(true).allowPartialOutputs()
                 .requiredHosts("mmcr:space_elevator")
                 .createObject();
@@ -217,13 +217,13 @@ class ModuleRecipeBuilderJSTest {
         assertThat(fluidOutput.getAmount()).isZero();
         assertThat(new MachineRecipeBuilderJS("mmcr:negative_item_output")
                 .machine(machineId.toString())
-                .outputs(java.util.List.of(itemOutput))
+                .outputs(List.of(itemOutput))
                 .createObject()
                 .machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
                         output -> assertThat(output.stack().isEmpty()).isTrue());
         assertThat(new MachineRecipeBuilderJS("mmcr:negative_fluid_output")
                 .machine(machineId.toString())
-                .fluidOutputs(java.util.List.of(fluidOutput))
+                .fluidOutputs(List.of(fluidOutput))
                 .createObject()
                 .machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.FluidOutput.class,
                         output -> assertThat(output.stack().isEmpty()).isTrue());

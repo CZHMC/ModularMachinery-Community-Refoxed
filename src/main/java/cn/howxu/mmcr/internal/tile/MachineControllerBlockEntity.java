@@ -90,6 +90,7 @@ import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.StructureRuntime.StructureWorkSnapshot;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import java.util.stream.Collectors;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -101,6 +102,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -245,9 +247,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return runtime.behaviorContext();
     }
 
-    public cn.howxu.mmcr.api.data.DataStorage dataStorageForNetwork() {
+    public DataStorage dataStorageForNetwork() {
         Object storage = runtime.behaviorContext().dataStorageForRuntime();
-        return storage instanceof cn.howxu.mmcr.api.data.DataStorage dataStorage ? dataStorage : null;
+        return storage instanceof DataStorage dataStorage ? dataStorage : null;
     }
 
     public MachineBehaviorContext behaviorContext(ControllerScreenText screenText) {
@@ -1269,7 +1271,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void logBehaviorCallbackFailure(String phase, ControllerRuntimeSnapshot snapshot,
-                                             @org.jetbrains.annotations.Nullable MachineRecipe recipe,
+                                             @Nullable MachineRecipe recipe,
                                              RuntimeException exception) {
         MMCR.LOG.warn("Machine behavior callback failed: phase={} machine={} recipe={} controller={}", phase,
                 snapshot.machineId(), recipe == null ? "" : recipe.id(), getBlockPos(), exception);
@@ -1324,7 +1326,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             task.refundRequirements().forEach(sink::accept);
         } else {
             task.refundRequirements().forEach(stack -> {
-                if (!stack.isEmpty()) level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(
+                if (!stack.isEmpty()) level.addFreshEntity(new ItemEntity(
                         level, worldPosition.getX() + 0.5, worldPosition.getY() + 0.5, worldPosition.getZ() + 0.5, stack));
             });
         }
@@ -2568,7 +2570,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         unbindNetworkInterfaces(previousNetworkInterfacePositions.stream()
                 .filter(position -> !nextNetworkInterfacePositions.contains(position))
-                .collect(java.util.stream.Collectors.toSet()));
+                .collect(Collectors.toSet()));
         activeNetworkInterfacePositions = Set.copyOf(nextNetworkInterfacePositions);
 
         for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
@@ -2794,7 +2796,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return List.copyOf(kinds);
     }
 
-    private java.util.Optional<PortRequirementSpec.Failure> validatePortTiers(Machine candidate, BlockArray rotatedPattern,
+    private Optional<PortRequirementSpec.Failure> validatePortTiers(Machine candidate, BlockArray rotatedPattern,
                                                                               @Nullable CompiledMachinePattern compiledPattern,
                                                                               Direction facing) {
         return candidate.portTierRequirements().validate(portKinds(rotatedPattern, compiledPattern, facing))
@@ -2806,12 +2808,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         PortRequirementSpec.FailureReason.MISSING));
     }
 
-    private java.util.Optional<PortRequirementSpec.Failure> validateFactoryControllerCount(
+    private Optional<PortRequirementSpec.Failure> validateFactoryControllerCount(
             Machine candidate, BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
-        if (candidate.behavior() instanceof TickBehavior) return java.util.Optional.empty();
+        if (candidate.behavior() instanceof TickBehavior) return Optional.empty();
         int count = countFactoryControllers(rotatedPattern, compiledPattern, facing);
-        if (count == 0 || candidate.hasFactory()) return java.util.Optional.empty();
-        return java.util.Optional.of(new PortRequirementSpec.Failure(
+        if (count == 0 || candidate.hasFactory()) return Optional.empty();
+        return Optional.of(new PortRequirementSpec.Failure(
                 "factory_controller",
                 count,
                 0,

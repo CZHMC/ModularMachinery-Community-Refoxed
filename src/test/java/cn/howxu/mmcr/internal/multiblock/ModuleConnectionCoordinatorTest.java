@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.multiblock;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
@@ -328,11 +330,11 @@ class ModuleConnectionCoordinatorTest {
 
     private static MachineControllerBlockEntity controller(BlockPos pos, Machine machine, boolean formed) throws Exception {
         if (MachineRegistry.getMachine(machine.registryName()) == null) MachineRegistry.register(machine);
-        BlockState state = ModBlocks.controllerFor(cn.howxu.mmcr.MMCR.id("test_cube")).get().defaultBlockState()
+        BlockState state = ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
                 .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(
-                cn.howxu.mmcr.MMCR.id("test_cube"), pos, state);
+                MMCR.id("test_cube"), pos, state);
         RuntimeTestFixtures.publishStructure(controller, machine, false);
         return controller;
     }
@@ -342,7 +344,7 @@ class ModuleConnectionCoordinatorTest {
         runtimeField.setAccessible(true);
         MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
         Method publishFormationState = MachineControllerRuntime.class.getDeclaredMethod("publishFormationState",
-                Machine.class, BlockArray.class, cn.howxu.mmcr.api.machine.CompiledMachinePattern.class,
+                Machine.class, BlockArray.class, CompiledMachinePattern.class,
                 Direction.class, Direction.class, int.class);
         publishFormationState.setAccessible(true);
         publishFormationState.invoke(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine),

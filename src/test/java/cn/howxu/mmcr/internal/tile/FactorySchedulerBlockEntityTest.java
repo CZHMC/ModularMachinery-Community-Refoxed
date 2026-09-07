@@ -11,6 +11,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
@@ -178,7 +179,7 @@ class FactorySchedulerBlockEntityTest {
     @SuppressWarnings("unchecked")
     private static void addFactoryComponent(MachineControllerBlockEntity controller,
                                              FactorySchedulerBlockEntity scheduler) throws Exception {
-        List<ProcessingComponent> components = new java.util.ArrayList<>(controller.componentRuntime().components());
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
         components.add(new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, List.of(), null));
         controller.componentRuntime().replaceComponents(components);
         RuntimeTestFixtures.publishStructure(controller, controller.structureSnapshot().configuredMachine(), true);

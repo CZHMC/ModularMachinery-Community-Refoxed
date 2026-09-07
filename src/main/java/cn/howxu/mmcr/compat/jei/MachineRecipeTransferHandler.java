@@ -62,7 +62,7 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
                 .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
                 .toList();
         for (JeiDisplayEntry entry : inputs) {
-            Optional<mezz.jei.api.recipe.transfer.IRecipeTransferHandler<?, ?>> adapterHandler = JeiIngredientAdapterRegistry
+            Optional<IRecipeTransferHandler<?, ?>> adapterHandler = JeiIngredientAdapterRegistry
                     .get(entry.typeId()).flatMap(JeiIngredientAdapter::transferHandler);
             if (adapterHandler.isPresent()) {
                 @SuppressWarnings("rawtypes")

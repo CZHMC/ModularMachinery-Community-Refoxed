@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -13,6 +15,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Map;
 import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -70,11 +73,11 @@ class FactoryControllerScreenTest {
                         1, "", false, ""),
                         new FactoryRuntime.ThreadSnapshot(1, false, false, false, "", 0, 0, 1,
                                 "", false, "")),
-                "Factory", 0, new cn.howxu.mmcr.api.capability.status.ExecutionStatus(
-                        cn.howxu.mmcr.MMCR.id("failure"),
-                        cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED,
-                        cn.howxu.mmcr.MMCR.id("crafting_runtime"),
-                        java.util.Map.of("reason", "insufficient_resource")), List.of()));
+                "Factory", 0, new ExecutionStatus(
+                        MMCR.id("failure"),
+                        StatusSeverity.BLOCKED,
+                        MMCR.id("crafting_runtime"),
+                        Map.of("reason", "insufficient_resource")), List.of()));
 
         assertThat(FactoryControllerScreen.selectedFailureUnloc(menu)).isEmpty();
     }

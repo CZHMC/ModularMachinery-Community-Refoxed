@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
+import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
@@ -13,6 +14,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.BeforeAll;
@@ -46,7 +48,7 @@ class MachineControllerMenuTest {
                 List.of("mmcr:steel"), true, "mmcr:locked_recipe", "mmcr:test_cube", 2, 3, true,
                 "mmcr:host", CraftingStatus.Status.CRAFTING, "", null, true, false,
                 4, 20, 6, 8, true, 2, 1, 2, 3, 100, 1000,
-                 new FluidStack(net.minecraft.world.level.material.Fluids.WATER, 250), FluidStack.EMPTY, Map.of()));
+                 new FluidStack(Fluids.WATER, 250), FluidStack.EMPTY, Map.of()));
 
         assertThat(menu.isFormed()).isTrue();
         assertThat(menu.hasActiveRecipe()).isTrue();
@@ -76,7 +78,7 @@ class MachineControllerMenuTest {
 
     @Test
     void client_open_round_trips_role_and_machine_identity() {
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
         MachineControllerMenu.writeClientOpenData(buffer, new BlockPos(7, 8, 9),
                 MMCR.id("test_cube"), MMCR.id("host"), 1, true, 4);
@@ -117,7 +119,7 @@ class MachineControllerMenuTest {
     private static RegistryFriendlyByteBuf menuBuffer(BlockPos pos, Identifier machineId,
                                                       Identifier connectedHostId, int role,
                                                       boolean formed, int installedModules) {
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
         MachineControllerMenu.writeClientOpenData(buffer, pos, machineId, connectedHostId, role, formed,
                 installedModules);

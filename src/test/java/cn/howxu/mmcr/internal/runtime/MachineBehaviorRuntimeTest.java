@@ -3,10 +3,12 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -38,6 +40,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
@@ -65,6 +68,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -93,7 +97,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * @author howxu <dev@howxu.cn>
  */
 class MachineBehaviorRuntimeTest {
-    private static final net.minecraft.resources.Identifier TEST_MACHINE_ID = MMCR.id("test_cube");
+    private static final Identifier TEST_MACHINE_ID = MMCR.id("test_cube");
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -310,7 +314,7 @@ class MachineBehaviorRuntimeTest {
                 .serverTick(context -> calls.incrementAndGet()).build());
         RuntimeTestFixtures.formStructure(controller, tickMachine);
 
-        controller.tickRuntimeWork((net.minecraft.server.level.ServerLevel) controller.getLevel(), controller.getBlockPos());
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
 
         assertThat(calls).hasValue(1);
         assertThat(controller.currentRuntimeSnapshot().crafting().recipeId()).isNull();
@@ -593,7 +597,7 @@ class MachineBehaviorRuntimeTest {
                 .idleEnd(context -> idleEnd.incrementAndGet()).build());
         RuntimeTestFixtures.formStructure(controller, recipeMachine);
 
-        controller.tickRuntimeWork((net.minecraft.server.level.ServerLevel) controller.getLevel(), controller.getBlockPos());
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
 
         assertThat(idleStart).hasValue(1);
         assertThat(idleEnd).hasValue(1);
@@ -642,14 +646,14 @@ class MachineBehaviorRuntimeTest {
                 .hasSize(2);
         assertThat(controller.behaviorContext().ioView().itemAmount(Ingredient.of(Items.IRON_INGOT))).isEqualTo(1L);
 
-        controller.tickRuntimeWork((net.minecraft.server.level.ServerLevel) controller.getLevel(),
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(),
                 controller.getBlockPos());
         assertThat(controller.runtimeSnapshot().crafting().recipeId())
                 .as("registered recipe starts: status=%s failure=%s", controller.runtimeSnapshot().crafting().status(),
                         controller.runtimeSnapshot().crafting().failure())
                 .isEqualTo(lifecycleRecipe.id());
         RuntimeTestFixtures.advanceGameTime(controller.getLevel());
-        controller.tickRuntimeWork((net.minecraft.server.level.ServerLevel) controller.getLevel(),
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(),
                 controller.getBlockPos());
 
         assertThat(phases).containsExactly("pre", "beforeStart", "post", "pre", "recipeTick", "beforeFinish", "post");
@@ -677,7 +681,7 @@ class MachineBehaviorRuntimeTest {
         RuntimeTestFixtures.formStructure(controller, recipeMachine);
 
         assertThatCode(() -> controller.tickRuntimeWork(
-                (net.minecraft.server.level.ServerLevel) controller.getLevel(), controller.getBlockPos()))
+                (ServerLevel) controller.getLevel(), controller.getBlockPos()))
                 .doesNotThrowAnyException();
         assertThat(postCalls).hasValue(1);
     }
@@ -711,20 +715,20 @@ class MachineBehaviorRuntimeTest {
         runtime.tick();
 
         assertThat(runtime.finish().getStatus())
-                .isEqualTo(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.NO_RECIPE);
+                .isEqualTo(CraftingStatus.Status.NO_RECIPE);
         assertThat(runtime.active()).isTrue();
         assertThat(output.itemStorage().amount(0)).isZero();
     }
 
-    private static Machine machine(net.minecraft.resources.Identifier id, MachineBehavior behavior) {
+    private static Machine machine(Identifier id, MachineBehavior behavior) {
         return machine(id, new BlockArray(Map.of()), behavior);
     }
 
-    private static Machine machine(net.minecraft.resources.Identifier id, BlockArray pattern,
+    private static Machine machine(Identifier id, BlockArray pattern,
                                    MachineBehavior behavior) {
         return new DynamicMachine(id, id.toString(), pattern,
                 MachineControllerSpec.defaultsFor(id), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), java.util.Map.of(), 1, false, false, 1, List.of(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(),
                 MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), behavior);
     }
 
@@ -737,7 +741,7 @@ class MachineBehaviorRuntimeTest {
                 List.of(), 0, 1, false, List.of(), List.of(requirements));
     }
 
-    private static ItemRequirement input(net.minecraft.world.item.Item item) {
+    private static ItemRequirement input(Item item) {
         return new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), 1,
                 ItemStack.EMPTY, 1F, List.of());
     }
@@ -767,7 +771,7 @@ class MachineBehaviorRuntimeTest {
         return amount;
     }
 
-    private static ItemRequirement output(net.minecraft.world.item.Item item) {
+    private static ItemRequirement output(Item item) {
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                 new ItemStack(item), 1F, List.of());
     }
@@ -810,14 +814,14 @@ class MachineBehaviorRuntimeTest {
                 }
 
                 @Override
-                public Set<Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet>> facets() {
+                public Set<Class<? extends CapabilityFacet>> facets() {
                     return Set.of(TickFacet.class);
                 }
             };
         }
 
         @Override
-        public CapabilityOperation prepare(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
+        public CapabilityOperation prepare(CapabilityRequest request) {
             return transaction -> CapabilityResult.successful();
         }
 

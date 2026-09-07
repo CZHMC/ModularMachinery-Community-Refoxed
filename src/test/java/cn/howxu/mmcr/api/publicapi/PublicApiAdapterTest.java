@@ -12,8 +12,12 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.Set;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -60,7 +64,7 @@ class PublicApiAdapterTest {
         var converted = MachineDefinitionConverter.toStructureDefinition(structure);
 
         assertThat(resolved).isFalse();
-        assertThat(converted.declarations().getFirst().pattern().get(net.minecraft.core.BlockPos.ZERO)
+        assertThat(converted.declarations().getFirst().pattern().get(BlockPos.ZERO)
                 .matches(Blocks.FURNACE.defaultBlockState())).isTrue();
         assertThat(resolved).isTrue();
     }
@@ -83,7 +87,7 @@ class PublicApiAdapterTest {
                         .where('C', BlockPredicate.block(Blocks.STONE))
                                 .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
                         .ports(ports -> ports.min("item_input_bus", 1))
-                        .portTiers(tiers -> tiers.minItemInput(cn.howxu.mmcr.api.publicapi.machine.PortTiers.ItemTier.NORMAL))
+                        .portTiers(tiers -> tiers.minItemInput(PortTiers.ItemTier.NORMAL))
                         .requirements(requirements -> requirements.levelSlot('C', MMCR.id("coil"))))
                 .build(machineId);
 
@@ -119,7 +123,7 @@ class PublicApiAdapterTest {
         var registration = MachineDefinitionConverter.toStartupRegistration(definition, structure);
         assertThat(registration.id()).isEqualTo(machineId);
         assertThat(registration.displayNameKey()).isEqualTo("machine.registered");
-        assertThat(registration.pattern().get(net.minecraft.core.BlockPos.ZERO)).isNotNull();
+        assertThat(registration.pattern().get(BlockPos.ZERO)).isNotNull();
     }
 
     @Test
@@ -153,9 +157,9 @@ class PublicApiAdapterTest {
 
         assertThat(converted.requestProcessors()).containsExactly(Map.entry(processId, process));
         assertThat(converted.requestFailures()).containsExactly(Map.entry(failureId, failure));
-        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, java.util.Set.of())
+        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, Set.of())
                 .requestProcessors()).containsExactly(Map.entry(processId, process));
-        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, java.util.Set.of())
+        assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, Set.of())
                 .requestFailures()).containsExactly(Map.entry(failureId, failure));
         var startup = MachineDefinitionConverter.toStartupRegistration(definition);
         assertThat(startup.requestProcessors()).containsExactly(Map.entry(processId, process));
@@ -211,7 +215,7 @@ class PublicApiAdapterTest {
                 .hasMessageContaining("factory settings");
     }
 
-    private static MachineStructureDefinition structureFor(net.minecraft.resources.Identifier machineId) {
+    private static MachineStructureDefinition structureFor(Identifier machineId) {
         return MachineStructureBuilder.structure()
                 .fullStructure(stage -> stage.pattern(pattern -> pattern.layer("F")
                         .where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F')))

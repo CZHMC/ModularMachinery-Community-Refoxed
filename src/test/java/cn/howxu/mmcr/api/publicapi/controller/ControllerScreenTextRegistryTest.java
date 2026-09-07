@@ -121,7 +121,7 @@ class ControllerScreenTextRegistryTest {
     @Test
     void registry_does_not_expose_server_script_registration_or_reload_lifecycle() {
         assertThat(ControllerScreenTextRegistry.class.getDeclaredMethods())
-                .extracting(java.lang.reflect.Method::getName)
+                .extracting(Method::getName)
                 .doesNotContain("registerServerScript", "beginServerScriptReload", "endServerScriptReload",
                         "abortServerScriptReload", "beginServerScriptReloadFromReloadHook",
                         "endServerScriptReloadFromReloadHook", "abortServerScriptReloadFromReloadHook");

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -110,7 +111,7 @@ public record DynamicMachine(
             throw new IllegalArgumentException("Only HOST machines may accept modules");
         }
         failureAction = failureAction == null ? RecipeFailureActions.getDefaultAction() : failureAction;
-        behavior = java.util.Objects.requireNonNull(behavior, "behavior");
+        behavior = Objects.requireNonNull(behavior, "behavior");
         requestProcessors = Collections.unmodifiableMap(new LinkedHashMap<>(requestProcessors == null ? Map.of() : requestProcessors));
         requestFailures = Collections.unmodifiableMap(new LinkedHashMap<>(requestFailures == null ? Map.of() : requestFailures));
         modifierReplacements = copyModifierReplacements(pattern, modifierReplacements);

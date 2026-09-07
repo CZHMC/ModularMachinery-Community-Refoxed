@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -32,6 +34,7 @@ import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier.Reason;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
@@ -41,15 +44,18 @@ import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.transfer.ResourceHandler;
@@ -256,7 +262,7 @@ class FactoryRuntimeTest {
 
     @Test
     void shared_input_is_reserved_by_only_one_active_lane() {
-        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         ItemStack stack = new ItemStack(Items.IRON_INGOT, 1);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
@@ -323,7 +329,7 @@ class FactoryRuntimeTest {
 
     @Test
     void factory_lane_missing_energy_is_not_reported_as_missing_input() {
-        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
         energy.energyStorage().setAmount(2);
         FactoryRuntime runtime = new FactoryRuntime();
@@ -340,7 +346,7 @@ class FactoryRuntimeTest {
 
     @Test
     void failureInOneLaneIsPublishedWithoutDiscardingOtherActiveLanes() {
-        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         ItemStack stack = new ItemStack(Items.IRON_INGOT, 1);
         stack.set(DataComponents.MAX_STACK_SIZE, 64);
@@ -367,7 +373,7 @@ class FactoryRuntimeTest {
         assertThat(failed.failure()).isNotNull();
         assertThat(snapshot.failure()).isNotNull();
         assertThat(snapshot.failure().details())
-                .containsExactly(java.util.Map.entry("reason", "insufficient_resource"));
+                .containsExactly(Map.entry("reason", "insufficient_resource"));
         assertThat(runtime.activeLaneCount()).isEqualTo(2);
         assertThat(failed.active()).isTrue();
         assertThat(survivor.active()).isTrue();
@@ -377,7 +383,7 @@ class FactoryRuntimeTest {
         assertThat(snapshot.presentationLanes().get(0).active()).isTrue();
         assertThat(snapshot.lanes().get(0).failure()).isNotNull();
         assertThat(snapshot.lanes().get(0).failure().details())
-                .containsExactly(java.util.Map.entry("reason", "insufficient_resource"));
+                .containsExactly(Map.entry("reason", "insufficient_resource"));
         assertThat(snapshot.presentationLanes().get(1).active()).isTrue();
         assertThat(snapshot.lanes().get(1).failure()).isNull();
         assertThat(snapshot.presentationLanes().get(1).lastFailureUnloc()).isEmpty();
@@ -859,7 +865,7 @@ class FactoryRuntimeTest {
 
     @Test
     void same_amount_resource_replacement_notifies_the_linked_controller() {
-        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         input.linkControllerAppearance(controller.getBlockPos(), null);
 
@@ -880,7 +886,7 @@ class FactoryRuntimeTest {
                 ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
         RecordingController controller = new RecordingController(new BlockPos(0, 0, 0),
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
-        var level = cn.howxu.mmcr.LevelStub.create(
+        var level = LevelStub.create(
                 Map.of(controller.getBlockPos(), controller.getBlockState().getBlock(),
                         input.getBlockPos(), input.getBlockState().getBlock()), List.of(controller, input));
         controller.setLevel(level);
@@ -909,7 +915,7 @@ class FactoryRuntimeTest {
                 ModBlocks.BLOCKS.get("extended_item_output_bus_basic").get().defaultBlockState());
         RecordingController controller = new RecordingController(new BlockPos(0, 0, 0),
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
-        var level = cn.howxu.mmcr.LevelStub.create(
+        var level = LevelStub.create(
                 Map.of(controller.getBlockPos(), controller.getBlockState().getBlock(),
                         output.getBlockPos(), output.getBlockState().getBlock()), List.of(controller, output));
         controller.setLevel(level);
@@ -935,7 +941,7 @@ class FactoryRuntimeTest {
 
     @Test
     void committed_mmcr_capability_operation_notifies_the_linked_controller() {
-        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new net.minecraft.core.BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
         input.linkControllerAppearance(controller.getBlockPos(), null);
         ItemBusCapability capability = (ItemBusCapability) input.capabilitySnapshot().capabilities().getFirst();
@@ -1132,8 +1138,8 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe candidate = inputRecipe("factory_core_retry_candidate");
         MachineRecipe other = recipe("factory_core_retry_other", 20);
-        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, "core", java.util.Set.of(candidate));
-        thread.replaceRecipeSet(java.util.Set.of(candidate, other));
+        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, "core", Set.of(candidate));
+        thread.replaceRecipeSet(Set.of(candidate, other));
         var snapshot = controller.runtimeSnapshot();
         RecipeSearchContextKey key = new RecipeSearchContextKey(snapshot.structure().version(),
                 snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(),
@@ -1181,7 +1187,7 @@ class FactoryRuntimeTest {
         MachineRecipe core = recipe("factory_core_context", 20);
         MachineRecipe fallback = inputRecipe("factory_fallback_context");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, "core", java.util.Set.of(core));
+        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, "core", Set.of(core));
         FactorySearchContext context = new FactorySearchContext(controller.runtimeSnapshot(),
                 List.of(core, fallback), List.of(), List.of(), 1L, 0L, 1, 0L);
 
@@ -1257,7 +1263,7 @@ class FactoryRuntimeTest {
         MachineRecipe core = recipe("factory_core_equal_source", 20);
         MachineRecipe fallback = recipe("factory_core_equal_fallback", 20);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
-        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, "core", java.util.Set.of(core));
+        FactoryRecipeThread thread = FactoryRecipeThread.core(controller, "core", Set.of(core));
 
         List<MachineRecipe> firstSource = List.of(core, fallback);
         List<MachineRecipe> equalSource = List.of(core, fallback);
@@ -1303,7 +1309,7 @@ class FactoryRuntimeTest {
         private final List<Object> notifiedResources = new ArrayList<>();
         private final List<Object> notifiedOutputResources = new ArrayList<>();
 
-        private RecordingController(BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
+        private RecordingController(BlockPos pos, BlockState state) {
             super(pos, state);
         }
 
@@ -1342,7 +1348,7 @@ class FactoryRuntimeTest {
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
         DynamicMachine machine = new DynamicMachine(machineId, machineId.getPath(), pattern,
                 MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(),
-                PortRequirementSpec.none(), cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(),
+                PortRequirementSpec.none(), PortTierRequirementSpec.none(),
                 List.of(), Map.of(), 1, false, true, 2,
                 List.of(new FactoryThreadSpec("blocked", List.of(coreRecipeId))), List.of());
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
@@ -1350,7 +1356,7 @@ class FactoryRuntimeTest {
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, output);
         controller.componentRuntime().replaceComponents(List.of(
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null),
-                new ProcessingComponent(new cn.howxu.mmcr.api.recipe.MachineComponent(output.kind(), output.ioType()),
+                new ProcessingComponent(new MachineComponent(output.kind(), output.ioType()),
                         output, output.getBlockPos(), output.getBlockPos(), (String) null)));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
@@ -1370,7 +1376,7 @@ class FactoryRuntimeTest {
         try {
             var field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
             field.setAccessible(true);
-            return ((cn.howxu.mmcr.internal.tile.MachineControllerRuntime) field.get(controller)).factoryRuntime();
+            return ((MachineControllerRuntime) field.get(controller)).factoryRuntime();
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to access controller factory runtime", exception);
         }
@@ -1442,7 +1448,7 @@ class FactoryRuntimeTest {
                  ItemStack.EMPTY)));
     }
 
-    private static MachineRecipe itemInputRecipe(String path, net.minecraft.world.item.Item item) {
+    private static MachineRecipe itemInputRecipe(String path, Item item) {
         return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(item), 1, ItemStack.EMPTY)));

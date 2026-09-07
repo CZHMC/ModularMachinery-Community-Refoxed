@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 
@@ -160,9 +161,9 @@ public final class CraftingContext {
             MachineRequirement requirement = source.get(index);
             if (direction != null && requirement.io() != direction) continue;
             if (consumedAtStart.contains(index)) continue;
-            if (retainedInputs.contains(index) && requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement item
+            if (retainedInputs.contains(index) && requirement instanceof ItemRequirement item
                     && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() > 0F) {
-                requirement = new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(item.io(), item.item(), item.count(),
+                requirement = new ItemRequirement(item.io(), item.item(), item.count(),
                         item.stack(null), item.chance(), item.tags(), item.components(), 0F);
             }
             requirements.add(requirement);

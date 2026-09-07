@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.publicapi;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.controller.JadeText;
 import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
@@ -49,22 +50,22 @@ class MachineBehaviorTest {
 
     private static final ControllerScreenText SCREEN_TEXT = new ControllerScreenText() {
         @Override
-        public void append(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope,
+        public void append(ControllerScreenTextScope scope,
                            Identifier lineId, Component text) {
         }
 
         @Override
-        public void appendAfter(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope,
+        public void appendAfter(ControllerScreenTextScope scope,
                                 Identifier lineId, Identifier afterLineId, Component text) {
         }
 
         @Override
-        public void remove(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope,
+        public void remove(ControllerScreenTextScope scope,
                            Identifier lineId) {
         }
 
         @Override
-        public void clear(cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope scope) {
+        public void clear(ControllerScreenTextScope scope) {
         }
     };
 
@@ -81,7 +82,7 @@ class MachineBehaviorTest {
         RecipeStartContext startContext = new RecipeStartContext(recipe, 4, 3);
         RecipeTickContext tickContext = new RecipeTickContext(recipe, 2, 20, 3);
         RecipeFinishContext finishContext = new RecipeFinishContext(recipe, 4, 3,
-                List.of(new MachineOutput.ItemOutput(net.minecraft.world.item.ItemStack.EMPTY, 1F)));
+                List.of(new MachineOutput.ItemOutput(ItemStack.EMPTY, 1F)));
 
         RecipeBehavior behavior = RecipeBehavior.builder()
                 .idleStart(context -> idleStart.incrementAndGet())

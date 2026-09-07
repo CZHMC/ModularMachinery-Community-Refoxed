@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -51,7 +52,7 @@ public abstract class EnergyHatchBlockEntity extends IOPortBlockEntity {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind().definition().bindings().stream()
                     .map(this::createCapability)
-                    .toList(), java.util.List.of(new EnergyPersistenceFacet()));
+                    .toList(), List.of(new EnergyPersistenceFacet()));
         }
         return capabilitySnapshot;
     }

@@ -25,6 +25,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -249,7 +250,7 @@ public final class ComponentRuntime {
     }
 
     public Set<BlockPos> upgradeBusPositions() {
-        return upgradeBuses.stream().map(UpgradeBusSnapshot::position).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return upgradeBuses.stream().map(UpgradeBusSnapshot::position).collect(Collectors.toUnmodifiableSet());
     }
 
     public List<ItemStack> upgradeItems() {

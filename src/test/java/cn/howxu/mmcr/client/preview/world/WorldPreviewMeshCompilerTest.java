@@ -2,14 +2,19 @@ package cn.howxu.mmcr.client.preview.world;
 
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assumptions;
@@ -101,11 +106,11 @@ class WorldPreviewMeshCompilerTest {
 
     @Test
     void translucentSortIsRebuiltWhenCameraMovesWithinTheSameBlock() {
-        var camera = new net.minecraft.world.phys.Vec3(1.25, 2.5, 3.75);
+        var camera = new Vec3(1.25, 2.5, 3.75);
 
         assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(null, camera)).isTrue();
         assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(camera,
-                new net.minecraft.world.phys.Vec3(1.5, 2.5, 3.75))).isTrue();
+                new Vec3(1.5, 2.5, 3.75))).isTrue();
         assertThat(WorldPreviewMeshCompiler.needsTranslucentResort(camera, camera)).isFalse();
     }
 
@@ -114,7 +119,7 @@ class WorldPreviewMeshCompilerTest {
         AtomicReference<WorldPreviewMeshCompiler.CompilationResources> resources = new AtomicReference<>();
         AtomicReference<MeshData> intermediateMesh = new AtomicReference<>();
         assertThatThrownBy(() -> WorldPreviewMeshCompiler.compile(null, BlockPos.ZERO,
-                List.of(entry(0, Blocks.GLASS)), Integer.MAX_VALUE, new net.minecraft.world.phys.Vec3(0, 0, 0),
+                List.of(entry(0, Blocks.GLASS)), Integer.MAX_VALUE, new Vec3(0, 0, 0),
                 new AtomicBoolean(), captured -> {
                     resources.set(captured);
                     MeshData mesh = nonEmptyMeshData();
@@ -135,7 +140,7 @@ class WorldPreviewMeshCompilerTest {
         Assumptions.assumeTrue(Minecraft.getInstance() != null);
         WorldPreviewMesh mesh = WorldPreviewMeshCompiler.compile(null, BlockPos.ZERO,
                 List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE,
-                new net.minecraft.world.phys.Vec3(0, 0, 0), new AtomicBoolean());
+                new Vec3(0, 0, 0), new AtomicBoolean());
         try {
             assertThat(mesh.meshes()).containsKey(ChunkSectionLayer.TRANSLUCENT);
             assertThat(mesh.translucentSortState()).isNotNull();
@@ -168,7 +173,7 @@ class WorldPreviewMeshCompilerTest {
     void worldPreviewMeshCloseIsIdempotent() {
         var owner = new CloseCounter();
         var meshData = nonEmptyMeshData();
-        var mesh = new WorldPreviewMesh(owner, java.util.Map.of(ChunkSectionLayer.SOLID, meshData), null, java.util.Set.of());
+        var mesh = new WorldPreviewMesh(owner, Map.of(ChunkSectionLayer.SOLID, meshData), null, Set.of());
 
         mesh.close();
         mesh.close();
@@ -178,14 +183,14 @@ class WorldPreviewMeshCompilerTest {
     }
 
     private static MeshData nonEmptyMeshData() {
-        var buffer = new com.mojang.blaze3d.vertex.ByteBufferBuilder(64);
+        var buffer = new ByteBufferBuilder(64);
         buffer.reserve(1);
         return new MeshData(buffer.build(),
                 new MeshData.DrawState(DefaultVertexFormat.BLOCK, 1, 0, VertexFormat.Mode.QUADS,
                         VertexFormat.IndexType.SHORT));
     }
 
-    private static MultiblockPreviewSnapshot.Entry entry(int y, net.minecraft.world.level.block.Block block) {
+    private static MultiblockPreviewSnapshot.Entry entry(int y, Block block) {
         return new MultiblockPreviewSnapshot.Entry(new BlockPos(0, y, 0), block.defaultBlockState());
     }
 

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import java.util.ArrayList;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -183,11 +184,11 @@ public final class PreparedRecipe {
     }
 
     public MachineRecipe toMachineRecipe() {
-        List<MachineRequirement> requirements = new java.util.ArrayList<>();
+        List<MachineRequirement> requirements = new ArrayList<>();
         inputs.stream().map(MachineRequirement::fromInput).forEach(requirements::add);
         outputs.stream().map(output -> MachineRequirement.itemOutput(output, 1F)).forEach(requirements::add);
         fluidOutputs.stream().map(output -> MachineRequirement.fluidOutput(output, 1F)).forEach(requirements::add);
-        List<MachineOutput> canonicalOutputs = new java.util.ArrayList<>();
+        List<MachineOutput> canonicalOutputs = new ArrayList<>();
         outputs.forEach(output -> canonicalOutputs.add(new MachineOutput.ItemOutput(output, 1F)));
         fluidOutputs.forEach(output -> canonicalOutputs.add(new MachineOutput.FluidOutput(output, 1F)));
         return MachineRecipe.fromCanonical(Identifier.parse(registryName), Identifier.parse(machineId), tickTime,

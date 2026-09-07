@@ -3,6 +3,8 @@ package cn.howxu.mmcr.client.preview.world;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.VertexSorting;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.SectionBufferBuilderPack;
 import net.minecraft.core.BlockPos;
@@ -67,7 +69,7 @@ public final class WorldPreviewMesh implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
-        java.util.List<AutoCloseable> resources = new java.util.ArrayList<>(meshes.values());
+        List<AutoCloseable> resources = new ArrayList<>(meshes.values());
         resources.add(builders);
         WorldPreviewMeshCompiler.closeResources(resources);
     }

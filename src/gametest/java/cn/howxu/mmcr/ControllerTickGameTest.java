@@ -2,6 +2,7 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -72,7 +73,7 @@ public class ControllerTickGameTest {
         Identifier machineId = MMCR.id("controller_tick");
         helper.assertTrue(MachineRegistry.getMachine(machineId) != null,
                 "GameTest startup installs the machine registry entry");
-        helper.assertTrue(cn.howxu.mmcr.api.machine.MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
+        helper.assertTrue(MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
                 "GameTest startup installs the effective structure");
         helper.assertTrue(!MachineRegistry.getCompiledStages(machineId).isEmpty(),
                 "GameTest startup compiles the effective structure");
@@ -157,7 +158,7 @@ public class ControllerTickGameTest {
         Identifier machineId = MMCR.id("controller_tick");
         helper.assertTrue(MachineRegistry.getMachine(machineId) != null,
                 "GameTest startup installs the machine registry entry");
-        helper.assertTrue(cn.howxu.mmcr.api.machine.MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
+        helper.assertTrue(MachineStructureRegistry.effectiveSnapshot().containsKey(machineId),
                 "GameTest startup installs the effective structure");
         helper.assertTrue(!MachineRegistry.getCompiledStages(machineId).isEmpty(),
                 "GameTest startup compiles the effective structure");

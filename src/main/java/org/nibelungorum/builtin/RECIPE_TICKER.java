@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Items;
@@ -91,7 +92,7 @@ public class RECIPE_TICKER {
                                         controllerPos.getZ() + 3);
 
                                 for (var entity : level.getEntitiesOfClass(LivingEntity.class, area)) {
-                                    entity.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                    entity.addEffect(new MobEffectInstance(
                                             MobEffects.STRENGTH, 10000, 1));
                                 }
 
@@ -118,7 +119,7 @@ public class RECIPE_TICKER {
                                         controllerPos.getZ() + 3);
 
                                 for (var entity : level.getEntitiesOfClass(LivingEntity.class, area)) {
-                                    entity.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                                    entity.addEffect(new MobEffectInstance(
                                             MobEffects.NIGHT_VISION, 10000, 1));
                                 }
                             })

@@ -8,15 +8,18 @@ import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
 import cn.howxu.mmcr.compat.kubejs.MachineBuilderJS;
 import cn.howxu.mmcr.compat.kubejs.MachineRecipeFactory;
 import cn.howxu.mmcr.compat.kubejs.MachineStructureBuilderJS;
+import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.world.level.block.RotatedPillarBlock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -98,7 +101,7 @@ class InterfaceHelpersTest {
         assertThatThrownBy(() -> InterfaceTiers.energy("unknown"))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PortTiers.Requirement(PortTiers.PortCategory.ITEM,
-                cn.howxu.mmcr.util.IOType.INPUT, PortTiers.ItemTier.NORMAL.ordinal(), "big"))
+                IOType.INPUT, PortTiers.ItemTier.NORMAL.ordinal(), "big"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -166,7 +169,7 @@ class InterfaceHelpersTest {
 
     @Test
     void identifier_lookup_preserves_namespace() {
-        assertThat(cn.howxu.mmcr.internal.registration.BuiltinRegistration.block(
+        assertThat(BuiltinRegistration.block(
                 Identifier.parse("minecraft:stone")).get()).isSameAs(Blocks.STONE);
     }
 
@@ -187,8 +190,8 @@ class InterfaceHelpersTest {
                 .isEqualTo(Blocks.STONE.defaultBlockState());
         assertThat(BlockPredicate.state("minecraft:oak_log[axis=x]").blockState().orElseThrow())
                 .isEqualTo(Blocks.OAK_LOG.defaultBlockState()
-                        .setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
-                                net.minecraft.core.Direction.Axis.X));
+                        .setValue(RotatedPillarBlock.AXIS,
+                                Direction.Axis.X));
     }
 
     @Test

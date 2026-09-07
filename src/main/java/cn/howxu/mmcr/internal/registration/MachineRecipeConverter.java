@@ -27,6 +27,9 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import java.util.HashMap;
+import java.util.Objects;
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -54,7 +57,7 @@ public final class MachineRecipeConverter {
             requirements.add(toRequirement(value));
         }
         List<MachineOutput> outputs = new ArrayList<>(requirements.stream()
-                .map(OutputRegistry::fromRequirement).filter(java.util.Objects::nonNull).toList());
+                .map(OutputRegistry::fromRequirement).filter(Objects::nonNull).toList());
         for (CustomRecipeIo custom : definition.customOutputs()) {
             MachineOutput output = toOutput(custom);
             outputs.add(output);
@@ -112,7 +115,7 @@ public final class MachineRecipeConverter {
     private static cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet toInternalComponents(
             DataComponentPredicateSet components) {
         if (components.values().isEmpty()) return cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet.EMPTY;
-        Map<net.minecraft.core.component.DataComponentType<?>, cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values = new java.util.HashMap<>();
+        Map<DataComponentType<?>, cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values = new HashMap<>();
         components.values().forEach((id, predicate) -> {
             var type = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(id);
             if (type == null) throw new IllegalArgumentException("Unknown data component type " + id);
@@ -127,7 +130,7 @@ public final class MachineRecipeConverter {
                     new Dynamic<>(JsonOps.INSTANCE, exact.value().deepCopy()));
         }
         if (predicate instanceof ComponentPredicate.MapValue map) {
-            Map<String, cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values = new java.util.HashMap<>();
+            Map<String, cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values = new HashMap<>();
             map.values().forEach((key, value) -> values.put(key, toInternalPredicate(value)));
             return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.map(values);
         }

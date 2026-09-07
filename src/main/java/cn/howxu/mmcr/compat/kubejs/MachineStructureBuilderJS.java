@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.registry.ModBlocks;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -285,7 +286,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
                 .map(declaration -> new Declaration(declaration.kind(), declaration.pattern(),
                         declaration.portRequirements(), declaration.portTierRequirements(), declaration.dynamicPatterns(),
                         declaration.requirements(), stateSensitive))
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+                .collect(Collectors.toCollection(ArrayList::new));
         if (!classMetadataChanged) return new MachineStructureDefinition(id, result);
         Declaration first = result.getFirst();
         result.set(0, new Declaration(first.kind(), first.pattern(), portRequirements, portTierRequirements,

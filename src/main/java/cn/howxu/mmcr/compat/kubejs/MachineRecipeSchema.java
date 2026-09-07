@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
@@ -218,13 +219,13 @@ public final class MachineRecipeSchema {
         recipe.save();
     }
 
-    private static void appendOutput(KubeRecipe recipe, cn.howxu.mmcr.api.recipe.MachineOutput output) {
+    private static void appendOutput(KubeRecipe recipe, MachineOutput output) {
         JsonArray outputs = recipe.json.getAsJsonArray("outputs");
         if (outputs == null) {
             outputs = new JsonArray();
             recipe.json.add("outputs", outputs);
         }
-        outputs.add(cn.howxu.mmcr.api.recipe.MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow());
+        outputs.add(MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow());
         recipe.save();
     }
 

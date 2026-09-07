@@ -10,9 +10,14 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import com.mojang.serialization.Lifecycle;
+import java.util.Set;
 import net.minecraft.core.Holder;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
@@ -33,6 +38,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.crafting.ICustomIngredient;
+import net.neoforged.neoforge.common.crafting.IngredientType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -126,7 +132,7 @@ class RecipeCandidateIndexTest {
             }
 
             @Override
-            public net.neoforged.neoforge.common.crafting.IngredientType<?> getType() {
+            public IngredientType<?> getType() {
                 return null;
             }
         }));
@@ -236,7 +242,7 @@ class RecipeCandidateIndexTest {
     void search_prefers_missing_input_over_energy_and_level_requirements() {
         MachineRecipe levelLimited = RecipeTestSupport.create(id("level_limited"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)), false, java.util.Set.of());
+                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)), false, Set.of());
         MachineRecipe energyLimited = RecipeTestSupport.create(id("energy_limited"), MACHINE, 20,
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)), List.of(), List.of(), 0, 1);
         MachineRecipe inputLimited = itemRecipe("input_limited", Ingredient.of(Items.IRON_INGOT));
@@ -249,12 +255,12 @@ class RecipeCandidateIndexTest {
 
     private static ControllerRuntimeSnapshot emptySnapshot() {
         return new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 0L, 0L, 0L,
-                java.util.Map.of(), java.util.Map.of(), java.util.Set.of(),
-                cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus.notRequired(), 0,
-                new cn.howxu.mmcr.internal.runtime.ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
-                cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot.empty(0L, 0L, 0L),
-                cn.howxu.mmcr.internal.runtime.FactorySnapshot.empty(), List.of(), List.of(), List.of(),
-                "", "", 0, false, false, 0, 0, 1, java.util.Map.of());
+                Map.of(), Map.of(), Set.of(),
+                ModuleConnectionStatus.notRequired(), 0,
+                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
+                CraftingStateSnapshot.empty(0L, 0L, 0L),
+                FactorySnapshot.empty(), List.of(), List.of(), List.of(),
+                "", "", 0, false, false, 0, 0, 1, Map.of());
     }
 
     private static MachineRecipe itemRecipe(String path, Ingredient ingredient) {

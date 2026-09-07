@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
@@ -47,8 +48,8 @@ class FactoryRecipeThreadTest {
                     MapCodec.unit(() -> new TestRequirement(null, RecipeModifier.IOType.INPUT)), handler);
             RequirementHandlerRegistry.register(type);
 
-            EnumMap<cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers =
-                    new EnumMap<>(cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier.Reason.class);
+            EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers =
+                    new EnumMap<>(ResourceAvailabilityNotifier.Reason.class);
             FactoryRecipeThread.addRequirementMatchers(matchers,
                     new TestRequirement(type, RecipeModifier.IOType.INPUT), "insufficient_resource");
 

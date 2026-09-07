@@ -23,6 +23,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.Map;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
@@ -65,7 +66,7 @@ class CustomRequirementTest {
 
         private ExecutionStatus failure() {
             return new ExecutionStatus(TYPE_ID, StatusSeverity.BLOCKED, TYPE_ID,
-                    java.util.Map.of("reason", "virtual_scalar_reserved"));
+                    Map.of("reason", "virtual_scalar_reserved"));
         }
     };
     private static final RequirementType<TestRequirement> TYPE = new RequirementType.Definition<>(
@@ -162,7 +163,7 @@ class CustomRequirementTest {
                 return storage.extract(virtual.parallelism(), false) == virtual.parallelism()
                         ? CapabilityResult.successful()
                         : CapabilityResult.failure(new ExecutionStatus(TYPE_ID, StatusSeverity.BLOCKED,
-                        TYPE_ID, java.util.Map.of("reason", "virtual_scalar_commit")));
+                        TYPE_ID, Map.of("reason", "virtual_scalar_commit")));
             };
         }
     }

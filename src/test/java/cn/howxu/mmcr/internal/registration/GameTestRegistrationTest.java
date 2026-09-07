@@ -5,6 +5,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,7 @@ class GameTestRegistrationTest {
     void forwards_all_canonical_startup_events_to_present_source() {
         GameTestRegistration.registerStartupSources("cn.howxu.mmcr.OptionalGameTestSource",
                 new MMCRMachineDefinationsEvent(),
-                new MMCRMachineStructuresEvent(java.util.Set.of()), new MMCRMachineRecipesEvent());
+                new MMCRMachineStructuresEvent(Set.of()), new MMCRMachineRecipesEvent());
 
         assertThat(OptionalGameTestSource.invoked()).isTrue();
         assertThat(OptionalGameTestSource.structuresInvoked()).isTrue();
@@ -50,7 +51,7 @@ class GameTestRegistrationTest {
     void ignores_absent_startup_source() {
         assertThatCode(() -> GameTestRegistration.registerStartupSources(
                 "cn.howxu.mmcr.MissingGameTestRegistry", new MMCRMachineDefinationsEvent(),
-                new MMCRMachineStructuresEvent(java.util.Set.of()), new MMCRMachineRecipesEvent()))
+                new MMCRMachineStructuresEvent(Set.of()), new MMCRMachineRecipesEvent()))
                 .doesNotThrowAnyException();
     }
 

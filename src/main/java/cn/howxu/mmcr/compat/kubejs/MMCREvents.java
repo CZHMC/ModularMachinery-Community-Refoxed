@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import dev.latvian.mods.kubejs.event.EventGroup;
+import dev.latvian.mods.kubejs.event.EventHandler;
 import dev.latvian.mods.kubejs.script.ScriptType;
 
 import java.util.LinkedHashMap;
@@ -38,9 +39,9 @@ public interface MMCREvents {
     }
 
     final class Holder {
-        private static final dev.latvian.mods.kubejs.event.EventHandler STARTUP = MMCREvents.GROUP.startup("startup",
+        private static final EventHandler STARTUP = MMCREvents.GROUP.startup("startup",
                 () -> MMCRStartupEventJS.class);
-        private static final dev.latvian.mods.kubejs.event.EventHandler SERVER = MMCREvents.GROUP.server("server",
+        private static final EventHandler SERVER = MMCREvents.GROUP.server("server",
                 () -> MMCRServerEventJS.class);
 
         private static void init() {

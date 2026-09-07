@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import com.google.gson.JsonElement;
@@ -51,7 +52,7 @@ public final class RecipeApi {
         if (custom.ioType().isInput()) {
             MachineRequirement requirement = MachineRequirement.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
             if (!custom.typeId().equals(requirement.type().id())
-                    || requirement.io() != cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.INPUT) {
+                    || requirement.io() != RecipeModifier.IOType.INPUT) {
                 throw new IllegalArgumentException("Custom recipe input does not match registered type: " + custom.typeId());
             }
             return;
@@ -66,7 +67,7 @@ public final class RecipeApi {
         }
         MachineRequirement requirement = MachineRequirement.CODEC.parse(JsonOps.INSTANCE, custom.payload()).getOrThrow();
         if (!custom.typeId().equals(requirement.type().id())
-                || requirement.io() != cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.OUTPUT) {
+                || requirement.io() != RecipeModifier.IOType.OUTPUT) {
             throw new IllegalArgumentException("Custom recipe output does not match registered type: " + custom.typeId());
         }
     }

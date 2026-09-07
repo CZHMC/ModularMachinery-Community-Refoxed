@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -11,6 +12,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import java.util.stream.Collectors;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
@@ -258,7 +260,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     @Override
-    protected void onStartSearchFailed(@Nullable cn.howxu.mmcr.api.capability.status.ExecutionStatus failure) {
+    protected void onStartSearchFailed(@Nullable ExecutionStatus failure) {
         super.onStartSearchFailed(failure);
         armSearchFailure();
         updateFailureResourceMatchers(failureCandidates);
@@ -439,7 +441,7 @@ public final class FactoryRecipeThread extends RecipeThread {
             }
         }
         failureResourceMatchers = matchers.entrySet().stream()
-                .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getKey,
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey,
                         entry -> List.copyOf(entry.getValue())));
     }
 
@@ -455,7 +457,7 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private static void addMatcher(Map<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
                                    ResourceAvailabilityNotifier.Reason reason, Predicate<Object> matcher) {
-        matchers.computeIfAbsent(reason, ignored -> new java.util.ArrayList<>()).add(matcher);
+        matchers.computeIfAbsent(reason, ignored -> new ArrayList<>()).add(matcher);
     }
 
     private RecipeSearchContextKey currentSearchContextKey() {

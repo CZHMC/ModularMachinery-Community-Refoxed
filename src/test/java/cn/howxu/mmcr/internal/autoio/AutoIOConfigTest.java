@@ -2,10 +2,12 @@ package cn.howxu.mmcr.internal.autoio;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -25,6 +27,7 @@ import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -179,8 +182,8 @@ class AutoIOConfigTest {
         public CapabilitySnapshot capabilitySnapshot() {
             return new CapabilitySnapshot(List.of(
                     new ItemBusCapability(this, new LongResourceStorage<>(
-                            net.neoforged.neoforge.transfer.item.ItemResource.class, 1, 64L,
-                            net.neoforged.neoforge.transfer.item.ItemResource::isEmpty, () -> {}), IOType.INPUT),
+                            ItemResource.class, 1, 64L,
+                            ItemResource::isEmpty, () -> {}), IOType.INPUT),
                     new FluidHatchCapability(this, new LongFluidStorage(1, 64L, () -> {}), IOType.INPUT)));
         }
 
@@ -223,8 +226,8 @@ class AutoIOConfigTest {
                         @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
                     };
                 }
-                @Override public cn.howxu.mmcr.api.capability.plan.CapabilityOperation prepare(
-                        cn.howxu.mmcr.api.capability.CapabilityRequest request) { return null; }
+                @Override public CapabilityOperation prepare(
+                        CapabilityRequest request) { return null; }
             };
             return new CapabilitySnapshot(List.of(capability));
         }

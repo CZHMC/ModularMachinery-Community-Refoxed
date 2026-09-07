@@ -29,6 +29,7 @@ import cn.howxu.mmcr.api.publicapi.machine.LevelType;
 import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
@@ -96,7 +97,7 @@ public final class MachineDefinitionConverter {
             entries = normalized;
             symbolsByPosition = normalizedSymbols;
         }
-        return new BlockArray(entries, java.util.Map.of(), symbolsByPosition);
+        return new BlockArray(entries, Map.of(), symbolsByPosition);
     }
 
     public static DynamicMachine toDynamicMachine(MachineDefinition definition, cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {
@@ -281,9 +282,9 @@ public final class MachineDefinitionConverter {
     private static cn.howxu.mmcr.api.machine.SmartInterfaceModifier toInternalSmartInterfaceModifier(
             cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier modifier) {
         return new cn.howxu.mmcr.api.machine.SmartInterfaceModifier(modifier.interfaceType(), modifier.target(),
-                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType.valueOf(modifier.io().name()),
+                RecipeModifier.IOType.valueOf(modifier.io().name()),
                 modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(), modifier.atMax(),
-                cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.Operation.valueOf(modifier.operation().name()));
+                RecipeModifier.Operation.valueOf(modifier.operation().name()));
     }
 
     private static List<MachineStructureStage> toStructureStages(cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition structure) {

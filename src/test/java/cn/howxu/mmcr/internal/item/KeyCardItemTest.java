@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.item;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
@@ -16,10 +17,14 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.ArrayList;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentMap;
@@ -36,6 +41,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -43,6 +49,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -118,7 +125,7 @@ class KeyCardItemTest {
         assertThat(useOn(fixture, player, stack, fixture.targetEndpoint)).isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.getCount()).isEqualTo(count);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get()))
-                .isEqualTo(new cn.howxu.mmcr.api.network.KeyCardBinding(fixture.sourceEndpoint, fixture.sourceMachine));
+                .isEqualTo(new KeyCardBinding(fixture.sourceEndpoint, fixture.sourceMachine));
         assertThat(fixture.sourceNetwork.connections()).hasSize(1);
         assertThat(fixture.targetNetwork.connections()).hasSize(1);
     }
@@ -213,7 +220,7 @@ class KeyCardItemTest {
 
     private static InteractionResult useOn(Fixture fixture, TestPlayer player, ItemStack stack, GlobalPos position) {
         BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(position.pos()), Direction.UP, position.pos(), false);
-        return keyCard.useOn(new net.minecraft.world.item.context.UseOnContext(fixture.level, player,
+        return keyCard.useOn(new UseOnContext(fixture.level, player,
                 InteractionHand.MAIN_HAND, stack, hit));
     }
 
@@ -258,7 +265,7 @@ class KeyCardItemTest {
 
     private static MachineControllerBlockEntity controller(BlockPos pos, Machine machine, TestServerLevel level,
                                                             BlockPos interfacePos) throws Exception {
-        MachineControllerBlockEntity controller = cn.howxu.mmcr.test.RuntimeTestFixtures.controllerEntity(
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(
                 MMCR.id("test_cube"), pos);
         controller.setLevel(level);
         level.blocks.put(pos, controller.getBlockState());
@@ -273,7 +280,7 @@ class KeyCardItemTest {
         runtimeField.setAccessible(true);
         MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
         Method publishFormationState = MachineControllerRuntime.class.getDeclaredMethod("publishFormationState",
-                Machine.class, BlockArray.class, cn.howxu.mmcr.api.machine.CompiledMachinePattern.class,
+                Machine.class, BlockArray.class, CompiledMachinePattern.class,
                 Direction.class, Direction.class, int.class);
         publishFormationState.setAccessible(true);
         publishFormationState.invoke(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine),
@@ -315,18 +322,18 @@ class KeyCardItemTest {
         }
         if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
-        holder.set(deferredHolder, net.minecraft.core.Holder.direct(value));
+        holder.set(deferredHolder, Holder.direct(value));
     }
 
     @SuppressWarnings("unchecked")
-    private static Item registerItem(net.neoforged.neoforge.registries.DeferredHolder<Item, Item> itemHolder) throws Exception {
+    private static Item registerItem(DeferredHolder<Item, Item> itemHolder) throws Exception {
         if (BuiltInRegistries.ITEM.containsKey(itemHolder.getId())) return BuiltInRegistries.ITEM.getValue(itemHolder.getId());
         MappedRegistry<Item> items = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
         items.unfreeze(true);
         Field entriesField = ModItems.REGISTER.getClass().getSuperclass().getDeclaredField("entries");
         entriesField.setAccessible(true);
-        Map<net.neoforged.neoforge.registries.DeferredHolder<Item, ? extends Item>, java.util.function.Supplier<? extends Item>> entries =
-                (Map<net.neoforged.neoforge.registries.DeferredHolder<Item, ? extends Item>, java.util.function.Supplier<? extends Item>>) entriesField.get(ModItems.REGISTER);
+        Map<DeferredHolder<Item, ? extends Item>, Supplier<? extends Item>> entries =
+                (Map<DeferredHolder<Item, ? extends Item>, Supplier<? extends Item>>) entriesField.get(ModItems.REGISTER);
         Item item = entries.get(itemHolder).get();
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);
         items.freeze();
@@ -389,7 +396,7 @@ class KeyCardItemTest {
 
     private static final class TestPlayer extends Player {
         private ItemStack held;
-        private java.util.ArrayList<Component> messages;
+        private ArrayList<Component> messages;
         private boolean shift;
 
         private TestPlayer(Level level) {
@@ -398,13 +405,13 @@ class KeyCardItemTest {
 
         private void hold(ItemStack stack) {
             held = stack;
-            if (messages == null) messages = new java.util.ArrayList<>();
+            if (messages == null) messages = new ArrayList<>();
         }
         @Override public void setShiftKeyDown(boolean shiftKeyDown) { shift = shiftKeyDown; }
         @Override public boolean isShiftKeyDown() { return shift; }
         @Override public ItemStack getItemInHand(InteractionHand hand) { return held; }
         @Override public void sendSystemMessage(Component message) {
-            if (messages == null) messages = new java.util.ArrayList<>();
+            if (messages == null) messages = new ArrayList<>();
             messages.add(message);
         }
         @Override public GameType gameMode() { return GameType.SURVIVAL; }

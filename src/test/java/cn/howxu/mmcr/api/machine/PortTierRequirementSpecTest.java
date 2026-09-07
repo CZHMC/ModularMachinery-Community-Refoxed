@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
@@ -131,7 +132,7 @@ class PortTierRequirementSpecTest {
     void combined_kind_rejects_a_third_capability_type() {
         assertInvalidCombined(List.of(itemFamily(IOType.INPUT), fluidFamily(IOType.INPUT)),
                 List.of(BuiltinCapabilityDefinitions.ITEM_TYPE, BuiltinCapabilityDefinitions.FLUID_TYPE,
-                        new CapabilityType(cn.howxu.mmcr.MMCR.id("custom"))));
+                        new CapabilityType(MMCR.id("custom"))));
     }
 
     @Test
@@ -166,7 +167,7 @@ class PortTierRequirementSpecTest {
     @Test
     void dynamic_machine_defaults_to_no_tier_requirements() {
         var machine = new DynamicMachine(
-                cn.howxu.mmcr.MMCR.id("tier_default_machine"),
+                MMCR.id("tier_default_machine"),
                 "Tier Default",
                 new BlockArray(Map.of()));
 
@@ -192,7 +193,7 @@ class PortTierRequirementSpecTest {
     private static IOPortKind combinedKind(IOType ioType, List<PortFamilyDescriptor> families) {
         return new PortKinds.CombinedKind("combined_" + ioType.getSerializedName() + "_test", ioType, families,
                 PortKinds.ITEM_INPUT.entityFactory(), PortDefinition.of(
-                        cn.howxu.mmcr.MMCR.id("combined_" + ioType.getSerializedName() + "_test"),
+                        MMCR.id("combined_" + ioType.getSerializedName() + "_test"),
                         families.stream().map(family -> IOPortKind.binding(
                                 family.familyId().equals(PortFamilyIds.ITEM)
                                         ? BuiltinCapabilityDefinitions.ITEM_TYPE
@@ -207,7 +208,7 @@ class PortTierRequirementSpecTest {
     private static void assertInvalidCombined(List<PortFamilyDescriptor> families, List<CapabilityType> types) {
         assertThatIllegalArgumentException().isThrownBy(() -> new PortKinds.CombinedKind("combined_invalid_test",
                 IOType.INPUT, families, PortKinds.ITEM_INPUT.entityFactory(), PortDefinition.of(
-                        cn.howxu.mmcr.MMCR.id("combined_invalid_test"), types.stream()
+                        MMCR.id("combined_invalid_test"), types.stream()
                                 .map(type -> IOPortKind.binding(type, IOType.INPUT, families)).toList())));
     }
 

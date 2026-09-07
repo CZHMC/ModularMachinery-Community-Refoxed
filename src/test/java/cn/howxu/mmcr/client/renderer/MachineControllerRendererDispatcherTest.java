@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.publicapi.render.ControllerRenderContext;
 import cn.howxu.mmcr.api.publicapi.render.ControllerRenderer;
+import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -78,7 +79,7 @@ class MachineControllerRendererDispatcherTest {
             assertFalse(context.structure().formed());
             assertTrue(context.structure().structureAreaLoaded());
             assertEquals(0, context.structure().matchedStage());
-            assertEquals(cn.howxu.mmcr.api.recipe.helper.CraftingStatus.Status.IDLE, context.crafting().status());
+            assertEquals(CraftingStatus.Status.IDLE, context.crafting().status());
         };
         MachineControllerRendererDispatcher dispatcher =
                 new MachineControllerRendererDispatcher(machine, renderer);

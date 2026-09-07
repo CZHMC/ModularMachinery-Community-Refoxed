@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
+import java.util.Optional;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
@@ -48,7 +49,7 @@ public final class EnergyHatchScreen extends AbstractPortScreen<EnergyHatchMenu>
         if (!autoIOPage) graphics.text(font, title, titleLabelX, titleLabelY, TITLE_COLOR, false);
         if (!autoIOPage && menu.energyCapacity() > 0) {
             CapabilityDisplay display = menu.displayEntries().stream().findFirst()
-                    .orElse(new CapabilityDisplay("energy", "0", "FE", java.util.Optional.empty()));
+                    .orElse(new CapabilityDisplay("energy", "0", "FE", Optional.empty()));
             Component amount = Component.literal(ReadableNumber.format(menu.storedEnergy()) + " / "
                     + ReadableNumber.format(menu.energyCapacity()) + " " + display.unit());
             int x = leftPos + titleLabelX;

@@ -7,9 +7,11 @@ import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
@@ -35,6 +37,7 @@ import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -128,8 +131,8 @@ class ControllerSyncRuntimeTest {
         Identifier machineId = MMCR.id("sync_tick_machine");
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Tick", new BlockArray(Map.of()),
                 MachineControllerSpec.defaultsFor(machineId),
-                cn.howxu.mmcr.api.machine.MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
-                cn.howxu.mmcr.api.machine.PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1,
+                MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1,
                 List.of(), MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction(),
                 TickBehavior.builder().build());
         StructureSnapshot structure = new StructureSnapshot(machine, machine, new BlockArray(Map.of()),
@@ -308,7 +311,7 @@ class ControllerSyncRuntimeTest {
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
         ItemStack inputStack = new ItemStack(Items.IRON_INGOT, 4);
-        inputStack.set(net.minecraft.core.component.DataComponents.MAX_STACK_SIZE, 64);
+        inputStack.set(DataComponents.MAX_STACK_SIZE, 64);
         try (Transaction transaction = Transaction.openRoot()) {
             input.itemStorage().insert(
                     0,
@@ -466,7 +469,7 @@ class ControllerSyncRuntimeTest {
         FactorySnapshot factory = new FactorySnapshot(true, true, List.of(crafting), 2, 1, 8L,
                 false, List.of(activeLane, idleLane), "factory", 3, failure, List.of("mmcr:steel"));
         StructureSnapshot structure = new StructureSnapshot(null, null, null, null, null,
-                net.minecraft.core.Direction.SOUTH, 1, true, 7L, null, null, null, false, true, Set.of());
+                Direction.SOUTH, 1, true, 7L, null, null, null, false, true, Set.of());
         return new ControllerRuntimeSnapshot(structure, 8L, 9L, 10L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.connected(MMCR.id("host")), 2,
                 new ComponentRuntime.CapabilityAggregate(250L, 1000L,

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -72,7 +73,7 @@ class PktControllerScreenTextPayloadTest {
                 List.of(line(ControllerScreenTextScope.CONTROLLER, "test:" + "x".repeat(257), Component.empty()))))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PktControllerScreenTextPayload(BlockPos.ZERO, 0L,
-                java.util.stream.IntStream.range(0, PktControllerScreenTextPayload.MAX_LINES + 1)
+                IntStream.range(0, PktControllerScreenTextPayload.MAX_LINES + 1)
                         .mapToObj(index -> line(ControllerScreenTextScope.CONTROLLER, "test:line_" + index,
                                 Component.empty())).toList()))
                 .isInstanceOf(IllegalArgumentException.class);

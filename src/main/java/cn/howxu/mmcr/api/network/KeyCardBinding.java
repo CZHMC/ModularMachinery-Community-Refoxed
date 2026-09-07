@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.network;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
@@ -20,7 +21,7 @@ public record KeyCardBinding(GlobalPos interfacePos, MachineReference machine) {
     ).apply(instance, (interfacePos, machineType, machineHash) ->
             new KeyCardBinding(interfacePos, new MachineReference(machineType, machineHash))));
 
-    public static final StreamCodec<net.minecraft.network.FriendlyByteBuf, KeyCardBinding> STREAM_CODEC =
+    public static final StreamCodec<FriendlyByteBuf, KeyCardBinding> STREAM_CODEC =
             StreamCodec.composite(GlobalPos.STREAM_CODEC, KeyCardBinding::interfacePos,
                     Identifier.STREAM_CODEC, binding -> binding.machine().type(),
                     ByteBufCodecs.LONG, binding -> binding.machine().hash(),

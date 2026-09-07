@@ -22,6 +22,7 @@ import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.ingredients.IIngredientRenderer;
+import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
@@ -427,16 +428,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             setQuantityOverlay(slot, quantity);
         }
         if (entry.renderer() != null) {
-            slot.setCustomRenderer((mezz.jei.api.ingredients.IIngredientType) entry.ingredientType(), entry.renderer());
+            slot.setCustomRenderer((IIngredientType) entry.ingredientType(), entry.renderer());
         }
         if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
             slot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER);
         }
         if (entry.ingredient() instanceof List<?> ingredients) {
-            slot.addIngredients((mezz.jei.api.ingredients.IIngredientType) entry.ingredientType(), ingredients);
+            slot.addIngredients((IIngredientType) entry.ingredientType(), ingredients);
             return;
         }
-        slot.add((mezz.jei.api.ingredients.IIngredientType) entry.ingredientType(), entry.ingredient());
+        slot.add((IIngredientType) entry.ingredientType(), entry.ingredient());
     }
 
     private static void drawTextEntries(MachineRecipeDisplay recipe, MachineRecipeLayout.RegionPlan region,

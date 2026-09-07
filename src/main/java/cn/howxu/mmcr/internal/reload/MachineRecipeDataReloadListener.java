@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.util.ArrayList;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
@@ -81,7 +82,7 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
 
     static PreparedRecipes loadCandidate(ResourceManager resourceManager, HolderLookup.Provider registries) {
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
-        List<MachineRecipeJson.RecipeJsonException> errors = new java.util.ArrayList<>();
+        List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>();
         for (Map.Entry<Identifier, Resource> entry : resourceManager.listResources("recipes", path -> path.getPath().endsWith(".json")).entrySet()) {
             Identifier resourceLocation = entry.getKey();
             Identifier recipeId = Identifier.fromNamespaceAndPath(resourceLocation.getNamespace(),

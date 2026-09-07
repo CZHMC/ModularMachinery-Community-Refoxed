@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
@@ -44,7 +45,7 @@ public final class UpgradeBusBlockEntity extends LinkedAppearanceBlockEntity {
     }
 
     public List<ItemStack> itemSnapshot() {
-        return java.util.stream.IntStream.range(0, storage.size())
+        return IntStream.range(0, storage.size())
                 .mapToObj(slot -> {
                     ItemResource resource = storage.resource(slot);
                     return resource == null || resource.isEmpty()

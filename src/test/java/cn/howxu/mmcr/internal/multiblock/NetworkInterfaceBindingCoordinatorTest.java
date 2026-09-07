@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.multiblock;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
@@ -14,6 +15,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.util.HashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -246,7 +248,7 @@ class NetworkInterfaceBindingCoordinatorTest {
         TestServerLevel level = allocate(TestServerLevel.class);
         level.blockEntities = new HashMap<>();
         level.blocks = new HashMap<>();
-        level.unloaded = new java.util.HashSet<>();
+        level.unloaded = new HashSet<>();
         setField(Level.class, level, "dimension", Level.OVERWORLD);
         setField(ServerLevel.class, level, "players", List.of());
         MinecraftServer server = allocate(DedicatedServer.class);
@@ -294,7 +296,7 @@ class NetworkInterfaceBindingCoordinatorTest {
         runtimeField.setAccessible(true);
         MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
         Method publishFormationState = MachineControllerRuntime.class.getDeclaredMethod("publishFormationState",
-                Machine.class, BlockArray.class, cn.howxu.mmcr.api.machine.CompiledMachinePattern.class,
+                Machine.class, BlockArray.class, CompiledMachinePattern.class,
                 Direction.class, Direction.class, int.class);
         publishFormationState.setAccessible(true);
         publishFormationState.invoke(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine),

@@ -12,6 +12,7 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -126,7 +127,7 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
      * The network coordinator can extend this seam for cross-level resolution without forcing chunks here.
      */
     public void removeFromLoadedPeers() {
-        if (!(level instanceof net.minecraft.server.level.ServerLevel serverLevel)) return;
+        if (!(level instanceof ServerLevel serverLevel)) return;
         GlobalPos endpoint = GlobalPos.of(serverLevel.dimension(), worldPosition);
         for (Connection connection : connections()) {
             GlobalPos peer = connection.endpoint();

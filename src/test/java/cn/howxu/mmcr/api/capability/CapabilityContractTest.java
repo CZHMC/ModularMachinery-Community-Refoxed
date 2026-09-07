@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.capability;
 
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
@@ -181,7 +182,7 @@ class CapabilityContractTest {
                 }
 
                 @Override
-                public Set<Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet>> facets() {
+                public Set<Class<? extends CapabilityFacet>> facets() {
                     return Set.of(OperationFacet.class);
                 }
             };

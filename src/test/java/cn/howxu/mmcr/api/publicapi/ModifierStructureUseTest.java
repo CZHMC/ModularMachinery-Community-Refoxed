@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
 import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
+import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -107,7 +108,7 @@ class ModifierStructureUseTest {
     }
 
     private static List<String> foundModifiers(
-            Map<BlockPos, List<cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement>> replacements,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
             Level level, BlockPos controller) {
         Set<String> ids = new LinkedHashSet<>();
         replacements.forEach((position, values) -> {

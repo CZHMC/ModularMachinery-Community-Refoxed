@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /** Public view of a machine's typed data storage.
  * @author howxu <dev@howxu.cn>
@@ -47,14 +48,14 @@ public final class DataStorage {
      * @author howxu <dev@howxu.cn>
      */
     public static final class Transaction {
-        private final net.neoforged.neoforge.transfer.transaction.TransactionContext context;
+        private final TransactionContext context;
 
-        private Transaction(net.neoforged.neoforge.transfer.transaction.TransactionContext context) {
+        private Transaction(TransactionContext context) {
             this.context = context;
         }
 
         public static Transaction view(Object context) {
-            if (!(context instanceof net.neoforged.neoforge.transfer.transaction.TransactionContext transaction)) {
+            if (!(context instanceof TransactionContext transaction)) {
                 throw new IllegalArgumentException("context must be a transaction");
             }
             return new Transaction(transaction);

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -226,7 +227,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 .orElseGet(() -> {
                     CapabilityDefinition definition = Optional.ofNullable(CapabilityRegistry.get(type))
                             .orElseThrow(() -> new IllegalStateException("Capability is not registered: " + type.id()));
-                    return new CapabilityBinding(type, cn.howxu.mmcr.api.capability.CapabilityDirections.of(ioType()), definition.factory(),
+                    return new CapabilityBinding(type, CapabilityDirections.of(ioType()), definition.factory(),
                             (ignored, tier) -> true);
                 });
         return createCapability(binding);
@@ -246,7 +247,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             }
 
             @Override
-            public cn.howxu.mmcr.api.capability.CapabilityDirections directions() {
+            public CapabilityDirections directions() {
                 return binding.directions();
             }
 
@@ -415,7 +416,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     @Override
     public MachineComponent provideComponent() {
-        return new MachineComponent(kind(), cn.howxu.mmcr.api.capability.CapabilityDirections.of(ioType()));
+        return new MachineComponent(kind(), CapabilityDirections.of(ioType()));
     }
 
     @Override

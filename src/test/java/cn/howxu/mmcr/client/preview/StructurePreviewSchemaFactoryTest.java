@@ -15,21 +15,27 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.tags.TagKey;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -56,25 +62,25 @@ class StructurePreviewSchemaFactoryTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        bindHolderTag(net.minecraft.world.level.block.Blocks.OAK_LOG.builtInRegistryHolder(), previewTag());
-        bindHolderTag(net.minecraft.world.level.block.Blocks.BIRCH_LOG.builtInRegistryHolder(), previewTag());
+        bindHolderTag(Blocks.OAK_LOG.builtInRegistryHolder(), previewTag());
+        bindHolderTag(Blocks.BIRCH_LOG.builtInRegistryHolder(), previewTag());
     }
 
-    private static TagKey<net.minecraft.world.level.block.Block> previewTag() {
+    private static TagKey<Block> previewTag() {
         return TagKey.create(Registries.BLOCK, MMCR.id("preview_logs"));
     }
 
     private static void bindHolderTag(Holder<?> holder, TagKey<?> tag) throws Exception {
-        java.lang.reflect.Method bindTags = Class.forName("net.minecraft.core.Holder$Reference")
-                .getDeclaredMethod("bindTags", java.util.Collection.class);
+        Method bindTags = Class.forName("net.minecraft.core.Holder$Reference")
+                .getDeclaredMethod("bindTags", Collection.class);
         bindTags.setAccessible(true);
-        bindTags.invoke(holder, java.util.Set.of(tag));
+        bindTags.invoke(holder, Set.of(tag));
     }
 
     @AfterEach
     void restoreDefaultLevels() {
-        cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.resetCollector();
-        var event = cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent.prepare(java.util.Set.of());
+        MMCRMachineStructuresEvent.resetCollector();
+        var event = MMCRMachineStructuresEvent.prepare(Set.of());
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("Preview Test")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
@@ -111,7 +117,7 @@ class StructurePreviewSchemaFactoryTest {
     void factory_uses_directional_state_and_candidate_from_the_rotated_compiled_pattern() {
         BlockPos rawPosition = new BlockPos(1, 0, 0);
         BlockState southState = Blocks.OAK_LOG.defaultBlockState()
-                .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS, Direction.Axis.X);
+                .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
         BlockArray pattern = new BlockArray(Map.of(rawPosition, new BlockPredicate.OfBlockState(southState)));
         BlockPos rotatedPosition = BlockRotator.rotateSouthTo(rawPosition, Direction.EAST);
         MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
@@ -120,7 +126,7 @@ class StructurePreviewSchemaFactoryTest {
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("rotated_preview"), Direction.EAST);
 
         assertThat(schema.stateAt(rotatedPosition)).isEqualTo(
-                southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90));
+                southState.rotate(Rotation.COUNTERCLOCKWISE_90));
         assertThat(schema.candidatesAt(rotatedPosition)).extracting(ItemStack::getItem)
                 .containsExactly(Blocks.OAK_LOG.asItem());
     }
@@ -373,7 +379,7 @@ class StructurePreviewSchemaFactoryTest {
     void factory_rotates_directional_level_state_with_the_pattern() {
         Identifier levelType = MMCR.id("rotated_directional_level");
         BlockState southState = Blocks.DISPENSER.defaultBlockState().setValue(
-                net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING, Direction.SOUTH);
+                BlockStateProperties.FACING, Direction.SOUTH);
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(levelType, Component.literal(levelType.toString())));
         TestBootstrap.registerLevel(new MachineLevel(MMCR.id("rotated_directional_level_0"), levelType, 0,
@@ -390,7 +396,7 @@ class StructurePreviewSchemaFactoryTest {
                 MMCR.id("rotated_directional_preview"), Direction.EAST);
 
         assertThat(schema.stateAt(BlockRotator.rotateSouthTo(rawPosition, Direction.EAST))).isEqualTo(
-                southState.rotate(net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90));
+                southState.rotate(Rotation.COUNTERCLOCKWISE_90));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import java.util.ArrayList;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -89,7 +90,7 @@ public record RequirementPlan(
                                        ExecutionStatus unsafeOperationFailure) {
         if (failure != null || operationFactory == null) {
             if (preparedParallelism > 0 && parallelism != preparedParallelism) {
-                List<CapabilityOperation> adapted = new java.util.ArrayList<>(operations.size());
+                List<CapabilityOperation> adapted = new ArrayList<>(operations.size());
                 for (CapabilityOperation operation : operations) {
                     CapabilityOperation scaled = operation.forParallelism(parallelism);
                     if (scaled == null) {

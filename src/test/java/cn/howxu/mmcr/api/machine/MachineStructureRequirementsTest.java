@@ -9,6 +9,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -117,8 +118,8 @@ class MachineStructureRequirementsTest {
     void bidirectional_machine_component_satisfies_input_and_output_direction_conditions() {
         MachineComponent component = new MachineComponent(PortKinds.ITEM_INPUT, CapabilityDirections.bidirectional());
 
-        assertThat(component.directions().supports(cn.howxu.mmcr.util.IOType.INPUT)).isTrue();
-        assertThat(component.directions().supports(cn.howxu.mmcr.util.IOType.OUTPUT)).isTrue();
+        assertThat(component.directions().supports(IOType.INPUT)).isTrue();
+        assertThat(component.directions().supports(IOType.OUTPUT)).isTrue();
     }
 
     private static SingleBlockModifierReplacement replacement(String name, BlockPredicate predicate) {

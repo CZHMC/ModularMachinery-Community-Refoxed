@@ -34,7 +34,7 @@ class IOPortStorageSyncTest {
                 ModBlocks.BLOCKS.get(PortKinds.EXTENDED_ITEM_INPUT.id()).get().defaultBlockState());
 
         ((LongResourceStorage<ItemResource>) port.itemStorage()).setContents(0,
-                ItemResource.of(net.minecraft.world.item.Items.IRON_INGOT), 1L);
+                ItemResource.of(Items.IRON_INGOT), 1L);
         assertThat(port.snapshotNotifications).isEqualTo(1);
 
         port.setAutoIOEnabled(true);

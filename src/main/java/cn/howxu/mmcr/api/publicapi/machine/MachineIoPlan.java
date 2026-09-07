@@ -5,12 +5,14 @@ import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import java.util.function.Predicate;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -146,10 +148,10 @@ public final class MachineIoPlan {
         }
     }
 
-    public CommitResult commitData(Consumer<cn.howxu.mmcr.api.publicapi.data.DataStorage.Transaction> transactionWrites) {
+    public CommitResult commitData(Consumer<DataStorage.Transaction> transactionWrites) {
         Objects.requireNonNull(transactionWrites, "transactionWrites");
         return commit(transaction -> transactionWrites.accept(
-                cn.howxu.mmcr.api.publicapi.data.DataStorage.Transaction.view(transaction)));
+                DataStorage.Transaction.view(transaction)));
     }
 
     public List<OutputSimulation> outputSimulations() {
@@ -176,7 +178,7 @@ public final class MachineIoPlan {
     }
 
     private boolean matchesFailure(@Nullable Integer failureIndex,
-                                   java.util.function.Predicate<MachineRequirement> predicate) {
+                                   Predicate<MachineRequirement> predicate) {
         return failureIndex != null && failureIndex >= 0 && failureIndex < requirements.size()
                 && predicate.test(requirements.get(failureIndex));
     }

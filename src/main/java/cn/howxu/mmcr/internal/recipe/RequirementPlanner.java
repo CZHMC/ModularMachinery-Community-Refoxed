@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -21,6 +22,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Resolves requirements through the handler registry and capability protocol.
@@ -150,7 +153,7 @@ public final class RequirementPlanner {
     private static List<OutputSimulation> outputSimulations(List<RequirementPlan> plans) {
         return plans.stream()
                 .map(RequirementPlan::outputSimulation)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -173,7 +176,7 @@ public final class RequirementPlanner {
         return (RequirementHandler<MachineRequirement>) handler;
     }
 
-    private static @org.jetbrains.annotations.Nullable ExecutionStatus failure(MachineRequirement requirement) {
+    private static @Nullable ExecutionStatus failure(MachineRequirement requirement) {
         if (requirement == null) return null;
         String reason = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? "no_output_capacity"
@@ -181,10 +184,10 @@ public final class RequirementPlanner {
         return failure(requirement, reason);
     }
 
-    private static @org.jetbrains.annotations.Nullable ExecutionStatus failure(MachineRequirement requirement, String reason) {
+    private static @Nullable ExecutionStatus failure(MachineRequirement requirement, String reason) {
         if (requirement == null) return null;
         return new ExecutionStatus(requirement.type().id(),
-                cn.howxu.mmcr.api.capability.status.StatusSeverity.BLOCKED,
-                requirement.type().id(), reason == null ? java.util.Map.of() : java.util.Map.of("reason", reason));
+                StatusSeverity.BLOCKED,
+                requirement.type().id(), reason == null ? Map.of() : Map.of("reason", reason));
     }
 }
