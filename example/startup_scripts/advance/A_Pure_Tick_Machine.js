@@ -7,7 +7,6 @@ MMCREvents.startup(event => {
 
     const api = MMCR.getAPI()
     const Player = Java.loadClass("net.minecraft.world.entity.player.Player")
-    const EnergyRequirement = Java.loadClass("cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement") // I do not provide EnergyRequirement directly because its not a widely used api
 
 
     machine
@@ -26,7 +25,7 @@ MMCREvents.startup(event => {
                 let plan_fe = ctx.ioPlan()
 
                 // need 10 FE to start this tick
-                plan_fe.addInput(new EnergyRequirement(10))
+                plan_fe.addInput(api.energyRequirement(api.recipeIO().INPUT, 10))
 
                 const feSimulation = plan_fe.simulate()
 

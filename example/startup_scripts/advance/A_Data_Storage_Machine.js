@@ -9,7 +9,6 @@ MMCREvents.startup(event => {
     // see what, big integer
     const BigInteger = Java.loadClass("java.math.BigInteger")
     const ReadableNumber = Java.loadClass("cn.howxu.mmcr.api.publicapi.ReadableNumber")
-    const DataValue = Java.loadClass("cn.howxu.mmcr.api.data.DataValue")
     const api = MMCR.getAPI()
     const RecipeIO = api.recipeIO()
     const OutputPolicy = api.outputPolicy()
@@ -65,7 +64,7 @@ MMCREvents.startup(event => {
 
                         if (inputSimulation.energySatisfied() && inputPlan.commit(transaction => {
                             // update the data storage value
-                            storage.set("energy", DataValue.of(next), transaction)
+                            storage.set("energy", api.dataValue(next), transaction)
                         }).successful()) {
                             stored = next
                         }
@@ -107,7 +106,7 @@ MMCREvents.startup(event => {
 
                                     // use js promise to update storage
                                     if (outputPlan.commit(transaction => {
-                                        storage.set("energy", DataValue.of(next), transaction)
+                                        storage.set("energy", api.dataValue(next), transaction)
                                     }).successful()) {
                                         stored = next
                                     }
