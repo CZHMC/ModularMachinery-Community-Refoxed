@@ -25,7 +25,7 @@ class CapabilityContractTest {
     @Test
     void capability_operation_commits_only_when_the_root_transaction_commits() {
         TestCapability capability = new TestCapability();
-        CapabilityOperation operation = capability.prepare(new TestRequest(1));
+        CapabilityOperation operation = capability.prepare(new TestRequest(IOType.INPUT, 1));
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(operation.commit(transaction).success()).isTrue();
@@ -41,7 +41,7 @@ class CapabilityContractTest {
         TestCapability capability = new TestCapability();
 
         try (Transaction transaction = Transaction.openRoot()) {
-            capability.prepare(new TestRequest(1)).commit(transaction);
+            capability.prepare(new TestRequest(IOType.INPUT, 1)).commit(transaction);
         }
 
         assertThat(capability.amount()).isZero();
@@ -93,6 +93,19 @@ class CapabilityContractTest {
     }
 
     @Test
+    void capability_prepare_uses_the_exact_request_direction() {
+        TestCapability bidirectional = new TestCapability(CapabilityDirections.bidirectional());
+        TestCapability inputOnly = new TestCapability(CapabilityDirections.input());
+
+        assertThatCode(() -> bidirectional.prepare(new TestRequest(IOType.INPUT, 1L)))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> bidirectional.prepare(new TestRequest(IOType.OUTPUT, 1L)))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> inputOnly.prepare(new TestRequest(IOType.OUTPUT, 1L)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void directionless_legacy_access_rejects_bidirectional_capabilities() {
         TestCapability capability = new TestCapability(CapabilityDirections.bidirectional());
 
@@ -101,16 +114,12 @@ class CapabilityContractTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
-    private record TestRequest(long parallelism) implements CapabilityRequest {
+    private record TestRequest(IOType ioType, long parallelism) implements CapabilityRequest {
         @Override
         public CapabilityType type() {
             return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "test"));
         }
 
-        @Override
-        public IOType ioType() {
-            return IOType.INPUT;
-        }
     }
 
     private static final class TestCapability implements MachineCapability {
@@ -171,6 +180,9 @@ class CapabilityContractTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
+            if (!directions.supports(request.ioType())) {
+                throw new IllegalArgumentException("Capability request IO type does not match");
+            }
             return new CapabilityOperation() {
                 @Override
                 public CapabilityResult commit(TransactionContext transaction) {

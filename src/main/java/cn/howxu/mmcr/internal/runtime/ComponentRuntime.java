@@ -166,15 +166,17 @@ public final class ComponentRuntime {
         for (MachineCapability capability : capabilities) {
             LongValueStorage value = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
-            if (value != null) {
-                snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
-                        capability.type() == null ? null : capability.type().id(), capability.directions().values().iterator().next(),
-                        value.amount(), value.capacity(), List.of()));
-            } else if (resourceStorage != null) {
-                snapshots.add(resourcePresentation(capability, resourceStorage));
-            } else {
-                snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
-                    capability.type() == null ? null : capability.type().id(), capability.directions().values().iterator().next(), 0L, 0L, List.of()));
+            for (IOType direction : capability.directions().values()) {
+                if (value != null) {
+                    snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
+                            capability.type() == null ? null : capability.type().id(), direction,
+                            value.amount(), value.capacity(), List.of()));
+                } else if (resourceStorage != null) {
+                    snapshots.add(resourcePresentation(capability, resourceStorage, direction));
+                } else {
+                    snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
+                        capability.type() == null ? null : capability.type().id(), direction, 0L, 0L, List.of()));
+                }
             }
         }
         cachedCapabilityPresentations = List.copyOf(snapshots);
@@ -369,7 +371,9 @@ public final class ComponentRuntime {
             if (component.getContainer() instanceof CapabilityHost host) {
                 try {
                     for (MachineCapability capability : host.capabilities()) {
-                        identities.add(CapabilityIdentity.of(component.getPos(), capability));
+                        for (IOType direction : capability.directions().values()) {
+                            identities.add(CapabilityIdentity.of(component.getPos(), capability, direction));
+                        }
                         result.add(capability);
                     }
                 } catch (RuntimeException ignored) {
@@ -494,7 +498,7 @@ public final class ComponentRuntime {
     }
 
     private static ControllerRuntimeSnapshot.CapabilityPresentation resourcePresentation(
-            MachineCapability capability, ResourceStorage<?> storage) {
+            MachineCapability capability, ResourceStorage<?> storage, IOType direction) {
         List<ControllerRuntimeSnapshot.StorageSlot> slots = new ArrayList<>(storage.size());
         long amount = 0L;
         long capacity = 0L;
@@ -509,7 +513,7 @@ public final class ComponentRuntime {
             capacity = saturatedAdd(capacity, slotCapacity);
         }
         return new ControllerRuntimeSnapshot.CapabilityPresentation(
-                capability.type() == null ? null : capability.type().id(), capability.directions().values().iterator().next(), amount, capacity, slots);
+                capability.type() == null ? null : capability.type().id(), direction, amount, capacity, slots);
     }
 
     private static CapabilityAggregate capabilityAggregate(List<MachineCapability> capabilities) {
@@ -549,9 +553,9 @@ public final class ComponentRuntime {
 
     private record CapabilityIdentity(BlockPos componentPos, Identifier type, IOType ioType, List<String> tags,
         String storageType, Object storageIdentity) {
-        private static CapabilityIdentity of(BlockPos componentPos, MachineCapability capability) {
+        private static CapabilityIdentity of(BlockPos componentPos, MachineCapability capability, IOType direction) {
             CapabilityStorage storage = CapabilityFactories.valueStorage(capability, CapabilityStorage.class);
-            return new CapabilityIdentity(componentPos.immutable(), capability.type().id(), capability.directions().values().iterator().next(),
+            return new CapabilityIdentity(componentPos.immutable(), capability.type().id(), direction,
                     List.copyOf(capability.view().tags()), storage == null ? "" : storage.getClass().getName(),
                     storageIdentity(storage));
         }
