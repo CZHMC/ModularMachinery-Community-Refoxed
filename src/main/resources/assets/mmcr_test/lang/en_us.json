@@ -9,7 +9,11 @@
     "block.mmcr.space_elevator_controller": "Space Elevator Controller",
     "block.mmcr.space_reassembler_controller": "Space Reassembler Controller",
     "block.mmcr.monster_farm_controller": "Monster Farm Controller",
-
+    "block.mmcr.data_storage_machine_controller": "Data Storage Machine Controller",
+    "block.mmcr.network_producer_machine_controller": "Network Producer Machine Controller",
+    "block.mmcr.network_center_machine_controller": "Network Center Machine Controller",
+    "block.mmcr.pure_tick_machine_controller": "Pure Tick Machine Controller",
+    "block.mmcr.recipe_ticker_controller": "Recipe Ticker Controller",
 
     "item.mmcr.alloy_furnace_controller": "Alloy Furnace Controller",
     "item.mmcr.blast_furnace_controller": "Blast Furnace Controller",
@@ -21,6 +25,11 @@
     "item.mmcr.space_elevator_controller": "Space Elevator Controller",
     "item.mmcr.space_reassembler_controller": "Space Reassembler Controller",
     "item.mmcr.monster_farm_controller": "Monster Farm Controller",
+    "item.mmcr.data_storage_machine_controller": "Data Storage Machine Controller",
+    "item.mmcr.network_producer_machine_controller": "Network Producer Machine Controller",
+    "item.mmcr.network_center_machine_controller": "Network Center Machine Controller",
+    "item.mmcr.pure_tick_machine_controller": "Pure Tick Machine Controller",
+    "item.mmcr.recipe_ticker_controller": "Recipe Ticker Controller",
 
     "machine.mmcr.alloy_furnace": "Alloy Furnace",
     "machine.mmcr.blast_furnace": "Blast Furnace",
@@ -32,6 +41,11 @@
     "machine.mmcr.space_elevator": "Space Elevator",
     "machine.mmcr.space_reassembler": "Space Reassembler",
     "machine.mmcr.monster_farm": "Monster Farm",
+    "machine.mmcr.data_storage_machine": "Data Storage Machine",
+    "machine.mmcr.network_producer_machine": "Network Producer Machine",
+    "machine.mmcr.network_center_machine": "Network Center Machine",
+    "machine.mmcr.pure_tick_machine": "Pure Tick Machine",
+    "machine.mmcr.recipe_ticker": "Recipe Ticker",
 
     "level.mmcr.thermal_smelting_coil": "Coil",
 
@@ -42,5 +56,10 @@
 
     "block.mmcr.artificial_star_controller": "Artificial Star Controller",
     "item.mmcr.artificial_star_controller": "Artificial Star Controller",
-    "machine.mmcr.artificial_star": "Artificial Star"
+    "machine.mmcr.artificial_star": "Artificial Star",
+
+    "gui.mmcr.before_line": "------------",
+    "gui.mmcr.in_line": "Demo Tick System",
+    "gui.mmcr.after_line": "------------",
+    "gui.mmcr.display_when_idle": "Demo Tick System: Idle"
 }

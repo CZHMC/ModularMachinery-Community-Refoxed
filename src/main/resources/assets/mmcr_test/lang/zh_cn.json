@@ -9,6 +9,11 @@
     "block.mmcr.space_elevator_controller": "太空电梯控制器",
     "block.mmcr.space_reassembler_controller": "太空重组器控制器",
     "block.mmcr.monster_farm_controller": "怪物农场控制器",
+    "block.mmcr.data_storage_machine_controller": "数据存储机器控制器",
+    "block.mmcr.network_producer_machine_controller": "网络发电机器控制器",
+    "block.mmcr.network_center_machine_controller": "网络中枢机器控制器",
+    "block.mmcr.pure_tick_machine_controller": "纯Tick机器控制器",
+    "block.mmcr.recipe_ticker_controller": "配方Tick机器控制器",
 
     "item.mmcr.alloy_furnace_controller": "合金炉控制器",
     "item.mmcr.blast_furnace_controller": "高炉控制器",
@@ -20,6 +25,11 @@
     "item.mmcr.space_elevator_controller": "太空电梯控制器",
     "item.mmcr.space_reassembler_controller": "太空重组器控制器",
     "item.mmcr.monster_farm_controller": "怪物农场控制器",
+    "item.mmcr.data_storage_machine_controller": "数据存储机器控制器",
+    "item.mmcr.network_producer_machine_controller": "网络发电机器控制器",
+    "item.mmcr.network_center_machine_controller": "网络中枢机器控制器",
+    "item.mmcr.pure_tick_machine_controller": "纯Tick机器控制器",
+    "item.mmcr.recipe_ticker_controller": "配方Tick机器控制器",
 
     "machine.mmcr.alloy_furnace": "合金炉",
     "machine.mmcr.blast_furnace": "高炉",
@@ -31,6 +41,11 @@
     "machine.mmcr.space_elevator": "太空电梯",
     "machine.mmcr.space_reassembler": "太空重组器",
     "machine.mmcr.monster_farm": "怪物农场",
+    "machine.mmcr.data_storage_machine": "数据存储机器",
+    "machine.mmcr.network_producer_machine": "网络发电机",
+    "machine.mmcr.network_center_machine": "网络中枢",
+    "machine.mmcr.pure_tick_machine": "纯Tick机器",
+    "machine.mmcr.recipe_ticker": "配方Tick机器",
 
     "level.mmcr.thermal_smelting_coil": "线圈",
 
@@ -41,5 +56,10 @@
 
     "block.mmcr.artificial_star_controller": "人造恒星",
     "item.mmcr.artificial_star_controller": "人造恒星",
-    "machine.mmcr.artificial_star": "人造恒星"
+    "machine.mmcr.artificial_star": "人造恒星",
+
+    "gui.mmcr.before_line": "------------",
+    "gui.mmcr.in_line": "  Demo Tick System",
+    "gui.mmcr.after_line": "------------",
+    "gui.mmcr.display_when_idle": "Demo Tick System: Idle"
 }
