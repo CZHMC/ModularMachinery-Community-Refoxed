@@ -73,8 +73,7 @@ public final class NetworkRequestDispatcher {
         }
         try {
             process.process(request.body(), new RequestInfo(request.requestId(), sourceReference),
-                    source.controller.behaviorContext().internalDataStorage(),
-                    target.controller.behaviorContext().internalDataStorage());
+                    source.controller.dataStorageForNetwork(), target.controller.dataStorageForNetwork());
         } catch (RuntimeException exception) {
             LOG.warn("Machine network request handler failed for {}", request.requestId(), exception);
         }
@@ -86,7 +85,7 @@ public final class NetworkRequestDispatcher {
         if (failure == null) failure = request.sourceFailure();
         if (failure == null) return;
         var senderStorage = source == null || source.controller == null
-                ? null : source.controller.behaviorContext().internalDataStorage();
+                ? null : source.controller.dataStorageForNetwork();
         try {
             failure.fail(request.body(), new RequestInfo(request.requestId(), request.target()),
                     senderStorage, reason);

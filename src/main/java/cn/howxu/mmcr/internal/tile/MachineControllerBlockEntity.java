@@ -245,6 +245,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return runtime.behaviorContext();
     }
 
+    public cn.howxu.mmcr.api.data.DataStorage dataStorageForNetwork() {
+        Object storage = runtime.behaviorContext().dataStorageForRuntime();
+        return storage instanceof cn.howxu.mmcr.api.data.DataStorage dataStorage ? dataStorage : null;
+    }
+
     public MachineBehaviorContext behaviorContext(ControllerScreenText screenText) {
         return runtime.behaviorContext(screenText);
     }

@@ -167,8 +167,8 @@ public final class GameTestRegistry {
                     long ticks = storage.get("ticks").map(DataValue::longValue).orElse(0L);
                     var plan = context.ioPlan();
                     if (!plan.simulate().inputsSatisfied()) return;
-                    if (!plan.commit().successful()) return;
-                    storage.set("ticks", DataValue.of(ticks + 1L));
+                    if (!plan.commitData(transaction -> storage.set("ticks", DataValue.of(ticks + 1L), transaction))
+                            .successful()) return;
                     context.screenText().append(ControllerScreenTextScope.OPERATION,
                             MMCR.id("data_storage_tick_status"), Component.literal("ticks=" + (ticks + 1L)));
                 }));

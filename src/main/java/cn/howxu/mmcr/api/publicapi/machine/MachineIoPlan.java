@@ -146,6 +146,12 @@ public final class MachineIoPlan {
         }
     }
 
+    public CommitResult commitData(Consumer<cn.howxu.mmcr.api.publicapi.data.DataStorage.Transaction> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
+        return commit(transaction -> transactionWrites.accept(
+                cn.howxu.mmcr.api.publicapi.data.DataStorage.Transaction.view(transaction)));
+    }
+
     public List<OutputSimulation> outputSimulations() {
         return (simulation == null ? simulate() : simulationView(simulation)).outputs();
     }

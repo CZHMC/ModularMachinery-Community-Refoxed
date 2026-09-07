@@ -114,7 +114,12 @@ public class MachineBehaviorContext {
         return dataStorage == null ? null : cn.howxu.mmcr.api.publicapi.data.DataStorage.view(dataStorage);
     }
 
-    public DataStorage internalDataStorage() {
+    DataStorage internalDataStorage() {
+        return dataStorage;
+    }
+
+    /** Internal runtime bridge; integrations must use {@link #dataStorage()}. */
+    public @Nullable Object dataStorageForRuntime() {
         return dataStorage;
     }
 

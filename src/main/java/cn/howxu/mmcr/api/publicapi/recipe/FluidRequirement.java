@@ -10,6 +10,10 @@ import java.util.Objects;
  */
 public record FluidRequirement(RecipeIo io, FluidIngredient ingredient, int amount, FluidStack stack, float chance)
         implements RecipeRequirement {
+    public FluidRequirement(RecipeIo io, FluidIngredient ingredient, int amount, FluidStack stack) {
+        this(io, ingredient, amount, stack, 1F);
+    }
+
     public FluidRequirement {
         Objects.requireNonNull(io, "io");
         if (io == RecipeIo.INPUT) {
