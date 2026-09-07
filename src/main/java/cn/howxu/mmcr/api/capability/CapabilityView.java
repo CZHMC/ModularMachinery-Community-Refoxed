@@ -16,7 +16,17 @@ import java.util.Set;
 public interface CapabilityView {
     CapabilityType type();
 
-    IOType ioType();
+    default CapabilityDirections directions() {
+        return CapabilityDirections.of(ioType());
+    }
+
+    /**
+     * @deprecated use {@link #directions()} to determine whether an operation direction is supported
+     */
+    @Deprecated(forRemoval = true)
+    default IOType ioType() {
+        return directions().values().iterator().next();
+    }
 
     /**
      * Returns the facet types declared by this capability snapshot, including

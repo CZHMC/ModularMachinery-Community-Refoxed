@@ -295,7 +295,7 @@ public final class PortKinds {
             }
             Set<Identifier> bindingIds = new HashSet<>();
             definition.bindings().forEach(binding -> {
-                if (binding.ioType() != ioType) {
+                if (!binding.directions().supports(ioType)) {
                     throw new IllegalArgumentException("combined kind bindings must use the kind IO direction");
                 }
                 if (!familyIds.contains(binding.type().id()) || !bindingIds.add(binding.type().id())) {

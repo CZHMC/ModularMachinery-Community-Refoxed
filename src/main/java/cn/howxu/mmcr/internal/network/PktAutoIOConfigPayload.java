@@ -83,7 +83,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
         CapabilityType type = new CapabilityType(capabilityId);
         var capability = port.capability(type);
         CapabilityTransferPolicies.ensureRegistered();
-        return capability != null && capability.ioType() == port.ioType()
+        return capability != null && capability.directions().supports(port.ioType())
                 && TransferStrategyRegistry.policyFor(type).isPresent();
     }
 

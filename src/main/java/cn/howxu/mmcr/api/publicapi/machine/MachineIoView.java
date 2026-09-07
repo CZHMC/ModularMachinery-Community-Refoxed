@@ -217,7 +217,7 @@ public final class MachineIoView {
 
     private List<MachineCapability> capabilities(IOType ioType) {
         return snapshot.capabilities().stream()
-                .filter(capability -> capability.view().ioType() == ioType)
+                .filter(capability -> capability.view().directions().supports(ioType))
                 .toList();
     }
 

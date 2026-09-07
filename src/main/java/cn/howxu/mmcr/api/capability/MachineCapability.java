@@ -15,7 +15,17 @@ import java.util.Optional;
 public interface MachineCapability {
     CapabilityType type();
 
-    IOType ioType();
+    default CapabilityDirections directions() {
+        return CapabilityDirections.of(ioType());
+    }
+
+    /**
+     * @deprecated use {@link #directions()} to determine whether an operation direction is supported
+     */
+    @Deprecated(forRemoval = true)
+    default IOType ioType() {
+        return directions().values().iterator().next();
+    }
 
     CapabilityView view();
 

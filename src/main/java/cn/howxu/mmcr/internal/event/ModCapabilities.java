@@ -116,10 +116,10 @@ public final class ModCapabilities {
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
                     if (!(be instanceof IOPortBlockEntity port)
-                            || port.ioType() != binding.ioType()
+                            || !binding.directions().supports(port.ioType())
                             || !port.isAutoIOSideExposed(binding.type(), side)
                             || port.capability(binding.type()) == null) return null;
-                    return exposure.resolver().resolve(port, binding.ioType(), side);
+                    return exposure.resolver().resolve(port, port.ioType(), side);
                 });
     }
 

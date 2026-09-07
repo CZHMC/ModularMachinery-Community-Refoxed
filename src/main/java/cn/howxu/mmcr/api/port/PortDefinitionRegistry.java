@@ -42,7 +42,7 @@ public final class PortDefinitionRegistry {
         PortDefinition definition = get(id);
         if (definition == null) return List.of();
         return definition.bindings().stream()
-                .filter(binding -> binding.ioType() == ioType && binding.supports(tier))
+                .filter(binding -> binding.directions().supports(ioType) && binding.supports(tier))
                 .toList();
     }
 

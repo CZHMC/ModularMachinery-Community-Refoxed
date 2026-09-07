@@ -62,6 +62,20 @@ class CapabilityContractTest {
         assertThatThrownBy(() -> CapabilityResult.failure(null)).isInstanceOf(NullPointerException.class);
     }
 
+    @Test
+    void bidirectional_capability_accepts_both_request_directions() {
+        TestCapability capability = new TestCapability(CapabilityDirections.bidirectional());
+
+        assertThat(capability.directions().supports(IOType.INPUT)).isTrue();
+        assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
+    }
+
+    @Test
+    void directions_reject_an_empty_set() {
+        assertThatThrownBy(() -> CapabilityDirections.of())
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private record TestRequest(long parallelism) implements CapabilityRequest {
         @Override
         public CapabilityType type() {
@@ -75,6 +89,7 @@ class CapabilityContractTest {
     }
 
     private static final class TestCapability implements MachineCapability {
+        private final CapabilityDirections directions;
         private final SnapshotJournal<Long> journal = new SnapshotJournal<>() {
             @Override
             protected Long createSnapshot() {
@@ -96,14 +111,22 @@ class CapabilityContractTest {
         private long amount;
         private long pending;
 
+        private TestCapability() {
+            this(CapabilityDirections.input());
+        }
+
+        private TestCapability(CapabilityDirections directions) {
+            this.directions = directions;
+        }
+
         @Override
         public CapabilityType type() {
             return new CapabilityType(Identifier.fromNamespaceAndPath("mmcr_test", "test"));
         }
 
         @Override
-        public IOType ioType() {
-            return IOType.INPUT;
+        public CapabilityDirections directions() {
+            return directions;
         }
 
         @Override
@@ -115,8 +138,8 @@ class CapabilityContractTest {
                 }
 
                 @Override
-                public IOType ioType() {
-                    return TestCapability.this.ioType();
+                public CapabilityDirections directions() {
+                    return TestCapability.this.directions();
                 }
             };
         }

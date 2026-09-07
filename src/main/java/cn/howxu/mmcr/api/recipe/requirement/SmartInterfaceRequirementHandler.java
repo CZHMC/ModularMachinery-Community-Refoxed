@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
@@ -33,7 +34,7 @@ public final class SmartInterfaceRequirementHandler implements RequirementHandle
                 return RequirementHandlerSupport.deferredPlan(context, context.requestedParallelism(),
                         (parallelism, reservations) -> new RequirementPlan.OperationPlan(List.of(
                                 capability.prepare(new CapabilityRequests.SmartValueRequest(
-                                        capability.view().type(), capability.view().ioType(), parallelism,
+                                        capability.view().type(), IOType.OUTPUT, parallelism,
                                         requirement.interfaceType(), requirement.minValue()))), null));
             }
         }

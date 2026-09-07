@@ -225,7 +225,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 .orElseGet(() -> {
                     CapabilityDefinition definition = Optional.ofNullable(CapabilityRegistry.get(type))
                             .orElseThrow(() -> new IllegalStateException("Capability is not registered: " + type.id()));
-                    return new CapabilityBinding(type, ioType(), definition.factory(),
+                    return new CapabilityBinding(type, cn.howxu.mmcr.api.capability.CapabilityDirections.of(ioType()), definition.factory(),
                             (ignored, tier) -> true);
                 });
         return createCapability(binding);
@@ -241,7 +241,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
             @Override
             public IOType ioType() {
-                return binding.ioType();
+                return IOPortBlockEntity.this.ioType();
             }
 
             @Override
@@ -481,7 +481,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public boolean ejectContents(CapabilityType type) {
         if (level == null || level.isClientSide() || ioType() != IOType.INPUT || isUsedByActiveRecipe()) return false;
         MachineCapability capability = capability(type);
-        if (capability == null || capability.ioType() != IOType.INPUT) return false;
+        if (capability == null || !capability.directions().supports(IOType.INPUT)) return false;
         TransferPolicy policy = capability == null ? null : transferPolicy(capability).orElse(null);
         if (capability == null || policy == null) return false;
         List<Direction> sides = new ArrayList<>(List.of(Direction.values()));

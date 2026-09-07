@@ -36,7 +36,7 @@ public interface IOPortKind {
     }
 
     static CapabilityBinding binding(CapabilityType type, IOType ioType, List<PortFamilyDescriptor> families) {
-        return new CapabilityBinding(type, ioType, capabilityFactory(type), (binding, tier) -> families.stream()
+        return new CapabilityBinding(type, cn.howxu.mmcr.api.capability.CapabilityDirections.of(ioType), capabilityFactory(type), (binding, tier) -> families.stream()
                 .filter(family -> family.matches(binding) && family.familyId().equals(type.id()))
                 .findFirst()
                 .map(family -> tier >= family.detectionTier())

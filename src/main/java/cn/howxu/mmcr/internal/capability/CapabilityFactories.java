@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.capability;
 
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -23,11 +24,11 @@ import java.util.Set;
 public final class CapabilityFactories {
     private CapabilityFactories() {}
 
-    static CapabilityView view(CapabilityType type, IOType ioType) {
-        return view(type, ioType, Set.of());
+    static CapabilityView view(CapabilityType type, CapabilityDirections directions) {
+        return view(type, directions, Set.of());
     }
 
-    static CapabilityView view(CapabilityType type, IOType ioType,
+    static CapabilityView view(CapabilityType type, CapabilityDirections directions,
                                Set<Class<? extends CapabilityFacet>> facets) {
         return new CapabilityView() {
             @Override
@@ -36,8 +37,8 @@ public final class CapabilityFactories {
             }
 
             @Override
-            public IOType ioType() {
-                return ioType;
+            public CapabilityDirections directions() {
+                return directions;
             }
 
             @Override
@@ -53,7 +54,7 @@ public final class CapabilityFactories {
         if (!capability.type().equals(request.type())) {
             throw new IllegalArgumentException("Capability request type does not match");
         }
-        if (capability.ioType() != request.ioType()) {
+        if (!capability.directions().supports(request.ioType())) {
             throw new IllegalArgumentException("Capability request IO type does not match");
         }
         if (request.parallelism() <= 0) throw new IllegalArgumentException("parallelism must be positive");

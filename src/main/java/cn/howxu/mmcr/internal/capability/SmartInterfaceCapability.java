@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.capability;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -39,7 +40,7 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.storage = storage;
         this.ioType = ioType;
-        this.view = CapabilityFactories.view(TYPE, ioType,
+        this.view = CapabilityFactories.view(TYPE, directions(),
                 Set.of(ValueFacet.class, OperationFacet.class, PresentationFacet.class));
     }
 
@@ -49,8 +50,8 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
     }
 
     @Override
-    public IOType ioType() {
-        return ioType;
+    public CapabilityDirections directions() {
+        return CapabilityDirections.of(ioType);
     }
 
     @Override
@@ -67,7 +68,7 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
     public CapabilityOperation prepare(CapabilityRequest request) {
         if (!(request instanceof CapabilityRequests.SmartValueRequest)
                 || !TYPE.equals(request.type())
-                || request.ioType() != ioType) {
+                || !directions().supports(request.ioType())) {
             return ignored -> failure("unsupported_request");
         }
         return CapabilityFactories.operation(this, request);

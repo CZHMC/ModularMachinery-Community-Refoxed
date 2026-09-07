@@ -81,7 +81,7 @@ public class CombinedPortBlockEntity extends IOPortBlockEntity {
     public CapabilitySnapshot capabilitySnapshot() {
         if (capabilitySnapshot == null) {
             capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
-                    .filter(binding -> binding.ioType() == kind.ioType())
+                    .filter(binding -> binding.directions().supports(kind.ioType()))
                     .map(this::createCapability)
                     .toList(), java.util.List.of(new FluidPersistenceFacet()));
         }

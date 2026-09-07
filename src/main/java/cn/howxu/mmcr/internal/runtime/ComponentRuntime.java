@@ -168,13 +168,13 @@ public final class ComponentRuntime {
             ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
             if (value != null) {
                 snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
-                        capability.type() == null ? null : capability.type().id(), capability.ioType(),
+                        capability.type() == null ? null : capability.type().id(), capability.directions().values().iterator().next(),
                         value.amount(), value.capacity(), List.of()));
             } else if (resourceStorage != null) {
                 snapshots.add(resourcePresentation(capability, resourceStorage));
             } else {
                 snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
-                    capability.type() == null ? null : capability.type().id(), capability.ioType(), 0L, 0L, List.of()));
+                    capability.type() == null ? null : capability.type().id(), capability.directions().values().iterator().next(), 0L, 0L, List.of()));
             }
         }
         cachedCapabilityPresentations = List.copyOf(snapshots);
@@ -509,7 +509,7 @@ public final class ComponentRuntime {
             capacity = saturatedAdd(capacity, slotCapacity);
         }
         return new ControllerRuntimeSnapshot.CapabilityPresentation(
-                capability.type() == null ? null : capability.type().id(), capability.ioType(), amount, capacity, slots);
+                capability.type() == null ? null : capability.type().id(), capability.directions().values().iterator().next(), amount, capacity, slots);
     }
 
     private static CapabilityAggregate capabilityAggregate(List<MachineCapability> capabilities) {
@@ -530,9 +530,9 @@ public final class ComponentRuntime {
                     if (!(resource instanceof FluidResource fluidResource) || fluidResource.isEmpty()) continue;
                     FluidStack stack = fluidResource.toStack((int) Math.min(resourceStorage.amount(slot), Integer.MAX_VALUE));
                     if (stack.isEmpty()) continue;
-                    if (capability.ioType() == IOType.INPUT && primaryFluid.isEmpty()) {
+                    if (capability.directions().supports(IOType.INPUT) && primaryFluid.isEmpty()) {
                         primaryFluid = stack;
-                    } else if (capability.ioType() == IOType.OUTPUT && primaryOutputFluid.isEmpty()) {
+                    } else if (capability.directions().supports(IOType.OUTPUT) && primaryOutputFluid.isEmpty()) {
                         primaryOutputFluid = stack;
                     }
                 }
@@ -551,7 +551,7 @@ public final class ComponentRuntime {
         String storageType, Object storageIdentity) {
         private static CapabilityIdentity of(BlockPos componentPos, MachineCapability capability) {
             CapabilityStorage storage = CapabilityFactories.valueStorage(capability, CapabilityStorage.class);
-            return new CapabilityIdentity(componentPos.immutable(), capability.type().id(), capability.ioType(),
+            return new CapabilityIdentity(componentPos.immutable(), capability.type().id(), capability.directions().values().iterator().next(),
                     List.copyOf(capability.view().tags()), storage == null ? "" : storage.getClass().getName(),
                     storageIdentity(storage));
         }

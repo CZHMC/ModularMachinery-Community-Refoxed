@@ -53,7 +53,7 @@ public record PktEjectPortContentsPayload(BlockPos pos, Identifier capabilityId)
                 || !MenuSupport.stillValidWithin(player, payload.pos)) return false;
         CapabilityType type = new CapabilityType(payload.capabilityId);
         var capability = port.capability(type);
-        return capability != null && capability.ioType() == IOType.INPUT && port.ejectContents(type);
+        return capability != null && capability.directions().supports(IOType.INPUT) && port.ejectContents(type);
     }
 
     private static boolean hasPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {

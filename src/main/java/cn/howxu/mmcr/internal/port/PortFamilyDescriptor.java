@@ -36,6 +36,6 @@ public record PortFamilyDescriptor(
     }
 
     public boolean matches(CapabilityBinding binding) {
-        return binding != null && familyId.equals(binding.type().id()) && ioType == binding.ioType();
+        return binding != null && familyId.equals(binding.type().id()) && binding.directions().supports(ioType);
     }
 }

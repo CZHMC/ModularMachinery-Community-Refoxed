@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputFit;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
@@ -101,7 +102,8 @@ final class RequirementHandlerSupport {
         List<CapabilityOperation> operations = materialize
                 ? actionMap.entrySet().stream()
                 .map(entry -> entry.getKey().prepare(new CapabilityRequests.ResourceRequest<>(
-                        entry.getKey().view().type(), entry.getKey().view().ioType(), parallelism, entry.getValue())))
+                        entry.getKey().view().type(), entry.getValue().getFirst().insert() ? IOType.OUTPUT : IOType.INPUT,
+                        parallelism, entry.getValue())))
                 .toList()
                 : List.of();
         return new RequirementPlan.OperationPlan(operations, null, outputSimulation);

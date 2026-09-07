@@ -613,7 +613,7 @@ public final class FactoryRuntime {
         Set<Item> items = new LinkedHashSet<>();
         boolean supported = false;
         for (MachineCapability capability : controller.componentRuntime().capabilities()) {
-            if (capability == null || capability.ioType() != IOType.INPUT) continue;
+            if (capability == null || !capability.directions().supports(IOType.INPUT)) continue;
             var storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
             if (storage == null) continue;
             supported = true;

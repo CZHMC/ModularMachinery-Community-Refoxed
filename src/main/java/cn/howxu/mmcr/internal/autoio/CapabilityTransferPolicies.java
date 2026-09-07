@@ -77,7 +77,7 @@ public final class CapabilityTransferPolicies {
         public boolean hasWork(MachineCapability capability) {
             ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
             if (storage == null) return false;
-            if (capability.ioType() == IOType.OUTPUT) {
+            if (capability.directions().supports(IOType.OUTPUT)) {
                 for (int slot = 0; slot < storage.size(); slot++) {
                     if (storage.amount(slot) > 0L) return true;
                 }
@@ -108,7 +108,7 @@ public final class CapabilityTransferPolicies {
             int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
             long moved = context.eject()
                     ? moveResource(internal, adjacent, limit, context)
-                    : capability.ioType() == IOType.INPUT
+                    : context.ioType() == IOType.INPUT
                     ? moveResource(adjacent, internal, limit, context)
                     : moveResource(internal, adjacent, limit, context);
             return TransferResult.moved(moved);
@@ -134,7 +134,7 @@ public final class CapabilityTransferPolicies {
         public boolean hasWork(MachineCapability capability) {
             ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
             if (storage == null) return false;
-            if (capability.ioType() == IOType.OUTPUT) return hasStoredContents(storage);
+            if (capability.directions().supports(IOType.OUTPUT)) return hasStoredContents(storage);
             for (int slot = 0; slot < storage.size(); slot++) {
                 FluidResource resource = storage.resource(slot);
                 if (storage.amount(slot) < storage.capacity(slot, isEmpty(resource) ? null : resource)) return true;
@@ -160,7 +160,7 @@ public final class CapabilityTransferPolicies {
             int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
             long moved = context.eject()
                     ? moveResource(internal, adjacent, limit, context)
-                    : capability.ioType() == IOType.INPUT
+                    : context.ioType() == IOType.INPUT
                     ? moveResource(adjacent, internal, limit, context)
                     : moveResource(internal, adjacent, limit, context);
             return TransferResult.moved(moved);
@@ -186,7 +186,7 @@ public final class CapabilityTransferPolicies {
         public boolean hasWork(MachineCapability capability) {
             LongValueStorage storage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             if (storage == null) return false;
-            return capability.ioType() == IOType.OUTPUT
+            return capability.directions().supports(IOType.OUTPUT)
                     ? storage.amount() > 0L
                     : storage.amount() < storage.capacity();
         }
@@ -209,7 +209,7 @@ public final class CapabilityTransferPolicies {
             long limit = transfer.transferLimit();
             long moved = context.eject()
                     ? moveEnergy(internal, adjacent, limit, context)
-                    : capability.ioType() == IOType.INPUT
+                    : context.ioType() == IOType.INPUT
                     ? moveEnergy(adjacent, internal, limit, context)
                     : moveEnergy(internal, adjacent, limit, context);
             return TransferResult.moved(moved);

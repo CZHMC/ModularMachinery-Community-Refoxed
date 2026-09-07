@@ -160,7 +160,7 @@ public final class RequirementPlanner {
         IOType direction = IOType.valueOf(requirement.io().name());
         return capabilities.stream()
                 .filter(capability -> type.equals(capability.view().type()))
-                .filter(capability -> direction == capability.view().ioType())
+                .filter(capability -> capability.view().directions().supports(direction))
                 .filter(capability -> requirement.tags().isEmpty()
                         || requirement.tags().stream().anyMatch(capability.view()::matchesTag))
                 .toList();

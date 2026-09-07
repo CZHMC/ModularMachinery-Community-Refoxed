@@ -26,7 +26,7 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
         Objects.requireNonNull(capability, "capability");
         Objects.requireNonNull(ioType, "ioType");
         Objects.requireNonNull(side, "side");
-        if (capability.type() == null || !ioType.equals(capability.ioType())) {
+        if (capability.type() == null || !capability.directions().supports(ioType)) {
             throw new IllegalArgumentException("context direction must match capability");
         }
         if (parallelism <= 0L) throw new IllegalArgumentException("parallelism must be positive");
@@ -42,7 +42,7 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
 
     public static TransferContext simulate(MachineCapability capability, Direction side, long parallelism) {
         Objects.requireNonNull(capability, "capability");
-        return simulate(capability, capability.ioType(), side, parallelism);
+        return simulate(capability, capability.directions().values().iterator().next(), side, parallelism);
     }
 
     public static TransferContext simulate(MachineCapability capability, IOType ioType, Direction side,
@@ -53,7 +53,7 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
     public static TransferContext commit(MachineCapability capability, Direction side, long parallelism,
                                          TransactionContext transaction) {
         Objects.requireNonNull(capability, "capability");
-        return commit(capability, capability.ioType(), side, parallelism, transaction);
+        return commit(capability, capability.directions().values().iterator().next(), side, parallelism, transaction);
     }
 
     public static TransferContext commit(MachineCapability capability, IOType ioType, Direction side,

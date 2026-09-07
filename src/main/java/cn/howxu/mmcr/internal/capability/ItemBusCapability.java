@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.capability;
 
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -54,7 +55,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
-        this.view = CapabilityFactories.view(type(), ioType,
+        this.view = CapabilityFactories.view(type(), directions(),
                 Set.of(ResourceFacet.class, TransferFacet.class, OperationFacet.class, PresentationFacet.class,
                         SyncFacet.class));
     }
@@ -98,8 +99,8 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     }
 
     @Override
-    public IOType ioType() {
-        return ioType;
+    public CapabilityDirections directions() {
+        return CapabilityDirections.of(ioType);
     }
 
     @Override

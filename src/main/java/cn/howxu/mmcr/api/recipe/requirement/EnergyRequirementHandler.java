@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
@@ -97,7 +98,7 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         if (materialize) {
             for (EnergyAction action : actions) {
                 operations.add(action.capability().prepare(new CapabilityRequests.ValueRequest(
-                        action.capability().view().type(), action.capability().view().ioType(),
+                        action.capability().view().type(), insert ? IOType.OUTPUT : IOType.INPUT,
                         parallelism, action.amount(), insert)));
             }
         }
