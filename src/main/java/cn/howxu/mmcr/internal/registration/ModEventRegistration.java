@@ -170,7 +170,7 @@ public final class ModEventRegistration {
 
     private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {
         if (event.shouldUpdateStaticData()) {
-            RuntimeContentRegistration.registerRecipes();
+            StartupContentRegistration.completeProductionRecipesAfterComponentsBound();
         }
     }
 
