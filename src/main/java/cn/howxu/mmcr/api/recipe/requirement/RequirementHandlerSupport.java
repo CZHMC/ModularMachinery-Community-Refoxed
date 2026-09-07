@@ -98,11 +98,11 @@ final class RequirementHandlerSupport {
 
     static <R> RequirementPlan.OperationPlan resourceOperations(
             Map<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> actionMap,
-            long parallelism, boolean materialize, OutputSimulation outputSimulation) {
+            IOType direction, long parallelism, boolean materialize, OutputSimulation outputSimulation) {
         List<CapabilityOperation> operations = materialize
                 ? actionMap.entrySet().stream()
                 .map(entry -> entry.getKey().prepare(new CapabilityRequests.ResourceRequest<>(
-                        entry.getKey().view().type(), entry.getValue().getFirst().insert() ? IOType.OUTPUT : IOType.INPUT,
+                        entry.getKey().view().type(), direction,
                         parallelism, entry.getValue())))
                 .toList()
                 : List.of();

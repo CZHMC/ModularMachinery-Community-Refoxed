@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
@@ -101,12 +102,13 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         }
         RequirementHandlerSupport.ConsumeProfile consumed = requirement.io() == RecipeModifier.IOType.INPUT
                 ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), parallelism) : null;
+        IOType direction = IOType.valueOf(requirement.io().name());
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, capabilities, finalParallelism,
-                        consumed, reservations, allowPartialOutput, true),
+                        consumed, reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
                         requirement, capabilities, finalParallelism, consumed, reservations,
-                        allowPartialOutput, false)));
+                        direction, allowPartialOutput, false)));
     }
 
     @Override
@@ -159,6 +161,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                                                                 long parallelism,
                                                                 RequirementHandlerSupport.ConsumeProfile consumed,
                                                                 PlanningReservations reservations,
+                                                                IOType direction,
                                                                 boolean allowPartialOutputs,
                                                                 boolean materialize) {
         long batches = requirement.io() == RecipeModifier.IOType.INPUT
@@ -217,7 +220,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         if (actionMap.isEmpty()) return new RequirementPlan.OperationPlan(List.of(),
                 RequirementHandlerSupport.blocked(requirement, "no_output_capacity"),
                 RequirementHandlerSupport.outputSimulation(requestedAmount, 0L));
-        return RequirementHandlerSupport.resourceOperations(actionMap, parallelism, materialize,
+        return RequirementHandlerSupport.resourceOperations(actionMap, direction, parallelism, materialize,
                 RequirementHandlerSupport.outputSimulation(requestedAmount, amount - remaining));
     }
 

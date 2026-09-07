@@ -20,6 +20,7 @@ public final class SmartInterfaceRequirementHandler implements RequirementHandle
     @Override
     public RequirementPlan plan(SmartInterfaceRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
+        IOType direction = IOType.valueOf(requirement.io().name());
         for (MachineCapability capability : capabilities) {
             ValueFacet<?> facet = capability.facet(ValueFacet.class).orElse(null);
             if (facet == null || !(facet.storage() instanceof FloatValueStorage storage)) continue;
@@ -34,7 +35,7 @@ public final class SmartInterfaceRequirementHandler implements RequirementHandle
                 return RequirementHandlerSupport.deferredPlan(context, context.requestedParallelism(),
                         (parallelism, reservations) -> new RequirementPlan.OperationPlan(List.of(
                                 capability.prepare(new CapabilityRequests.SmartValueRequest(
-                                        capability.view().type(), IOType.OUTPUT, parallelism,
+                                        capability.view().type(), direction, parallelism,
                                         requirement.interfaceType(), requirement.minValue()))), null));
             }
         }

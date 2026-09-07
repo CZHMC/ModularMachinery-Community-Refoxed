@@ -6,6 +6,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -424,6 +425,42 @@ class RequirementPlannerTest {
                 assertThat(plan.operations()).isNotEmpty());
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void bidirectional_item_capability_plans_input_and_output_with_requirement_directions() {
+        BulkItemStorage storage = new BulkItemStorage(64, null);
+        storage.insert(ironResource(), 1, false);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
+                CapabilityDirections.bidirectional(), IOType.INPUT, storage);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(1))),
+                List.of(capability), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().requirements()).hasSize(2);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(capability.resourceRequests()).extracting(CapabilityRequests.ResourceRequest::ioType)
+                .containsExactly(IOType.INPUT, IOType.OUTPUT);
+        assertThat(storage.amount(0)).isEqualTo(1);
+    }
+
+    @Test
+    void bidirectional_item_capability_rolls_back_input_simulation_when_output_cannot_fit() {
+        BulkItemStorage storage = new BulkItemStorage(1, null);
+        storage.insert(ironResource(), 1, false);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
+                CapabilityDirections.bidirectional(), IOType.INPUT, storage);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2))),
+                List.of(capability), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(storage.amount(0)).isEqualTo(1);
     }
 
     @Test
@@ -1659,18 +1696,31 @@ class RequirementPlannerTest {
     private static class StorageCapability implements MachineCapability, ValueFacet<CapabilityStorage> {
         private final CapabilityType type;
         private final IOType ioType;
+        private final CapabilityDirections directions;
         private final CapabilityStorage storage;
         private final List<String> tags;
         private int prepareCalls;
         private CapabilityRequests.ResourceRequest<?> lastResourceRequest;
+        private final List<CapabilityRequests.ResourceRequest<?>> resourceRequests = new ArrayList<>();
 
         private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
             this(type, ioType, storage, List.of());
         }
 
         private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage, List<String> tags) {
+            this(type, CapabilityDirections.of(ioType), ioType, storage, tags);
+        }
+
+        private StorageCapability(Identifier type, CapabilityDirections directions, IOType ioType,
+                                  CapabilityStorage storage) {
+            this(type, directions, ioType, storage, List.of());
+        }
+
+        private StorageCapability(Identifier type, CapabilityDirections directions, IOType ioType,
+                                  CapabilityStorage storage, List<String> tags) {
             this.type = new CapabilityType(type);
             this.ioType = ioType;
+            this.directions = directions;
             this.storage = storage;
             this.tags = List.copyOf(tags);
         }
@@ -1696,6 +1746,11 @@ class RequirementPlannerTest {
                 @Override
                 public IOType ioType() {
                     return StorageCapability.this.ioType;
+                }
+
+                @Override
+                public CapabilityDirections directions() {
+                    return StorageCapability.this.directions;
                 }
 
                 @Override
@@ -1740,6 +1795,7 @@ class RequirementPlannerTest {
             }
             CapabilityRequests.ResourceRequest<?> resourceRequest = (CapabilityRequests.ResourceRequest<?>) request;
             lastResourceRequest = resourceRequest;
+            resourceRequests.add(resourceRequest);
             if (!(storage instanceof ResourceStorage<?> resourceStorage)) {
                 return transaction -> CapabilityResult.failure(new ExecutionStatus(
                         type.id(), StatusSeverity.BLOCKED, type.id(), java.util.Map.of()));
@@ -1754,6 +1810,10 @@ class RequirementPlannerTest {
                 }
                 return CapabilityResult.successful();
             };
+        }
+
+        private List<CapabilityRequests.ResourceRequest<?>> resourceRequests() {
+            return resourceRequests;
         }
     }
 

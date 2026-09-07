@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.util.IOType;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 
@@ -68,6 +69,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         }
         boolean allowPartialOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                 && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
+        IOType direction = IOType.valueOf(requirement.io().name());
         long maximum = fluidMaximum(requirement, capabilities, parallelism, allowPartialOutput);
         if (maximum <= 0) {
             return requirement.io() == RecipeModifier.IOType.OUTPUT
@@ -80,10 +82,10 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         }
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, capabilities, finalParallelism,
-                        reservations, allowPartialOutput, true),
+                        reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
                         requirement, capabilities, finalParallelism, reservations,
-                        allowPartialOutput, false)));
+                        direction, allowPartialOutput, false)));
     }
 
     @Override
@@ -138,10 +140,11 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
     }
 
     private static RequirementPlan.OperationPlan planOperations(FluidRequirement requirement,
-                                                                List<MachineCapability> capabilities,
-                                                                long parallelism,
-                                                                PlanningReservations reservations,
-                                                                boolean allowPartialOutputs,
+                                                                 List<MachineCapability> capabilities,
+                                                                 long parallelism,
+                                                                 PlanningReservations reservations,
+                                                                 IOType direction,
+                                                                 boolean allowPartialOutputs,
                                                                 boolean materialize) {
         long amount = requirement.io() == RecipeModifier.IOType.INPUT
                 ? RequirementHandlerSupport.scaled(requirement.amount(), parallelism)
@@ -192,7 +195,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         if (actionMap.isEmpty()) return new RequirementPlan.OperationPlan(List.of(),
                 RequirementHandlerSupport.blocked(requirement, "no_output_capacity"),
                 RequirementHandlerSupport.outputSimulation(requestedAmount, 0L));
-        return RequirementHandlerSupport.resourceOperations(actionMap, parallelism, materialize,
+        return RequirementHandlerSupport.resourceOperations(actionMap, direction, parallelism, materialize,
                 RequirementHandlerSupport.outputSimulation(requestedAmount, amount - remaining));
     }
 

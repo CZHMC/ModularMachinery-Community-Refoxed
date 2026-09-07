@@ -50,6 +50,7 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        IOType direction = IOType.valueOf(requirement.io().name());
         boolean allowPartialOutput = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         long maximum = energyMaximum(requirement.fePerTick(), insert, capabilities,
                 context.requestedParallelism(), allowPartialOutput);
@@ -61,9 +62,9 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         }
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (parallelism, reservations) -> planOperations(requirement, capabilities, parallelism,
-                        reservations, insert, allowPartialOutput, true),
+                        reservations, insert, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> planOperations(
-                        requirement, capabilities, parallelism, reservations, insert, allowPartialOutput, false)));
+                        requirement, capabilities, parallelism, reservations, insert, direction, allowPartialOutput, false)));
     }
 
     @Override
@@ -79,10 +80,11 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
 
     private static RequirementPlan.OperationPlan planOperations(EnergyRequirement requirement,
                                                                 List<MachineCapability> capabilities,
-                                                                long parallelism,
-                                                                PlanningReservations reservations,
-                                                                boolean insert,
-                                                                boolean allowPartialOutput,
+                                                                 long parallelism,
+                                                                 PlanningReservations reservations,
+                                                                 boolean insert,
+                                                                 IOType direction,
+                                                                 boolean allowPartialOutput,
                                                                 boolean materialize) {
         List<CapabilityOperation> operations = new ArrayList<>();
         long requested = insert ? requestedAmount(requirement, parallelism) : 0L;
@@ -98,7 +100,7 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         if (materialize) {
             for (EnergyAction action : actions) {
                 operations.add(action.capability().prepare(new CapabilityRequests.ValueRequest(
-                        action.capability().view().type(), insert ? IOType.OUTPUT : IOType.INPUT,
+                        action.capability().view().type(), direction,
                         parallelism, action.amount(), insert)));
             }
         }
