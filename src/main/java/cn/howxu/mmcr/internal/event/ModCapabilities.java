@@ -116,9 +116,7 @@ public final class ModCapabilities {
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
                     if (!(be instanceof IOPortBlockEntity port)
-                            || !binding.directions().supports(port.ioType())
-                            || !port.isAutoIOSideExposed(binding.type(), side)
-                            || port.capability(binding.type()) == null) return null;
+                            || !port.isNativeSideExposed(binding, side)) return null;
                     return exposure.resolver().resolve(port, port.ioType(), side);
                 });
     }
@@ -176,11 +174,11 @@ public final class ModCapabilities {
         registerEnergyPort(event, kind, bindings);
     }
 
-    private static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
-                                                            List<CapabilityBinding> bindings, Direction side,
-                                                            Class<R> resourceType) {
+    static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
+                                                   List<CapabilityBinding> bindings, Direction side,
+                                                   Class<R> resourceType) {
         for (CapabilityBinding binding : bindings) {
-            if (!port.isAutoIOSideExposed(binding.type(), side)) continue;
+            if (!port.isNativeSideExposed(binding, side)) continue;
             ResourceStorage<R> storage = CapabilityFactories.resourceStorage(port.capability(binding.type()), resourceType);
             if (storage != null) return storage;
         }
@@ -190,7 +188,7 @@ public final class ModCapabilities {
     private static LongValueStorage valueStorage(IOPortBlockEntity port, List<CapabilityBinding> bindings,
                                                  Direction side) {
         for (CapabilityBinding binding : bindings) {
-            if (!port.isAutoIOSideExposed(binding.type(), side)) continue;
+            if (!port.isNativeSideExposed(binding, side)) continue;
             LongValueStorage storage = CapabilityFactories.valueStorage(port.capability(binding.type()), LongValueStorage.class);
             if (storage != null) return storage;
         }

@@ -246,6 +246,11 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             }
 
             @Override
+            public cn.howxu.mmcr.api.capability.CapabilityDirections directions() {
+                return binding.directions();
+            }
+
+            @Override
             public <T> Optional<T> service(Class<T> serviceType) {
                 return serviceType.isInstance(IOPortBlockEntity.this)
                         ? Optional.of(serviceType.cast(IOPortBlockEntity.this)) : Optional.empty();
@@ -343,6 +348,17 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public boolean isAutoIOSideExposed(CapabilityType type, Direction side) {
         return type != null && autoIOCapability(type) != null
                 && (side == null || autoIOConfig(type).isSideEnabled(side));
+    }
+
+    /**
+     * Checks whether a binding may expose its native provider without requiring AutoIO support.
+     */
+    public boolean isNativeSideExposed(CapabilityBinding binding, Direction side) {
+        if (binding == null || !binding.directions().supports(ioType()) || capability(binding.type()) == null) {
+            return false;
+        }
+        AutoIOConfig config = autoIOConfigs.get(binding.type());
+        return side == null || config == null || config.isSideEnabled(side);
     }
 
     public void toggleAutoIOEnabled() {
