@@ -136,6 +136,10 @@ public final class LevelStub {
         return ((TestLevel) level).sentBlockUpdates;
     }
 
+    public static int capabilityLookups(Level level) {
+        return ((TestLevel) level).capabilityLookups;
+    }
+
     private static Level createFromStates(Map<BlockPos, BlockState> blocks) {
         try {
             var level = (TestLevel) unsafe().allocateInstance(TestLevel.class);
@@ -167,6 +171,7 @@ public final class LevelStub {
         private Set<Long> loadedChunks;
         private long gameTime;
         private int sentBlockUpdates;
+        private int capabilityLookups;
         private RandomSource random = RandomSource.create(0L);
 
         private TestLevel() {
@@ -184,6 +189,7 @@ public final class LevelStub {
         @Override
         @SuppressWarnings("unchecked")
         public <T, C> T getCapability(BlockCapability<T, C> capability, BlockPos pos, C context) {
+            capabilityLookups++;
             return (T) capabilities.getOrDefault(capability, Map.of()).get(pos);
         }
 

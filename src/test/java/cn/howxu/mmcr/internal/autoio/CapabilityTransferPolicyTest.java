@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.autoio;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -31,19 +32,26 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -56,6 +64,7 @@ import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -239,6 +248,44 @@ class CapabilityTransferPolicyTest {
     }
 
     @Test
+    void operation_only_capability_is_ignored_by_real_auto_io_port_entries() {
+        OperationOnlyItemCapability capability = new OperationOnlyItemCapability();
+        OperationOnlyPort port = new OperationOnlyPort(capability);
+        Level level = LevelStub.createWithBlockEntities(List.of(port));
+        port.setLevel(level);
+        int lookupsBefore = LevelStub.capabilityLookups(level);
+
+        assertThat(port.isAutoIOSideExposed(capability.type(), null)).isFalse();
+        port.setAutoIOEnabled(true);
+        port.setAutoIOSide(Direction.NORTH, false);
+        port.runAutoIOCycleForTesting();
+
+        assertThat(capability.prepareCalls()).isZero();
+        assertThat(port.autoIOCandidateCount()).isZero();
+        assertThat(port.autoIODelay()).isEqualTo(60);
+        assertThat(LevelStub.capabilityLookups(level)).isEqualTo(lookupsBefore);
+
+        TagValueOutput saved = tagOutput();
+        port.saveTo(saved);
+        assertThat(saved.buildResult().getCompound("auto_io_capabilities")).isEmpty();
+
+        TagValueOutput injected = tagOutput();
+        injected.child("auto_io_capabilities").child(capability.type().id().toString())
+                .putBoolean("enabled", true);
+        port.loadFrom(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), injected.buildResult()));
+        TagValueOutput restored = tagOutput();
+        port.saveTo(restored);
+
+        assertThat(restored.buildResult().getCompound("auto_io_capabilities")).isEmpty();
+        assertThat(port.ejectContents(capability.type())).isFalse();
+        assertThat(port.ejectContents()).isFalse();
+        assertThat(port.activeRecipeChecks()).isZero();
+        assertThat(capability.prepareCalls()).isZero();
+        assertThat(LevelStub.capabilityLookups(level)).isEqualTo(lookupsBefore);
+    }
+
+    @Test
     void output_port_ejection_is_rejected_before_transfer_policy_runs() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
         setItem(output.itemStorage(), 0, stack(2));
@@ -359,6 +406,60 @@ class CapabilityTransferPolicyTest {
             }
             storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
             transaction.commit();
+        }
+    }
+
+    private static TagValueOutput tagOutput() {
+        return TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+    }
+
+    private static final class OperationOnlyPort extends IOPortBlockEntity {
+        private final IOPortKind kind = PortKinds.ITEM_INPUT;
+        private final CapabilitySnapshot snapshot;
+        private int activeRecipeChecks;
+
+        private OperationOnlyPort(MachineCapability capability) {
+            super(ModBlockEntities.BES.get(PortKinds.ITEM_INPUT.id()).get(), BlockPos.ZERO,
+                    ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState());
+            snapshot = new CapabilitySnapshot(List.of(capability));
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return kind;
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return snapshot;
+        }
+
+        private void runAutoIOCycleForTesting() {
+            runAutoIOCycle();
+        }
+
+        private void saveTo(TagValueOutput output) {
+            saveAdditional(output);
+        }
+
+        private void loadFrom(ValueInput input) {
+            loadAdditional(input);
+        }
+
+        @Override
+        protected boolean isUsedByActiveRecipe() {
+            activeRecipeChecks++;
+            return false;
+        }
+
+        private int activeRecipeChecks() {
+            return activeRecipeChecks;
         }
     }
 

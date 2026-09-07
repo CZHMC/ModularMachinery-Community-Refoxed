@@ -145,14 +145,14 @@ class AutoIOConfigTest {
     }
 
     @Test
-    void no_arg_auto_io_methods_select_a_unique_unrecognized_capability_profile() {
+    void no_arg_auto_io_methods_ignore_a_unique_unrecognized_capability_profile() {
         UniqueCustomHost host = new UniqueCustomHost();
 
         host.setAutoIOEnabled(true);
         host.setAutoIOSide(Direction.NORTH, false);
 
-        assertThat(host.autoIOConfig().enabled()).isTrue();
-        assertThat(host.autoIOConfig().isSideEnabled(Direction.NORTH)).isFalse();
+        assertThat(host.autoIOConfig().enabled()).isFalse();
+        assertThat(host.autoIOConfig().isSideEnabled(Direction.NORTH)).isTrue();
         assertThat(host.ejectContents()).isFalse();
     }
 

@@ -271,12 +271,13 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     public AutoIOConfig autoIOConfig() {
-        List<MachineCapability> capabilities = capabilitySnapshot().capabilities();
-        return capabilities.isEmpty() ? new AutoIOConfig() : autoIOConfig(capabilities.getFirst().type());
+        MachineCapability capability = autoIOCapability();
+        return capability == null ? new AutoIOConfig() : autoIOConfig(capability.type());
     }
 
     public AutoIOConfig autoIOConfig(CapabilityType type) {
         if (type == null) throw new IllegalArgumentException("Capability type must not be null");
+        if (autoIOCapability(type) == null) return new AutoIOConfig();
         return autoIOConfigs.computeIfAbsent(type, ignored -> new AutoIOConfig());
     }
 
@@ -328,7 +329,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     public void setAutoIOEnabled(CapabilityType type, boolean enabled) {
-        if (type == null) return;
+        if (type == null || autoIOCapability(type) == null) return;
         AutoIOConfig config = autoIOConfig(type);
         if (config.enabled() == enabled) return;
         config.setEnabled(enabled);
@@ -340,7 +341,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     public boolean isAutoIOSideExposed(CapabilityType type, Direction side) {
-        return side == null || type != null && capability(type) != null && autoIOConfig(type).isSideEnabled(side);
+        return type != null && autoIOCapability(type) != null
+                && (side == null || autoIOConfig(type).isSideEnabled(side));
     }
 
     public void toggleAutoIOEnabled() {
@@ -352,7 +354,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     public void setAutoIOSide(CapabilityType type, Direction side, boolean enabled) {
-        if (type == null || side == null) return;
+        if (type == null || side == null || autoIOCapability(type) == null) return;
         AutoIOConfig config = autoIOConfig(type);
         if (config.isSideEnabled(side) == enabled) return;
         config.setSide(side, enabled);
@@ -364,7 +366,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     public void setAllAutoIOSides(CapabilityType type, boolean enabled) {
-        if (type == null) return;
+        if (type == null || autoIOCapability(type) == null) return;
         AutoIOConfig config = autoIOConfig(type);
         if (config.enabledSides().size() == (enabled ? Direction.values().length : 0)) return;
         config.setAllSides(enabled);
@@ -415,9 +417,14 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         if (level == null || level.isClientSide()) return;
         boolean rebuiltCandidates = consumeAutoIOCacheDirty();
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
-            AutoIOConfig config = autoIOConfig(capability.type());
             TransferPolicy policy = transferPolicy(capability).orElse(null);
-            if (!config.enabled() || config.enabledSides().isEmpty() || policy == null) continue;
+            if (policy == null) {
+                autoIOConfigs.remove(capability.type());
+                autoIOStates.remove(capability.type());
+                continue;
+            }
+            AutoIOConfig config = autoIOConfig(capability.type());
+            if (!config.enabled() || config.enabledSides().isEmpty()) continue;
             AutoIOState state = autoIOStates.computeIfAbsent(capability.type(), ignored -> new AutoIOState());
             if (rebuiltCandidates) rebuildAutoIOCandidates(capability, policy, config, state);
             if (state.candidateSides.isEmpty()) {
@@ -463,10 +470,17 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     private @Nullable MachineCapability autoIOCapability() {
         List<MachineCapability> capabilities = capabilitySnapshot().capabilities();
-        for (MachineCapability capability : capabilities) {
-            if (transferPolicy(capability).isPresent()) return capability;
-        }
-        return capabilities.size() == 1 ? capabilities.getFirst() : null;
+        return capabilities.stream()
+                .filter(capability -> transferPolicy(capability).isPresent())
+                .findFirst().orElse(null);
+    }
+
+    private @Nullable MachineCapability autoIOCapability(CapabilityType type) {
+        if (type == null) return null;
+        return capabilitySnapshot().capabilities().stream()
+                .filter(capability -> type.equals(capability.type()))
+                .filter(capability -> transferPolicy(capability).isPresent())
+                .findFirst().orElse(null);
     }
 
     private @Nullable CapabilityType autoIOCapabilityType() {
@@ -480,11 +494,12 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     public boolean ejectContents(CapabilityType type) {
-        if (level == null || level.isClientSide() || ioType() != IOType.INPUT || isUsedByActiveRecipe()) return false;
+        if (level == null || level.isClientSide() || ioType() != IOType.INPUT) return false;
         MachineCapability capability = capability(type);
         if (capability == null || !capability.directions().supports(IOType.INPUT)) return false;
         TransferPolicy policy = capability == null ? null : transferPolicy(capability).orElse(null);
         if (capability == null || policy == null) return false;
+        if (isUsedByActiveRecipe()) return false;
         List<Direction> sides = new ArrayList<>(List.of(Direction.values()));
         for (int index = sides.size() - 1; index > 0; index--) {
             int swapIndex = level.getRandom().nextInt(index + 1);
@@ -540,8 +555,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        ValueOutput profiles = output.child(AUTO_IO_CAPABILITIES_KEY);
+        ValueOutput profiles = null;
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
+            if (transferPolicy(capability).isEmpty()) continue;
+            if (profiles == null) profiles = output.child(AUTO_IO_CAPABILITIES_KEY);
             autoIOConfig(capability.type()).save(profiles.child(capability.type().id().toString()));
         }
     }
@@ -553,6 +570,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         Optional<ValueInput> profiles = input.child(AUTO_IO_CAPABILITIES_KEY);
         if (profiles.isPresent()) {
             for (MachineCapability capability : capabilitySnapshot().capabilities()) {
+                if (transferPolicy(capability).isEmpty()) continue;
                 Optional<ValueInput> profile = profiles.get().child(capability.type().id().toString());
                 if (profile.isPresent()) {
                     autoIOConfig(capability.type()).loadInto(profile.get());

@@ -40,6 +40,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -251,6 +253,21 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void bidirectional_fluid_capability_publishes_both_primary_aggregate_roles() {
+        LongResourceStorage<FluidResource> storage = new LongResourceStorage<>(
+                FluidResource.class, 1, 100L, resource -> resource.isEmpty(), () -> {});
+        storage.setContents(0, FluidResource.of(Fluids.WATER), 20L);
+        MachineCapability capability = new TestCapability("bidirectional_fluid", storage,
+                CapabilityDirections.bidirectional());
+        ComponentRuntime runtime = new ComponentRuntime();
+
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(capability)), "fluid")));
+
+        assertThat(runtime.capabilityAggregate().primaryFluid().getAmount()).isEqualTo(20);
+        assertThat(runtime.capabilityAggregate().primaryOutputFluid().getAmount()).isEqualTo(20);
+    }
+
+    @Test
     void structure_normalization_preserves_capacity_above_integer_maximum() {
         Identifier machineId = Identifier.fromNamespaceAndPath("mmcr_test", "long_parallel_machine");
         var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
@@ -455,10 +472,14 @@ class ComponentRuntimeTest {
         }
     }
 
-    private record TestCapability(String id, CapabilityStorage storage)
+    private record TestCapability(String id, CapabilityStorage storage, CapabilityDirections directions)
             implements MachineCapability, ValueFacet<CapabilityStorage> {
         private TestCapability(String id) {
-            this(id, null);
+            this(id, null, CapabilityDirections.input());
+        }
+
+        private TestCapability(String id, CapabilityStorage storage) {
+            this(id, storage, CapabilityDirections.input());
         }
 
         @Override
@@ -467,8 +488,8 @@ class ComponentRuntimeTest {
         }
 
         @Override
-        public IOType ioType() {
-            return IOType.INPUT;
+        public CapabilityDirections directions() {
+            return directions;
         }
 
         @Override
@@ -485,8 +506,8 @@ class ComponentRuntimeTest {
                 }
 
                 @Override
-                public IOType ioType() {
-                    return TestCapability.this.ioType();
+                public CapabilityDirections directions() {
+                    return TestCapability.this.directions();
                 }
 
                 @Override

@@ -536,7 +536,8 @@ public final class ComponentRuntime {
                     if (stack.isEmpty()) continue;
                     if (capability.view().directions().supports(IOType.INPUT) && primaryFluid.isEmpty()) {
                         primaryFluid = stack;
-                    } else if (capability.view().directions().supports(IOType.OUTPUT) && primaryOutputFluid.isEmpty()) {
+                    }
+                    if (capability.view().directions().supports(IOType.OUTPUT) && primaryOutputFluid.isEmpty()) {
                         primaryOutputFluid = stack;
                     }
                 }
