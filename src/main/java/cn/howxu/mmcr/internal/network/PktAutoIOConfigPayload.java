@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
@@ -84,7 +83,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
         var capability = port.capability(type);
         CapabilityTransferPolicies.ensureRegistered();
         return capability != null && capability.directions().supports(port.ioType())
-                && TransferStrategyRegistry.policyFor(type).isPresent();
+                && CapabilityTransferPolicies.policyFor(capability).isPresent();
     }
 
     static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {

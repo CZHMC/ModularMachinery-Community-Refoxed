@@ -70,7 +70,8 @@ public final class MachineIoView {
      */
     public List<CapabilityDisplay> displays() {
         return snapshot.capabilities().stream()
-                .flatMap(capability -> CapabilityDisplayRegistry.global().displays(capability).stream())
+                .flatMap(capability -> capability.view().directions().values().stream()
+                        .flatMap(ignored -> CapabilityDisplayRegistry.global().displays(capability).stream()))
                 .toList();
     }
 

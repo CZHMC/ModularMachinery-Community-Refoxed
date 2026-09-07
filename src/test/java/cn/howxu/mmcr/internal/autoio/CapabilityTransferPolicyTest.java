@@ -1,9 +1,15 @@
 package cn.howxu.mmcr.internal.autoio;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
@@ -11,6 +17,7 @@ import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
@@ -47,6 +54,8 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -222,6 +231,14 @@ class CapabilityTransferPolicyTest {
     }
 
     @Test
+    void operation_only_bidirectional_item_capability_is_excluded_from_auto_io() {
+        OperationOnlyItemCapability capability = new OperationOnlyItemCapability();
+
+        assertThat(CapabilityTransferPolicies.policyFor(capability)).isEmpty();
+        assertThat(capability.prepareCalls()).isZero();
+    }
+
+    @Test
     void output_port_ejection_is_rejected_before_transfer_policy_runs() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
         setItem(output.itemStorage(), 0, stack(2));
@@ -342,6 +359,55 @@ class CapabilityTransferPolicyTest {
             }
             storage.insert(slot, ItemResource.of(stack), stack.getCount(), transaction);
             transaction.commit();
+        }
+    }
+
+    private static final class OperationOnlyItemCapability implements MachineCapability, OperationFacet {
+        private final AtomicInteger prepareCalls = new AtomicInteger();
+
+        @Override
+        public CapabilityType type() {
+            return BuiltinCapabilityDefinitions.ITEM_TYPE;
+        }
+
+        @Override
+        public CapabilityDirections directions() {
+            return CapabilityDirections.bidirectional();
+        }
+
+        @Override
+        public CapabilityView view() {
+            return new CapabilityView() {
+                @Override
+                public CapabilityType type() {
+                    return OperationOnlyItemCapability.this.type();
+                }
+
+                @Override
+                public CapabilityDirections directions() {
+                    return CapabilityDirections.bidirectional();
+                }
+
+                @Override
+                public Set<Class<? extends CapabilityFacet>> facets() {
+                    return Set.of(OperationFacet.class);
+                }
+            };
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            prepareCalls.incrementAndGet();
+            return transaction -> CapabilityResult.successful();
+        }
+
+        @Override
+        public CapabilityOperation prepareOperation(CapabilityRequest request) {
+            return prepare(request);
+        }
+
+        private int prepareCalls() {
+            return prepareCalls.get();
         }
     }
 

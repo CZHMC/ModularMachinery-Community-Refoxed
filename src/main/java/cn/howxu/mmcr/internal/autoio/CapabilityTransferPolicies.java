@@ -54,7 +54,8 @@ public final class CapabilityTransferPolicies {
     }
 
     public static Optional<TransferPolicy> policyFor(MachineCapability capability) {
-        if (capability == null || capability.type() == null) return Optional.empty();
+        if (capability == null || capability.type() == null
+                || capability.facet(TransferFacet.class).isEmpty()) return Optional.empty();
         return TransferStrategyRegistry.policyFor(capability.type());
     }
 

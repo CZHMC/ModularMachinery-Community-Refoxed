@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
@@ -17,6 +18,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -233,6 +235,19 @@ class ComponentRuntimeTest {
 
         assertThat(presentation.amount()).isEqualTo(Long.MAX_VALUE);
         assertThat(presentation.capacity()).isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
+    void bidirectional_capability_view_publishes_input_and_output_identities() {
+        MachineCapability capability = new ViewBidirectionalCapability();
+        ComponentRuntime runtime = new ComponentRuntime();
+
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(capability)), "bidirectional")));
+
+        assertThat(runtime.capabilityPresentations())
+                .extracting(ControllerRuntimeSnapshot.CapabilityPresentation::ioType)
+                .containsExactlyInAnyOrder(IOType.INPUT, IOType.OUTPUT);
+        assertThat(new MachineIoView(new CapabilitySnapshot(List.of(capability))).displays()).hasSize(2);
     }
 
     @Test
@@ -477,6 +492,41 @@ class ComponentRuntimeTest {
                 @Override
                 public Set<Class<? extends CapabilityFacet>> facets() {
                     return Set.of(ValueFacet.class);
+                }
+            };
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            return transaction -> CapabilityResult.successful();
+        }
+    }
+
+    private static final class ViewBidirectionalCapability implements MachineCapability {
+        private static final CapabilityType TYPE = new CapabilityType(
+                Identifier.fromNamespaceAndPath("mmcr_test", "view_bidirectional"));
+
+        @Override
+        public CapabilityType type() {
+            return TYPE;
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public CapabilityView view() {
+            return new CapabilityView() {
+                @Override
+                public CapabilityType type() {
+                    return TYPE;
+                }
+
+                @Override
+                public CapabilityDirections directions() {
+                    return CapabilityDirections.bidirectional();
                 }
             };
         }

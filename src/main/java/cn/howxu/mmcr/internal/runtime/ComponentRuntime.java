@@ -166,7 +166,7 @@ public final class ComponentRuntime {
         for (MachineCapability capability : capabilities) {
             LongValueStorage value = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
-            for (IOType direction : capability.directions().values()) {
+            for (IOType direction : capability.view().directions().values()) {
                 if (value != null) {
                     snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
                             capability.type() == null ? null : capability.type().id(), direction,
@@ -371,7 +371,7 @@ public final class ComponentRuntime {
             if (component.getContainer() instanceof CapabilityHost host) {
                 try {
                     for (MachineCapability capability : host.capabilities()) {
-                        for (IOType direction : capability.directions().values()) {
+                        for (IOType direction : capability.view().directions().values()) {
                             identities.add(CapabilityIdentity.of(component.getPos(), capability, direction));
                         }
                         result.add(capability);
@@ -534,9 +534,9 @@ public final class ComponentRuntime {
                     if (!(resource instanceof FluidResource fluidResource) || fluidResource.isEmpty()) continue;
                     FluidStack stack = fluidResource.toStack((int) Math.min(resourceStorage.amount(slot), Integer.MAX_VALUE));
                     if (stack.isEmpty()) continue;
-                    if (capability.directions().supports(IOType.INPUT) && primaryFluid.isEmpty()) {
+                    if (capability.view().directions().supports(IOType.INPUT) && primaryFluid.isEmpty()) {
                         primaryFluid = stack;
-                    } else if (capability.directions().supports(IOType.OUTPUT) && primaryOutputFluid.isEmpty()) {
+                    } else if (capability.view().directions().supports(IOType.OUTPUT) && primaryOutputFluid.isEmpty()) {
                         primaryOutputFluid = stack;
                     }
                 }

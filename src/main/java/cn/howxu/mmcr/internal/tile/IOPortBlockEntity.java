@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
@@ -504,7 +505,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     private static Optional<TransferPolicy> transferPolicy(MachineCapability capability) {
-        if (capability == null || capability.type() == null) return Optional.empty();
+        if (capability == null || capability.type() == null
+                || capability.facet(TransferFacet.class).isEmpty()) {
+            return Optional.empty();
+        }
         CapabilityTransferPolicies.ensureRegistered();
         return TransferStrategyRegistry.policyFor(capability.type());
     }
