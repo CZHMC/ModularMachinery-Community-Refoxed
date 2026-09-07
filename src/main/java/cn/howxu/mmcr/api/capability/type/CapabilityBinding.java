@@ -67,6 +67,9 @@ public record CapabilityBinding(CapabilityType type,
      */
     @Deprecated(forRemoval = true)
     public IOType ioType() {
+        if (directions.values().size() != 1) {
+            throw new IllegalStateException("Capability binding does not have exactly one direction");
+        }
         return directions.values().iterator().next();
     }
 

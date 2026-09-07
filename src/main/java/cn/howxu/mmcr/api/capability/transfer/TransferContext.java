@@ -42,7 +42,7 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
 
     public static TransferContext simulate(MachineCapability capability, Direction side, long parallelism) {
         Objects.requireNonNull(capability, "capability");
-        return simulate(capability, capability.directions().values().iterator().next(), side, parallelism);
+        return simulate(capability, singleDirection(capability), side, parallelism);
     }
 
     public static TransferContext simulate(MachineCapability capability, IOType ioType, Direction side,
@@ -53,7 +53,7 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
     public static TransferContext commit(MachineCapability capability, Direction side, long parallelism,
                                          TransactionContext transaction) {
         Objects.requireNonNull(capability, "capability");
-        return commit(capability, capability.directions().values().iterator().next(), side, parallelism, transaction);
+        return commit(capability, singleDirection(capability), side, parallelism, transaction);
     }
 
     public static TransferContext commit(MachineCapability capability, IOType ioType, Direction side,
@@ -64,5 +64,12 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
 
     public TransferContext asEjection() {
         return new TransferContext(capability, ioType, side, parallelism, simulate, transaction, true);
+    }
+
+    private static IOType singleDirection(MachineCapability capability) {
+        if (capability.directions().values().size() != 1) {
+            throw new IllegalStateException("Capability does not have exactly one direction");
+        }
+        return capability.directions().values().iterator().next();
     }
 }

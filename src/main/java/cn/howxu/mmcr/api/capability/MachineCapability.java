@@ -24,6 +24,9 @@ public interface MachineCapability {
      */
     @Deprecated(forRemoval = true)
     default IOType ioType() {
+        if (directions().values().size() != 1) {
+            throw new IllegalStateException("Capability does not have exactly one direction");
+        }
         return directions().values().iterator().next();
     }
 
