@@ -16,7 +16,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
-import net.minecraft.world.level.material.Fluids;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -33,6 +32,7 @@ public final class StartupContentRegistration {
     private static StartupPhase startupPhase = StartupPhase.NOT_STARTED;
     private static boolean structureCollectionDeferred;
     private static MMCRMachineDefinationsEvent pendingProductionDefinitions;
+    private static boolean productionRecipesCollected;
 
     private StartupContentRegistration() {
     }
@@ -47,6 +47,7 @@ public final class StartupContentRegistration {
 
     public static void registerProductionForModStartup(IEventBus eventBus) {
         startupPhase = StartupPhase.COLLECTING;
+        productionRecipesCollected = false;
         PublicApiBootstrap.begin();
         ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
@@ -64,7 +65,7 @@ public final class StartupContentRegistration {
         if (pendingProductionDefinitions == null) return;
         boolean deferStructures = ModList.get() != null && ModList.get().isLoaded("kubejs")
                 && !Plugin.startupScriptsLoaded();
-        bindItemComponentsForStartup();
+        bindItemComponentsForEarlyRegistration();
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(
                 pendingProductionDefinitions.definitions().keySet());
         registerGameTestBuiltins("registerMachineStructures",
@@ -75,17 +76,30 @@ public final class StartupContentRegistration {
             structures.freeze();
             ContentRegistrationCoordinator.collectStructures(structures);
         }
+        tryCommitProductionStartup();
+    }
+
+    public static void completeProductionRecipesAfterComponentsBound() {
+        completeProductionRecipesAfterComponentsBound(NeoForge.EVENT_BUS);
+    }
+
+    public static void completeProductionRecipesAfterComponentsBound(IEventBus eventBus) {
+        if (pendingProductionDefinitions == null || productionRecipesCollected) return;
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        registerGameTestBuiltins("registerRecipes",
-                new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
+        registerGameTestBuiltins("registerRecipes", new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
         eventBus.post(recipes);
         recipes.freeze();
         ContentRegistrationCoordinator.collectRecipes(recipes);
-        if (!deferStructures) {
-            ContentRegistrationCoordinator.commitStartup();
-            startupPhase = StartupPhase.COMMITTED;
-        }
+        productionRecipesCollected = true;
+        tryCommitProductionStartup();
+    }
+
+    private static void tryCommitProductionStartup() {
+        if (pendingProductionDefinitions == null || !productionRecipesCollected || structureCollectionDeferred) return;
+        ContentRegistrationCoordinator.commitStartup();
+        registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
         pendingProductionDefinitions = null;
+        startupPhase = StartupPhase.COMMITTED;
     }
 
     private static void registerProduction(boolean begin, boolean commit, IEventBus eventBus) {
@@ -120,10 +134,13 @@ public final class StartupContentRegistration {
 
     public static void completeKubeJSStartup() {
         if (ContentRegistrationCoordinator.isCommitted()) return;
-        if (pendingProductionDefinitions != null) return;
         if (structureCollectionDeferred) {
             ContentRegistrationCoordinator.collectStructures(MMCRMachineStructuresEvent.current());
             structureCollectionDeferred = false;
+        }
+        if (pendingProductionDefinitions != null) {
+            tryCommitProductionStartup();
+            return;
         }
         ContentRegistrationCoordinator.commitStartup();
         registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
@@ -149,6 +166,7 @@ public final class StartupContentRegistration {
     public static void resetForTesting() {
         startupPhase = StartupPhase.NOT_STARTED;
         structureCollectionDeferred = false;
+        productionRecipesCollected = false;
     }
 
     public static void markCollectingForTesting() {
@@ -198,7 +216,7 @@ public final class StartupContentRegistration {
         definitions.freeze();
         ContentRegistrationCoordinator.collectMachines(definitions);
 
-        bindItemComponentsForStartup();
+        bindItemComponentsForEarlyRegistration();
         MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(definitions.definitions().keySet());
         structuresSource.accept(structures);
         eventBus.post(structures);
@@ -227,12 +245,7 @@ public final class StartupContentRegistration {
     /**
      * Ensures item holders can be used by startup declarations before the game has bound components.
      */
-    public static void bindItemComponentsForStartup() {
-        try {
-            Fluids.WATER.builtInRegistryHolder().components();
-        } catch (NullPointerException ignored) {
-            Fluids.WATER.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
-        }
+    public static void bindItemComponentsForEarlyRegistration() {
         for (Item item : BuiltInRegistries.ITEM) {
             Holder.Reference<Item> holder = item.builtInRegistryHolder();
             try {
