@@ -31,7 +31,10 @@ public final class StartupContentRegistration {
             .build();
     private static StartupPhase startupPhase = StartupPhase.NOT_STARTED;
     private static boolean structureCollectionDeferred;
+    private static boolean productionStructuresInitialized;
+    private static boolean productionStructuresCollected;
     private static MMCRMachineDefinationsEvent pendingProductionDefinitions;
+    private static boolean productionRecipesCollecting;
     private static boolean productionRecipesCollected;
 
     private StartupContentRegistration() {
@@ -48,7 +51,11 @@ public final class StartupContentRegistration {
     public static void registerProductionForModStartup(IEventBus eventBus) {
         if (startupPhase == StartupPhase.COLLECTING || startupPhase == StartupPhase.COMMITTED) return;
         startupPhase = StartupPhase.COLLECTING;
+        structureCollectionDeferred = false;
+        productionStructuresInitialized = false;
+        productionStructuresCollected = false;
         productionRecipesCollected = false;
+        productionRecipesCollecting = false;
         PublicApiBootstrap.begin();
         ContentRegistrationCoordinator.beginStartup();
         MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
@@ -63,19 +70,31 @@ public final class StartupContentRegistration {
     }
 
     public static void completeProductionForModStartup(IEventBus eventBus) {
-        if (pendingProductionDefinitions == null) return;
-        boolean deferStructures = ModList.get() != null && ModList.get().isLoaded("kubejs")
-                && !Plugin.startupScriptsLoaded();
-        bindItemComponentsForEarlyRegistration();
-        MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(
-                pendingProductionDefinitions.definitions().keySet());
-        registerGameTestBuiltins("registerMachineStructures",
-                new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
-        eventBus.post(structures);
-        structureCollectionDeferred = deferStructures;
-        if (!deferStructures) {
-            structures.freeze();
-            ContentRegistrationCoordinator.collectStructures(structures);
+        if (pendingProductionDefinitions == null || productionStructuresInitialized) return;
+        productionStructuresInitialized = true;
+        boolean initialized = false;
+        try {
+            boolean deferStructures = ModList.get() != null && ModList.get().isLoaded("kubejs")
+                    && !Plugin.startupScriptsLoaded();
+            bindItemComponentsForEarlyRegistration();
+            MMCRMachineStructuresEvent structures = MMCRMachineStructuresEvent.prepare(
+                    pendingProductionDefinitions.definitions().keySet());
+            registerGameTestBuiltins("registerMachineStructures",
+                    new Class<?>[]{MMCRMachineStructuresEvent.class}, structures);
+            eventBus.post(structures);
+            structureCollectionDeferred = deferStructures;
+            if (!deferStructures) {
+                structures.freeze();
+                ContentRegistrationCoordinator.collectStructures(structures);
+                productionStructuresCollected = true;
+            }
+            initialized = true;
+        } finally {
+            if (!initialized) {
+                productionStructuresInitialized = false;
+                structureCollectionDeferred = false;
+                productionStructuresCollected = false;
+            }
         }
         tryCommitProductionStartup();
     }
@@ -85,8 +104,8 @@ public final class StartupContentRegistration {
     }
 
     public static void completeProductionRecipesAfterComponentsBound(IEventBus eventBus) {
-        if (pendingProductionDefinitions == null || productionRecipesCollected) return;
-        productionRecipesCollected = true;
+        if (pendingProductionDefinitions == null || productionRecipesCollecting || productionRecipesCollected) return;
+        productionRecipesCollecting = true;
         boolean collected = false;
         try {
             MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
@@ -94,15 +113,18 @@ public final class StartupContentRegistration {
             eventBus.post(recipes);
             recipes.freeze();
             ContentRegistrationCoordinator.collectRecipes(recipes);
+            productionRecipesCollected = true;
             collected = true;
         } finally {
+            productionRecipesCollecting = false;
             if (!collected) productionRecipesCollected = false;
         }
         tryCommitProductionStartup();
     }
 
     private static void tryCommitProductionStartup() {
-        if (pendingProductionDefinitions == null || !productionRecipesCollected || structureCollectionDeferred) return;
+        if (pendingProductionDefinitions == null || !productionStructuresInitialized || !productionStructuresCollected
+                || productionRecipesCollecting || !productionRecipesCollected) return;
         ContentRegistrationCoordinator.commitStartup();
         registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
         pendingProductionDefinitions = null;
@@ -144,6 +166,7 @@ public final class StartupContentRegistration {
         if (structureCollectionDeferred) {
             ContentRegistrationCoordinator.collectStructures(MMCRMachineStructuresEvent.current());
             structureCollectionDeferred = false;
+            productionStructuresCollected = true;
         }
         if (pendingProductionDefinitions != null) {
             tryCommitProductionStartup();
@@ -173,7 +196,10 @@ public final class StartupContentRegistration {
     public static void resetForTesting() {
         startupPhase = StartupPhase.NOT_STARTED;
         structureCollectionDeferred = false;
+        productionStructuresInitialized = false;
+        productionStructuresCollected = false;
         pendingProductionDefinitions = null;
+        productionRecipesCollecting = false;
         productionRecipesCollected = false;
     }
 
