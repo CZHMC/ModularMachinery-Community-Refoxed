@@ -105,7 +105,7 @@ public class REACTOR {
                 .inputItem(Items.APPLE, 3)
                 .inputFluid(Fluids.WATER, 1)
                 .outputItem(Items.DIAMOND, 10)
-                .outputFluid(Fluids.WATER, 250)
+                .outputFluid(Fluids.LAVA, 250)
                 .outputEnergy(200)
                 .duration(300)
                 .build();
@@ -116,7 +116,7 @@ public class REACTOR {
                 .inputItem(Items.GOLDEN_APPLE, 2)
                 .inputFluid(Fluids.WATER, 800)
                 .outputItem(Items.GOLD_INGOT, 2)
-                .outputFluid(Fluids.WATER, 450)
+                .outputFluid(Fluids.LAVA, 450)
                 .inputEnergy(10)
                 .outputEnergy(200)
                 .duration(200)
