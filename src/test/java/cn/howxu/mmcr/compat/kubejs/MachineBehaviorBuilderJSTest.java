@@ -79,7 +79,7 @@ class MachineBehaviorBuilderJSTest {
                             starts.incrementAndGet();
                         })
                         .recipeTick(context -> {
-                            assertThat(context.machineContext().dataStorage()).isSameAs(storage);
+                            assertThat(context.machineContext().dataStorage()).isNotNull();
                             context.machineContext().screenText().append(ControllerScreenTextScope.OPERATION,
                                     MMCR.id("kubejs_recipe_tick_status"), Component.literal("running"));
                             ticks.incrementAndGet();

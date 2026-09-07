@@ -1,15 +1,17 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.data.DataStorage;
-import cn.howxu.mmcr.api.data.DataValue;
-import cn.howxu.mmcr.api.network.NetworkApi;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
+import cn.howxu.mmcr.api.publicapi.data.DataValue;
+import cn.howxu.mmcr.api.publicapi.network.NetworkApi;
+import cn.howxu.mmcr.api.publicapi.network.RequestProcess;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -44,7 +46,7 @@ public class NETWORK_CENTER_MACHINE {
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:black_wool")))
                     .networkInterface(1, 16)
                     .allowNetworkMachine(NETWORK_PRODUCER_MACHINE.NETWORK_PRODUCER_MACHINE)
-                    .requestProcess(REPORT_POWER, (body, request, senderStorage, receiverStorage) -> {
+                    .requestProcess(REPORT_POWER, (RequestProcess) (body, request, senderStorage, receiverStorage) -> {
                         if (receiverStorage == null) return;
                         double reported = body.get("power").flatMap(DataValue::asDouble).orElse(0.0);
                         long hash = request.peer().hash();
@@ -55,7 +57,7 @@ public class NETWORK_CENTER_MACHINE {
                         if (storage == null) return;
 
                         var energyPlan = context.ioPlan();
-                        energyPlan.addInput(new EnergyRequirement(200));
+                        energyPlan.addInput(new EnergyRequirement(RecipeIo.INPUT, 200));
                         var energySim = energyPlan.simulate();
                         boolean energyOk = energySim.energySatisfied() && energyPlan.commit().successful();
 

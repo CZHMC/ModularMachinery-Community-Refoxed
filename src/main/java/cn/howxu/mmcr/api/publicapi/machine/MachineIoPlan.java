@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -53,15 +55,27 @@ public final class MachineIoPlan {
         return addRequirement(requirement, RecipeModifier.IOType.INPUT, null);
     }
 
+    public MachineIoPlan addInput(RecipeRequirement requirement) {
+        return addInput(MachineRecipeConverter.toRequirement(requirement));
+    }
+
     public MachineIoPlan addOutput(MachineRequirement requirement, OutputPolicy policy) {
         Objects.requireNonNull(policy, "policy");
         return addRequirement(requirement, RecipeModifier.IOType.OUTPUT, toInternal(policy));
+    }
+
+    public MachineIoPlan addOutput(RecipeRequirement requirement, OutputPolicy policy) {
+        return addOutput(MachineRecipeConverter.toRequirement(requirement), policy);
     }
 
     public MachineIoPlan add(MachineRequirement requirement) {
         Objects.requireNonNull(requirement, "requirement");
         return requirement.io() == RecipeModifier.IOType.INPUT
                 ? addInput(requirement) : addOutput(requirement, OutputPolicy.REQUIRE_FULL);
+    }
+
+    public MachineIoPlan add(RecipeRequirement requirement) {
+        return add(MachineRecipeConverter.toRequirement(requirement));
     }
 
     private MachineIoPlan addRequirement(MachineRequirement requirement, RecipeModifier.IOType expectedIo,

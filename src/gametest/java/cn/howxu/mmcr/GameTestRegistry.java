@@ -3,8 +3,8 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.data.DataStorage;
-import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
+import cn.howxu.mmcr.api.publicapi.data.DataValue;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
@@ -167,8 +167,8 @@ public final class GameTestRegistry {
                     long ticks = storage.get("ticks").map(DataValue::longValue).orElse(0L);
                     var plan = context.ioPlan();
                     if (!plan.simulate().inputsSatisfied()) return;
-                    if (!plan.commit(transaction ->
-                            storage.set("ticks", DataValue.of(ticks + 1L), transaction)).successful()) return;
+                    if (!plan.commit().successful()) return;
+                    storage.set("ticks", DataValue.of(ticks + 1L));
                     context.screenText().append(ControllerScreenTextScope.OPERATION,
                             MMCR.id("data_storage_tick_status"), Component.literal("ticks=" + (ticks + 1L)));
                 }));

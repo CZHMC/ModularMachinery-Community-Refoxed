@@ -119,7 +119,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS requestProcess(String requestId, RequestProcess process) {
-        callbackBuilder.requestProcess(Identifier.parse(requestId), process);
+        callbackBuilder.requestProcessInternal(Identifier.parse(requestId), process);
         return this;
     }
 

@@ -8,9 +8,11 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemInput;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -61,7 +63,7 @@ public class PURE_TICK_MACHINE {
                         if (!context.isDue(40)) return;
 
                         var planFe = context.ioPlan();
-                        planFe.addInput(new EnergyRequirement(RecipeModifier.IOType.INPUT, 10));
+                        planFe.addInput(new EnergyRequirement(RecipeIo.INPUT, 10));
                         var feSimulation = planFe.simulate();
 
                         if (!feSimulation.energySatisfied()) {
@@ -99,18 +101,9 @@ public class PURE_TICK_MACHINE {
                         }
 
                         var plan = context.ioPlan();
-                        plan.addInput(new ItemRequirement(
-                                RecipeModifier.IOType.INPUT,
-                                Ingredient.of(Items.IRON_INGOT),
-                                1,
-                                net.minecraft.world.item.ItemStack.EMPTY));
-                        plan.add(new ItemRequirement(
-                                RecipeModifier.IOType.OUTPUT,
-                                null,
-                                0,
-                                new net.minecraft.world.item.ItemStack(Items.GOLD_NUGGET, 1),
-                                1.0F,
-                                java.util.List.of()));
+                        plan.addInput(ItemRequirement.input(new ItemInput(Ingredient.of(Items.IRON_INGOT), 1)));
+                        plan.add(ItemRequirement.output(new ItemOutput(
+                                new net.minecraft.world.item.ItemStack(Items.GOLD_NUGGET, 1))));
 
                         var simulation = plan.simulate();
 

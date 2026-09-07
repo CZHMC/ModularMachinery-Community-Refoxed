@@ -145,7 +145,7 @@ class PublicApiAdapterTest {
         RequestProcess process = (body, request, sender, receiver) -> { };
         RequestFailed failure = (body, request, sender, reason) -> { };
         var definition = MachineBuilder.machine(machineId)
-                .requestProcess(processId, process)
+                .requestProcessInternal(processId, process)
                 .requestFailed(failureId, failure)
                 .build();
 

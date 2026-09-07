@@ -9,22 +9,16 @@ import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import java.util.ArrayList;
 
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
@@ -101,41 +95,7 @@ public class RECIPE_TICKER {
                                             MobEffects.STRENGTH, 10000, 1));
                                 }
 
-                                var nextRequirements = new ArrayList<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement>();
-                                boolean changed = false;
-
-                                for (var requirement : ctx.requirements()) {
-                                    if (!(requirement instanceof ItemRequirement itemRequirement)
-                                            || requirement.io() != RecipeModifier.IOType.INPUT) {
-                                        nextRequirements.add(requirement);
-                                        continue;
-                                    }
-
-                                    var possibleItems = ingredientItems(itemRequirement);
-                                    boolean isExactlyGold = itemRequirement.count() == 32
-                                            && possibleItems.size() == 1
-                                            && BuiltInRegistries.ITEM.getKey(possibleItems.get(0).value())
-                                                    .toString().equals("minecraft:gold_ingot");
-
-                                    if (isExactlyGold) {
-                                        nextRequirements.add(new ItemRequirement(
-                                                itemRequirement.io(),
-                                                itemRequirement.item(),
-                                                1,
-                                                itemRequirement.stack(),
-                                                itemRequirement.chance(),
-                                                itemRequirement.tags(),
-                                                itemRequirement.components(),
-                                                itemRequirement.consumeChance()));
-                                        changed = true;
-                                    } else {
-                                        nextRequirements.add(requirement);
-                                    }
-                                }
-
-                                if (changed) {
-                                    ctx.setRequirements(nextRequirements);
-                                }
+                                ctx.replaceExactItemInputCount(Items.GOLD_INGOT, 32, 1);
                             })
                             .recipeTick(ctx -> {
                                 var screen = ctx.machineContext().screenText();
@@ -225,10 +185,5 @@ public class RECIPE_TICKER {
                 .duration(300)
                 .build();
         event.registerRecipe(recipe);
-    }
-
-    private static java.util.List<Holder<net.minecraft.world.item.Item>> ingredientItems(ItemRequirement requirement) {
-        if (requirement.item() == null) return java.util.List.of();
-        return requirement.item().items().toList();
     }
 }

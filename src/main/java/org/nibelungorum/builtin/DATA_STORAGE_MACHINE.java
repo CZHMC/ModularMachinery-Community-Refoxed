@@ -1,7 +1,7 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.data.DataStorage;
-import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
+import cn.howxu.mmcr.api.publicapi.data.DataValue;
 import cn.howxu.mmcr.api.publicapi.ReadableNumber;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
@@ -12,7 +12,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
@@ -75,9 +75,8 @@ public class DATA_STORAGE_MACHINE {
                                 BigInteger next = stored.add(BigInteger.valueOf(low));
                                 var inputSimulation = inputPlan.simulate();
 
-                                if (inputSimulation.energySatisfied() && inputPlan.commit(transaction -> {
-                                    storage.set("energy", DataValue.of(next), transaction);
-                                }).successful()) {
+                                if (inputSimulation.energySatisfied() && inputPlan.commit().successful()) {
+                                    storage.set("energy", DataValue.of(next));
                                     stored = next;
                                 }
                             }
@@ -106,9 +105,8 @@ public class DATA_STORAGE_MACHINE {
                                         if (accepted > 0) {
                                             BigInteger finalStored = stored.subtract(BigInteger.valueOf(accepted));
 
-                                            if (outputPlan.commit(transaction -> {
-                                                storage.set("energy", DataValue.of(finalStored), transaction);
-                                            }).successful()) {
+                                        if (outputPlan.commit().successful()) {
+                                            storage.set("energy", DataValue.of(finalStored));
                                                 stored = finalStored;
                                             }
                                         }

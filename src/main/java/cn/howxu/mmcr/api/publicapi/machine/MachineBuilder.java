@@ -192,12 +192,22 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder requestProcess(Identifier requestId, RequestProcess process) {
+    public MachineBuilder requestProcessInternal(Identifier requestId, RequestProcess process) {
         if (requestProcessors.putIfAbsent(Objects.requireNonNull(requestId, "requestId"),
                 Objects.requireNonNull(process, "process")) != null) {
             throw new IllegalArgumentException("Duplicate request processor: " + requestId);
         }
         return this;
+    }
+
+    public MachineBuilder requestProcess(Identifier requestId, cn.howxu.mmcr.api.publicapi.network.RequestProcess process) {
+        Objects.requireNonNull(process, "process");
+        return requestProcessInternal(requestId, (RequestProcess) (body, request, senderStorage, receiverStorage) -> process.process(
+                cn.howxu.mmcr.api.publicapi.network.RequestBody.fromInternal(body),
+                new cn.howxu.mmcr.api.publicapi.network.RequestInfo(request.requestId(),
+                        cn.howxu.mmcr.api.publicapi.network.MachineReference.fromInternal(request.peer())),
+                senderStorage == null ? null : cn.howxu.mmcr.api.publicapi.data.DataStorage.view(senderStorage),
+                receiverStorage == null ? null : cn.howxu.mmcr.api.publicapi.data.DataStorage.view(receiverStorage)));
     }
 
     public MachineBuilder requestFailed(Identifier requestId, RequestFailed failure) {

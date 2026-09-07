@@ -110,7 +110,11 @@ public class MachineBehaviorContext {
         return screenText;
     }
 
-    public @Nullable DataStorage dataStorage() {
+    public @Nullable cn.howxu.mmcr.api.publicapi.data.DataStorage dataStorage() {
+        return dataStorage == null ? null : cn.howxu.mmcr.api.publicapi.data.DataStorage.view(dataStorage);
+    }
+
+    public DataStorage internalDataStorage() {
         return dataStorage;
     }
 

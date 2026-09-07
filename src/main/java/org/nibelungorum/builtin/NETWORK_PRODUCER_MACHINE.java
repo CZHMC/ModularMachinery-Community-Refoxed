@@ -1,18 +1,18 @@
 package org.nibelungorum.builtin;
 
-import cn.howxu.mmcr.api.data.DataStorage;
-import cn.howxu.mmcr.api.data.DataValue;
-import cn.howxu.mmcr.api.network.NetworkApi;
-import cn.howxu.mmcr.api.network.RequestBody;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
+import cn.howxu.mmcr.api.publicapi.data.DataValue;
+import cn.howxu.mmcr.api.publicapi.network.NetworkApi;
+import cn.howxu.mmcr.api.publicapi.network.RequestBody;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
@@ -64,7 +64,7 @@ public class NETWORK_PRODUCER_MACHINE {
                         boolean feOk = true;
 
                         var energyPlan = context.ioPlan();
-                        energyPlan.addInput(new EnergyRequirement(100));
+                        energyPlan.addInput(new EnergyRequirement(RecipeIo.INPUT, 100));
                         var energySim = energyPlan.simulate();
                         if (!energySim.energySatisfied() || !energyPlan.commit().successful()) {
                             feOk = false;
@@ -77,10 +77,11 @@ public class NETWORK_PRODUCER_MACHINE {
                         if (context.isDue(20)) {
                             var waterPlan = context.ioPlan();
                             waterPlan.addInput(new FluidRequirement(
-                                    RecipeModifier.IOType.INPUT,
+                                    RecipeIo.INPUT,
                                     FluidIngredient.of(Fluids.WATER),
                                     100,
-                                    FluidStack.EMPTY));
+                                    FluidStack.EMPTY,
+                                    1F));
                             var waterSim = waterPlan.simulate();
                             boolean hasWater = waterSim.inputsSatisfied();
 

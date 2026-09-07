@@ -71,12 +71,12 @@ class NetworkRequestDispatcherTest {
         Identifier first = Identifier.parse("mmcr:first");
         Identifier second = Identifier.parse("mmcr:second");
         var builder = MachineBuilder.machine(Identifier.parse("mmcr:request_test"))
-                .requestProcess(first, (body, request, sender, receiver) -> { })
-                .requestProcess(second, (body, request, sender, receiver) -> { });
+                .requestProcessInternal(first, (body, request, sender, receiver) -> { })
+                .requestProcessInternal(second, (body, request, sender, receiver) -> { });
 
         assertEquals(List.of(first, second), List.copyOf(builder.build().requestProcessors().keySet()));
         assertThrows(IllegalArgumentException.class,
-                () -> builder.requestProcess(first, (body, request, sender, receiver) -> { }));
+                () -> builder.requestProcessInternal(first, (body, request, sender, receiver) -> { }));
     }
 
     @Test

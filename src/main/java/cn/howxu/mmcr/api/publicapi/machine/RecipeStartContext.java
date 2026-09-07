@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,6 +78,32 @@ public final class RecipeStartContext {
     public void setDuration(int duration) {
         if (duration <= 0) throw new IllegalArgumentException("duration must be positive");
         this.duration = duration;
+    }
+
+    /**
+     * Replaces the count of an input whose ingredient resolves to exactly {@code item}.
+     *
+     * @return whether an input was replaced
+     */
+    public boolean replaceExactItemInputCount(Item item, int expectedCount, int replacementCount) {
+        Objects.requireNonNull(item, "item");
+        if (expectedCount < 1 || replacementCount < 1) throw new IllegalArgumentException("item counts must be positive");
+        List<MachineRequirement> next = new ArrayList<>(requirements.size());
+        boolean replaced = false;
+        for (MachineRequirement requirement : requirements) {
+            if (!replaced && requirement instanceof cn.howxu.mmcr.api.recipe.requirement.ItemRequirement input
+                    && input.io() == RecipeModifier.IOType.INPUT && input.count() == expectedCount
+                    && input.item() != null && input.item().items().toList().size() == 1
+                    && input.item().items().toList().getFirst().value() == item) {
+                next.add(new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(input.io(), input.item(), replacementCount,
+                        input.stack(), input.chance(), input.tags(), input.components(), input.consumeChance()));
+                replaced = true;
+            } else {
+                next.add(requirement);
+            }
+        }
+        if (replaced) setRequirements(next);
+        return replaced;
     }
 
     public List<MachineRequirement> requirements() {
