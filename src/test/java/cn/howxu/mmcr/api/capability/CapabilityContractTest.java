@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.capability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
+import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -12,6 +14,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -122,7 +125,7 @@ class CapabilityContractTest {
 
     }
 
-    private static final class TestCapability implements MachineCapability {
+    private static final class TestCapability implements MachineCapability, OperationFacet {
         private final CapabilityDirections directions;
         private final SnapshotJournal<Long> journal = new SnapshotJournal<>() {
             @Override
@@ -175,14 +178,21 @@ class CapabilityContractTest {
                 public CapabilityDirections directions() {
                     return TestCapability.this.directions();
                 }
+
+                @Override
+                public Set<Class<? extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet>> facets() {
+                    return Set.of(OperationFacet.class);
+                }
             };
         }
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
-            if (!directions.supports(request.ioType())) {
-                throw new IllegalArgumentException("Capability request IO type does not match");
-            }
+            return CapabilityFactories.operation(this, request);
+        }
+
+        @Override
+        public CapabilityOperation prepareOperation(CapabilityRequest request) {
             return new CapabilityOperation() {
                 @Override
                 public CapabilityResult commit(TransactionContext transaction) {

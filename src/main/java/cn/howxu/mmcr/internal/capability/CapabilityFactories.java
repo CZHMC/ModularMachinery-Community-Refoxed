@@ -48,7 +48,7 @@ public final class CapabilityFactories {
         };
     }
 
-    static CapabilityOperation operation(MachineCapability capability, CapabilityRequest request) {
+    public static CapabilityOperation operation(MachineCapability capability, CapabilityRequest request) {
         if (capability == null) throw new IllegalArgumentException("capability must not be null");
         if (request == null) throw new IllegalArgumentException("request must not be null");
         if (!capability.type().equals(request.type())) {
