@@ -290,7 +290,7 @@ class RequirementPlannerTest {
         TestType reservationType = type("shared_reservation_lifecycle");
         BulkItemStorage storage = new BulkItemStorage(2, null);
         storage.insert(ironResource(), 2, false);
-        StorageCapability capability = new StorageCapability(reservationType.id(), IOType.INPUT, storage);
+        StorageCapability capability = new StorageCapability(reservationType.id(), CapabilityDirections.input(), storage);
         PlanningReservations shared = new PlanningReservations();
         AtomicInteger factories = new AtomicInteger();
         register(reservationType, new RequirementHandler<TestRequirement>() {
@@ -419,7 +419,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,
                         ItemStack.EMPTY)),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(2, 0));
 
         assertThat(result.successful()).isTrue();
@@ -435,7 +435,7 @@ class RequirementPlannerTest {
         BulkItemStorage storage = new BulkItemStorage(64, null);
         storage.insert(ironResource(), 1, false);
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.bidirectional(), IOType.OUTPUT, storage);
+                CapabilityDirections.bidirectional(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
@@ -457,7 +457,7 @@ class RequirementPlannerTest {
         BulkItemStorage storage = new BulkItemStorage(1, null);
         storage.insert(ironResource(), 1, false);
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.bidirectional(), IOType.OUTPUT, storage);
+                CapabilityDirections.bidirectional(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
@@ -485,7 +485,7 @@ class RequirementPlannerTest {
         BulkItemStorage storage = new BulkItemStorage(2, null);
         storage.insert(ironResource(), 1, false);
         StorageCapability capability = new FailingOutputStorageCapability(ItemRequirement.TYPE.id(),
-                CapabilityDirections.bidirectional(), IOType.OUTPUT, storage);
+                CapabilityDirections.bidirectional(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
@@ -506,7 +506,7 @@ class RequirementPlannerTest {
 
     @Test
     void storage_capability_validates_request_direction_through_production_factory() {
-        StorageCapability capability = new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT,
+        StorageCapability capability = new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.input(),
                 new LongValueStorage(10, 10, null));
         CapabilityRequests.ValueRequest request = new CapabilityRequests.ValueRequest(
                 capability.type(), IOType.OUTPUT, 1, 1, true);
@@ -521,7 +521,7 @@ class RequirementPlannerTest {
         LongFluidStorage storage = new LongFluidStorage(2_000, null);
         storage.setFluid(new FluidStack(Fluids.WATER, 1_000));
         StorageCapability capability = new StorageCapability(FluidRequirement.TYPE.id(),
-                CapabilityDirections.bidirectional(), IOType.OUTPUT, storage);
+                CapabilityDirections.bidirectional(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
@@ -538,7 +538,7 @@ class RequirementPlannerTest {
         LongValueStorage storage = new LongValueStorage(100, 100, null);
         storage.setAmount(4);
         StorageCapability capability = new StorageCapability(EnergyRequirement.TYPE.id(),
-                CapabilityDirections.bidirectional(), IOType.OUTPUT, storage);
+                CapabilityDirections.bidirectional(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
@@ -554,7 +554,7 @@ class RequirementPlannerTest {
         FloatValueStorage storage = new FloatValueStorage();
         storage.set("temperature", 0F);
         StorageCapability capability = new StorageCapability(SmartInterfaceRequirement.TYPE.id(),
-                CapabilityDirections.bidirectional(), IOType.INPUT, storage);
+                CapabilityDirections.bidirectional(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(SmartInterfaceRequirement.output("temperature", 1F)),
@@ -577,7 +577,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
                         FluidStack.EMPTY)),
-                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(2, 0));
 
         assertThat(result.successful()).isTrue();
@@ -602,9 +602,9 @@ class RequirementPlannerTest {
                         new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
                                 FluidStack.EMPTY),
                         new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
-                List.of(new StorageCapability(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), IOType.INPUT, itemStorage),
-                        new StorageCapability(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), IOType.INPUT, fluidStorage),
-                        new StorageCapability(BuiltinCapabilityDefinitions.ENERGY_TYPE.id(), IOType.INPUT, energyStorage)),
+                List.of(new StorageCapability(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), CapabilityDirections.input(), itemStorage),
+                        new StorageCapability(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), CapabilityDirections.input(), fluidStorage),
+                        new StorageCapability(BuiltinCapabilityDefinitions.ENERGY_TYPE.id(), CapabilityDirections.input(), energyStorage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isTrue();
@@ -617,7 +617,7 @@ class RequirementPlannerTest {
     @Test
     void partial_item_output_commits_the_available_resource_amount() {
         BulkItemStorage storage = new BulkItemStorage(2, null);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage);
         ItemStack output = ironStack(4);
         assertThat(output.getCount()).isEqualTo(4);
         assertThat(storage.capacityResource(0, ItemResource.of(output))).isEqualTo(2);
@@ -664,7 +664,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(requirement),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isTrue();
@@ -687,7 +687,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(requirement),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0, Map.of(0, OutputPolicy.ALLOW_PARTIAL)));
 
         assertThat(result.successful()).isTrue();
@@ -710,7 +710,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(requirement),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -732,7 +732,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(requirement),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -758,8 +758,8 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(input, output),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, inputStorage),
-                        new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, outputStorage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), inputStorage),
+                        new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), outputStorage)),
                 new PlanningContext(1, 0, Map.of(1, OutputPolicy.ALLOW_PARTIAL)));
 
         assertThat(result.successful()).isTrue();
@@ -773,7 +773,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new FluidStack(Fluids.WATER, 1_000), 1F, List.of())),
-                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0, true));
 
         assertThat(result.successful()).isTrue();
@@ -793,7 +793,7 @@ class RequirementPlannerTest {
     void item_planning_and_commit_respect_the_resource_stack_limit() {
         BulkItemStorage storage = new BulkItemStorage(128, null);
         ItemStack output = ironStack(64);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output)),
@@ -812,12 +812,12 @@ class RequirementPlannerTest {
         var itemResult = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         ironStack(1), 1F, List.of())),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT,
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(),
                         new BulkItemStorage(0, null))), new PlanningContext(1, 0, true));
         var fluidResult = new RequirementPlanner().plan(
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new FluidStack(Fluids.WATER, 1_000), 1F, List.of())),
-                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.OUTPUT,
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.output(),
                         new LongFluidStorage(0, null))), new PlanningContext(1, 0, true));
 
         assertThat(itemResult.successful()).isFalse();
@@ -844,7 +844,7 @@ class RequirementPlannerTest {
         var itemResult = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new ItemStack(Items.GOLD_NUGGET, 1), 1F, List.of())),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, itemStorage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), itemStorage)),
                 new PlanningContext(1, 0));
 
         assertThat(itemResult.successful()).isFalse();
@@ -857,7 +857,7 @@ class RequirementPlannerTest {
         var fluidResult = new RequirementPlanner().plan(
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new FluidStack(Fluids.WATER, 1), 1F, List.of())),
-                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.OUTPUT, fluidStorage)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.output(), fluidStorage)),
                 new PlanningContext(1, 0));
 
         assertThat(fluidResult.successful()).isFalse();
@@ -874,7 +874,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)),
-                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -894,7 +894,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 60)),
-                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isTrue();
@@ -913,7 +913,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 60)),
-                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0, true));
 
         assertThat(result.successful()).isTrue();
@@ -987,7 +987,7 @@ class RequirementPlannerTest {
     void energy_shortage_returns_a_real_operation_for_the_available_parallelism() {
         LongValueStorage storage = new LongValueStorage(100, 100, null);
         storage.setAmount(4);
-        MachineCapability capability = new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage);
+        MachineCapability capability = new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.input(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
@@ -1010,7 +1010,7 @@ class RequirementPlannerTest {
                 List.of(
                         new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
                         new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY)),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -1027,7 +1027,7 @@ class RequirementPlannerTest {
                 List.of(
                         new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY),
                         new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY)),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(2, 0));
 
         assertThat(result.successful()).isTrue();
@@ -1049,7 +1049,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 outputs,
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(2, 0));
 
         assertThat(result.successful()).isTrue();
@@ -1069,7 +1069,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 outputs,
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(2, 0, true));
 
         assertThat(result.successful()).isTrue();
@@ -1092,7 +1092,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 outputs,
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
                 new PlanningContext(2, 0, true));
 
         assertThat(result.successful()).isFalse();
@@ -1123,7 +1123,7 @@ class RequirementPlannerTest {
                                 FluidStack.EMPTY),
                         new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
                                 FluidStack.EMPTY)),
-                List.of(new StorageCapability(FluidRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -1139,7 +1139,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4),
                         new EnergyRequirement(RecipeModifier.IOType.INPUT, 4)),
-                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -1221,8 +1221,8 @@ class RequirementPlannerTest {
                         new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000, FluidStack.EMPTY)
                 ),
                 List.of(
-                        new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, itemStorage),
-                        new StorageCapability(FluidRequirement.TYPE.id(), IOType.INPUT, fluidStorage)
+                        new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), itemStorage),
+                        new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.input(), fluidStorage)
                 ),
                 new PlanningContext(1, 0));
 
@@ -1323,7 +1323,8 @@ class RequirementPlannerTest {
         FloatValueStorage storage = new FloatValueStorage();
         storage.set("mode", 1F);
         StorageCapability capability = new StorageCapability(
-                cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(), IOType.OUTPUT, storage);
+                cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
 
         var result = new RequirementPlanner().plan(
                 List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("mode", 9F)),
@@ -1337,7 +1338,7 @@ class RequirementPlannerTest {
     @Test
     void built_in_chance_decision_prepares_the_operation_once() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
-        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage);
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         ironStack(1), 1F, List.of())),
@@ -1354,7 +1355,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 2,
                         ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -1367,7 +1368,7 @@ class RequirementPlannerTest {
                     List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
                             ironIngredient(), 1, ItemStack.EMPTY,
                             1F, List.of(), DataComponentPredicateSet.EMPTY, 0.5F)),
-                    List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT,
+                    List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(),
                             new BulkItemStorage(64, null))), new PlanningContext(1, 0));
 
             assertThat(result.successful()).isFalse();
@@ -1384,7 +1385,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,
                         ItemStack.EMPTY)),
-                List.of(new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(parallelism, 0));
 
         assertThat(result.successful()).isTrue();
@@ -1398,7 +1399,7 @@ class RequirementPlannerTest {
 
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)),
-                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(Long.MAX_VALUE, 0));
 
         assertThat(result.successful()).isTrue();
@@ -1413,7 +1414,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1),
                         new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)),
-                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), IOType.INPUT, storage)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
                 new PlanningContext(Long.MAX_VALUE, 0));
 
         assertThat(result.successful()).isTrue();
@@ -1431,7 +1432,7 @@ class RequirementPlannerTest {
                         ironStack(4))),
                 false, List.of(), true);
         CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(
-                new StorageCapability(ItemRequirement.TYPE.id(), IOType.OUTPUT, storage))));
+                new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage))));
 
         assertThat(context.planOutputs(recipe, 1).successful()).isTrue();
         assertThat(context.planStart(recipe, 1)).isNotNull();
@@ -1443,7 +1444,7 @@ class RequirementPlannerTest {
         var result = new RequirementPlanner().plan(
                 List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("missing", 9F)),
                 List.of(new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
-                        IOType.OUTPUT, storage)),
+                        CapabilityDirections.output(), storage)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
@@ -1460,9 +1461,9 @@ class RequirementPlannerTest {
                 List.of(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.output("mode", 9F)),
                 List.of(
                         new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
-                                IOType.OUTPUT, first),
+                                CapabilityDirections.output(), first),
                         new StorageCapability(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.TYPE.id(),
-                                IOType.OUTPUT, second)),
+                                CapabilityDirections.output(), second)),
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isTrue();
@@ -1528,7 +1529,7 @@ class RequirementPlannerTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(output, input), true);
 
         var result = new CraftingContext(new CapabilitySnapshot(List.of(
-                new StorageCapability(ItemRequirement.TYPE.id(), IOType.INPUT, storage))))
+                new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage))))
                 .planInputs(recipe, 1);
 
         assertThat(result.successful()).isTrue();
@@ -1555,9 +1556,9 @@ class RequirementPlannerTest {
                 ironStack(1), 1F, List.of("primary"));
         MachineRequirement trailingOutput = new TestRequirement(trailingType, RecipeModifier.IOType.OUTPUT);
         StorageCapability untaggedCapability = new StorageCapability(
-                ItemRequirement.TYPE.id(), IOType.OUTPUT, untaggedStorage, List.of("other"));
+                ItemRequirement.TYPE.id(), CapabilityDirections.output(), untaggedStorage, List.of("other"));
         StorageCapability taggedCapability = new StorageCapability(
-                ItemRequirement.TYPE.id(), IOType.OUTPUT, taggedStorage, List.of("primary"));
+                ItemRequirement.TYPE.id(), CapabilityDirections.output(), taggedStorage, List.of("primary"));
         var result = new CraftingContext(new CapabilitySnapshot(List.of(
                 untaggedCapability,
                 taggedCapability,
@@ -1801,7 +1802,6 @@ class RequirementPlannerTest {
 
     private static class StorageCapability implements MachineCapability, ValueFacet<CapabilityStorage>, OperationFacet {
         private final CapabilityType type;
-        private final IOType ioType;
         private final CapabilityDirections directions;
         private final CapabilityStorage storage;
         private final List<String> tags;
@@ -1811,23 +1811,13 @@ class RequirementPlannerTest {
         private final List<CapabilityRequest> requests = new ArrayList<>();
         private final List<IOType> committedRequestDirections = new ArrayList<>();
 
-        private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
-            this(type, ioType, storage, List.of());
+        private StorageCapability(Identifier type, CapabilityDirections directions, CapabilityStorage storage) {
+            this(type, directions, storage, List.of());
         }
 
-        private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage, List<String> tags) {
-            this(type, CapabilityDirections.of(ioType), ioType, storage, tags);
-        }
-
-        private StorageCapability(Identifier type, CapabilityDirections directions, IOType ioType,
-                                  CapabilityStorage storage) {
-            this(type, directions, ioType, storage, List.of());
-        }
-
-        private StorageCapability(Identifier type, CapabilityDirections directions, IOType ioType,
-                                  CapabilityStorage storage, List<String> tags) {
+        private StorageCapability(Identifier type, CapabilityDirections directions, CapabilityStorage storage,
+                                  List<String> tags) {
             this.type = new CapabilityType(type);
-            this.ioType = ioType;
             this.directions = directions;
             this.storage = storage;
             this.tags = List.copyOf(tags);
@@ -1943,8 +1933,8 @@ class RequirementPlannerTest {
         private final BulkItemStorage storage;
 
         private FailingOutputStorageCapability(Identifier type, CapabilityDirections directions,
-                                               IOType ioType, CapabilityStorage storage) {
-            super(type, directions, ioType, storage);
+                                               CapabilityStorage storage) {
+            super(type, directions, storage);
             this.storage = (BulkItemStorage) storage;
         }
 
