@@ -46,6 +46,7 @@ public final class StartupContentRegistration {
     }
 
     public static void registerProductionForModStartup(IEventBus eventBus) {
+        if (startupPhase == StartupPhase.COLLECTING || startupPhase == StartupPhase.COMMITTED) return;
         startupPhase = StartupPhase.COLLECTING;
         productionRecipesCollected = false;
         PublicApiBootstrap.begin();
@@ -85,12 +86,18 @@ public final class StartupContentRegistration {
 
     public static void completeProductionRecipesAfterComponentsBound(IEventBus eventBus) {
         if (pendingProductionDefinitions == null || productionRecipesCollected) return;
-        MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        registerGameTestBuiltins("registerRecipes", new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
-        eventBus.post(recipes);
-        recipes.freeze();
-        ContentRegistrationCoordinator.collectRecipes(recipes);
         productionRecipesCollected = true;
+        boolean collected = false;
+        try {
+            MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
+            registerGameTestBuiltins("registerRecipes", new Class<?>[]{MMCRMachineRecipesEvent.class}, recipes);
+            eventBus.post(recipes);
+            recipes.freeze();
+            ContentRegistrationCoordinator.collectRecipes(recipes);
+            collected = true;
+        } finally {
+            if (!collected) productionRecipesCollected = false;
+        }
         tryCommitProductionStartup();
     }
 
@@ -166,6 +173,7 @@ public final class StartupContentRegistration {
     public static void resetForTesting() {
         startupPhase = StartupPhase.NOT_STARTED;
         structureCollectionDeferred = false;
+        pendingProductionDefinitions = null;
         productionRecipesCollected = false;
     }
 
