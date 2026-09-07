@@ -18,7 +18,10 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
@@ -1323,6 +1326,38 @@ class MachineControllerBlockEntityTest {
         assertThat(counts.count("fluid_output_hatch")).isEqualTo(1);
     }
 
+    @Test
+    void bidirectional_port_counts_each_binding_once_per_direction() throws Exception {
+        BlockPos controllerPos = BlockPos.ZERO;
+        BlockPos portPos = controllerPos.offset(1, 0, 0);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        BidirectionalPort port = new BidirectionalPort(portPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        controller.setLevel(LevelStub.create(Map.of(
+                controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
+                portPos, ModBlocks.BLOCKS.get("item_input_bus").get()), List.of(controller, port)));
+
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod(
+                "countPorts", BlockArray.class, CompiledMachinePattern.class, Direction.class);
+        method.setAccessible(true);
+        PortRequirementSpec.PortCounts counts = (PortRequirementSpec.PortCounts) method.invoke(
+                controller,
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
+                null,
+                Direction.SOUTH);
+
+        assertThat(counts.count("item_input_bus")).isEqualTo(1);
+        assertThat(counts.count("duplicate_item_input_bus")).isZero();
+        assertThat(counts.count("item_output_bus")).isEqualTo(1);
+        assertThat(PortTierRequirementSpec.builder().anyItemInput().anyItemOutput().build()
+                .validate(List.of(port.kind()))).isEmpty();
+        assertThat(PortRequirementSpec.builder()
+                .min("item_input_bus", 1)
+                .min("duplicate_item_input_bus", 1)
+                .build()
+                .validate(counts)).hasValueSatisfying(failure ->
+                        assertThat(failure.portId()).isEqualTo("duplicate_item_input_bus"));
+    }
+
     private static final class CombinedPort extends IOPortBlockEntity {
         private static final IOPortKind INPUT_KIND = combinedKind(IOType.INPUT, "combined_input_test");
         private static final IOPortKind OUTPUT_KIND = combinedKind(IOType.OUTPUT, "combined_output_test");
@@ -1353,6 +1388,29 @@ class MachineControllerBlockEntityTest {
         }
     }
 
+    private static final class BidirectionalPort extends IOPortBlockEntity {
+        private static final IOPortKind KIND = bidirectionalKind();
+
+        private BidirectionalPort(BlockPos pos, BlockState state) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), pos, state);
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return KIND;
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(List.of());
+        }
+    }
+
     private static IOPortKind combinedKind(IOType ioType, String id) {
         List<PortFamilyDescriptor> families = List.of(
                 new PortFamilyDescriptor(PortFamilyIds.ITEM, ioType, 2,
@@ -1363,6 +1421,41 @@ class MachineControllerBlockEntityTest {
                 PortDefinition.of(MMCR.id(id),
                         IOPortKind.binding(BuiltinCapabilityDefinitions.ITEM_TYPE, ioType, families),
                         IOPortKind.binding(BuiltinCapabilityDefinitions.FLUID_TYPE, ioType, families)));
+    }
+
+    private static IOPortKind bidirectionalKind() {
+        List<PortFamilyDescriptor> families = List.of(
+                new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, 0, List.of("item_input_bus")),
+                new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, 0, List.of("duplicate_item_input_bus")),
+                new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.OUTPUT, 0, List.of("item_output_bus")));
+        CapabilityBinding binding = new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE,
+                CapabilityDirections.bidirectional(), context -> null, PortTierPolicy.always());
+        return new IOPortKind() {
+            @Override
+            public String id() {
+                return "bidirectional_count_test";
+            }
+
+            @Override
+            public IOType ioType() {
+                return IOType.INPUT;
+            }
+
+            @Override
+            public net.minecraft.world.level.block.entity.BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+                return BidirectionalPort::new;
+            }
+
+            @Override
+            public PortDefinition definition() {
+                return PortDefinition.of(MMCR.id(id()), binding);
+            }
+
+            @Override
+            public List<PortFamilyDescriptor> families() {
+                return families;
+            }
+        };
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {

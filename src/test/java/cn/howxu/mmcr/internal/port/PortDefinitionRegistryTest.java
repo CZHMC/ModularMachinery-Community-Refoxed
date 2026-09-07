@@ -39,7 +39,11 @@ class PortDefinitionRegistryTest {
     @AfterEach
     void closeRegistry() {
         PortDefinitionRegistry.clearForTesting();
-        PortKinds.all().forEach(kind -> PortDefinitionRegistry.register(kind.definition()));
+        PortKinds.all().forEach(kind -> {
+            if (PortDefinitionRegistry.get(kind.definition().id()) == null) {
+                PortDefinitionRegistry.register(kind.definition());
+            }
+        });
         PortDefinitionRegistry.freeze();
     }
 
@@ -132,6 +136,16 @@ class PortDefinitionRegistryTest {
         CapabilityBinding duplicate = binding("item", IOType.OUTPUT, PortTierPolicy.always());
 
         assertThatThrownBy(() -> PortDefinition.of(id("duplicate"), List.of(first, duplicate)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("duplicate");
+    }
+
+    @Test
+    void rejects_split_input_and_output_bindings_for_the_same_capability_type() {
+        CapabilityBinding input = binding("split", CapabilityDirections.of(IOType.INPUT), PortTierPolicy.always());
+        CapabilityBinding output = binding("split", CapabilityDirections.of(IOType.OUTPUT), PortTierPolicy.always());
+
+        assertThatThrownBy(() -> PortDefinition.of(id("split"), List.of(input, output)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicate");
     }

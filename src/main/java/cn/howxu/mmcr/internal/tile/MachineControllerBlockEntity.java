@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
@@ -2758,9 +2759,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
             IOPortKind kind = port.kind();
             counts.merge(kind.id(), 1, Integer::sum);
+            Set<String> countedAliases = new HashSet<>();
             for (PortFamilyDescriptor family : kind.families()) {
-                for (String alias : family.countAliases()) {
-                    if (!alias.equals(kind.id())) counts.merge(alias, 1, Integer::sum);
+                for (CapabilityBinding binding : kind.bindings()) {
+                    if (!family.matches(binding)) continue;
+                    for (String alias : family.countAliases()) {
+                        String key = family.ioType() + ":" + binding.type().id();
+                        if (countedAliases.add(key) && !alias.equals(kind.id())) counts.merge(alias, 1, Integer::sum);
+                    }
                 }
             }
         }
