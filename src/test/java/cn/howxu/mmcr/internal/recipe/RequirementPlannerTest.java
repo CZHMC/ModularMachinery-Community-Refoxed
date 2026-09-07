@@ -465,7 +465,18 @@ class RequirementPlannerTest {
                 List.of(capability), new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure()).satisfies(failure -> {
+            assertThat(failure.details()).containsEntry("reason", "no_output_capacity");
+            assertThat(failure.id()).isEqualTo(ItemRequirement.TYPE.id());
+            assertThat(failure.source()).isEqualTo(ItemRequirement.TYPE.id());
+        });
+        assertThat(result.failureRequirementIndex()).isEqualTo(1);
+        assertThat(result.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(2L);
+                    assertThat(simulation.accepted()).isZero();
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
+                });
         assertThat(storage.amount(0)).isEqualTo(1);
     }
 
@@ -487,6 +498,9 @@ class RequirementPlannerTest {
         assertThat(capability.resourceRequests()).extracting(CapabilityRequests.ResourceRequest::ioType)
                 .containsExactly(IOType.INPUT, IOType.OUTPUT);
         assertThat(result.plan().commit()).isFalse();
+        assertThat(capability.committedRequestDirections()).containsExactly(IOType.INPUT, IOType.OUTPUT);
+        assertThat(result.plan().failure()).satisfies(failure ->
+                assertThat(failure.details()).containsEntry("reason", "forced_output_failure"));
         assertThat(storage.amount(0)).isEqualTo(1);
     }
 
@@ -1795,6 +1809,7 @@ class RequirementPlannerTest {
         private CapabilityRequests.ResourceRequest<?> lastResourceRequest;
         private final List<CapabilityRequests.ResourceRequest<?>> resourceRequests = new ArrayList<>();
         private final List<CapabilityRequest> requests = new ArrayList<>();
+        private final List<IOType> committedRequestDirections = new ArrayList<>();
 
         private StorageCapability(Identifier type, IOType ioType, CapabilityStorage storage) {
             this(type, ioType, storage, List.of());
@@ -1879,14 +1894,18 @@ class RequirementPlannerTest {
         public CapabilityOperation prepareOperation(cn.howxu.mmcr.api.capability.CapabilityRequest request) {
             if (request instanceof CapabilityRequests.SmartValueRequest smartRequest
                     && storage instanceof FloatValueStorage floatStorage) {
-                return transaction -> floatStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
-                        ? CapabilityResult.successful()
-                        : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
-                                type.id(), java.util.Map.of()));
+                return transaction -> {
+                    committedRequestDirections.add(smartRequest.ioType());
+                    return floatStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
+                            ? CapabilityResult.successful()
+                            : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
+                                    type.id(), java.util.Map.of()));
+                };
             }
             if (request instanceof CapabilityRequests.ValueRequest valueRequest
                     && storage instanceof LongValueStorage longStorage) {
                 return transaction -> {
+                    committedRequestDirections.add(valueRequest.ioType());
                     longStorage.updateSnapshots(transaction);
                     long moved = valueRequest.insert()
                             ? longStorage.insert(valueRequest.amount(), false)
@@ -1905,6 +1924,7 @@ class RequirementPlannerTest {
                         type.id(), StatusSeverity.BLOCKED, type.id(), java.util.Map.of()));
             }
             return transaction -> {
+                committedRequestDirections.add(resourceRequest.ioType());
                 for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
                     long moved = action.insert()
                             ? resourceStorage.insertResource(action.slot(), action.resource(), action.amount(), transaction)
@@ -1922,6 +1942,10 @@ class RequirementPlannerTest {
 
         private List<CapabilityRequest> requests() {
             return requests;
+        }
+
+        private List<IOType> committedRequestDirections() {
+            return committedRequestDirections;
         }
     }
 
