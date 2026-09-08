@@ -79,6 +79,7 @@
 
   "config.jade.plugin_mmcr.machine_controller": "机器控制器",
   "config.jade.plugin_mmcr.parallel_controller": "并行器",
+  "config.jade.plugin_mmcr.recipe_output": "配方产物",
   "container.mmcr.energy_input_hatch": "普通能量输入仓",
   "container.mmcr.energy_input_hatch_big": "大型能量输入仓",
   "container.mmcr.energy_input_hatch_huge": "巨型能量输入仓",
@@ -277,8 +278,8 @@
   "jade.mmcr.machine_controller.progress": "进度",
   "jade.mmcr.machine_controller.progress.sec": "%s/%s 秒",
   "jade.mmcr.machine_controller.progress.tick": "%s/%s tick",
-  "jade.mmcr.machine_controller.recipe_output": "配方产物",
-  "jade.mmcr.machine_controller.recipe_output.item": "%s %s",
+  "jade.mmcr.machine_controller.recipe_output": "配方输出:",
+  "jade.mmcr.machine_controller.recipe_output.item": "%s%s",
   "jade.mmcr.machine_controller.recipe_output.fluid": "%s %s",
   "jade.mmcr.machine_controller.state": "状态",
   "jade.mmcr.machine_controller.status.idle": "待机中",

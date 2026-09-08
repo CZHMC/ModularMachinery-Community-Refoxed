@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -897,27 +898,39 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return SYNC_RUNTIME.machineState(state).parallelism();
     }
 
-    public List<MachineOutput> recipeOutputs() {
+    public List<MachineOutputAmount> recipeOutputs() {
         MachineControllerRuntime controllerRuntime = this.runtime;
         if (controllerRuntime == null) return List.of();
-        List<MachineOutput> aggregated = aggregateFactoryLaneOutputs(controllerRuntime.factoryRuntime());
+        List<MachineOutputAmount> aggregated = aggregateFactoryLaneOutputs(controllerRuntime.factoryRuntime());
         if (!aggregated.isEmpty()) return aggregated;
         CraftingRuntime crafting = controllerRuntime.craftingRuntime();
-        return crafting == null ? List.of() : crafting.activeOutputs();
+        return crafting == null ? List.of() : scaleOutputs(crafting.activeOutputs(), crafting.parallelism());
     }
 
-    private static List<MachineOutput> aggregateFactoryLaneOutputs(FactoryRuntime factory) {
+    private static List<MachineOutputAmount> aggregateFactoryLaneOutputs(FactoryRuntime factory) {
         Map<MachineOutput.AggregationKey, Aggregate> aggregates = new LinkedHashMap<>();
         for (CraftingRuntime lane : factory.activeRuntimes()) {
-            for (MachineOutput output : lane.activeOutputs()) {
-                MachineOutput.AggregationKey key = MachineOutput.aggregationKey(output);
+            for (MachineOutputAmount output : scaleOutputs(lane.activeOutputs(), lane.parallelism())) {
+                MachineOutput.AggregationKey key = MachineOutput.aggregationKey(output.output());
                 aggregates.computeIfAbsent(key, k -> new Aggregate(output))
                         .absorb(output);
             }
         }
-        List<MachineOutput> merged = new ArrayList<>(aggregates.size());
+        List<MachineOutputAmount> merged = new ArrayList<>(aggregates.size());
         for (Aggregate aggregate : aggregates.values()) merged.add(aggregate.materialize());
         return List.copyOf(merged);
+    }
+
+    private static List<MachineOutputAmount> scaleOutputs(List<MachineOutput> outputs, long parallelism) {
+        return outputs.stream().map(output -> scaleOutput(output, parallelism)).toList();
+    }
+
+    private static MachineOutputAmount scaleOutput(MachineOutput output, long parallelism) {
+        long amount = MachineOutput.scaledAmount(output);
+        if (parallelism <= 1 || amount <= 0) return new MachineOutputAmount(output, amount);
+        long scaledAmount = amount > Long.MAX_VALUE / parallelism
+                ? Long.MAX_VALUE : amount * parallelism;
+        return new MachineOutputAmount(output, scaledAmount);
     }
 
     private static final class Aggregate {
@@ -925,16 +938,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
         private long amount;
         private float minChance = Float.POSITIVE_INFINITY;
 
-        Aggregate(MachineOutput template) { this.template = template; }
-
-        void absorb(MachineOutput output) {
-            amount += MachineOutput.scaledAmount(output);
-            minChance = Math.min(minChance, output.chance());
+        Aggregate(MachineOutputAmount output) {
+            this.template = output.output();
         }
 
-        MachineOutput materialize() {
+        void absorb(MachineOutputAmount output) {
+            long outputAmount = output.amount();
+            amount = outputAmount > Long.MAX_VALUE - amount
+                    ? Long.MAX_VALUE : amount + outputAmount;
+            minChance = Math.min(minChance, output.output().chance());
+        }
+
+        MachineOutputAmount materialize() {
             float chance = Float.isInfinite(minChance) ? template.chance() : minChance;
-            return MachineOutput.withScaledAmount(template, amount, chance);
+            return new MachineOutputAmount(template.withChance(chance), amount);
         }
     }
 

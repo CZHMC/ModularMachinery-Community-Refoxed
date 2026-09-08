@@ -33,11 +33,12 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
         Snapshot snapshot = Snapshot.from(accessor.getServerData());
 
-        appendProgressBar(tooltip, snapshot);
         for (String key : lineKeys(snapshot)) {
             if ("progress".equals(key)) continue;
             tooltip.add(row(key, lineValue(snapshot, key)));
+            if ("state".equals(key)) appendProgressBar(tooltip, snapshot);
         }
+        if (snapshot.tickMachine()) appendProgressBar(tooltip, snapshot);
         for (Component line : JadeTextCodec.read(accessor.getServerData())) {
             tooltip.add(line);
         }

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.nbt.CompoundTag;
@@ -36,11 +37,12 @@ class RecipeOutputDataProviderTest {
         RecipeOutputDataProvider.INSTANCE.appendServerData(data, accessorFor(controller));
 
         assertThat(data.contains(RecipeOutputCodec.OUTPUT_KEY)).isTrue();
-        List<MachineOutput> decoded = RecipeOutputCodec.read(data);
+        List<MachineOutputAmount> decoded = RecipeOutputCodec.read(data);
         assertThat(decoded).hasSize(1);
-        assertThat(decoded.get(0)).isInstanceOf(MachineOutput.ItemOutput.class);
-        assertThat(((MachineOutput.ItemOutput) decoded.get(0)).stack().getCount()).isEqualTo(4);
-        assertThat(decoded.get(0).chance()).isEqualTo(1F);
+        assertThat(decoded.get(0).output()).isInstanceOf(MachineOutput.ItemOutput.class);
+        assertThat(((MachineOutput.ItemOutput) decoded.get(0).output()).stack().getCount()).isEqualTo(1);
+        assertThat(decoded.get(0).amount()).isEqualTo(4L);
+        assertThat(decoded.get(0).output().chance()).isEqualTo(1F);
     }
 
     @Test
@@ -60,6 +62,22 @@ class RecipeOutputDataProviderTest {
         RecipeOutputDataProvider.INSTANCE.appendServerData(data, accessorFor(new Object()));
 
         assertThat(data.contains(RecipeOutputCodec.OUTPUT_KEY)).isFalse();
+    }
+
+    @Test
+    void codecPreservesLongAggregatedAmounts() {
+        CompoundTag data = new CompoundTag();
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
+                new MachineOutput.ItemOutput(new ItemStack(Items.STONE, Integer.MAX_VALUE), 1F),
+                Long.MAX_VALUE)));
+
+        List<MachineOutputAmount> decoded = RecipeOutputCodec.read(data);
+        assertThat(decoded).hasSize(1);
+        assertThat(decoded.getFirst()).satisfies(output -> {
+            assertThat(output.amount()).isEqualTo(Long.MAX_VALUE);
+            assertThat(((MachineOutput.ItemOutput) output.output()).stack().getCount())
+                    .isEqualTo(1);
+        });
     }
 
     private static BlockAccessor accessorFor(Object target) {

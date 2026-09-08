@@ -200,7 +200,12 @@ public final class TestBootstrap {
      * factory controller or starting a recipe.
      */
     public static void bindFactoryWithOutputs(MachineControllerBlockEntity controller,
-                                              List<MachineOutput> outputs) {
+                                               List<MachineOutput> outputs) {
+        bindFactoryWithOutputs(controller, outputs, 1L);
+    }
+
+    public static void bindFactoryWithOutputs(MachineControllerBlockEntity controller,
+                                              List<MachineOutput> outputs, long parallelism) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         try {
             MachineControllerRuntime controllerRuntime = controllerRuntimeField(controller);
@@ -208,11 +213,22 @@ public final class TestBootstrap {
             @SuppressWarnings("unchecked")
             List<FactoryRecipeThread> lanes =
                     (List<FactoryRecipeThread>) FACTORY_LANES_FIELD.get(factoryRuntime);
-            CraftingRuntime runtime = syntheticCraftingRuntimeWithOutputs(controller, outputs);
+            CraftingRuntime runtime = syntheticCraftingRuntimeWithOutputs(controller, outputs, parallelism);
             FactoryRecipeThread lane = syntheticLaneFor(controller, runtime, lanes.size());
             lanes.add(lane);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to bind factory outputs", exception);
+        }
+    }
+
+    public static void bindCraftingWithOutputs(MachineControllerBlockEntity controller,
+                                               List<MachineOutput> outputs, long parallelism) {
+        if (controller == null) throw new IllegalArgumentException("controller must not be null");
+        try {
+            MachineControllerRuntime controllerRuntime = controllerRuntimeField(controller);
+            configureCraftingRuntimeWithOutputs(controllerRuntime.craftingRuntime(), outputs, parallelism);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to bind crafting outputs", exception);
         }
     }
 
@@ -233,14 +249,23 @@ public final class TestBootstrap {
     }
 
     private static CraftingRuntime syntheticCraftingRuntimeWithOutputs(MachineControllerBlockEntity controller,
-                                                                       List<MachineOutput> outputs)
+                                                                       List<MachineOutput> outputs, long parallelism)
             throws ReflectiveOperationException {
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        configureCraftingRuntimeWithOutputs(runtime, outputs, parallelism);
+        return runtime;
+    }
+
+    private static void configureCraftingRuntimeWithOutputs(CraftingRuntime runtime,
+                                                            List<MachineOutput> outputs, long parallelism)
+            throws ReflectiveOperationException {
+        if (parallelism <= 0L) throw new IllegalArgumentException("parallelism must be positive");
         ActiveMachineRecipe placeholder = (ActiveMachineRecipe)
                 UNSAFE.allocateInstance(ActiveMachineRecipe.class);
+        placeholder.setMaxParallelism(parallelism);
+        placeholder.setParallelism(parallelism);
         CRAFTING_ACTIVE_RECIPE_FIELD.set(runtime, placeholder);
         CRAFTING_EFFECTIVE_OUTPUTS_FIELD.set(runtime, List.copyOf(outputs));
-        return runtime;
     }
 
     private static sun.misc.Unsafe resolveUnsafe() {

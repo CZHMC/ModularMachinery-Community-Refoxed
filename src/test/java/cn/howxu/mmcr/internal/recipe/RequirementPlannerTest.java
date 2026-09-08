@@ -657,6 +657,60 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void extended_item_bus_accepts_parallel_output_above_integer_stack_limit() {
+        ExtendedItemBusBlockEntity bus = (ExtendedItemBusBlockEntity) ModBlockEntities.BES
+                .get("extended_item_output_bus_basic").get().create(
+                        BlockPos.ZERO, ModBlocks.BLOCKS.get("extended_item_output_bus_basic").get().defaultBlockState());
+        ItemStack output = new ItemStack(Items.IRON_INGOT, Integer.MAX_VALUE);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
+
+        var result = new CraftingContext(bus.capabilitySnapshot())
+                .planOutputRequirements(List.of(requirement), 2L, false);
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> assertThat(simulation.requested())
+                        .isEqualTo((long) Integer.MAX_VALUE * 2L));
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(bus.itemStorage().amount(0)).isEqualTo((long) Integer.MAX_VALUE * 2L);
+    }
+
+    @Test
+    void long_output_shortage_requires_full_capacity_or_accepts_partial_capacity() {
+        ExtendedItemBusBlockEntity bus = (ExtendedItemBusBlockEntity) ModBlockEntities.BES
+                .get("extended_item_output_bus_basic").get().create(
+                        BlockPos.ZERO, ModBlocks.BLOCKS.get("extended_item_output_bus_basic").get().defaultBlockState());
+        ItemStack output = new ItemStack(Items.IRON_INGOT, Integer.MAX_VALUE);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, output, 1F, List.of());
+        long requested = (long) Integer.MAX_VALUE * 2L;
+        long existing = Long.MAX_VALUE - 1L;
+        try (Transaction transaction = Transaction.openRoot()) {
+            bus.itemStorage().insert(0, ItemResource.of(output), existing, transaction);
+            for (int slot = 1; slot < bus.itemStorage().size(); slot++) {
+                bus.itemStorage().insert(slot, ItemResource.of(Items.COBBLESTONE), Long.MAX_VALUE, transaction);
+            }
+            transaction.commit();
+        }
+        assertThat(bus.itemStorage().amount(0)).isEqualTo(existing);
+
+        var full = new CraftingContext(bus.capabilitySnapshot())
+                .planOutputRequirements(List.of(requirement), 2L, false);
+        assertThat(full.successful()).isFalse();
+        assertThat(full.failure()).isNotNull();
+
+        var partial = new CraftingContext(bus.capabilitySnapshot())
+                .planOutputRequirements(List.of(requirement), 2L, true);
+        assertThat(partial.successful()).isTrue();
+        assertThat(partial.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(requested);
+                    assertThat(simulation.accepted()).isEqualTo(1L);
+                });
+        assertThat(partial.plan().commit()).isTrue();
+        assertThat(bus.itemStorage().amount(0)).isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
     void output_simulation_reports_full_fit() {
         BulkItemStorage storage = new BulkItemStorage(4, null);
         ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,

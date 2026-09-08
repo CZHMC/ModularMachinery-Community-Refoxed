@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.client.gui.layouts.LayoutElement;
 import net.minecraft.client.resources.language.ClientLanguage;
@@ -37,7 +38,8 @@ class RecipeOutputComponentProviderTest {
     @Test
     void rendersLabelForItemOutputs() {
         CompoundTag data = new CompoundTag();
-        RecipeOutputCodec.write(data, List.of(new MachineOutput.ItemOutput(new ItemStack(Items.STONE, 2), 1F)));
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
+                new MachineOutput.ItemOutput(new ItemStack(Items.STONE, 2), 1F), 2L)));
         List<Object> calls = collect(data);
         assertThat(calls.get(0)).isInstanceOf(Component.class);
         assertThat(((Component) calls.get(0)).getString()).contains("Recipe Output");
@@ -52,7 +54,7 @@ class RecipeOutputComponentProviderTest {
 
     @Test
     void priorityIsTooltipTail() {
-        assertThat(RecipeOutputComponentProvider.INSTANCE.getDefaultPriority()).isEqualTo(TooltipPosition.TAIL);
+        assertThat(RecipeOutputComponentProvider.INSTANCE.getDefaultPriority()).isEqualTo(TooltipPosition.TAIL - 9);
     }
 
     private static List<Object> collect(CompoundTag data) {

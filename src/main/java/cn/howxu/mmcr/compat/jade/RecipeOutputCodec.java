@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import com.mojang.serialization.DataResult;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -17,15 +18,23 @@ import java.util.List;
  */
 public final class RecipeOutputCodec {
     public static final String OUTPUT_KEY = "mmcr_recipe_output";
+    private static final String OUTPUT_FIELD = "output";
+    private static final String AMOUNT_FIELD = "amount";
 
     private RecipeOutputCodec() {}
 
-    public static void write(CompoundTag data, List<MachineOutput> outputs) {
+    public static void write(CompoundTag data, List<MachineOutputAmount> outputs) {
         ListTag list = new ListTag();
-        for (MachineOutput output : outputs) {
-            DataResult<Tag> encoded = MachineOutput.CODEC.encodeStart(NbtOps.INSTANCE, output);
+        for (MachineOutputAmount output : outputs) {
+            DataResult<Tag> encoded = MachineOutput.CODEC.encodeStart(NbtOps.INSTANCE,
+                    templateForTransport(output.output()));
             encoded.result().ifPresent(tag -> {
-                if (tag instanceof CompoundTag compound) list.add(compound);
+                if (tag instanceof CompoundTag compound) {
+                    CompoundTag entry = new CompoundTag();
+                    entry.put(OUTPUT_FIELD, compound);
+                    entry.putLong(AMOUNT_FIELD, output.amount());
+                    list.add(entry);
+                }
             });
         }
         if (list.isEmpty()) {
@@ -35,15 +44,32 @@ public final class RecipeOutputCodec {
         data.put(OUTPUT_KEY, list);
     }
 
-    public static List<MachineOutput> read(CompoundTag data) {
+    public static List<MachineOutputAmount> read(CompoundTag data) {
         if (data == null) return List.of();
         ListTag list = data.getListOrEmpty(OUTPUT_KEY);
-        List<MachineOutput> decoded = new ArrayList<>(list.size());
+        List<MachineOutputAmount> decoded = new ArrayList<>(list.size());
         for (Tag element : list) {
             if (!(element instanceof CompoundTag compound)) continue;
-            DataResult<MachineOutput> parsed = MachineOutput.CODEC.parse(NbtOps.INSTANCE, compound);
-            parsed.result().ifPresent(decoded::add);
+            CompoundTag encodedOutput = compound.contains(OUTPUT_FIELD)
+                    ? compound.getCompoundOrEmpty(OUTPUT_FIELD) : compound;
+            DataResult<MachineOutput> parsed = MachineOutput.CODEC.parse(NbtOps.INSTANCE, encodedOutput);
+            parsed.result().ifPresent(output -> decoded.add(new MachineOutputAmount(output,
+                    compound.getLong(AMOUNT_FIELD).orElse(MachineOutput.scaledAmount(output)))));
         }
         return List.copyOf(decoded);
+    }
+
+    private static MachineOutput templateForTransport(MachineOutput output) {
+        if (output instanceof MachineOutput.ItemOutput item) {
+            var stack = item.stack();
+            stack.setCount(1);
+            return new MachineOutput.ItemOutput(stack, item.chance());
+        }
+        if (output instanceof MachineOutput.FluidOutput fluid) {
+            var stack = fluid.stack();
+            stack.setAmount(1);
+            return new MachineOutput.FluidOutput(stack, fluid.chance());
+        }
+        return output;
     }
 }

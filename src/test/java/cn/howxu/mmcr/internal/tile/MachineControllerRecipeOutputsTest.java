@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -35,8 +36,51 @@ class MachineControllerRecipeOutputsTest {
         TestBootstrap.bindFactoryWithOutputs(controller, List.of(
                 new MachineOutput.ItemOutput(new ItemStack(Items.STONE, 4), 1F),
                 new MachineOutput.ItemOutput(new ItemStack(Items.STONE, 6), 1F)));
-        List<MachineOutput> merged = controller.recipeOutputs();
+        List<MachineOutputAmount> merged = controller.recipeOutputs();
         assertThat(merged).hasSize(1);
-        assertThat(((MachineOutput.ItemOutput) merged.get(0)).stack().getCount()).isEqualTo(10);
+        assertThat(merged.get(0).amount()).isEqualTo(10L);
+        assertThat(((MachineOutput.ItemOutput) merged.get(0).output()).stack().getCount()).isEqualTo(4);
+    }
+
+    @Test
+    void ordinaryMachineParallelismKeepsLongOutputAmount() {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        TestBootstrap.bindCraftingWithOutputs(controller,
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.STONE, Integer.MAX_VALUE), 1F)), 2L);
+
+        assertThat(controller.recipeOutputs()).singleElement()
+                .satisfies(output -> assertThat(output.amount()).isEqualTo((long) Integer.MAX_VALUE * 2L));
+    }
+
+    @Test
+    void ordinaryMachineWithoutParallelismKeepsTheStackAmount() {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        TestBootstrap.bindCraftingWithOutputs(controller,
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.STONE, 4), 1F)), 1L);
+
+        assertThat(controller.recipeOutputs()).singleElement()
+                .satisfies(output -> assertThat(output.amount()).isEqualTo(4L));
+    }
+
+    @Test
+    void factoryThreadsAggregateLongOutputAmounts() {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        MachineOutput output = new MachineOutput.ItemOutput(new ItemStack(Items.STONE, Integer.MAX_VALUE), 1F);
+        TestBootstrap.bindFactoryWithOutputs(controller, List.of(output), 2L);
+        TestBootstrap.bindFactoryWithOutputs(controller, List.of(output), 2L);
+
+        assertThat(controller.recipeOutputs()).singleElement()
+                .satisfies(value -> assertThat(value.amount()).isEqualTo((long) Integer.MAX_VALUE * 4L));
+    }
+
+    @Test
+    void outputAmountSaturatesAtLongMaximumAfterParallelScaling() {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        TestBootstrap.bindCraftingWithOutputs(controller,
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.STONE, Integer.MAX_VALUE), 1F)),
+                Long.MAX_VALUE);
+
+        assertThat(controller.recipeOutputs()).singleElement()
+                .satisfies(output -> assertThat(output.amount()).isEqualTo(Long.MAX_VALUE));
     }
 }

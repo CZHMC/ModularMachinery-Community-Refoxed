@@ -79,6 +79,7 @@
 
   "config.jade.plugin_mmcr.machine_controller": "Machine Controller",
   "config.jade.plugin_mmcr.parallel_controller": "Parallel Controller",
+  "config.jade.plugin_mmcr.recipe_output": "Recipe Output",
   "container.mmcr.energy_input_hatch": "Normal Energy Input Hatch",
   "container.mmcr.energy_input_hatch_big": "Big Energy Input Hatch",
   "container.mmcr.energy_input_hatch_huge": "Huge Energy Input Hatch",
@@ -277,8 +278,8 @@
   "jade.mmcr.machine_controller.progress": "Progress",
   "jade.mmcr.machine_controller.progress.sec": "%s/%s s",
   "jade.mmcr.machine_controller.progress.tick": "%s/%s tick",
-  "jade.mmcr.machine_controller.recipe_output": "Recipe Output",
-  "jade.mmcr.machine_controller.recipe_output.item": "%s %s",
+  "jade.mmcr.machine_controller.recipe_output": "Recipe Output:",
+  "jade.mmcr.machine_controller.recipe_output.item": "%s%s",
   "jade.mmcr.machine_controller.recipe_output.fluid": "%s %s",
   "jade.mmcr.machine_controller.state": "State",
   "jade.mmcr.machine_controller.status.idle": "Idle",
