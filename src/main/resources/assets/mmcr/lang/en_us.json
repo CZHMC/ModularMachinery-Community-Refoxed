@@ -457,6 +457,7 @@
   "tooltip.mmcr.multiblock_detector.unknown_block": "Unknown block",
   "tooltip.mmcr.key_card.not_selected": "No source selected",
   "tooltip.mmcr.key_card.selected": "Source: %s (%s)",
+  "tooltip.mmcr.blueprint.recipe_list": "Material List:",
   "tooltip.mmcr.terminal.mode": "Mode",
   "tooltip.mmcr.terminal.inventory_mode.container": "Container",
   "tooltip.mmcr.terminal.inventory_mode.inventory": "Inventory",

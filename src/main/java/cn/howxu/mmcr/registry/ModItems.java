@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.internal.item.InterfaceBlockItem;
 import cn.howxu.mmcr.internal.item.KeyCardItem;
+import cn.howxu.mmcr.internal.item.BlueprintItem;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
 import cn.howxu.mmcr.internal.item.TerminalItem;
 import cn.howxu.mmcr.internal.item.ThreadDisperserItem;
@@ -40,8 +41,7 @@ public final class ModItems {
                     ResourceKey.create(Registries.ITEM, id))));
 
     public static final DeferredHolder<Item, Item> BLUEPRINT =
-            REGISTER.register("blueprint", id -> new Item(new Item.Properties().setId(
-                    ResourceKey.create(Registries.ITEM, id))));
+            REGISTER.register("blueprint", BlueprintItem::new);
 
     public static final LinkedHashMap<String, DeferredHolder<Item, Item>> ITEMS = new LinkedHashMap<>();
     private static Map<Item, Identifier> controllerMachineIds = Map.of();

@@ -22,11 +22,11 @@ class BlueprintRegistrationTest {
     }
 
     @Test
-    void blueprintIsAnOrdinaryRegisteredItem() {
+    void blueprintIsASingleStackRegisteredItem() {
         Item blueprint = ModItems.BLUEPRINT.get();
 
         assertEquals("blueprint", BuiltInRegistries.ITEM.getKey(blueprint).getPath());
-        assertEquals(64, blueprint.getDefaultMaxStackSize());
+        assertEquals(1, blueprint.getDefaultMaxStackSize());
         assertSame(blueprint, ModItems.ITEMS.get("blueprint").get());
     }
 }

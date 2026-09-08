@@ -701,8 +701,36 @@ public final class TestBootstrap {
         Item item = registeredItemSupplier(itemHolder).get();
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);
         items.freeze();
-        item.builtInRegistryHolder().bindComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+        if (itemHolder == ModItems.BLUEPRINT) bindItemComponents(item, itemHolder.getId());
+        else item.builtInRegistryHolder().bindComponents(DataComponentMap.builder()
+                .set(DataComponents.MAX_STACK_SIZE, 64).build());
         return item;
+    }
+
+    private static void bindItemComponents(Item item, Identifier id) throws Exception {
+        Field initializersField = DataComponentInitializers.class.getDeclaredField("initializers");
+        initializersField.setAccessible(true);
+        Field keyField = null;
+        Field initializerField = null;
+        RegistryAccess registryAccess = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        for (Object entry : (List<?>) initializersField.get(BuiltInRegistries.DATA_COMPONENT_INITIALIZERS)) {
+            if (keyField == null) {
+                keyField = entry.getClass().getDeclaredField("key");
+                keyField.setAccessible(true);
+                initializerField = entry.getClass().getDeclaredField("initializer");
+                initializerField.setAccessible(true);
+            }
+            ResourceKey<?> key = (ResourceKey<?>) keyField.get(entry);
+            if (!key.isFor(Registries.ITEM) || !key.identifier().equals(id)) continue;
+            DataComponentMap.Builder builder = DataComponentMap.builder();
+            @SuppressWarnings("unchecked")
+            DataComponentInitializers.Initializer<Item> initializer =
+                    (DataComponentInitializers.Initializer<Item>) initializerField.get(entry);
+            initializer.run(builder, registryAccess, ResourceKey.create(Registries.ITEM, id));
+            item.builtInRegistryHolder().bindComponents(builder.build());
+            return;
+        }
+        item.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
     }
 
     private static void bindPortBlocks() throws Exception {

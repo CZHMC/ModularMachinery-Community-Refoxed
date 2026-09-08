@@ -191,7 +191,6 @@ public final class RecipeSearchTask {
     static int failurePriority(@Nullable ExecutionStatus failure) {
         if (failure == null) return Integer.MAX_VALUE;
         return switch (failure.details().getOrDefault("reason", "")) {
-            case "no_output_capacity" -> -1;
             case "insufficient_resource" -> 0;
             case "insufficient_energy" -> 1;
             default -> 3;

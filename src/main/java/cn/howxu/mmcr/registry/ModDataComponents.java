@@ -8,6 +8,7 @@ import com.mojang.serialization.Codec;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -41,6 +42,11 @@ public final class ModDataComponents {
             KEY_CARD_BINDING = REGISTER.registerComponentType("key_card_binding", builder ->
                     builder.persistent(KeyCardBinding.CODEC)
                             .networkSynchronized(KeyCardBinding.STREAM_CODEC));
+
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<Identifier>>
+            BLUEPRINT_MACHINE = REGISTER.registerComponentType("blueprint_machine", builder ->
+                    builder.persistent(Identifier.CODEC)
+                            .networkSynchronized(Identifier.STREAM_CODEC));
 
     public static void register(IEventBus bus) {
         REGISTER.register(bus);

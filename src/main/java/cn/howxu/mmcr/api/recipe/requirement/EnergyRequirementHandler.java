@@ -94,7 +94,8 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         long accepted = energyAmount(actions);
         if (accepted < required && (!allowPartialOutput || !insert)) {
             return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
-                    insert ? "no_output_capacity" : "insufficient_energy"),
+                    accepted == 0L && insert ? "no_output_capacity" :
+                            insert ? "insufficient_resource" : "insufficient_energy"),
                     RequirementHandlerSupport.outputSimulation(requested, accepted));
         }
         if (materialize) {

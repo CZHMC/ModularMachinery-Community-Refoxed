@@ -457,6 +457,7 @@
   "tooltip.mmcr.multiblock_detector.unknown_block": "未知方块",
   "tooltip.mmcr.key_card.not_selected": "未选择源接口",
   "tooltip.mmcr.key_card.selected": "源接口: %s (%s)",
+  "tooltip.mmcr.blueprint.recipe_list": "材料清单:",
   "tooltip.mmcr.terminal.mode": "模式",
   "tooltip.mmcr.terminal.inventory_mode.container": "容器",
   "tooltip.mmcr.terminal.inventory_mode.inventory": "背包",

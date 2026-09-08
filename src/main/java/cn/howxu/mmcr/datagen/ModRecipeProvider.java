@@ -279,6 +279,11 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('P', Items.PAPER)
                 .save(output);
 
+        shapeless(ModItems.BLUEPRINT.get(), 1)
+                .requires(Items.PAPER)
+                .requires(ModItems.MODULARIUM.get())
+                .save(output);
+
         shaped(ModItems.THREAD_DISPERSER.get(), 1)
                 .pattern("ABA")
                 .pattern("BCB")

@@ -244,7 +244,7 @@ class PublicMachineBuilderTest {
                     .as("runtime block model %s", id).isNotEmpty();
             assertThat(ModItems.ITEMS).containsKey(id);
         }
-        assertThat(recipes).containsKeys(MMCR.id("key_card"), MMCR.id("data_storage"),
+        assertThat(recipes).containsKeys(MMCR.id("blueprint"), MMCR.id("key_card"), MMCR.id("data_storage"),
                 MMCR.id("network_interface"));
     }
 
