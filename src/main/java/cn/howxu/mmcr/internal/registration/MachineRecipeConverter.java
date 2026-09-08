@@ -106,7 +106,7 @@ public final class MachineRecipeConverter {
             return new FluidRequirement(toInternalIo(fluid.io()), fluid.ingredient(), fluid.amount(), fluid.stack(), fluid.chance(), List.of());
         }
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement energy) {
-            return new EnergyRequirement(toInternalIo(energy.io()), (int) energy.fePerTick());
+            return new EnergyRequirement(toInternalIo(energy.io()), energy.fePerTick());
         }
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement smart) {
             return new SmartInterfaceRequirement(toInternalIo(smart.io()), smart.interfaceType(), smart.minValue(), smart.maxValue());

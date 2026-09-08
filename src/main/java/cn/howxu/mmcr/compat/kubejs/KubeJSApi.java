@@ -247,12 +247,12 @@ public final class KubeJSApi {
         return new FluidStack(BuiltInRegistries.FLUID.getValue(identifier), amount);
     }
 
-    public MachineIngredient energyInput(int fePerTick) { return new MachineIngredient.EnergyIngredient(fePerTick); }
-    public MachineIngredient energyOutput(int fePerTick) {
+    public MachineIngredient energyInput(long fePerTick) { return new MachineIngredient.EnergyIngredient(fePerTick); }
+    public MachineIngredient energyOutput(long fePerTick) {
         return new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, fePerTick);
     }
 
-    public MachineRequirement energyRequirement(RecipeIo io, int fePerTick) {
+    public MachineRequirement energyRequirement(RecipeIo io, long fePerTick) {
         return new EnergyRequirement(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT,
                 fePerTick);
     }

@@ -87,7 +87,7 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
 
     private static void validateSync(ItemRequirement requirement) {
         int count = requirement.io() == RecipeModifier.IOType.INPUT ? requirement.count() : requirement.stack().getCount();
-        int maximum = requirement.io() == RecipeModifier.IOType.INPUT ? 1_000_000 : 65536;
+        int maximum = Integer.MAX_VALUE;
         if (count < 1 || count > maximum) {
             throw new IllegalArgumentException(requirement.io() == RecipeModifier.IOType.INPUT
                     ? "Invalid item count: " + count : "Invalid item stack count: " + count);

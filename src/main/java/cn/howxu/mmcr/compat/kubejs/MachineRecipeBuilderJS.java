@@ -49,7 +49,7 @@ public class MachineRecipeBuilderJS {
     private int maxThreads = 1;
     private boolean parallelized = false;
     private boolean deriveRequirements = true;
-    public int energyPerTick = 0;
+    public long energyPerTick = 0L;
     public boolean cancelIfPerTickFails = false;
     public final List<LevelRequirement> levelRequirements = new ArrayList<>();
     public final Set<Identifier> requiredHostIds = new LinkedHashSet<>();
@@ -231,7 +231,7 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    public MachineRecipeBuilderJS energyPerTick(int energyPerTick) {
+    public MachineRecipeBuilderJS energyPerTick(long energyPerTick) {
         this.energyPerTick = energyPerTick;
         return this;
     }

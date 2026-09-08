@@ -27,7 +27,7 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
     @Override
     public EnergyRequirement applyModifiers(EnergyRequirement requirement, List<RecipeModifier> modifiers) {
         return new EnergyRequirement(requirement.io(),
-                IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyEnergy(modifiers, requirement.fePerTick())),
+                IntegrationTypeHelper.applyEnergy(modifiers, requirement.fePerTick()),
                 requirement.tags());
     }
 
@@ -38,9 +38,10 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                 requirement.tags());
     }
 
-    private static int floorNonNegative(double value) {
-        if (value <= 0D) return 0;
-        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.floor(value);
+    private static long floorNonNegative(double value) {
+        if (Double.isNaN(value) || value <= 0D) return 0L;
+        return value >= Long.MAX_VALUE || Double.isInfinite(value)
+                ? Long.MAX_VALUE : (long) Math.floor(value);
     }
 
     @Override

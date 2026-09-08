@@ -5,5 +5,5 @@ package cn.howxu.mmcr.compat.jei;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record EnergyIngredient(int fePerTick, boolean input) {
+public record EnergyIngredient(long fePerTick, boolean input) {
 }

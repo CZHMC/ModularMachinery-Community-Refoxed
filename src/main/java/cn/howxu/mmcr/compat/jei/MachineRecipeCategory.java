@@ -13,6 +13,7 @@ import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.ReadableNumber;
+import cn.howxu.mmcr.util.SaturatingLong;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
@@ -165,7 +166,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (EnergyIngredient energy : recipe.energyInputs()) {
             guiGraphics.text(Minecraft.getInstance().font,
                     Component.translatable("jei.mmcr.machine_recipe.energy_in", ReadableNumber.format(energy.fePerTick()),
-                            ReadableNumber.format((long) energy.fePerTick() * recipe.durationTicks())),
+                            ReadableNumber.format(saturatedEnergyTotal(energy.fePerTick(), recipe.durationTicks()))),
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
@@ -564,6 +565,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     static String itemQuantityText(long count) {
         return count > 1 ? ReadableNumber.formatForSlot(count, 0, "") : "";
+    }
+
+    static long saturatedEnergyTotal(long fePerTick, int durationTicks) {
+        return SaturatingLong.multiply(fePerTick, durationTicks);
     }
 
     static String fluidQuantityText(int amount) {

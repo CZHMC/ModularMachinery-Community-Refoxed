@@ -34,7 +34,7 @@ public sealed interface MachineIngredient {
         if (ingredient instanceof EnergyIngredient energy) {
             return builder
                     .add("io", ops.createString(energy.io().getKey()))
-                    .add("fe_per_tick", ops.createInt(energy.fePerTick()))
+                    .add("fe_per_tick", ops.createLong(energy.fePerTick()))
                     .build(prefix);
         }
         return DataResult.error(() -> "Unknown machine ingredient: " + ingredient);
@@ -69,7 +69,7 @@ public sealed interface MachineIngredient {
                         .orElse(RecipeModifier.IOType.INPUT);
                 yield ops.get(input, "fe_per_tick")
                         .flatMap(ops::getNumberValue)
-                        .map(fePerTick -> new EnergyIngredient(io, fePerTick.intValue()));
+                        .map(fePerTick -> new EnergyIngredient(io, fePerTick.longValue()));
             }
             default -> DataResult.error(() -> "Unknown ingredient type: " + type);
         };
@@ -110,8 +110,8 @@ public sealed interface MachineIngredient {
         }
     }
 
-    record EnergyIngredient(RecipeModifier.IOType io, int fePerTick) implements MachineIngredient {
-        public EnergyIngredient(int fePerTick) {
+    record EnergyIngredient(RecipeModifier.IOType io, long fePerTick) implements MachineIngredient {
+        public EnergyIngredient(long fePerTick) {
             this(RecipeModifier.IOType.INPUT, fePerTick);
         }
 

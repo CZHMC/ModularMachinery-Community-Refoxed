@@ -71,7 +71,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
     private static void renderFluid(ITooltip tooltip, MachineOutput.FluidOutput fluid, long amount) {
         FluidStack stack = fluid.stack();
         if (stack.isEmpty() || amount <= 0L) return;
-        JadeFluidObject obj = JadeFluidObject.of(stack.getFluid(), amount);
+        JadeFluidObject obj = JadeFluidObject.of(stack.getFluid(), 1L);
         int lineHeight = DisplayHelper.font().lineHeight;
         var icon = JadeUI.fluid(obj);
         icon.setFreeSpace(lineHeight + 1, lineHeight - 1);

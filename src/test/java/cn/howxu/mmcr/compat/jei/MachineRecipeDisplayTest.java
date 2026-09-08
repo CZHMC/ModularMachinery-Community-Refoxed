@@ -106,6 +106,13 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void energyDisplayPreservesMaximumLongRateAndSaturatesDurationTotal() {
+        assertThat(new EnergyIngredient(Long.MAX_VALUE, true).fePerTick()).isEqualTo(Long.MAX_VALUE);
+        assertThat(MachineRecipeCategory.saturatedEnergyTotal(Long.MAX_VALUE, 20))
+                .isEqualTo(Long.MAX_VALUE);
+    }
+
+    @Test
     void fluidQuantityTextIsOnlyShownAboveOneBucket() {
         assertThat(MachineRecipeCategory.fluidQuantityText(1_000)).isEqualTo("1.00B");
         assertThat(MachineRecipeCategory.fluidQuantityText(1_001)).isEqualTo("1.00B");

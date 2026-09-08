@@ -77,6 +77,7 @@ import com.mojang.serialization.JsonOps;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RuntimeContentSnapshotTest {
@@ -428,17 +429,15 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void recipeCodecRejectsOversizedFluidOutput() {
+    void recipeCodecAcceptsMaximumFluidOutput() {
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("oversized_fluid_recipe"), MMCR.id("runtime_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                        new FluidStack(Fluids.WATER, 10_000_001))));
+                        new FluidStack(Fluids.WATER, Integer.MAX_VALUE))));
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
 
-        assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid fluid amount");
+        assertThatCode(() -> MachineRecipeSyncCodec.encode(buf, recipe)).doesNotThrowAnyException();
     }
 
     @Test

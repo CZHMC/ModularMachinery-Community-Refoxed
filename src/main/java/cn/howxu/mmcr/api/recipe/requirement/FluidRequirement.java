@@ -56,7 +56,7 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
 
     private static void validateSync(FluidRequirement requirement) {
         int amount = requirement.io() == RecipeModifier.IOType.INPUT ? requirement.amount() : requirement.stack().getAmount();
-        if (amount < 1 || amount > 10_000_000) {
+        if (amount < 1) {
             throw new IllegalArgumentException("Invalid fluid amount: " + amount);
         }
         if (requirement.tags().size() > 1024) {

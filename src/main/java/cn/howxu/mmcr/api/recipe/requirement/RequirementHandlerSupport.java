@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.util.SaturatingLong;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,11 +66,7 @@ final class RequirementHandlerSupport {
     }
 
     static long scaled(long amount, long parallelism) {
-        try {
-            return Math.multiplyExact(amount, parallelism);
-        } catch (ArithmeticException exception) {
-            return Long.MAX_VALUE;
-        }
+        return SaturatingLong.multiply(amount, parallelism);
     }
 
     static OutputSimulation outputSimulation(long requested, long accepted) {
@@ -110,8 +107,7 @@ final class RequirementHandlerSupport {
     }
 
     static long saturatingAdd(long first, long second) {
-        if (second > 0 && first > Long.MAX_VALUE - second) return Long.MAX_VALUE;
-        return first + second;
+        return SaturatingLong.add(first, second);
     }
 
     static boolean shouldProduce(float chance) {

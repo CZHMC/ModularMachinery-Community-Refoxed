@@ -64,6 +64,7 @@ import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.util.SaturatingLong;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
@@ -927,10 +928,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private static MachineOutputAmount scaleOutput(MachineOutput output, long parallelism) {
         long amount = MachineOutput.scaledAmount(output);
-        if (parallelism <= 1 || amount <= 0) return new MachineOutputAmount(output, amount);
-        long scaledAmount = amount > Long.MAX_VALUE / parallelism
-                ? Long.MAX_VALUE : amount * parallelism;
-        return new MachineOutputAmount(output, scaledAmount);
+        return new MachineOutputAmount(output, SaturatingLong.multiply(amount, parallelism));
     }
 
     private static final class Aggregate {
@@ -943,9 +941,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
 
         void absorb(MachineOutputAmount output) {
-            long outputAmount = output.amount();
-            amount = outputAmount > Long.MAX_VALUE - amount
-                    ? Long.MAX_VALUE : amount + outputAmount;
+            amount = SaturatingLong.add(amount, output.amount());
             minChance = Math.min(minChance, output.output().chance());
         }
 

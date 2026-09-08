@@ -63,9 +63,13 @@ public final class IntegrationTypeHelper {
         return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_FLUID, RecipeModifier.IOType.INPUT, chance, true));
     }
 
-    public static float applyEnergy(List<RecipeModifier> modifiers, int fePerTick) {
+    public static long applyEnergy(List<RecipeModifier> modifiers, long fePerTick) {
         if (modifiers == null || modifiers.isEmpty()) return fePerTick;
-        return RecipeModifier.applyModifiers(modifiers, TARGET_ENERGY, RecipeModifier.IOType.INPUT, fePerTick, false);
+        double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_ENERGY,
+                RecipeModifier.IOType.INPUT, (double) fePerTick, false);
+        if (Double.isNaN(adjusted) || adjusted <= 0D) return 0L;
+        return adjusted >= Long.MAX_VALUE || Double.isInfinite(adjusted)
+                ? Long.MAX_VALUE : (long) Math.floor(adjusted);
     }
 
     public static int asInt(float value) {

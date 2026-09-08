@@ -74,6 +74,15 @@ class MachineIngredientCodecTest {
         assertThat(back).isEqualTo(ing);
     }
 
+    @Test void energyIngredient_roundtrip_preserves_maximum_long_rate() {
+        var ing = new MachineIngredient.EnergyIngredient(Long.MAX_VALUE);
+
+        var json = MachineIngredient.CODEC.encodeStart(jsonOps(), ing).getOrThrow();
+        var back = MachineIngredient.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(back).isEqualTo(ing);
+    }
+
     @Test void energyIngredient_default_io_is_input() {
         var ing = new MachineIngredient.EnergyIngredient(100);
 

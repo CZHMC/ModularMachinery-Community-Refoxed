@@ -13,13 +13,13 @@ import java.util.List;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<String> tags) implements MachineRequirement {
+public record EnergyRequirement(RecipeModifier.IOType io, long fePerTick, List<String> tags) implements MachineRequirement {
     private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("neoforge", "energy");
     public static final MapCodec<EnergyRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
                     .forGetter(EnergyRequirement::io),
-            Codec.INT.fieldOf("fe_per_tick").forGetter(EnergyRequirement::fePerTick),
+            Codec.LONG.fieldOf("fe_per_tick").forGetter(EnergyRequirement::fePerTick),
             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(EnergyRequirement::tags)
     ).apply(instance, (ignored, io, fePerTick, tags) -> new EnergyRequirement(io, fePerTick, tags)));
     private static final RequirementHandler<EnergyRequirement> HANDLER = new EnergyRequirementHandler();
@@ -27,19 +27,19 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
             new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, EnergyRequirement::copy,
                     RecipeSyncCodec.json(CODEC.codec(), EnergyRequirement::validateSync));
 
-    public EnergyRequirement(int fePerTick) {
+    public EnergyRequirement(long fePerTick) {
         this(RecipeModifier.IOType.INPUT, fePerTick, List.of());
     }
 
-    public EnergyRequirement(int fePerTick, List<String> tags) {
+    public EnergyRequirement(long fePerTick, List<String> tags) {
         this(RecipeModifier.IOType.INPUT, fePerTick, tags);
     }
 
-    public EnergyRequirement(RecipeModifier.IOType io, int fePerTick) {
+    public EnergyRequirement(RecipeModifier.IOType io, long fePerTick) {
         this(io, fePerTick, List.of());
     }
 
-    public EnergyRequirement(RecipeIo io, int fePerTick) {
+    public EnergyRequirement(RecipeIo io, long fePerTick) {
         this(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT, fePerTick);
     }
 
@@ -53,7 +53,7 @@ public record EnergyRequirement(RecipeModifier.IOType io, int fePerTick, List<St
     }
 
     private static void validateSync(EnergyRequirement requirement) {
-        if (requirement.fePerTick() < 1 || requirement.fePerTick() > 10_000_000) {
+        if (requirement.fePerTick() < 1L) {
             throw new IllegalArgumentException("Invalid energy rate: " + requirement.fePerTick());
         }
         if (requirement.tags().size() > 1024) {

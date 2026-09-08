@@ -119,6 +119,25 @@ class PublicRecipeBuilderTest {
     }
 
     @Test
+    void preservesMaximumLongEnergyRatesDuringInternalConversion() {
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("maximum_energy"), id("machine"))
+                .inputEnergy(Long.MAX_VALUE)
+                .outputEnergy(Long.MAX_VALUE)
+                .build();
+
+        assertThat(recipe.energyInputs()).extracting(cn.howxu.mmcr.api.publicapi.recipe.EnergyInput::fePerTick)
+                .containsExactly(Long.MAX_VALUE);
+        assertThat(recipe.energyOutputs()).extracting(cn.howxu.mmcr.api.publicapi.recipe.EnergyInput::fePerTick)
+                .containsExactly(Long.MAX_VALUE);
+        assertThat(MachineRecipeConverter.toRecipe(recipe,
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())).requirements())
+                .filteredOn(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.class::isInstance)
+                .extracting(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.class::cast)
+                .extracting(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement::fePerTick)
+                .containsOnly(Long.MAX_VALUE);
+    }
+
+    @Test
     void preserves_item_tag_component_and_consume_chance_and_output_chance() {
         MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("predicates"), id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2)

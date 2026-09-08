@@ -51,10 +51,6 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_LEVEL_REQUIREMENTS = 1024;
     private static final int MAX_REQUIRED_HOSTS = 1024;
     private static final int MAX_TAGS = 1024;
-    private static final int MAX_STACK_COUNT = 65536;
-    private static final int MAX_ITEM_COUNT = 1_000_000;
-    private static final int MAX_FLUID_AMOUNT = 10_000_000;
-    private static final int MAX_ENERGY_PER_TICK = 10_000_000;
     private static final int FORMAT_MARKER = -1;
     private static final int FORMAT_VERSION = 1;
 
@@ -326,13 +322,13 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void checkStackCount(ItemStack stack) {
-        if (stack.getCount() <= 0 || stack.getCount() > MAX_STACK_COUNT) {
+        if (stack.getCount() <= 0) {
             throw new DecoderException("Invalid item stack count: " + stack.getCount());
         }
     }
 
     private static void checkFluidAmount(FluidStack stack) {
-        if (stack.getAmount() <= 0 || stack.getAmount() > MAX_FLUID_AMOUNT) {
+        if (stack.getAmount() <= 0) {
             throw new DecoderException("Invalid fluid amount: " + stack.getAmount());
         }
     }

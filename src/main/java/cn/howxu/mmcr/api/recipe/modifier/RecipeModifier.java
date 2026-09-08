@@ -148,6 +148,25 @@ public final class RecipeModifier {
         return (value + add) * mul;
     }
 
+    public static double applyModifiers(Collection<RecipeModifier> modifiers, String target, IOType ioType,
+                                        double value, boolean isChance) {
+        if (modifiers == null || modifiers.isEmpty()) return value;
+        double add = 0D;
+        double mul = 1D;
+        for (RecipeModifier mod : modifiers) {
+            if (!mod.matches(target, ioType, isChance)) continue;
+            switch (mod.operation) {
+                case ADD -> add += mod.modifier;
+                case SUBTRACT -> add -= mod.modifier;
+                case MULTIPLY -> mul *= mod.modifier;
+                case DIVIDE -> {
+                    if (mod.modifier != 0F) mul /= mod.modifier;
+                }
+            }
+        }
+        return (value + add) * mul;
+    }
+
     private boolean matches(String target, IOType ioType, boolean isChance) {
         if (this.target != null && !this.target.isEmpty() && !this.target.equals(target)) return false;
         if (ioType != null && this.ioTarget != ioType) return false;
