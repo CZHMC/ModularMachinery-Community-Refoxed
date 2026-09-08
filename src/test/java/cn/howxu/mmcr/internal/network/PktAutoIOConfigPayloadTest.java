@@ -8,6 +8,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -34,6 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class PktAutoIOConfigPayloadTest {
+
+    private static MekanismBridge currentBridge() {
+        return MekanismBridge.get();
+    }
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -63,21 +68,38 @@ class PktAutoIOConfigPayloadTest {
     void enabled_set_accepts_loaded_chemical_and_heat_port_menus() throws Exception {
         ChemicalPortMenu chemicalMenu = new ChemicalPortMenu(1, testInventory(), BlockPos.ZERO);
         HeatPortMenu heatMenu = new HeatPortMenu(1, testInventory(), BlockPos.ZERO);
-        ServerPlayer chemicalPlayer = playerWith(chemicalMenu);
-        ServerPlayer heatPlayer = playerWith(heatMenu);
 
-        assertThat(PktAutoIOConfigPayload.canUpdate(chemicalPlayer, BlockPos.ZERO,
-                AutoIOAction.SET_ENABLED, null)).isTrue();
-        assertThat(PktAutoIOConfigPayload.canUpdate(heatPlayer, BlockPos.ZERO,
-                AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(MekanismBridge.get().isPortMenuAt(chemicalMenu, BlockPos.ZERO, null)).isTrue();
+        assertThat(MekanismBridge.get().isPortMenuAt(heatMenu, BlockPos.ZERO, null)).isTrue();
         assertThat(MekanismBridge.get().capabilityIdForMenu(chemicalMenu))
                 .isEqualTo(MekanismRecipeTypes.CHEMICAL);
         assertThat(MekanismBridge.get().capabilityIdForMenu(heatMenu))
                 .isEqualTo(MekanismRecipeTypes.HEAT);
-        assertThat(MekanismBridge.get().isPortMenuAt(chemicalMenu, BlockPos.ZERO, null)).isTrue();
-        assertThat(MekanismBridge.get().isPortMenuAt(heatMenu, BlockPos.ZERO, null)).isTrue();
-        assertThat(PktAutoIOConfigPayload.ownsMenu(chemicalMenu, null)).isTrue();
-        assertThat(PktAutoIOConfigPayload.ownsMenu(heatMenu, null)).isTrue();
+    }
+
+    @Test
+    void unavailable_bridge_rejects_non_port_menus_without_loading_loaded_classes() throws Exception {
+        MekanismBridge previous = currentBridge();
+        try {
+            MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(false));
+            AbstractContainerMenu nonPortMenu = new AbstractMachineMenu(null, 0) {
+                @Override public boolean stillValid(Player player) { return true; }
+                @Override public net.minecraft.world.item.ItemStack quickMoveStack(Player player, int index) {
+                    return net.minecraft.world.item.ItemStack.EMPTY;
+                }
+            };
+            ServerPlayer player = playerWith(nonPortMenu);
+
+            assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO,
+                    AutoIOAction.SET_ENABLED, null)).isFalse();
+            assertThat(MekanismBridge.get().isPortMenuAt(nonPortMenu, BlockPos.ZERO, null)).isFalse();
+            assertThat(PktAutoIOConfigPayload.ownsMenu(nonPortMenu, null)).isFalse();
+        } catch (Throwable failure) {
+            throw failure;
+        } finally {
+            MekanismBridgeBootstrap.installForTesting(previous);
+            MekanismBridgeBootstrap.resetForTesting();
+        }
     }
 
     @Test
