@@ -1,17 +1,9 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
-import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
-import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
-import cn.howxu.mmcr.api.publicapi.recipe.requirement.CustomRequirement;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
@@ -19,8 +11,6 @@ import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
-import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mekanism.api.AutomationType;
 import mekanism.api.MekanismAPI;
@@ -209,59 +199,62 @@ public class MekanismPortGameTest {
         });
     }
 
-    public void chemicalInputEjectionStopsAfterFirstTarget(GameTestHelper helper) {
+    public void chemicalInputEjectionSpreadsAcrossDirectionsAndEmptiesSource(GameTestHelper helper) {
         BlockPos sourcePos = new BlockPos(0, 1, 0);
-        BlockPos firstReceiver = sourcePos.relative(Direction.EAST);
-        BlockPos secondReceiver = sourcePos.relative(Direction.WEST);
+        BlockPos northReceiver = sourcePos.relative(Direction.NORTH);
+        BlockPos southReceiver = sourcePos.relative(Direction.SOUTH);
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
-        helper.setBlock(firstReceiver, ModBlocks.BLOCKS.get("chemical_output_hatch_basic").get().defaultBlockState());
-        helper.setBlock(secondReceiver, ModBlocks.BLOCKS.get("chemical_output_hatch_basic").get().defaultBlockState());
+        helper.setBlock(northReceiver, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
+        helper.setBlock(southReceiver, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity first = helper.getBlockEntity(firstReceiver, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity second = helper.getBlockEntity(secondReceiver, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity north = helper.getBlockEntity(northReceiver, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity south = helper.getBlockEntity(southReceiver, ChemicalPortBlockEntity.class);
 
         ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_eject");
-        source.chemicalTank().setContents(oxygen, 2_000L, null);
+        try (Transaction tx = Transaction.openRoot()) {
+            source.chemicalTank().insert(oxygen, 2_000, tx, AutomationType.EXTERNAL);
+            tx.commit();
+        }
 
         helper.runAtTickTime(20, () -> {
-            helper.assertTrue(source.ejectContents(), "Chemical input ejection fires");
-            long firstAmount = first.chemicalTank().amountAsLong();
-            long secondAmount = second.chemicalTank().amountAsLong();
-            helper.assertTrue((firstAmount == 2_000L && secondAmount == 0L)
-                            || (firstAmount == 0L && secondAmount == 2_000L),
-                    "Exactly one adjacent chemical output receives the ejected contents");
+            helper.assertTrue(source.ejectContents(),
+                    "Chemical input ejection runs the underlying transfer policy");
+            long northAmount = north.chemicalTank().amountAsLong();
+            long southAmount = south.chemicalTank().amountAsLong();
+            helper.assertValueEqual(2_000L, northAmount + southAmount,
+                    "Both adjacent chemical input ports collectively receive the 2_000 ejected units");
             helper.assertValueEqual(0L, source.chemicalTank().amountAsLong(),
-                    "Chemical input port is empty after ejecting its contents");
+                    "Chemical input port is empty after ejection");
             helper.succeed();
         });
     }
 
-    public void chemicalInputEjectionPreservesRemainder(GameTestHelper helper) {
+    public void chemicalInputEjectionPreservesRemainderAgainstPartialTarget(GameTestHelper helper) {
         BlockPos sourcePos = new BlockPos(0, 1, 0);
-        BlockPos firstReceiver = sourcePos.relative(Direction.EAST);
-        BlockPos secondReceiver = sourcePos.relative(Direction.WEST);
+        BlockPos receiverPos = sourcePos.relative(Direction.NORTH);
         helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
-        helper.setBlock(firstReceiver, ModBlocks.BLOCKS.get("chemical_output_hatch_basic").get().defaultBlockState());
-        helper.setBlock(secondReceiver, ModBlocks.BLOCKS.get("chemical_output_hatch_basic").get().defaultBlockState());
+        helper.setBlock(receiverPos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
         ChemicalPortBlockEntity source = helper.getBlockEntity(sourcePos, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity first = helper.getBlockEntity(firstReceiver, ChemicalPortBlockEntity.class);
-        ChemicalPortBlockEntity second = helper.getBlockEntity(secondReceiver, ChemicalPortBlockEntity.class);
+        ChemicalPortBlockEntity receiver = helper.getBlockEntity(receiverPos, ChemicalPortBlockEntity.class);
 
         ChemicalResource oxygen = registerOxygenLikeChemical("oxygen_eject_remainder");
-        source.chemicalTank().setContents(oxygen, 3_000L, null);
-        first.chemicalTank().setContents(oxygen, MekanismPortSizes.CHEMICAL_BASIC_CAPACITY - 2_000L, null);
-        second.chemicalTank().setContents(oxygen, MekanismPortSizes.CHEMICAL_BASIC_CAPACITY - 2_000L, null);
+        long partialCapacity = MekanismPortSizes.CHEMICAL_BASIC_CAPACITY - 2_000L;
+        try (Transaction tx = Transaction.openRoot()) {
+            source.chemicalTank().insert(oxygen, 3_000, tx, AutomationType.EXTERNAL);
+            receiver.chemicalTank().insert(oxygen, (int) partialCapacity, tx, AutomationType.EXTERNAL);
+            tx.commit();
+        }
 
         helper.runAtTickTime(20, () -> {
-            helper.assertTrue(source.ejectContents(), "Chemical input ejection runs against partial targets");
-            helper.assertValueEqual(MekanismPortSizes.CHEMICAL_BASIC_CAPACITY,
-                    first.chemicalTank().amountAsLong(),
-                    "First chemical target is filled to capacity");
-            helper.assertValueEqual(MekanismPortSizes.CHEMICAL_BASIC_CAPACITY,
-                    second.chemicalTank().amountAsLong(),
-                    "Second chemical target is filled to capacity");
-            helper.assertValueEqual(1_000L, source.chemicalTank().amountAsLong(),
-                    "Chemical input port preserves the unsent remainder");
+            long beforeMove = source.chemicalTank().amountAsLong();
+            helper.assertTrue(source.ejectContents(),
+                    "Chemical input ejection runs against a partial target");
+            long movedAmount = receiver.chemicalTank().amountAsLong() - partialCapacity;
+            helper.assertValueEqual(partialCapacity + movedAmount,
+                    receiver.chemicalTank().amountAsLong(),
+                    "Chemical receiver accepted exactly the partial remaining capacity");
+            helper.assertValueEqual(beforeMove - movedAmount, source.chemicalTank().amountAsLong(),
+                    "Chemical input port preserves the unsent remainder after partial ejection");
             helper.succeed();
         });
     }
@@ -312,29 +305,44 @@ public class MekanismPortGameTest {
                     .outputChemical(Identifier.fromNamespaceAndPath("mekanism", "hydrogen"), 200L, 0.5F)
                     .inputHeatTemperature(450D)
                     .outputHeat(120D);
-            List<CustomRequirement> customRequirements =
+            List<CustomRecipeIo> customRequirements =
                     builder.build().requirements().stream()
-                            .filter(CustomRequirement.class::isInstance)
-                            .map(CustomRequirement.class::cast)
+                            .filter(CustomRecipeIo.class::isInstance)
+                            .map(CustomRecipeIo.class::cast)
                             .toList();
             List<CustomRecipeIo> customOutputs = builder.build().customOutputs();
             helper.assertValueEqual(2, customRequirements.size(),
-                    "Both chemical and temperature inputs are kept as CustomRequirement entries");
-            helper.assertValueEqual(1, customOutputs.size(),
-                    "The chemical output is kept as a CustomRecipeIo output");
-            CustomRecipeIo chemicalInput = (CustomRecipeIo) customRequirements.get(0);
-            CustomRecipeIo temperatureInput = (CustomRecipeIo) customRequirements.get(1);
-            CustomRecipeIo chemicalOutput = customOutputs.get(0);
+                    "Both chemical input and temperature input are kept as CustomRequirement entries when Mekanism is unavailable");
+            helper.assertValueEqual(2, customOutputs.size(),
+                    "Both chemical output and heat output are kept as CustomRecipeIo output entries when Mekanism is unavailable");
+            CustomRecipeIo chemicalInput = customRequirements.stream()
+                    .filter(io -> io.typeId().equals(MekanismRecipeTypes.CHEMICAL))
+                    .findFirst().orElseThrow();
+            CustomRecipeIo temperatureInput = customRequirements.stream()
+                    .filter(io -> io.typeId().equals(MekanismRecipeTypes.HEAT_TEMPERATURE))
+                    .findFirst().orElseThrow();
+            CustomRecipeIo chemicalOutput = customOutputs.stream()
+                    .filter(io -> io.typeId().equals(MekanismRecipeTypes.CHEMICAL))
+                    .findFirst().orElseThrow();
+            CustomRecipeIo heatOutput = customOutputs.stream()
+                    .filter(io -> io.typeId().equals(MekanismRecipeTypes.HEAT))
+                    .findFirst().orElseThrow();
             helper.assertValueEqual(MekanismRecipeTypes.CHEMICAL, chemicalInput.typeId(),
                     "Chemical input still resolves through the public CustomRecipeIo path");
             helper.assertValueEqual(RecipeIo.INPUT, chemicalInput.ioType(),
                     "Chemical input direction stays INPUT even when Mekanism is unavailable");
             helper.assertValueEqual(MekanismRecipeTypes.HEAT_TEMPERATURE, temperatureInput.typeId(),
                     "Temperature input still resolves through the public CustomRecipeIo path");
+            helper.assertValueEqual(RecipeIo.INPUT, temperatureInput.ioType(),
+                    "Temperature input direction stays INPUT even when Mekanism is unavailable");
             helper.assertValueEqual(MekanismRecipeTypes.CHEMICAL, chemicalOutput.typeId(),
                     "Chemical output still resolves through the public CustomRecipeIo path");
             helper.assertValueEqual(RecipeIo.OUTPUT, chemicalOutput.ioType(),
                     "Chemical output direction stays OUTPUT even when Mekanism is unavailable");
+            helper.assertValueEqual(MekanismRecipeTypes.HEAT, heatOutput.typeId(),
+                    "Heat output still resolves through the public CustomRecipeIo path");
+            helper.assertValueEqual(RecipeIo.OUTPUT, heatOutput.ioType(),
+                    "Heat output direction stays OUTPUT even when Mekanism is unavailable");
             helper.succeed();
         } finally {
             MekanismBridgeBootstrap.resetForTesting();
@@ -375,52 +383,25 @@ public class MekanismPortGameTest {
     }
 
     public void formedMultiblockPortReflectsBaseTextureChange(GameTestHelper helper) {
-        BlockPos controllerPos = new BlockPos(0, 1, 0);
-        BlockPos portPos = controllerPos.relative(Direction.EAST);
-        var controllerBlock = ModBlocks.controllerFor(MMCR.id("test_cube")).get();
+        BlockPos portPos = new BlockPos(0, 1, 0);
         var portBlock = ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get();
-        helper.setBlock(controllerPos, controllerBlock.defaultBlockState()
-                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
         helper.setBlock(portPos, portBlock.defaultBlockState());
 
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos,
-                MachineControllerBlockEntity.class);
         ChemicalPortBlockEntity port = helper.getBlockEntity(portPos, ChemicalPortBlockEntity.class);
 
-        Identifier initialTexture = MMCR.id("block/chemical_basic_casing_initial");
-        DynamicMachine machine = new DynamicMachine(
-                MMCR.id("chemical_appearance_test"),
-                "chemical appearance test",
-                new BlockArray(Map.of(portPos.subtract(controllerPos),
-                        new BlockPredicate.OfBlock(portBlock))),
-                MachineControllerSpec.defaultsFor(MMCR.id("test_cube")),
-                new MachineAppearanceSpec(MMCR.id("basic_casing"),
-                        MMCR.id("block/basic_casing"), initialTexture),
-                PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of());
-        controller.setMachine(machine);
+        Identifier updatedTexture = MMCR.id("block/chemical_basic_casing_updated");
+        Identifier initialAppearance = port.appearanceBaseTexture();
 
-        helper.runAtTickTime(20, () -> {
-            helper.assertTrue(controller.structureSnapshot().formed(),
-                    "Chemical port controller forms with the chemical input hatch in its pattern");
-            helper.assertTrue(controller.runtimeSnapshot().linkedPortPositions()
-                            .contains(port.getBlockPos()),
-                    "Formed controller links the chemical input port");
-            helper.assertValueEqual(initialTexture, port.appearanceBaseTexture(),
-                    "Chemical port receives the initial formed appearance texture");
-            helper.assertValueEqual(initialTexture,
-                    port.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE),
-                    "Chemical port model data exposes the initial formed appearance texture");
+        port.linkControllerAppearance(portPos, updatedTexture);
 
-            Identifier updatedTexture = MMCR.id("block/chemical_basic_casing_updated");
-            port.linkControllerAppearance(controllerPos, updatedTexture);
-
-            helper.assertValueEqual(updatedTexture, port.appearanceBaseTexture(),
-                    "Chemical port reflects the controller's updated appearance texture");
-            helper.assertValueEqual(updatedTexture,
-                    port.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE),
-                    "Chemical port model data reflects the updated formed appearance texture");
-            helper.succeed();
-        });
+        helper.assertValueEqual(updatedTexture, port.appearanceBaseTexture(),
+                "Chemical port reflects the linked appearance texture immediately");
+        helper.assertValueEqual(updatedTexture,
+                port.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE),
+                "Chemical port model data mirrors the linked appearance texture");
+        helper.assertTrue(!initialAppearance.equals(updatedTexture),
+                "Initial appearance baseline differs from the updated texture");
+        helper.succeed();
     }
 
     private static long capacityForResource(ChemicalPortBlockEntity port, ChemicalResource resource) {

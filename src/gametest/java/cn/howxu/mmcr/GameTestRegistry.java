@@ -166,9 +166,9 @@ public final class GameTestRegistry {
         register(event, "mekanism_chemical_input_auto_imports", 160,
                 helper -> new MekanismPortGameTest().chemicalInputAutoImportsFromAdjacentOutput(helper));
         register(event, "mekanism_chemical_input_ejects_to_first_target", 100,
-                helper -> new MekanismPortGameTest().chemicalInputEjectionStopsAfterFirstTarget(helper));
+                helper -> new MekanismPortGameTest().chemicalInputEjectionSpreadsAcrossDirectionsAndEmptiesSource(helper));
         register(event, "mekanism_chemical_input_ejection_preserves_remainder", 100,
-                helper -> new MekanismPortGameTest().chemicalInputEjectionPreservesRemainder(helper));
+                helper -> new MekanismPortGameTest().chemicalInputEjectionPreservesRemainderAgainstPartialTarget(helper));
         register(event, "mekanism_chemical_and_heat_persist_across_reload", 100,
                 helper -> new MekanismPortGameTest().chemicalAndHeatContentsPersistAcrossReload(helper));
         register(event, "mekanism_unavailable_bridge_still_registers_io", 100,
