@@ -72,27 +72,23 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder outputFluid(Fluid fluid, int amount) { return requirement(FluidRequirement.output(new FluidOutput(fluid, amount))); }
     public MachineRecipeBuilder inputChemical(Identifier id, long amount) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
-                chemicalPayload(ChemicalIngredient.chemical(id, amount))));
+                chemicalInputPayload(ChemicalIngredient.chemical(id, amount))));
     }
     public MachineRecipeBuilder inputChemicalTag(Identifier id, long amount) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
-                chemicalPayload(ChemicalIngredient.tag(id, amount))));
+                chemicalInputPayload(ChemicalIngredient.tag(id, amount))));
     }
     public MachineRecipeBuilder outputChemical(Identifier id, long amount, float chance) {
-        ChemicalOutput output = ChemicalOutput.of(id, amount, chance);
-        JsonObject payload = new JsonObject();
-        payload.addProperty("type", MekanismPortFamilies.CHEMICAL.toString());
-        payload.addProperty("id", output.id().toString());
-        payload.addProperty("amount", output.amount());
-        payload.addProperty("chance", output.chance());
-        return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT, payload));
+        return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT,
+                chemicalOutputPayload(ChemicalOutput.of(id, amount, chance))));
     }
     public MachineRecipeBuilder inputHeatTemperature(double temperature) {
-        return heat(HeatRequirement.minimumTemperature(temperature), MekanismPortFamilies.HEAT_TEMPERATURE,
-                RecipeIo.INPUT);
+        return custom(new CustomRecipeIo(MekanismPortFamilies.HEAT_TEMPERATURE, RecipeIo.INPUT,
+                heatInputPayload(temperature)));
     }
     public MachineRecipeBuilder outputHeat(double heat) {
-        return heat(HeatRequirement.outputHeat(heat), MekanismPortFamilies.HEAT, RecipeIo.OUTPUT);
+        return custom(new CustomRecipeIo(MekanismPortFamilies.HEAT, RecipeIo.OUTPUT,
+                heatOutputPayload(heat)));
     }
     public MachineRecipeBuilder inputEnergy(long fePerTick) { return requirement(new EnergyRequirement(RecipeIo.INPUT, fePerTick)); }
     public MachineRecipeBuilder outputEnergy(long fePerTick) { return requirement(new EnergyRequirement(RecipeIo.OUTPUT, fePerTick)); }
@@ -145,7 +141,15 @@ public final class MachineRecipeBuilder {
                 levelRequirements, Set.copyOf(requiredHosts));
     }
 
-    private static JsonObject chemicalPayload(ChemicalIngredient ingredient) {
+    /**
+     * Builds the canonical chemical input payload from a public {@link ChemicalIngredient}.
+     *
+     * @param ingredient validated chemical ingredient
+     * @return immutable JSON payload for {@code RecipeApi.custom}
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject chemicalInputPayload(ChemicalIngredient ingredient) {
+        if (ingredient == null) throw new IllegalArgumentException("ingredient must not be null");
         JsonObject payload = new JsonObject();
         payload.addProperty("type", MekanismPortFamilies.CHEMICAL.toString());
         payload.addProperty("kind", ingredient.kind().name().toLowerCase(Locale.ROOT));
@@ -155,12 +159,65 @@ public final class MachineRecipeBuilder {
         return payload;
     }
 
-    private MachineRecipeBuilder heat(HeatRequirement requirement, Identifier typeId, RecipeIo io) {
+    /**
+     * Builds the canonical chemical output payload from a public {@link ChemicalOutput}.
+     *
+     * @param output validated chemical output
+     * @return immutable JSON payload for {@code RecipeApi.custom}
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject chemicalOutputPayload(ChemicalOutput output) {
+        if (output == null) throw new IllegalArgumentException("output must not be null");
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", MekanismPortFamilies.CHEMICAL.toString());
+        payload.addProperty("id", output.id().toString());
+        payload.addProperty("amount", output.amount());
+        payload.addProperty("chance", output.chance());
+        return payload;
+    }
+
+    /**
+     * Builds the canonical minimum temperature payload for {@code mmcr:mekanism_heat_temperature}.
+     *
+     * @param temperature minimum required temperature
+     * @return immutable JSON payload for {@code RecipeApi.custom}
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject heatInputPayload(double temperature) {
+        return heatPayload(HeatRequirement.minimumTemperature(temperature),
+                MekanismPortFamilies.HEAT_TEMPERATURE, RecipeIo.INPUT);
+    }
+
+    /**
+     * Builds the canonical heat output payload for {@code mmcr:mekanism_heat}.
+     *
+     * @param heat produced heat value
+     * @return immutable JSON payload for {@code RecipeApi.custom}
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject heatOutputPayload(double heat) {
+        return heatPayload(HeatRequirement.outputHeat(heat),
+                MekanismPortFamilies.HEAT, RecipeIo.OUTPUT);
+    }
+
+    /**
+     * Builds the canonical heat payload for a typed {@link HeatRequirement} targeting a port family.
+     *
+     * @param requirement validated heat requirement
+     * @param typeId target port family identifier
+     * @param io recipe IO direction
+     * @return immutable JSON payload for {@code RecipeApi.custom}
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject heatPayload(HeatRequirement requirement, Identifier typeId, RecipeIo io) {
+        if (requirement == null) throw new IllegalArgumentException("requirement must not be null");
+        if (typeId == null) throw new IllegalArgumentException("typeId must not be null");
+        if (io == null) throw new IllegalArgumentException("io must not be null");
         JsonObject payload = new JsonObject();
         payload.addProperty("type", typeId.toString());
         payload.addProperty("io", io.name().toLowerCase(Locale.ROOT));
         payload.addProperty("value", requirement.value());
-        return custom(new CustomRecipeIo(typeId, io, payload));
+        return payload;
     }
 
 }

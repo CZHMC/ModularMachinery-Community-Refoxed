@@ -41,6 +41,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -61,6 +62,13 @@ class MachineRecipeSchemaTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @BeforeEach
+    void installMekanismRecipeTypes() {
+        cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap.installForTesting(
+                cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap.selectForTesting(false));
+        cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes.register();
     }
 
     @AfterEach
@@ -317,6 +325,149 @@ class MachineRecipeSchemaTest {
             assertThat(builder.requirements).containsExactly(requirement);
             assertThat(builder.customOutputs).containsExactly(output);
         }
+    }
+
+    @Test
+    void schema_chemical_input_function_parity_with_builder() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        MachineRecipeSchema.SCHEMA.functions.get("chemicalInput").function()
+                .execute(new TestRecipeContext(schemaRecipe), List.of("mekanism:oxygen", 1_000L));
+
+        var builder = new MachineRecipeBuilderJS(MMCR.id("schema_chemical_input_parity"));
+        builder.chemicalInput("mekanism:oxygen", 1_000L);
+
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                schemaRecipe.json.getAsJsonArray("requirements").get(0)).getOrThrow())
+                .isEqualTo(builder.requirements.get(0));
+    }
+
+    @Test
+    void schema_chemical_tag_input_function_parity_with_builder() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        MachineRecipeSchema.SCHEMA.functions.get("chemicalTagInput").function()
+                .execute(new TestRecipeContext(schemaRecipe), List.of("mekanism:fuels", 10L));
+
+        var builder = new MachineRecipeBuilderJS(MMCR.id("schema_chemical_tag_parity"));
+        builder.chemicalTagInput("mekanism:fuels", 10L);
+
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                schemaRecipe.json.getAsJsonArray("requirements").get(0)).getOrThrow())
+                .isEqualTo(builder.requirements.get(0));
+    }
+
+    @Test
+    void schema_chemical_output_function_parity_with_builder() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        MachineRecipeSchema.SCHEMA.functions.get("chemicalOutput").function()
+                .execute(new TestRecipeContext(schemaRecipe), List.of("mekanism:hydrogen", 200L, 0.5));
+
+        var builder = new MachineRecipeBuilderJS(MMCR.id("schema_chemical_output_parity"));
+        builder.chemicalOutput("mekanism:hydrogen", 200L, 0.5D);
+
+        assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
+                schemaRecipe.json.getAsJsonArray("outputs").get(0)).getOrThrow())
+                .isEqualTo(builder.customOutputs.get(0));
+    }
+
+    @Test
+    void schema_heat_temperature_input_function_parity_with_builder() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        MachineRecipeSchema.SCHEMA.functions.get("heatTemperatureInput").function()
+                .execute(new TestRecipeContext(schemaRecipe), List.of(450D));
+
+        var builder = new MachineRecipeBuilderJS(MMCR.id("schema_heat_input_parity"));
+        builder.heatTemperatureInput(450D);
+
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
+                schemaRecipe.json.getAsJsonArray("requirements").get(0)).getOrThrow())
+                .isEqualTo(builder.requirements.get(0));
+    }
+
+    @Test
+    void schema_heat_output_function_parity_with_builder() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        MachineRecipeSchema.SCHEMA.functions.get("heatOutput").function()
+                .execute(new TestRecipeContext(schemaRecipe), List.of(1_200D));
+
+        var builder = new MachineRecipeBuilderJS(MMCR.id("schema_heat_output_parity"));
+        builder.heatOutput(1_200D);
+
+        assertThat(MachineOutput.CODEC.parse(JsonOps.INSTANCE,
+                schemaRecipe.json.getAsJsonArray("outputs").get(0)).getOrThrow())
+                .isEqualTo(builder.customOutputs.get(0));
+    }
+
+    @Test
+    void schema_chemical_input_function_rejects_blank_id() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("chemicalInput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of("", 1_000L)));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("chemicalInput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of("   ", 1_000L)));
+    }
+
+    @Test
+    void schema_chemical_input_function_rejects_non_positive_amount() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("chemicalInput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of("mekanism:oxygen", 0L)));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("chemicalInput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of("mekanism:oxygen", -1L)));
+    }
+
+    @Test
+    void schema_chemical_output_function_rejects_invalid_chance() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("chemicalOutput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of("mekanism:oxygen", 1_000L, -0.1)));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("chemicalOutput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of("mekanism:oxygen", 1_000L, 1.1)));
+    }
+
+    @Test
+    void schema_heat_temperature_input_function_rejects_negative_value() {
+        var schemaRecipe = new KubeRecipe();
+        schemaRecipe.json = new JsonObject();
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("heatTemperatureInput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of(-1D)));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get("heatOutput").function()
+                        .execute(new TestRecipeContext(schemaRecipe), List.of(-0.5D)));
+    }
+
+    @Test
+    void schema_chemical_functions_are_declared_with_typed_components() {
+        var chemicalInput = MachineRecipeSchema.SCHEMA.functions.get("chemicalInput");
+        var chemicalTagInput = MachineRecipeSchema.SCHEMA.functions.get("chemicalTagInput");
+        var chemicalOutput = MachineRecipeSchema.SCHEMA.functions.get("chemicalOutput");
+        var heatTemperatureInput = MachineRecipeSchema.SCHEMA.functions.get("heatTemperatureInput");
+        var heatOutput = MachineRecipeSchema.SCHEMA.functions.get("heatOutput");
+
+        assertThat(chemicalInput).isNotNull();
+        assertThat(chemicalInput.arguments()).hasSize(2);
+        assertThat(chemicalTagInput).isNotNull();
+        assertThat(chemicalTagInput.arguments()).hasSize(2);
+        assertThat(chemicalOutput).isNotNull();
+        assertThat(chemicalOutput.arguments()).hasSize(3);
+        assertThat(heatTemperatureInput).isNotNull();
+        assertThat(heatTemperatureInput.arguments()).hasSize(1);
+        assertThat(heatOutput).isNotNull();
+        assertThat(heatOutput.arguments()).hasSize(1);
     }
 
     private record TestRequirement(int value) implements CustomRequirement {

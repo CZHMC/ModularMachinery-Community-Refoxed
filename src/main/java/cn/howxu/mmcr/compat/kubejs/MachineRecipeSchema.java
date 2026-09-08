@@ -2,11 +2,15 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
+import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import com.google.gson.JsonElement;
@@ -200,6 +204,88 @@ public final class MachineRecipeSchema {
                             levels.add(requirement);
                             cx.recipe().save();
                         }
+                    }))
+            .function(new RecipeFunctionInstance("chemicalInput",
+                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            Identifier id = requireChemicalId((String) args.get(0), "chemicalId");
+                            long amount = ((Number) args.get(1)).longValue();
+                            appendChemicalInput(cx.recipe(),
+                                    ChemicalIngredient.chemical(id, amount));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("chemicalTagInput",
+                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            Identifier id = requireChemicalId((String) args.get(0), "tagId");
+                            long amount = ((Number) args.get(1)).longValue();
+                            appendChemicalInput(cx.recipe(),
+                                    ChemicalIngredient.tag(id, amount));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("chemicalOutput",
+                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG, NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG,
+                                    NumberComponent.doubleRange(0D, 1D));
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            Identifier id = requireChemicalId((String) args.get(0), "chemicalId");
+                            long amount = ((Number) args.get(1)).longValue();
+                            double chance = ((Number) args.get(2)).doubleValue();
+                            if (!Double.isFinite(chance)) {
+                                throw new IllegalArgumentException("chance must be finite");
+                            }
+                            appendChemicalOutput(cx.recipe(), id, amount, chance);
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("heatTemperatureInput",
+                    List.of(NumberComponent.NON_NEGATIVE_DOUBLE),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(NumberComponent.NON_NEGATIVE_DOUBLE);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            double temperature = ((Number) args.get(0)).doubleValue();
+                            appendHeatRequirement(cx.recipe(), MekanismPortFamilies.HEAT_TEMPERATURE,
+                                    RecipeIo.INPUT, HeatRequirement.minimumTemperature(temperature));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("heatOutput",
+                    List.of(NumberComponent.NON_NEGATIVE_DOUBLE),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(NumberComponent.NON_NEGATIVE_DOUBLE);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            double heat = ((Number) args.get(0)).doubleValue();
+                            appendHeatRequirement(cx.recipe(), MekanismPortFamilies.HEAT, RecipeIo.OUTPUT,
+                                    HeatRequirement.outputHeat(heat));
+                        }
                     }));
 
     private MachineRecipeSchema() {
@@ -227,6 +313,41 @@ public final class MachineRecipeSchema {
         }
         outputs.add(MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow());
         recipe.save();
+    }
+
+    private static void appendChemicalInput(KubeRecipe recipe, ChemicalIngredient ingredient) {
+        var custom = RecipeApi.custom(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(ingredient));
+        appendRequirement(recipe, MachineRecipeConverter.toRequirement(custom));
+    }
+
+    private static void appendChemicalOutput(KubeRecipe recipe, Identifier id, long amount, double chance) {
+        var output = cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput.of(id, amount, (float) chance);
+        var custom = RecipeApi.custom(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT,
+                MachineRecipeBuilder.chemicalOutputPayload(output));
+        appendOutput(recipe, MachineRecipeConverter.toOutput(custom));
+    }
+
+    private static void appendHeatRequirement(KubeRecipe recipe, Identifier typeId, RecipeIo io,
+                                              HeatRequirement requirement) {
+        var custom = RecipeApi.custom(typeId, io,
+                MachineRecipeBuilder.heatPayload(requirement, typeId, io));
+        if (io.isInput() || OutputRegistry.typeFor(custom.typeId()) == null) {
+            appendRequirement(recipe, MachineRecipeConverter.toRequirement(custom));
+        } else {
+            appendOutput(recipe, MachineRecipeConverter.toOutput(custom));
+        }
+    }
+
+    private static Identifier requireChemicalId(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be null or blank");
+        }
+        try {
+            return Identifier.parse(value);
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid " + name + ": " + value, exception);
+        }
     }
 
     private record JsonElementComponent() implements RecipeComponent<JsonElement> {

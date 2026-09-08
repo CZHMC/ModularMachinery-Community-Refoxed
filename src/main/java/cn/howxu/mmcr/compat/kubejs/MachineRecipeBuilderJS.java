@@ -3,6 +3,9 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -10,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
+import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -229,6 +233,84 @@ public class MachineRecipeBuilderJS {
         stack.add("components", components.deepCopy());
         componentOutputs.add(new ComponentOutput(outputs.size(), stack));
         return this;
+    }
+
+    /**
+     * Adds a chemical input requirement resolved from a namespaced identifier.
+     *
+     * @param chemicalId chemical identifier (e.g. {@code mekanism:oxygen})
+     * @param amount required chemical amount
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount) {
+        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount)));
+    }
+
+    /**
+     * Adds a chemical tag input requirement resolved from a namespaced identifier.
+     *
+     * @param tagId chemical tag identifier (e.g. {@code mekanism:fuels})
+     * @param amount required chemical amount per matching chemical
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount) {
+        Identifier id = requireChemicalId(tagId, "tagId");
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount)));
+    }
+
+    /**
+     * Adds a chemical output registered through the public chemical output codec.
+     *
+     * @param chemicalId chemical identifier (e.g. {@code mekanism:hydrogen})
+     * @param amount produced chemical amount
+     * @param chance production chance between 0 and 1 inclusive
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS chemicalOutput(String chemicalId, long amount, double chance) {
+        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.OUTPUT,
+                MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(id, amount, (float) chance)));
+    }
+
+    /**
+     * Adds a minimum temperature input requirement through the public heat requirement codec.
+     *
+     * @param temperature minimum required temperature in Kelvin
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS heatTemperatureInput(double temperature) {
+        return custom(MekanismPortFamilies.HEAT_TEMPERATURE.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.heatInputPayload(temperature));
+    }
+
+    /**
+     * Adds a heat output declaration through the public heat requirement codec.
+     *
+     * @param heat produced heat value in Kelvin per tick
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS heatOutput(double heat) {
+        return custom(MekanismPortFamilies.HEAT.toString(), RecipeIo.OUTPUT,
+                MachineRecipeBuilder.heatOutputPayload(heat));
+    }
+
+    private static Identifier requireChemicalId(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be null or blank");
+        }
+        try {
+            return Identifier.parse(value);
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid " + name + ": " + value, exception);
+        }
     }
 
     public MachineRecipeBuilderJS energyPerTick(long energyPerTick) {
