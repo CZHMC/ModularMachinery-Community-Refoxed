@@ -19,12 +19,15 @@ public final class JadePlugin implements IWailaPlugin {
     public void register(IWailaCommonRegistration registration) {
         JadeTextSupport.enable();
         registration.registerBlockDataProvider(MachineControllerDataProvider.INSTANCE, MachineControllerBlockEntity.class);
+        registration.registerBlockDataProvider(RecipeOutputDataProvider.INSTANCE, MachineControllerBlockEntity.class);
     }
 
     @Override
     public void registerClient(IWailaClientRegistration registration) {
         registration.addConfig(MachineControllerComponentProvider.UID, true);
         registration.registerBlockComponent(MachineControllerComponentProvider.INSTANCE, MachineControllerBlock.class);
+        registration.addConfig(RecipeOutputComponentProvider.UID, true);
+        registration.registerBlockComponent(RecipeOutputComponentProvider.INSTANCE, MachineControllerBlock.class);
         registration.addConfig(ParallelControllerComponentProvider.UID, true);
         registration.registerBlockComponent(ParallelControllerComponentProvider.INSTANCE, ParallelControllerBlock.class);
     }
