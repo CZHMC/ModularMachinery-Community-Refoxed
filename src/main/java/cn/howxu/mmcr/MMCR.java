@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.registration.GameTestRegistration;
@@ -28,6 +29,7 @@ public class MMCR {
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
+        MekanismBridgeBootstrap.bootstrap();
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
