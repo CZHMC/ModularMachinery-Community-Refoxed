@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism;
 
-import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -26,7 +26,7 @@ final class UnavailableMekanismBridge implements MekanismBridge {
 
     @Override
     public Identifier unavailableReason() {
-        return MMCR.id("mekanism_unavailable");
+        return MekanismFailureReasons.MEKANISM_UNAVAILABLE.id();
     }
 
     @Override

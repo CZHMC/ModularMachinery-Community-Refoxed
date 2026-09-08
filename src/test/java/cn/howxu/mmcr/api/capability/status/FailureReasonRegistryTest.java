@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.api.capability.status;
 
-import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
@@ -17,8 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class FailureReasonRegistryTest {
     @Test
     void duplicate_failure_reason_ids_are_rejected() {
-        FailureReason reason = new FailureReason(MekanismFailureReasons.CHEMICAL_INPUT_MISSING,
-                "gui.mmcr.failure.chemical_input_missing");
+        FailureReason reason = new FailureReason(Identifier.fromNamespaceAndPath("mmcr_test", "duplicate_reason"),
+                "gui.mmcr.failure.duplicate_reason");
         FailureReasonRegistry.register(reason);
         assertThrows(IllegalArgumentException.class, () -> FailureReasonRegistry.register(reason));
         assertEquals(reason, FailureReasonRegistry.find(reason.id()));

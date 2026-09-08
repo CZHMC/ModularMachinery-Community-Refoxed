@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism;
 
+import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import java.util.Objects;
 import net.neoforged.fml.ModList;
 
@@ -18,6 +19,7 @@ public final class MekanismBridgeBootstrap {
     }
 
     public static void bootstrap() {
+        MekanismFailureReasons.register();
     }
 
     static MekanismBridge bridge() {

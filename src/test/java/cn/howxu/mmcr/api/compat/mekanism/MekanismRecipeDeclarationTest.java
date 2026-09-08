@@ -1,7 +1,14 @@
 package cn.howxu.mmcr.api.compat.mekanism;
 
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -42,5 +49,36 @@ class MekanismRecipeDeclarationTest {
         assertEquals(Identifier.parse("mmcr:mekanism_chemical"), MekanismPortFamilies.CHEMICAL);
         assertEquals(Identifier.parse("mmcr:mekanism_heat_temperature"), MekanismPortFamilies.HEAT_TEMPERATURE);
         assertEquals(Identifier.parse("mmcr:mekanism_heat"), MekanismPortFamilies.HEAT);
+    }
+
+    @Test
+    void production_initialization_registers_all_failure_reasons() {
+        MekanismBridgeBootstrap.bootstrap();
+
+        assertRegistered(MekanismFailureReasons.MEKANISM_UNAVAILABLE,
+                "gui.mmcr.failure.mekanism_unavailable");
+        assertRegistered(MekanismFailureReasons.CHEMICAL_INPUT_MISSING,
+                "gui.mmcr.failure.chemical_input_missing");
+        assertRegistered(MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED,
+                "gui.mmcr.failure.chemical_output_blocked");
+        assertRegistered(MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH,
+                "gui.mmcr.failure.chemical_type_mismatch");
+        assertRegistered(MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED,
+                "gui.mmcr.failure.chemical_radioactivity_rejected");
+        assertRegistered(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT,
+                "gui.mmcr.failure.heat_temperature_insufficient");
+        assertRegistered(MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
+                "gui.mmcr.failure.heat_output_blocked");
+
+        FailureReason reason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
+        ExecutionStatus status = new ExecutionStatus(reason.id(), StatusSeverity.BLOCKED, reason.id(),
+                Map.of("reason", reason.id().toString()));
+        assertEquals(reason, status.reason());
+        assertThrows(IllegalArgumentException.class, MekanismFailureReasons::register);
+    }
+
+    private static void assertRegistered(FailureReason reason, String translationKey) {
+        assertEquals(translationKey, reason.translationKey());
+        assertEquals(reason, FailureReasonRegistry.find(reason.id()));
     }
 }
