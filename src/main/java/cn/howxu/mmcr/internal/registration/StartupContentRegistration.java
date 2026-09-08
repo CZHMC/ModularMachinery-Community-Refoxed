@@ -88,6 +88,7 @@ public final class StartupContentRegistration {
             if (!deferStructures) {
                 structures.freeze();
                 ContentRegistrationCoordinator.collectStructures(structures);
+                ContentRegistrationCoordinator.commitStructures();
                 productionStructuresCollected = true;
             }
             initialized = true;
@@ -127,7 +128,7 @@ public final class StartupContentRegistration {
     private static void tryCommitProductionStartup() {
         if (pendingProductionDefinitions == null || !productionStructuresInitialized || !productionStructuresCollected
                 || productionRecipesCollecting || !productionRecipesCollected) return;
-        ContentRegistrationCoordinator.commitStartup();
+        ContentRegistrationCoordinator.commitRecipes();
         registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
         pendingProductionDefinitions = null;
         startupPhase = StartupPhase.COMMITTED;
@@ -167,6 +168,7 @@ public final class StartupContentRegistration {
         if (ContentRegistrationCoordinator.isCommitted()) return;
         if (structureCollectionDeferred) {
             ContentRegistrationCoordinator.collectStructures(MMCRMachineStructuresEvent.current());
+            ContentRegistrationCoordinator.commitStructures();
             structureCollectionDeferred = false;
             productionStructuresCollected = true;
         }

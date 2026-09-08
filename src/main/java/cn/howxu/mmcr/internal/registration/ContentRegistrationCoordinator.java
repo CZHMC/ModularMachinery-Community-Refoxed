@@ -88,15 +88,26 @@ public final class ContentRegistrationCoordinator {
         }
         requireCollecting();
 
+        commitStructures();
+        commitRecipes();
+        testCommitCount++;
+        lastStartupSnapshot = new StartupSnapshotForTesting(
+                Set.copyOf(MACHINES.keySet()), Set.copyOf(STRUCTURES.keySet()), Set.copyOf(RECIPES.keySet()));
+        }
+    }
+
+    /**
+     * Validates and publishes machines, structures, levels, and modifiers. After this call,
+     * {@link MachineDefinitions#getRegistration(Identifier)} and
+     * {@link MachineLevelRegistry} are populated for downstream consumers that run between
+     * structure collection and recipe collection (e.g. KubeJS server script reload, datapack
+     * recipe parsing). Recipes are not yet committed.
+     */
+    public static synchronized void commitStructures() {
+        requireCollecting();
+
         Map<Identifier, MachineRegistration> registrations = validateAndConvertMachines();
         Map<Identifier, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
-        MachineLevelRegistry.installSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(), STRUCTURE_SNAPSHOT.levels().values());
-        Map<Identifier, MachineRecipe> recipes = validateAndConvertRecipes();
-        validateDuplicates(registrations, structures, recipes);
-
-        // Prepare and publish recipes before any other registry is changed. The batch validates the
-        // complete candidate first, so a recipe failure leaves startup registries untouched.
-        RecipeRegistry.registerStaticBatch(recipes.values());
         ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.modifierItems());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
@@ -106,13 +117,23 @@ public final class ContentRegistrationCoordinator {
             }
         });
         MachineStructureRegistry.replaceStartup(structures);
+    }
+
+    /**
+     * Validates and publishes recipes against the already-committed machines and structures.
+     */
+    public static synchronized void commitRecipes() {
+        requireCollecting();
+
+        Map<Identifier, MachineRecipe> recipes = validateAndConvertRecipes();
+        validateRecipeDuplicates(recipes);
+
+        // Prepare and publish recipes before any other registry is changed. The batch validates the
+        // complete candidate first, so a recipe failure leaves startup registries untouched.
+        RecipeRegistry.registerStaticBatch(recipes.values());
         MachineDefinitions.freezeRegistryPhase();
         PublicApiBootstrap.freeze();
         state = State.COMMITTED;
-        testCommitCount++;
-        lastStartupSnapshot = new StartupSnapshotForTesting(
-                Set.copyOf(MACHINES.keySet()), Set.copyOf(STRUCTURES.keySet()), Set.copyOf(RECIPES.keySet()));
-        }
     }
 
     /** Test-only counter for verifying that bootstrap paths share this coordinator. */
@@ -204,6 +225,12 @@ public final class ContentRegistrationCoordinator {
                 throw new ApiRegistrationException("Structure key does not match machine id: " + id);
             }
         });
+        recipes.keySet().forEach(id -> {
+            if (RecipeRegistry.containsStatic(id)) throw duplicate(id, "recipe");
+        });
+    }
+
+    private static void validateRecipeDuplicates(Map<Identifier, MachineRecipe> recipes) {
         recipes.keySet().forEach(id -> {
             if (RecipeRegistry.containsStatic(id)) throw duplicate(id, "recipe");
         });

@@ -246,9 +246,8 @@ class ContentRegistrationCoordinatorTest {
         ContentRegistrationCoordinator.collectRecipes(recipeEvent(
                 MachineRecipeBuilder.recipe(existingRecipeId, newMachineId).duration(1).build()));
 
-        assertThatThrownBy(ContentRegistrationCoordinator::commitStartup).isInstanceOf(RuntimeException.class);
-        assertThat(MachineDefinitions.getRegistration(newMachineId)).isNull();
-        assertThat(MachineStructureRegistry.startupSnapshot()).doesNotContainKey(newMachineId);
+        assertThatThrownBy(ContentRegistrationCoordinator::commitRecipes)
+                .isInstanceOf(RuntimeException.class);
         assertThat(RecipeRegistry.getRecipe(existingRecipeId).machineId()).isEqualTo(existingMachineId);
     }
 
@@ -361,13 +360,13 @@ class ContentRegistrationCoordinatorTest {
                 LevelModifier.IDENTITY));
         StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS);
 
+        assertThat(MachineLevelRegistry.getType(typeId)).isNotNull();
+        assertThat(MachineLevelRegistry.getLevel(levelId)).isNotNull();
         assertThat(ContentRegistrationCoordinator.isCommitted()).isFalse();
 
         StartupContentRegistration.completeProductionRecipesAfterComponentsBound(NeoForge.EVENT_BUS);
 
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
-        assertThat(MachineLevelRegistry.getType(typeId)).isNotNull();
-        assertThat(MachineLevelRegistry.getLevel(levelId)).isNotNull();
     }
 
     @Test
