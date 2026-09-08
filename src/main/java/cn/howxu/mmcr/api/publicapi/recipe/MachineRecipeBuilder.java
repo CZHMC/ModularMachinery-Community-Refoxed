@@ -1,8 +1,13 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
+import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import com.google.gson.JsonObject;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -14,6 +19,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /** Fluent public machine recipe declaration builder.
@@ -64,6 +70,30 @@ public final class MachineRecipeBuilder {
     }
     public MachineRecipeBuilder inputFluid(Fluid fluid, int amount) { return requirement(FluidRequirement.input(new FluidInput(fluid, amount))); }
     public MachineRecipeBuilder outputFluid(Fluid fluid, int amount) { return requirement(FluidRequirement.output(new FluidOutput(fluid, amount))); }
+    public MachineRecipeBuilder inputChemical(Identifier id, long amount) {
+        return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
+                chemicalPayload(ChemicalIngredient.chemical(id, amount))));
+    }
+    public MachineRecipeBuilder inputChemicalTag(Identifier id, long amount) {
+        return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
+                chemicalPayload(ChemicalIngredient.tag(id, amount))));
+    }
+    public MachineRecipeBuilder outputChemical(Identifier id, long amount, float chance) {
+        ChemicalOutput output = ChemicalOutput.of(id, amount, chance);
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", MekanismPortFamilies.CHEMICAL.toString());
+        payload.addProperty("id", output.id().toString());
+        payload.addProperty("amount", output.amount());
+        payload.addProperty("chance", output.chance());
+        return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT, payload));
+    }
+    public MachineRecipeBuilder inputHeatTemperature(double temperature) {
+        return heat(HeatRequirement.minimumTemperature(temperature), MekanismPortFamilies.HEAT_TEMPERATURE,
+                RecipeIo.INPUT);
+    }
+    public MachineRecipeBuilder outputHeat(double heat) {
+        return heat(HeatRequirement.outputHeat(heat), MekanismPortFamilies.HEAT, RecipeIo.OUTPUT);
+    }
     public MachineRecipeBuilder inputEnergy(long fePerTick) { return requirement(new EnergyRequirement(RecipeIo.INPUT, fePerTick)); }
     public MachineRecipeBuilder outputEnergy(long fePerTick) { return requirement(new EnergyRequirement(RecipeIo.OUTPUT, fePerTick)); }
     public MachineRecipeBuilder outputItem(Item item, int count) { return requirement(ItemRequirement.output(new ItemOutput(item, count))); }
@@ -113,6 +143,24 @@ public final class MachineRecipeBuilder {
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, itemInputs, fluidInputs,
                 energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, customOutputs, modifierIds,
                 levelRequirements, Set.copyOf(requiredHosts));
+    }
+
+    private static JsonObject chemicalPayload(ChemicalIngredient ingredient) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", MekanismPortFamilies.CHEMICAL.toString());
+        payload.addProperty("kind", ingredient.kind().name().toLowerCase(Locale.ROOT));
+        payload.addProperty("id", ingredient.id().toString());
+        payload.addProperty("amount", ingredient.amount());
+        payload.addProperty("io", RecipeIo.INPUT.name().toLowerCase(Locale.ROOT));
+        return payload;
+    }
+
+    private MachineRecipeBuilder heat(HeatRequirement requirement, Identifier typeId, RecipeIo io) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("type", typeId.toString());
+        payload.addProperty("io", io.name().toLowerCase(Locale.ROOT));
+        payload.addProperty("value", requirement.value());
+        return custom(new CustomRecipeIo(typeId, io, payload));
     }
 
 }
