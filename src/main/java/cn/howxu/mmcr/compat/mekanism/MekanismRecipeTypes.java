@@ -9,7 +9,6 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public final class MekanismRecipeTypes {
-    // TODO: change to mekanism:chemical mekanism:temperature mekanism:heat
     public static final Identifier CHEMICAL = MMCR.id("mekanism_chemical");
     public static final Identifier HEAT_TEMPERATURE = MMCR.id("mekanism_heat_temperature");
     public static final Identifier HEAT = MMCR.id("mekanism_heat");

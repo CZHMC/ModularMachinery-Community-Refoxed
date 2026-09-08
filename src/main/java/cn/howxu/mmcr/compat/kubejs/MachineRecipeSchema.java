@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -322,7 +323,7 @@ public final class MachineRecipeSchema {
     }
 
     private static void appendChemicalOutput(KubeRecipe recipe, Identifier id, long amount, double chance) {
-        var output = cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput.of(id, amount, (float) chance);
+        var output = ChemicalOutput.of(id, amount, (float) chance);
         var custom = RecipeApi.custom(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT,
                 MachineRecipeBuilder.chemicalOutputPayload(output));
         appendOutput(recipe, MachineRecipeConverter.toOutput(custom));
