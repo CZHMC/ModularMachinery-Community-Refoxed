@@ -35,6 +35,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         appendProgressBar(tooltip, snapshot);
         for (String key : lineKeys(snapshot)) {
+            if ("progress".equals(key)) continue;
             tooltip.add(row(key, lineValue(snapshot, key)));
         }
         for (Component line : JadeTextCodec.read(accessor.getServerData())) {
@@ -51,10 +52,13 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                 ? Component.translatable("jade.mmcr.machine_controller.progress.tick", tick, total)
                 : Component.translatable("jade.mmcr.machine_controller.progress.sec",
                         Math.round(tick / 20F), Math.round(total / 20F));
-        // JadeUI.progress(...) reaches DisplayHelper.font() → Minecraft.getInstance().font and the
-        // active Jade Theme (BoxStyle.nestedBox()). Both are null in unit tests where no real
-        // client is booted; swallow the resulting runtime exceptions so the text rows below still
-        // render. In production with a live client these always succeed and the bar is observed.
+        // JadeUI.progress(...) reaches into Jade client state (BoxStyle.nestedBox() calls
+        // IThemeHelper.get().theme(); JadeUI.progress() reads Minecraft.getInstance().font via
+        // DisplayHelper; JadeFont reaches Font.provider via a field made public by Jade's
+        // accesstransformer). All of those are null/missing in the unit-test JVM, so this whole
+        // block throws there. In production with a live client everything is present, so the
+        // catch never fires. Scoped narrowly to the bar so a failing render in tests does not
+        // strand the rest of the tooltip.
         try {
             ProgressView view = new ProgressView(
                     ProgressView.Part.of(ratio, 0xFF4CBB17),

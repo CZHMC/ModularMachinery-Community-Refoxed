@@ -97,7 +97,7 @@ class MachineControllerComponentProviderTest {
         assertThat(MachineControllerComponentProvider.lineKeys(
                 MachineControllerComponentProvider.Snapshot.from(tag)))
                 .containsExactly("structure", "state", "progress");
-        assertThat(added).hasSize(4);
+        assertThat(added).hasSize(3);
         assertThat(added.getLast()).isEqualTo(Component.literal("custom value"));
     }
 
@@ -121,9 +121,6 @@ class MachineControllerComponentProviderTest {
                     throw new UnsupportedOperationException(method.getName());
                 });
 
-        // JadeUI.progress(...) touches Minecraft.getInstance().font / Jade Theme, which are null
-        // under gradle test. appendProgressBar catches the runtime exception and reports a text
-        // row instead, so the call always returns normally here.
         MachineControllerComponentProvider.INSTANCE.appendTooltip(tooltip, accessor, null);
         return added;
     }
