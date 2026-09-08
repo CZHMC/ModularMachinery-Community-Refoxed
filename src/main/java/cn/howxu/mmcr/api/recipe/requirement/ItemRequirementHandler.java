@@ -213,8 +213,10 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
             if (remaining == 0L) break;
         }
         if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
+            String reason = requirement.io() == RecipeModifier.IOType.OUTPUT
+                    ? "no_output_capacity" : "insufficient_resource";
             return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
-                    "insufficient_resource"), RequirementHandlerSupport.outputSimulation(
+                    reason), RequirementHandlerSupport.outputSimulation(
                     requestedAmount, amount - remaining));
         }
         if (actionMap.isEmpty()) return new RequirementPlan.OperationPlan(List.of(),
