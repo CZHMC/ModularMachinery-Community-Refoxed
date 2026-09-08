@@ -35,15 +35,15 @@ public final class MekanismBridgeBootstrap {
         }
     }
 
-    static MekanismBridge selectForTesting(boolean mekanismLoaded) {
+    public static MekanismBridge selectForTesting(boolean mekanismLoaded) {
         return mekanismLoaded ? loadLoadedBridge() : UnavailableMekanismBridge.INSTANCE;
     }
 
-    static void installForTesting(MekanismBridge testingBridge) {
+    public static void installForTesting(MekanismBridge testingBridge) {
         MekanismBridgeBootstrap.testingBridge = Objects.requireNonNull(testingBridge);
     }
 
-    static synchronized void resetForTesting() {
+    public static synchronized void resetForTesting() {
         testingBridge = null;
         bridge = null;
     }

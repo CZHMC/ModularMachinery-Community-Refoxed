@@ -127,6 +127,10 @@ public final class BlockPredicate {
         return new BlockPredicate(false, false, null, null, null, null, List.copyOf(predicates));
     }
 
+    static BlockPredicate none() {
+        return new BlockPredicate(false, false, null, null, null, null, List.of());
+    }
+
     public boolean isMachineCoupler() {
         return machineCoupler;
     }

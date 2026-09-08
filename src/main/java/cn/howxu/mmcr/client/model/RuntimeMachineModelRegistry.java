@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
@@ -11,6 +12,7 @@ import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -141,6 +143,12 @@ public final class RuntimeMachineModelRegistry {
     static RuntimeBlockStateDefinition portStyleDefinition(Block block) {
         return new RuntimeBlockStateDefinition(BuiltInRegistries.BLOCK.getKey(block),
                 List.of(new RuntimeVariant("", DynamicOverlayModelLoader.PORT_ID)));
+    }
+
+    static DynamicOverlayBakedModel.TextureSet portTexturesForTest(IOPortKind kind,
+                                                                    MachineAppearanceSpec appearance) {
+        return DynamicOverlayBakedModel.portTextures(null, appearance.formedPortBaseTexture(),
+                DynamicOverlayTextures.portOverlayTexture(kind));
     }
 
     private static @Nullable RuntimeBlockModelDefinition definition(String blockName, Block block) {

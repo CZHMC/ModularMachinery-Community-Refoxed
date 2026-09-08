@@ -8,6 +8,7 @@ import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
 import cn.howxu.mmcr.compat.kubejs.MachineBuilderJS;
 import cn.howxu.mmcr.compat.kubejs.MachineRecipeFactory;
 import cn.howxu.mmcr.compat.kubejs.MachineStructureBuilderJS;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
@@ -21,6 +22,7 @@ import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,6 +32,45 @@ class InterfaceHelpersTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @AfterEach
+    void resetMekanismBridge() {
+        MekanismBridgeBootstrap.resetForTesting();
+    }
+
+    @Test
+    void mek_predicates_are_empty_when_bridge_is_unavailable() {
+        MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(false));
+
+        assertThat(InterfacePredicates.anyOfChemicalInput().alternatives()).isEmpty();
+        assertThat(InterfacePredicates.anyOfChemicalOutput().alternatives()).isEmpty();
+        assertThat(InterfacePredicates.anyOfRadioactiveChemicalInput().alternatives()).isEmpty();
+        assertThat(InterfacePredicates.anyOfRadioactiveChemicalOutput().alternatives()).isEmpty();
+        assertThat(InterfacePredicates.anyOfHeatInput().alternatives()).isEmpty();
+        assertThat(InterfacePredicates.anyOfHeatOutput().alternatives()).isEmpty();
+        assertThat(KubeJSInterfaceHelpers.anyOfChemicalInput().children()).isEmpty();
+        assertThat(KubeJSInterfaceHelpers.anyOfHeatOutput().children()).isEmpty();
+    }
+
+    @Test
+    void loaded_bridge_exposes_exact_approved_port_declarations() {
+        var declarations = MekanismBridgeBootstrap.selectForTesting(true).portDeclarations();
+
+        assertThat(declarations).extracting(declaration -> declaration.id()).containsExactly(
+                "chemical_input_hatch_basic", "chemical_output_hatch_basic",
+                "chemical_input_hatch_advanced", "chemical_output_hatch_advanced",
+                "chemical_input_hatch_elite", "chemical_output_hatch_elite",
+                "chemical_input_hatch_ultimate", "chemical_output_hatch_ultimate",
+                "radioactive_chemical_input_hatch", "radioactive_chemical_output_hatch",
+                "heat_input_hatch", "heat_output_hatch");
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("chemical_"))
+                .allSatisfy(declaration -> assertThat(declaration.capacity()).isIn(64_000L, 256_000L,
+                        1_024_000L, 8_192_000L));
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("radioactive_"))
+                .allSatisfy(declaration -> assertThat(declaration.capacity()).isEqualTo(512_000L));
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("heat_"))
+                .allSatisfy(declaration -> assertThat(declaration.capacity()).isEqualTo(300L));
     }
 
     @Test

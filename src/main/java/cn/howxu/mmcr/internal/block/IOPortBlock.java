@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
@@ -121,6 +122,8 @@ public class IOPortBlock extends Block implements EntityBlock {
                     if (!(level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined)) return InteractionResult.SUCCESS;
                     player.openMenu(provider, buffer -> ExtendedCombinedMenu.writeClientOpenData(buffer, combined));
                     PktPortStorageSyncPayload.sendTo(player, combined);
+                } else if (MekanismBridge.get().isPort(kind.id())) {
+                    player.openMenu(provider, buffer -> MekanismBridge.get().writeClientOpenData(buffer, kind.id(), pos));
                 }
             }
         }
@@ -204,7 +207,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                     level.getBlockEntity(pos) instanceof CombinedPortBlockEntity combined ? combined : null);
             case EXTENDED_COMBINED -> new ExtendedCombinedMenu(containerId, playerInv,
                     level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined ? combined : null);
-            case NONE -> null;
+            case NONE -> MekanismBridge.get().createMenu(kind, containerId, playerInv, level, pos);
         };
     }
 

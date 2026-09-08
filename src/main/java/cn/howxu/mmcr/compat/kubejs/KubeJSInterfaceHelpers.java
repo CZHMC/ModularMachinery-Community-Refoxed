@@ -21,6 +21,16 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyOfFluidOutput() { return convert(InterfacePredicates.anyOfFluidOutput()); }
     public static BlockPredicate anyOfEnergyInput() { return convert(InterfacePredicates.anyOfEnergyInput()); }
     public static BlockPredicate anyOfEnergyOutput() { return convert(InterfacePredicates.anyOfEnergyOutput()); }
+    public static BlockPredicate anyOfChemicalInput() { return convert(InterfacePredicates.anyOfChemicalInput()); }
+    public static BlockPredicate anyOfChemicalOutput() { return convert(InterfacePredicates.anyOfChemicalOutput()); }
+    public static BlockPredicate anyOfRadioactiveChemicalInput() {
+        return convert(InterfacePredicates.anyOfRadioactiveChemicalInput());
+    }
+    public static BlockPredicate anyOfRadioactiveChemicalOutput() {
+        return convert(InterfacePredicates.anyOfRadioactiveChemicalOutput());
+    }
+    public static BlockPredicate anyOfHeatInput() { return convert(InterfacePredicates.anyOfHeatInput()); }
+    public static BlockPredicate anyOfHeatOutput() { return convert(InterfacePredicates.anyOfHeatOutput()); }
     public static BlockPredicate anyOfUpgradeBus() { return convert(InterfacePredicates.anyOfUpgradeBus()); }
 
     public static BlockPredicate anyOfPort(String... ids) {

@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
 
@@ -26,6 +27,11 @@ public final class DynamicOverlayTextures {
 
     public static Identifier portOverlayTexture(IOPortKind kind) {
         if (kind == null) return DynamicOverlayBakedModel.defaultPortOverlayTexture();
+        if (kind instanceof PortKinds.ChemicalKind || kind instanceof PortKinds.HeatKind) {
+            return kind.ioType() == IOType.INPUT
+                    ? MMCR.id("block/overlay_fluidinputhatch_normal")
+                    : MMCR.id("block/overlay_fluidoutputhatch_normal");
+        }
         if (kind.itemBusSize().isPresent()) {
             return tieredPortOverlay(kind.ioType(), "overlay_inputbus", "overlay_outputbus",
                     kind.itemBusSize().map(ItemBusSize::id).orElseThrow());

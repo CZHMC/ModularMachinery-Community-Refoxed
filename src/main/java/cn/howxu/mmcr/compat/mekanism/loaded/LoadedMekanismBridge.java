@@ -4,6 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -33,6 +35,9 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge.MenuRegistrar;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortType;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -47,13 +52,20 @@ import mekanism.api.heat.HeatAPI;
 import mekanism.api.heat.IHeatCapacitor;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.network.IContainerFactory;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -118,8 +130,123 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     @Override
     public boolean supportsPortFamily(Identifier familyId) {
         return MekanismRecipeTypes.CHEMICAL.equals(familyId)
+                || MekanismPortFamilies.RADIOACTIVE_CHEMICAL.equals(familyId)
                 || MekanismRecipeTypes.HEAT_TEMPERATURE.equals(familyId)
                 || MekanismRecipeTypes.HEAT.equals(familyId);
+    }
+
+    @Override
+    public List<PortDeclaration> portDeclarations() {
+        List<PortDeclaration> declarations = new ArrayList<>();
+        for (MekanismPortSizes.ChemicalTier tier : MekanismPortSizes.ChemicalTier.values()) {
+            declarations.add(new PortDeclaration("chemical_input_hatch_" + tier.id(), PortType.CHEMICAL,
+                    IOType.INPUT, tier.ordinal(), tier.capacity(), false));
+            declarations.add(new PortDeclaration("chemical_output_hatch_" + tier.id(), PortType.CHEMICAL,
+                    IOType.OUTPUT, tier.ordinal(), tier.capacity(), false));
+        }
+        declarations.add(new PortDeclaration("radioactive_chemical_input_hatch", PortType.CHEMICAL,
+                IOType.INPUT, MekanismPortSizes.ChemicalTier.values().length,
+                MekanismPortSizes.RADIOACTIVE_CHEMICAL_CAPACITY, true));
+        declarations.add(new PortDeclaration("radioactive_chemical_output_hatch", PortType.CHEMICAL,
+                IOType.OUTPUT, MekanismPortSizes.ChemicalTier.values().length,
+                MekanismPortSizes.RADIOACTIVE_CHEMICAL_CAPACITY, true));
+        declarations.add(new PortDeclaration("heat_input_hatch", PortType.HEAT, IOType.INPUT, 0,
+                (long) MekanismPortSizes.HEAT_CAPACITY, false));
+        declarations.add(new PortDeclaration("heat_output_hatch", PortType.HEAT, IOType.OUTPUT, 0,
+                (long) MekanismPortSizes.HEAT_CAPACITY, false));
+        return List.copyOf(declarations);
+    }
+
+    @Override
+    public MachineCapability createChemicalCapability(CapabilityCreationContext context) {
+        if (context.host() instanceof ChemicalPortBlockEntity port) return new ChemicalPortCapability(port);
+        throw new IllegalArgumentException("Mekanism chemical capability requires a chemical port");
+    }
+
+    @Override
+    public MachineCapability createHeatCapability(CapabilityCreationContext context) {
+        if (context.host() instanceof HeatPortBlockEntity port) return new HeatPortCapability(port);
+        throw new IllegalArgumentException("Mekanism heat capability requires a heat port");
+    }
+
+    @Override
+    public IOPortBlockEntity createChemicalPort(BlockPos pos, BlockState state, IOPortKind kind,
+                                                 long capacity, boolean radioactive) {
+        return new DeclaredChemicalPort(pos, state, kind, capacity, radioactive);
+    }
+
+    @Override
+    public IOPortBlockEntity createHeatPort(BlockPos pos, BlockState state, IOPortKind kind) {
+        return new DeclaredHeatPort(pos, state, kind);
+    }
+
+    @Override
+    public void registerMenus(MenuRegistrar registrar) {
+        registrar.register("chemical_port", () -> new MenuType<>((IContainerFactory<ChemicalPortMenu>) ChemicalPortMenu::clientOpen,
+                FeatureFlags.VANILLA_SET));
+        registrar.register("heat_port", () -> new MenuType<>((IContainerFactory<HeatPortMenu>) HeatPortMenu::clientOpen,
+                FeatureFlags.VANILLA_SET));
+    }
+
+    @Override
+    public AbstractContainerMenu createMenu(String id, int containerId, Inventory playerInventory,
+                                             Level level, BlockPos pos) {
+        return switch (id) {
+            case "chemical_input_hatch_basic", "chemical_output_hatch_basic",
+                    "chemical_input_hatch_advanced", "chemical_output_hatch_advanced",
+                    "chemical_input_hatch_elite", "chemical_output_hatch_elite",
+                    "chemical_input_hatch_ultimate", "chemical_output_hatch_ultimate",
+                    "radioactive_chemical_input_hatch", "radioactive_chemical_output_hatch" ->
+                    new ChemicalPortMenu(containerId, playerInventory,
+                            level.getBlockEntity(pos) instanceof ChemicalPortBlockEntity port ? port : null);
+            case "heat_input_hatch", "heat_output_hatch" ->
+                    new HeatPortMenu(containerId, playerInventory,
+                            level.getBlockEntity(pos) instanceof HeatPortBlockEntity port ? port : null);
+            default -> null;
+        };
+    }
+
+    private static final class DeclaredChemicalPort extends ChemicalPortBlockEntity {
+        private final IOPortKind kind;
+        private final IOType ioType;
+
+        private DeclaredChemicalPort(BlockPos pos, BlockState state, IOPortKind kind,
+                                     long capacity, boolean radioactive) {
+            super(typeForKind(kind), pos, state, kind, capacity, radioactive);
+            this.kind = kind;
+            this.ioType = kind.ioType();
+        }
+
+        @Override
+        public IOType ioType() {
+            return ioType;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return kind;
+        }
+    }
+
+    private static final class DeclaredHeatPort extends HeatPortBlockEntity {
+        private final IOPortKind kind;
+        private final IOType ioType;
+
+        private DeclaredHeatPort(BlockPos pos, BlockState state, IOPortKind kind) {
+            super(typeForKind(kind), pos, state, kind);
+            this.kind = kind;
+            this.ioType = kind.ioType();
+        }
+
+        @Override
+        public IOType ioType() {
+            return ioType;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return kind;
+        }
     }
 
     @Override

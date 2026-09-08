@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
@@ -66,6 +68,54 @@ public final class InterfacePredicates {
         return anyOfEnergyOutput();
     }
 
+    public static BlockPredicate anyOfChemicalInput() {
+        return anyOfChemicalPorts(IOType.INPUT, false);
+    }
+
+    public static BlockPredicate anyChemicalInput() {
+        return anyOfChemicalInput();
+    }
+
+    public static BlockPredicate anyOfChemicalOutput() {
+        return anyOfChemicalPorts(IOType.OUTPUT, false);
+    }
+
+    public static BlockPredicate anyChemicalOutput() {
+        return anyOfChemicalOutput();
+    }
+
+    public static BlockPredicate anyOfRadioactiveChemicalInput() {
+        return anyOfChemicalPorts(IOType.INPUT, true);
+    }
+
+    public static BlockPredicate anyRadioactiveChemicalInput() {
+        return anyOfRadioactiveChemicalInput();
+    }
+
+    public static BlockPredicate anyOfRadioactiveChemicalOutput() {
+        return anyOfChemicalPorts(IOType.OUTPUT, true);
+    }
+
+    public static BlockPredicate anyRadioactiveChemicalOutput() {
+        return anyOfRadioactiveChemicalOutput();
+    }
+
+    public static BlockPredicate anyOfHeatInput() {
+        return anyOfPorts(MekanismPortFamilies.HEAT, IOType.INPUT);
+    }
+
+    public static BlockPredicate anyHeatInput() {
+        return anyOfHeatInput();
+    }
+
+    public static BlockPredicate anyOfHeatOutput() {
+        return anyOfPorts(MekanismPortFamilies.HEAT, IOType.OUTPUT);
+    }
+
+    public static BlockPredicate anyHeatOutput() {
+        return anyOfHeatOutput();
+    }
+
     public static BlockPredicate anyOfUpgradeBus() {
         List<BlockPredicate> predicates = new ArrayList<>();
         for (UpgradeBusSize size : UpgradeBusSize.values()) {
@@ -79,8 +129,16 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate ports() {
-        return BlockPredicate.any(anyItemInput(), anyItemOutput(), anyFluidInput(), anyFluidOutput(),
-                anyEnergyInput(), anyEnergyOutput());
+        List<BlockPredicate> predicates = new ArrayList<>(List.of(
+                anyItemInput(), anyItemOutput(), anyFluidInput(), anyFluidOutput(),
+                anyEnergyInput(), anyEnergyOutput()));
+        addIfPresent(predicates, anyOfChemicalInput());
+        addIfPresent(predicates, anyOfChemicalOutput());
+        addIfPresent(predicates, anyOfRadioactiveChemicalInput());
+        addIfPresent(predicates, anyOfRadioactiveChemicalOutput());
+        addIfPresent(predicates, anyOfHeatInput());
+        addIfPresent(predicates, anyOfHeatOutput());
+        return BlockPredicate.any(predicates.toArray(BlockPredicate[]::new));
     }
 
     public static BlockPredicate anyOfPort() {
@@ -137,6 +195,7 @@ public final class InterfacePredicates {
     public static BlockPredicate networkInterface(){return port("network_interface");}
 
     private static BlockPredicate anyOfPorts(Identifier familyId, IOType ioType) {
+        if (isUnavailableMekanismFamily(familyId)) return BlockPredicate.none();
         List<BlockPredicate> predicates = new ArrayList<>();
         for (IOPortKind kind : PortKinds.all()) {
             boolean exposesFamily = kind.families().stream()
@@ -144,7 +203,30 @@ public final class InterfacePredicates {
                             && kind.bindings().stream().anyMatch(family::matches));
             if (exposesFamily) predicates.add(port(kind.id()));
         }
-        return BlockPredicate.anyOf(predicates);
+        return predicates.isEmpty() ? BlockPredicate.none() : BlockPredicate.anyOf(predicates);
+    }
+
+    private static BlockPredicate anyOfChemicalPorts(IOType ioType, boolean radioactive) {
+        if (!MekanismBridge.get().available()) return BlockPredicate.none();
+        List<BlockPredicate> predicates = new ArrayList<>();
+        for (IOPortKind kind : PortKinds.all()) {
+            if (kind instanceof PortKinds.ChemicalKind chemical
+                    && chemical.ioType() == ioType && chemical.radioactive() == radioactive) {
+                predicates.add(port(kind.id()));
+            }
+        }
+        return predicates.isEmpty() ? BlockPredicate.none() : BlockPredicate.anyOf(predicates);
+    }
+
+    private static void addIfPresent(List<BlockPredicate> predicates, BlockPredicate predicate) {
+        if (!predicate.alternatives().isEmpty()) predicates.add(predicate);
+    }
+
+    private static boolean isUnavailableMekanismFamily(Identifier familyId) {
+        return (familyId.equals(MekanismPortFamilies.HEAT)
+                || familyId.equals(MekanismPortFamilies.CHEMICAL)
+                || familyId.equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL))
+                && !MekanismBridge.get().available();
     }
 
 }

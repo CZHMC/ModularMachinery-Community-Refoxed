@@ -10,6 +10,7 @@ import net.minecraft.resources.Identifier;
  */
 public final class MekanismPortFamilies {
     public static final Identifier CHEMICAL = MMCR.id("mekanism_chemical");
+    public static final Identifier RADIOACTIVE_CHEMICAL = MMCR.id("mekanism_radioactive_chemical");
     public static final Identifier HEAT_TEMPERATURE = MMCR.id("mekanism_heat_temperature");
     public static final Identifier HEAT = MMCR.id("mekanism_heat");
 
