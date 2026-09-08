@@ -27,10 +27,11 @@ public final class DynamicOverlayTextures {
 
     public static Identifier portOverlayTexture(IOPortKind kind) {
         if (kind == null) return DynamicOverlayBakedModel.defaultPortOverlayTexture();
-        if (kind instanceof PortKinds.ChemicalKind || kind instanceof PortKinds.HeatKind) {
-            return kind.ioType() == IOType.INPUT
-                    ? MMCR.id("block/overlay_fluidinputhatch_normal")
-                    : MMCR.id("block/overlay_fluidoutputhatch_normal");
+        if (kind instanceof PortKinds.ChemicalKind chemical) {
+            return chemicalOverlay(chemical);
+        }
+        if (kind instanceof PortKinds.HeatKind) {
+            return heatOverlay(kind.ioType());
         }
         if (kind.itemBusSize().isPresent()) {
             return tieredPortOverlay(kind.ioType(), "overlay_inputbus", "overlay_outputbus",
@@ -74,6 +75,21 @@ public final class DynamicOverlayTextures {
 
     private static Identifier tieredPortOverlay(IOType ioType, String input, String output, String tier) {
         return MMCR.id("block/" + (ioType == IOType.INPUT ? input : output) + "_" + tier);
+    }
+
+    private static final String[] CHEMICAL_TIER_IDS = {"basic", "advanced", "elite", "ultimate"};
+
+    private static Identifier chemicalOverlay(PortKinds.ChemicalKind kind) {
+        if (kind.radioactive()) {
+            return MMCR.id("block/overlay_radioactive_chemical_" + (kind.ioType() == IOType.INPUT ? "input" : "output"));
+        }
+        int tier = Math.min(Math.max(kind.tier(), 0), CHEMICAL_TIER_IDS.length - 1);
+        String direction = kind.ioType() == IOType.INPUT ? "chemicalinputhatch" : "chemicaloutputhatch";
+        return MMCR.id("block/overlay_" + direction + "_" + CHEMICAL_TIER_IDS[tier]);
+    }
+
+    private static Identifier heatOverlay(IOType ioType) {
+        return MMCR.id("block/overlay_heat_" + (ioType == IOType.INPUT ? "input" : "output"));
     }
 
 }
