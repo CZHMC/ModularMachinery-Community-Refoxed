@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRendersEvent;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
 import cn.howxu.mmcr.client.gui.EnergyHatchScreen;
 import cn.howxu.mmcr.client.gui.ExtendedCombinedScreen;
@@ -28,6 +29,8 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModUIs;
 // import org.nibelungorum.client.ArtificialStarRenderer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.server.packs.PackType;
 import net.neoforged.api.distmarker.Dist;
@@ -44,6 +47,10 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.inventory.MenuType;
+import net.neoforged.neoforge.registries.DeferredHolder;
+
+import java.lang.reflect.Constructor;
 
 @Mod(value = MMCR.MODID, dist = Dist.CLIENT)
 public class Client {
@@ -106,6 +113,35 @@ public class Client {
         event.register(ModUIs.COMBINED.get(), CombinedPortScreen::new);
         event.register(ModUIs.EXTENDED_COMBINED.get(), ExtendedCombinedScreen::new);
         event.register(ModUIs.UPGRADE_BUS.get(), UpgradeBusScreen::new);
+        if (MekanismBridge.get().available()) {
+            registerOptionalMenuScreen(event, ModUIs.CHEMICAL_PORT,
+                    "cn.howxu.mmcr.client.gui.ChemicalHatchScreen");
+            registerOptionalMenuScreen(event, ModUIs.HEAT_PORT,
+                    "cn.howxu.mmcr.client.gui.HeatHatchScreen");
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void registerOptionalMenuScreen(RegisterMenuScreensEvent event,
+                                                    DeferredHolder<MenuType<?>, ?> menu,
+                                                    String screenClassName) {
+        if (menu == null) return;
+        try {
+            Class<?> screenClass = Class.forName(screenClassName);
+            Constructor<?> constructor = screenClass.getDeclaredConstructors()[0];
+            constructor.setAccessible(true);
+            MenuScreens.ScreenConstructor factory = (container, inventory, title) -> {
+                try {
+                    return (AbstractContainerScreen) constructor.newInstance(container, inventory, title);
+                } catch (ReflectiveOperationException exception) {
+                    throw new IllegalStateException("Unable to create optional Mekanism screen "
+                            + screenClassName, exception);
+                }
+            };
+            event.register((MenuType) menu.get(), factory);
+        } catch (ReflectiveOperationException exception) {
+            MMCR.LOG.warn("Unable to register optional Mekanism screen {}", screenClassName, exception);
+        }
     }
 
     private static void registerModelLoaders(RegisterBlockStateModels event) {

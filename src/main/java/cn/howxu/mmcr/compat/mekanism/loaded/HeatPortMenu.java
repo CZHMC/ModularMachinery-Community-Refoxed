@@ -63,12 +63,19 @@ public final class HeatPortMenu extends AbstractMachineMenu {
 
     public long heatAmount() {
         HeatPortBlockEntity port = resolvedOwner();
-        return port == null ? heat.value() : Math.round(port.heatCapacitor().getHeat());
+        long value = port == null ? heat.value() : boundedRound(port.heatCapacitor().getHeat());
+        return Math.max(0L, value);
     }
 
     public long heatCapacity() {
         HeatPortBlockEntity port = resolvedOwner();
-        return port == null ? capacity.value() : Math.round(port.heatCapacitor().getHeatCapacity());
+        return port == null ? Math.max(0L, capacity.value())
+                : boundedRound(port.heatCapacitor().getHeatCapacity());
+    }
+
+    public double temperature() {
+        long capacity = heatCapacity();
+        return capacity <= 0L ? 0D : heatAmount() / (double) capacity;
     }
 
     public List<CapabilityDisplay> displayEntries() {
@@ -79,6 +86,11 @@ public final class HeatPortMenu extends AbstractMachineMenu {
     private HeatPortBlockEntity resolvedOwner() {
         if (owner != null) return owner;
         return level.getBlockEntity(pos) instanceof HeatPortBlockEntity port ? port : null;
+    }
+
+    private static long boundedRound(double value) {
+        if (!Double.isFinite(value) || value <= 0D) return 0L;
+        return value >= Long.MAX_VALUE ? Long.MAX_VALUE : Math.round(value);
     }
 
     @Override

@@ -9,6 +9,8 @@ import cn.howxu.mmcr.registry.ModUIs;
 import mekanism.api.chemical.ChemicalResource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -71,13 +73,30 @@ public final class ChemicalPortMenu extends AbstractMachineMenu {
 
     public long chemicalAmount() {
         ResourceHandler<ChemicalResource> storage = storage();
-        return storage == null ? amount.value() : storage.getAmountAsLong(0);
+        long value = storage == null ? amount.value() : storage.getAmountAsLong(0);
+        return bounded(value, chemicalCapacity());
     }
 
     public long chemicalCapacity() {
         ChemicalPortBlockEntity port = resolvedOwner();
-        return port == null ? capacity.value() : port.chemicalHandler(null)
+        long value = port == null ? capacity.value() : port.chemicalHandler(null)
                 .getCapacityAsLong(0, ChemicalResource.EMPTY);
+        return Math.max(0L, value);
+    }
+
+    public Identifier chemicalIdentifier() {
+        ChemicalResource resource = chemicalResource();
+        return resource.isEmpty() ? null : resource.getChemical().getIcon();
+    }
+
+    public int chemicalTint() {
+        ChemicalResource resource = chemicalResource();
+        return resource.isEmpty() ? 0xFFFFFFFF : resource.getChemicalTint();
+    }
+
+    public Component chemicalName() {
+        ChemicalResource resource = chemicalResource();
+        return resource.isEmpty() ? Component.empty() : resource.getTextComponent();
     }
 
     public List<CapabilityDisplay> displayEntries() {
@@ -88,6 +107,15 @@ public final class ChemicalPortMenu extends AbstractMachineMenu {
     private ChemicalPortBlockEntity resolvedOwner() {
         if (owner != null) return owner;
         return level.getBlockEntity(pos) instanceof ChemicalPortBlockEntity port ? port : null;
+    }
+
+    private ChemicalResource chemicalResource() {
+        ResourceHandler<ChemicalResource> storage = storage();
+        return storage == null ? ChemicalResource.EMPTY : storage.getResource(0);
+    }
+
+    private static long bounded(long value, long capacity) {
+        return Math.max(0L, Math.min(value, capacity));
     }
 
     @Override
