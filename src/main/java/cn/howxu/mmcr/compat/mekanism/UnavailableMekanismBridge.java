@@ -31,5 +31,6 @@ final class UnavailableMekanismBridge implements MekanismBridge {
 
     @Override
     public void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat) {
+        MekanismRecipeDeclarations.registerUnavailable();
     }
 }
