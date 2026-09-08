@@ -165,4 +165,84 @@ public interface MachineOutput {
         if (chance > 1F) return 1F;
         return chance;
     }
+
+    public record AggregationKey(@org.jetbrains.annotations.Nullable OutputType<?> type,
+                                @org.jetbrains.annotations.Nullable ItemStack itemKey,
+                                @org.jetbrains.annotations.Nullable FluidStack fluidKey) {
+
+        public static final AggregationKey EMPTY = new AggregationKey(null, null, null);
+
+        /**
+         * Custom equality: Minecraft's {@link ItemStack} and {@link FluidStack} do not
+         * override {@code equals}, so two records with semantically identical stacks
+         * would otherwise be unequal. Compare content via {@code ItemStack.isSameItemSameComponents}
+         * and {@link FluidStack} field-by-field instead.
+         */
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) return true;
+            if (!(other instanceof AggregationKey that)) return false;
+            if (type != that.type) return false;
+            if (!Objects.equals(itemKey, that.itemKey) || !Objects.equals(fluidKey, that.fluidKey)) {
+                if (itemKey != null && that.itemKey != null
+                        && ItemStack.isSameItemSameComponents(itemKey, that.itemKey)) {
+                    return fluidKey == null && that.fluidKey == null;
+                }
+                if (fluidKey != null && that.fluidKey != null
+                        && fluidKey.getFluid() == that.fluidKey.getFluid()
+                        && Objects.equals(fluidKey.getComponents(), that.fluidKey.getComponents())) {
+                    return true;
+                }
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int h = Objects.hashCode(type);
+            if (itemKey != null) {
+                h = 31 * h + ItemStack.hashItemAndComponents(itemKey);
+            }
+            if (fluidKey != null) {
+                h = 31 * h + System.identityHashCode(fluidKey.getFluid());
+                h = 31 * h + Objects.hashCode(fluidKey.getComponents());
+            }
+            return h;
+        }
+    }
+
+    public static AggregationKey aggregationKey(MachineOutput output) {
+        if (output instanceof ItemOutput item) {
+            ItemStack stripped = item.stack().copy();
+            stripped.setCount(1);
+            return new AggregationKey(item.outputType(), stripped, null);
+        }
+        if (output instanceof FluidOutput fluid) {
+            FluidStack stripped = fluid.stack().copy();
+            stripped.setAmount(1);
+            return new AggregationKey(fluid.outputType(), null, stripped);
+        }
+        return AggregationKey.EMPTY;
+    }
+
+    public static long scaledAmount(MachineOutput output) {
+         if (output instanceof ItemOutput item) return item.stack().getCount();
+         if (output instanceof FluidOutput fluid) return fluid.stack().getAmount();
+         return 0L;
+    }
+
+    public static MachineOutput withScaledAmount(MachineOutput template, long amount, float chance) {
+         if (template instanceof ItemOutput item) {
+             ItemStack stack = item.stack().copy();
+             stack.setCount((int) Math.min(amount, Integer.MAX_VALUE));
+             return new ItemOutput(stack, chance);
+         }
+         if (template instanceof FluidOutput fluid) {
+             FluidStack stack = fluid.stack().copy();
+             stack.setAmount((int) Math.min(amount, Integer.MAX_VALUE));
+             return new FluidOutput(stack, chance);
+         }
+         return template;
+    }
 }
