@@ -27,6 +27,7 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
@@ -35,7 +36,11 @@ import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -178,6 +183,97 @@ public final class TestBootstrap {
     public static CraftingRuntime newCraftingRuntime() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         return new CraftingRuntime(controller, controller.componentRuntime());
+    }
+
+    /**
+     * Builds a fresh {@link MachineControllerBlockEntity} backed by the {@code test_cube} machine.
+     * Convenience helper for tests that need the controller itself (not just a runtime).
+     */
+    public static MachineControllerBlockEntity newController() {
+        return RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+    }
+
+    /**
+     * Pushes a synthetic factory lane whose {@link CraftingRuntime#activeOutputs()} returns the
+     * supplied list and whose {@link CraftingRuntime#active()} returns {@code true}.
+     * Used to exercise the controller-level factory aggregation path without standing up a real
+     * factory controller or starting a recipe.
+     */
+    public static void bindFactoryWithOutputs(MachineControllerBlockEntity controller,
+                                              List<MachineOutput> outputs) {
+        if (controller == null) throw new IllegalArgumentException("controller must not be null");
+        try {
+            MachineControllerRuntime controllerRuntime = controllerRuntimeField(controller);
+            FactoryRuntime factoryRuntime = controllerRuntime.factoryRuntime();
+            @SuppressWarnings("unchecked")
+            List<FactoryRecipeThread> lanes =
+                    (List<FactoryRecipeThread>) FACTORY_LANES_FIELD.get(factoryRuntime);
+            CraftingRuntime runtime = syntheticCraftingRuntimeWithOutputs(controller, outputs);
+            FactoryRecipeThread lane = syntheticLaneFor(controller, runtime, lanes.size());
+            lanes.add(lane);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to bind factory outputs", exception);
+        }
+    }
+
+    private static final sun.misc.Unsafe UNSAFE = resolveUnsafe();
+    private static final Field CONTROLLER_RUNTIME_FIELD = fieldOnHierarchy(
+            MachineControllerBlockEntity.class, "runtime");
+    private static final Field FACTORY_LANES_FIELD = fieldOnHierarchy(FactoryRuntime.class, "lanes");
+    private static final Field CRAFTING_ACTIVE_RECIPE_FIELD =
+            fieldOnHierarchy(CraftingRuntime.class, "activeRecipe");
+    private static final Field CRAFTING_EFFECTIVE_OUTPUTS_FIELD =
+            fieldOnHierarchy(CraftingRuntime.class, "effectiveOutputs");
+    private static final Field RECIPE_THREAD_RUNTIME_FIELD =
+            fieldOnHierarchy(FactoryRecipeThread.class.getSuperclass(), "runtime");
+
+    private static MachineControllerRuntime controllerRuntimeField(MachineControllerBlockEntity controller)
+            throws ReflectiveOperationException {
+        return (MachineControllerRuntime) CONTROLLER_RUNTIME_FIELD.get(controller);
+    }
+
+    private static CraftingRuntime syntheticCraftingRuntimeWithOutputs(MachineControllerBlockEntity controller,
+                                                                       List<MachineOutput> outputs)
+            throws ReflectiveOperationException {
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        ActiveMachineRecipe placeholder = (ActiveMachineRecipe)
+                UNSAFE.allocateInstance(ActiveMachineRecipe.class);
+        CRAFTING_ACTIVE_RECIPE_FIELD.set(runtime, placeholder);
+        CRAFTING_EFFECTIVE_OUTPUTS_FIELD.set(runtime, List.copyOf(outputs));
+        return runtime;
+    }
+
+    private static sun.misc.Unsafe resolveUnsafe() {
+        try {
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            return (sun.misc.Unsafe) unsafeField.get(null);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to resolve sun.misc.Unsafe", exception);
+        }
+    }
+
+    private static FactoryRecipeThread syntheticLaneFor(MachineControllerBlockEntity controller,
+                                                       CraftingRuntime runtime, int index)
+            throws ReflectiveOperationException {
+        String laneId = "test-lane-" + index;
+        FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, laneId);
+        RECIPE_THREAD_RUNTIME_FIELD.set(lane, runtime);
+        return lane;
+    }
+
+    private static Field fieldOnHierarchy(Class<?> type, String name) {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                Field field = current.getDeclaredField(name);
+                field.setAccessible(true);
+                return field;
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new IllegalStateException("Field " + name + " not found on " + type);
     }
 
     private static void registerRuntimeTestContent() {

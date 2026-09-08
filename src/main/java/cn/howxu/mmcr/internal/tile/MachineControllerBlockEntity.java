@@ -26,6 +26,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -894,6 +895,47 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public long currentParallelism() {
         ControllerRuntimeSnapshot state = runtimeSnapshot();
         return SYNC_RUNTIME.machineState(state).parallelism();
+    }
+
+    public List<MachineOutput> recipeOutputs() {
+        MachineControllerRuntime controllerRuntime = this.runtime;
+        if (controllerRuntime == null) return List.of();
+        List<MachineOutput> aggregated = aggregateFactoryLaneOutputs(controllerRuntime.factoryRuntime());
+        if (!aggregated.isEmpty()) return aggregated;
+        CraftingRuntime crafting = controllerRuntime.craftingRuntime();
+        return crafting == null ? List.of() : crafting.activeOutputs();
+    }
+
+    private static List<MachineOutput> aggregateFactoryLaneOutputs(FactoryRuntime factory) {
+        Map<MachineOutput.AggregationKey, Aggregate> aggregates = new LinkedHashMap<>();
+        for (CraftingRuntime lane : factory.activeRuntimes()) {
+            for (MachineOutput output : lane.activeOutputs()) {
+                MachineOutput.AggregationKey key = MachineOutput.aggregationKey(output);
+                aggregates.computeIfAbsent(key, k -> new Aggregate(output))
+                        .absorb(output);
+            }
+        }
+        List<MachineOutput> merged = new ArrayList<>(aggregates.size());
+        for (Aggregate aggregate : aggregates.values()) merged.add(aggregate.materialize());
+        return List.copyOf(merged);
+    }
+
+    private static final class Aggregate {
+        private final MachineOutput template;
+        private long amount;
+        private float minChance = Float.POSITIVE_INFINITY;
+
+        Aggregate(MachineOutput template) { this.template = template; }
+
+        void absorb(MachineOutput output) {
+            amount += MachineOutput.scaledAmount(output);
+            minChance = Math.min(minChance, output.chance());
+        }
+
+        MachineOutput materialize() {
+            float chance = Float.isInfinite(minChance) ? template.chance() : minChance;
+            return MachineOutput.withScaledAmount(template, amount, chance);
+        }
     }
 
     public int activeFactoryThreadCount() {
