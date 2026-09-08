@@ -93,8 +93,10 @@ class MachineControllerComponentProviderTest {
 
         List<Component> added = appendTooltip(tag);
 
-        assertThat(added).hasSize(MachineControllerComponentProvider
-                .lineKeys(MachineControllerComponentProvider.Snapshot.from(tag)).size() + 1);
+        assertThat(MachineControllerComponentProvider.lineKeys(
+                MachineControllerComponentProvider.Snapshot.from(tag)))
+                .containsExactly("structure", "state", "progress");
+        assertThat(added).hasSize(4);
         assertThat(added.getLast()).isEqualTo(Component.literal("custom value"));
     }
 

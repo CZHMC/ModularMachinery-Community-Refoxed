@@ -152,7 +152,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         }
 
         private boolean hasActiveWork() {
-            return active && factoryLanes > 0;
+            return active && (factoryLanes > 0 || (tick > 0 && totalTick > 0));
         }
     }
 }
