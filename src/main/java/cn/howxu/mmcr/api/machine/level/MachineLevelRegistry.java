@@ -59,6 +59,24 @@ public final class MachineLevelRegistry {
         registrationOpen = false;
     }
 
+    /**
+     * Validates a level snapshot without installing it.
+     * Throws if any duplicate priority or duplicate state is detected within a type.
+     */
+    public static void validateSnapshot(Collection<LevelType> types, Collection<MachineLevel> levels) {
+        Map<Identifier, LevelType> nextTypes = new LinkedHashMap<>();
+        Map<Identifier, MachineLevel> nextLevels = new LinkedHashMap<>();
+        Map<Identifier, List<MachineLevel>> nextByType = new LinkedHashMap<>();
+        types.forEach(type -> {
+            Objects.requireNonNull(type, "type");
+            if (nextTypes.putIfAbsent(type.id(), type) != null) {
+                throw new IllegalStateException("Machine level type already registered: " + type.id());
+            }
+            nextByType.put(type.id(), new ArrayList<>());
+        });
+        levels.forEach(level -> validateAndAdd(level, nextTypes, nextLevels, nextByType));
+    }
+
     static void registerType(LevelType type) {
         requireRegistrationOpen();
         Objects.requireNonNull(type, "type");

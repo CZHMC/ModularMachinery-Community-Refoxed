@@ -70,6 +70,10 @@ public final class ContentRegistrationCoordinator {
         requireCollecting();
         STRUCTURE_SNAPSHOT = event.freeze();
         event.structures().forEach((id, structure) -> putUnique(STRUCTURES, id, structure, "structure"));
+        MachineLevelRegistry.validateSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(),
+                STRUCTURE_SNAPSHOT.levels().values());
+        MachineLevelRegistry.installSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(),
+                STRUCTURE_SNAPSHOT.levels().values());
     }
 
     public static synchronized void collectRecipes(MMCRMachineRecipesEvent event) {

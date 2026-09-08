@@ -28,6 +28,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.List;
 import java.util.Map;
+import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
@@ -211,8 +212,8 @@ class ContentRegistrationCoordinatorTest {
 
         ContentRegistrationCoordinator.beginStartup();
         ContentRegistrationCoordinator.collectMachines(definitions);
-        ContentRegistrationCoordinator.collectStructures(structures);
-        assertThatThrownBy(ContentRegistrationCoordinator::commitStartup).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> ContentRegistrationCoordinator.collectStructures(structures))
+                .isInstanceOf(RuntimeException.class);
         assertThat(MachineDefinitions.getRegistration(machineId)).isNull();
         assertThat(MachineLevelRegistry.getType(id("invalid_type"))).isNull();
         assertThat(ModifierRegistry.definitions()).isEmpty();
@@ -345,6 +346,28 @@ class ContentRegistrationCoordinatorTest {
         StartupContentRegistration.completeKubeJSStartupIfReady();
 
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+    }
+
+    @Test
+    void kubejs_startup_levels_declared_after_structures_event_are_collected_with_production() {
+        Identifier typeId = id("kubejs_deferred_type");
+        Identifier levelId = id("kubejs_deferred_level");
+        StartupContentRegistration.registerProductionForModStartup();
+        MMCRMachineStructuresEvent.current().registerLevelType(new LevelType(typeId,
+                Component.literal("KubeJS Coil")));
+        MMCRMachineStructuresEvent.current().registerLevel(new MachineLevel(levelId, typeId, 1,
+                new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
+                ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
+        StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS);
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isFalse();
+
+        StartupContentRegistration.completeProductionRecipesAfterComponentsBound(NeoForge.EVENT_BUS);
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(MachineLevelRegistry.getType(typeId)).isNotNull();
+        assertThat(MachineLevelRegistry.getLevel(levelId)).isNotNull();
     }
 
     @Test

@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
