@@ -45,8 +45,6 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         data.putBoolean("factoryPresent", machineState.factoryControllerPresent());
         data.putInt("factoryLanes", factory.activeLaneCount());
         data.putInt("factoryThreadLimit", factory.laneLimit());
-        String activeRecipe = machineState.activeRecipe();
-        if (!activeRecipe.isEmpty()) data.putString("activeRecipe", activeRecipe);
         data.putInt("tick", machineState.tick());
         data.putInt("totalTick", machineState.totalTick());
 
