@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -16,6 +20,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
 
@@ -30,8 +35,18 @@ class PktAutoIOConfigPayloadTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
+        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, inventory) -> new ItemBusMenu(containerId, inventory, BlockPos.ZERO), FeatureFlags.VANILLA_SET));
+        bind(ModUIs.CHEMICAL_PORT, new MenuType<>((containerId, inventory) ->
+                new ChemicalPortMenu(containerId, inventory, BlockPos.ZERO), FeatureFlags.VANILLA_SET));
+        bind(ModUIs.HEAT_PORT, new MenuType<>((containerId, inventory) ->
+                new HeatPortMenu(containerId, inventory, BlockPos.ZERO), FeatureFlags.VANILLA_SET));
+    }
+
+    @AfterAll
+    static void resetBridge() {
+        MekanismBridgeBootstrap.resetForTesting();
     }
 
     @Test
@@ -40,6 +55,21 @@ class PktAutoIOConfigPayloadTest {
         ServerPlayer player = playerWith(menu);
 
         assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
+    }
+
+    @Test
+    void enabled_set_accepts_loaded_chemical_and_heat_port_menus() throws Exception {
+        ChemicalPortMenu chemicalMenu = new ChemicalPortMenu(1, testInventory(), BlockPos.ZERO);
+        HeatPortMenu heatMenu = new HeatPortMenu(1, testInventory(), BlockPos.ZERO);
+        ServerPlayer chemicalPlayer = playerWith(chemicalMenu);
+        ServerPlayer heatPlayer = playerWith(heatMenu);
+
+        assertThat(PktAutoIOConfigPayload.canUpdate(chemicalPlayer, BlockPos.ZERO,
+                AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(PktAutoIOConfigPayload.canUpdate(heatPlayer, BlockPos.ZERO,
+                AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(PktAutoIOConfigPayload.ownsMenu(chemicalMenu, null)).isTrue();
+        assertThat(PktAutoIOConfigPayload.ownsMenu(heatMenu, null)).isTrue();
     }
 
     @Test
@@ -97,13 +127,18 @@ class PktAutoIOConfigPayloadTest {
         return player;
     }
 
+    private static Inventory testInventory() throws Exception {
+        Player player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
+        return new Inventory(player, null);
+    }
+
     private static Unsafe unsafe() throws Exception {
         Field field = Unsafe.class.getDeclaredField("theUnsafe");
         field.setAccessible(true);
         return (Unsafe) field.get(null);
     }
 
-    private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {
+    private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
         Class<?> type = deferredHolder.getClass();
         Field holder = null;
         while (type != null && holder == null) {

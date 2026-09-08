@@ -12,6 +12,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -41,13 +42,18 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
     @Override protected int portSlotCount() { return 0; }
     @Override protected Identifier texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
 
-    static String displayLines(double heat, double capacity) {
+    static List<Component> displayLines(double heat, double capacity) {
         long safeHeat = safeWhole(heat);
         long safeCapacity = safeWhole(capacity);
         double temperature = safeCapacity <= 0L ? 0D : safeHeat / (double) safeCapacity;
-        return "Heat: " + ReadableNumber.formatExact(safeHeat) + " J\n"
-                + "Capacity: " + ReadableNumber.formatExact(safeCapacity) + " J/K\n"
-                + "Temperature: " + String.format(Locale.ROOT, "%.1f K", temperature);
+        return List.of(
+                Component.translatable("gui.mmcr.heat.tooltip.amount", ReadableNumber.formatExact(safeHeat),
+                        Component.translatable("mmcr.unit.heat")),
+                Component.translatable("gui.mmcr.heat.tooltip.capacity", ReadableNumber.formatExact(safeCapacity),
+                        Component.translatable("mmcr.unit.heat_capacity")),
+                Component.translatable("gui.mmcr.heat.tooltip.temperature",
+                        String.format(Locale.ROOT, "%.1f", temperature),
+                        Component.translatable("mmcr.unit.temperature")));
     }
 
     @Override
@@ -64,8 +70,9 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
         graphics.text(font, Component.translatable("gui.mmcr.heat.temperature",
                 String.format(Locale.ROOT, "%.1f", menu.temperature()),
                 Component.translatable("mmcr.unit.temperature")), titleLabelX, titleLabelY + 30, TITLE_COLOR, false);
-        addTooltip(leftPos + titleLabelX, topPos + titleLabelY + 10, font.width(displayLines(heat, capacity)), 30,
-                java.util.List.of(Component.literal(displayLines(heat, capacity))));
+        List<Component> details = displayLines(heat, capacity);
+        int tooltipWidth = details.stream().mapToInt(font::width).max().orElse(0);
+        addTooltip(leftPos + titleLabelX, topPos + titleLabelY + 10, tooltipWidth, 30, details);
     }
 
     @Override

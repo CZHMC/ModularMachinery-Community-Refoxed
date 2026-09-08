@@ -8,10 +8,18 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -36,6 +44,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterAll;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -52,8 +61,18 @@ class PktEjectPortContentsPayloadTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
+        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, inventory) -> new ItemBusMenu(containerId, inventory), FeatureFlags.VANILLA_SET));
+        bind(ModUIs.CHEMICAL_PORT, new MenuType<>((containerId, inventory) ->
+                new ChemicalPortMenu(containerId, inventory, PORT_POS), FeatureFlags.VANILLA_SET));
+        bind(ModUIs.HEAT_PORT, new MenuType<>((containerId, inventory) ->
+                new HeatPortMenu(containerId, inventory, PORT_POS), FeatureFlags.VANILLA_SET));
+    }
+
+    @AfterAll
+    static void resetBridge() {
+        MekanismBridgeBootstrap.resetForTesting();
     }
 
     @Test
@@ -108,6 +127,26 @@ class PktEjectPortContentsPayloadTest {
 
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isTrue();
+        assertThat(port.ejectCalls).isEqualTo(1);
+    }
+
+    @Test
+    void matching_chemical_menu_ejects_through_the_existing_port_semantics() throws Exception {
+        ChemicalProbePort port = chemicalInputPort();
+        ServerPlayer player = playerWith(port, new ChemicalPortMenu(1, testInventory(), port), PORT_POS);
+
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MekanismRecipeTypes.CHEMICAL))).isTrue();
+        assertThat(port.ejectCalls).isEqualTo(1);
+    }
+
+    @Test
+    void matching_heat_menu_ejects_through_the_existing_port_semantics() throws Exception {
+        HeatProbePort port = heatInputPort();
+        ServerPlayer player = playerWith(port, new HeatPortMenu(1, testInventory(), port), PORT_POS);
+
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, MekanismRecipeTypes.HEAT))).isTrue();
         assertThat(port.ejectCalls).isEqualTo(1);
     }
 
@@ -180,7 +219,7 @@ class PktEjectPortContentsPayloadTest {
         return new ProbePort(PORT_POS, ModBlocks.BLOCKS.get(blockId).get().defaultBlockState(), ioType, kind);
     }
 
-    private static ServerPlayer playerWith(ProbePort port, AbstractContainerMenu menu, BlockPos playerPos) throws Exception {
+    private static ServerPlayer playerWith(IOPortBlockEntity port, AbstractContainerMenu menu, BlockPos playerPos) throws Exception {
         TestServerLevel level = (TestServerLevel) unsafe().allocateInstance(TestServerLevel.class);
         level.port = port;
         port.setLevel(level);
@@ -191,13 +230,18 @@ class PktEjectPortContentsPayloadTest {
         return player;
     }
 
+    private static Inventory testInventory() throws Exception {
+        Player player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
+        return new Inventory(player, null);
+    }
+
     private static Unsafe unsafe() throws Exception {
         Field field = Unsafe.class.getDeclaredField("theUnsafe");
         field.setAccessible(true);
         return (Unsafe) field.get(null);
     }
 
-    private static void bind(Object deferredHolder, MenuType<ItemBusMenu> menuType) throws Exception {
+    private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {
         Class<?> type = deferredHolder.getClass();
         Field holder = null;
         while (type != null && holder == null) {
@@ -224,6 +268,50 @@ class PktEjectPortContentsPayloadTest {
         if (field == null) throw new NoSuchFieldException(name);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private static ChemicalProbePort chemicalInputPort() {
+        return new ChemicalProbePort(PORT_POS,
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+    }
+
+    private static HeatProbePort heatInputPort() {
+        return new HeatProbePort(PORT_POS,
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+    }
+
+    private static MachineCapability testCapability(CapabilityType type, IOType ioType) {
+        return new MachineCapability() {
+            @Override
+            public CapabilityType type() {
+                return type;
+            }
+
+            @Override
+            public CapabilityDirections directions() {
+                return CapabilityDirections.of(ioType);
+            }
+
+            @Override
+            public CapabilityView view() {
+                return new CapabilityView() {
+                    @Override
+                    public CapabilityType type() {
+                        return type;
+                    }
+
+                    @Override
+                    public CapabilityDirections directions() {
+                        return CapabilityDirections.of(ioType);
+                    }
+                };
+            }
+
+            @Override
+            public CapabilityOperation prepare(CapabilityRequest request) {
+                return null;
+            }
+        };
     }
 
     private static final class ProbePort extends ItemBusBlockEntity {
@@ -271,8 +359,69 @@ class PktEjectPortContentsPayloadTest {
         }
     }
 
+    private static final class ChemicalProbePort extends ChemicalPortBlockEntity {
+        private int ejectCalls;
+
+        private ChemicalProbePort(BlockPos pos, BlockState state) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), pos, state,
+                    PortKinds.ITEM_INPUT, 64_000L, false);
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return PortKinds.ITEM_INPUT;
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(List.of(testCapability(
+                    new CapabilityType(MekanismRecipeTypes.CHEMICAL), IOType.INPUT)));
+        }
+
+        @Override
+        public boolean ejectContents(CapabilityType capabilityType) {
+            ejectCalls++;
+            return true;
+        }
+    }
+
+    private static final class HeatProbePort extends HeatPortBlockEntity {
+        private int ejectCalls;
+
+        private HeatProbePort(BlockPos pos, BlockState state) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), pos, state, PortKinds.ITEM_INPUT);
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return PortKinds.ITEM_INPUT;
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(List.of(testCapability(
+                    new CapabilityType(MekanismRecipeTypes.HEAT), IOType.INPUT)));
+        }
+
+        @Override
+        public boolean ejectContents(CapabilityType capabilityType) {
+            ejectCalls++;
+            return true;
+        }
+    }
+
     private static final class TestServerLevel extends ServerLevel {
-        private ProbePort port;
+        private IOPortBlockEntity port;
 
         private TestServerLevel() {
             super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);

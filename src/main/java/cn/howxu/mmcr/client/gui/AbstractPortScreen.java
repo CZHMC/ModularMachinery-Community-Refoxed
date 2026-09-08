@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
@@ -381,6 +384,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE.id());
         }
         if (menu instanceof EnergyHatchMenu) return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE.id());
+        if (menu instanceof ChemicalPortMenu) return List.of(MekanismRecipeTypes.CHEMICAL);
+        if (menu instanceof HeatPortMenu) return List.of(MekanismRecipeTypes.HEAT);
         return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
     }
 

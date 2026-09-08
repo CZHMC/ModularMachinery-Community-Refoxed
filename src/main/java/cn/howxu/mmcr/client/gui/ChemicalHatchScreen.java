@@ -71,11 +71,15 @@ public final class ChemicalHatchScreen extends AbstractPortScreen<ChemicalPortMe
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
         if (autoIOPage || menu.chemicalCapacity() <= 0) return;
-        ChemicalGuiRenderer.ChemicalRenderState state = ChemicalGuiRenderer.state(menu.chemicalIdentifier(),
-                menu.chemicalTint(), menu.chemicalAmount(), menu.chemicalCapacity(), TANK_H);
+        ChemicalGuiRenderer.ChemicalRenderState state = renderState(menu, TANK_H);
         ChemicalGuiRenderer.drawChemical(graphics, state, leftPos + TANK_X, topPos + TANK_Y,
                 TANK_W, TANK_H);
         graphics.blit(RenderPipelines.GUI_TEXTURED, TEXTURE, leftPos + TANK_X, topPos + TANK_Y,
                 176, 0, TANK_W, TANK_H, GUI_TEXTURE_SIZE, GUI_TEXTURE_SIZE);
+    }
+
+    static ChemicalGuiRenderer.ChemicalRenderState renderState(ChemicalPortMenu menu, int height) {
+        return ChemicalGuiRenderer.state(menu.chemicalIdentifier(), menu.chemicalTint(),
+                menu.chemicalAmount(), menu.chemicalCapacity(), height);
     }
 }

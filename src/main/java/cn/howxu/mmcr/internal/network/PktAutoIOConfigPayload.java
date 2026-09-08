@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
@@ -70,7 +72,9 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
                 || menu instanceof ExtendedItemMenu extendedItem && extendedItem.pos().equals(pos)
                 || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.pos().equals(pos)
                 || menu instanceof CombinedPortMenu combined && combined.pos().equals(pos)
-                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos);
+                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos)
+                || menu instanceof ChemicalPortMenu chemical && chemical.pos().equals(pos)
+                || menu instanceof HeatPortMenu heat && heat.pos().equals(pos);
         if (!portMenu) return false;
         return menu.stillValid(player) && (!action.requiresSide() || side != null);
     }
@@ -93,7 +97,9 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
                 || menu instanceof ExtendedItemMenu extendedItem && extendedItem.owner() == port
                 || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.owner() == port
                 || menu instanceof CombinedPortMenu combined && combined.owner() == port
-                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.owner() == port;
+                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.owner() == port
+                || menu instanceof ChemicalPortMenu chemical && chemical.owner() == port
+                || menu instanceof HeatPortMenu heat && heat.owner() == port;
     }
 
     private static <T> T readEnum(T[] values, int index) {
