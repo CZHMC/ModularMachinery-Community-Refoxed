@@ -59,6 +59,19 @@ public interface MekanismBridge {
     default void registerMenus(MenuRegistrar registrar) {
     }
 
+    /** Returns the optional capability identity represented by a menu, or {@code null}. */
+    default Identifier capabilityIdForMenu(AbstractContainerMenu menu) {
+        return null;
+    }
+
+    /**
+     * Checks an optional port menu without exposing its implementation type to common code.
+     * A {@code null} position or port is treated as an unconstrained value.
+     */
+    default boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
+        return false;
+    }
+
     default boolean isPort(String id) {
         return portDeclarations().stream().anyMatch(declaration -> declaration.id().equals(id));
     }

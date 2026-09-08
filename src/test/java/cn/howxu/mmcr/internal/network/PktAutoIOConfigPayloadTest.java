@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
@@ -68,6 +70,12 @@ class PktAutoIOConfigPayloadTest {
                 AutoIOAction.SET_ENABLED, null)).isTrue();
         assertThat(PktAutoIOConfigPayload.canUpdate(heatPlayer, BlockPos.ZERO,
                 AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(MekanismBridge.get().capabilityIdForMenu(chemicalMenu))
+                .isEqualTo(MekanismRecipeTypes.CHEMICAL);
+        assertThat(MekanismBridge.get().capabilityIdForMenu(heatMenu))
+                .isEqualTo(MekanismRecipeTypes.HEAT);
+        assertThat(MekanismBridge.get().isPortMenuAt(chemicalMenu, BlockPos.ZERO, null)).isTrue();
+        assertThat(MekanismBridge.get().isPortMenuAt(heatMenu, BlockPos.ZERO, null)).isTrue();
         assertThat(PktAutoIOConfigPayload.ownsMenu(chemicalMenu, null)).isTrue();
         assertThat(PktAutoIOConfigPayload.ownsMenu(heatMenu, null)).isTrue();
     }

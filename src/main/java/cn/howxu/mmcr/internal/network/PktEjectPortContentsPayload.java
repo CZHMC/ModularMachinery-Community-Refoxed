@@ -2,8 +2,7 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
-import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
@@ -66,7 +65,6 @@ public record PktEjectPortContentsPayload(BlockPos pos, Identifier capabilityId)
                 || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.pos().equals(pos) && extendedFluid.owner() == port
                 || menu instanceof CombinedPortMenu combined && combined.pos().equals(pos) && combined.owner() == port
                 || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos) && extendedCombined.owner() == port
-                || menu instanceof ChemicalPortMenu chemical && chemical.pos().equals(pos) && chemical.owner() == port
-                || menu instanceof HeatPortMenu heat && heat.pos().equals(pos) && heat.owner() == port;
+                || MekanismBridge.get().isPortMenuAt(menu, pos, port);
     }
 }

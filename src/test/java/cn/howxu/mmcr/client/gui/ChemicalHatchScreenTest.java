@@ -50,6 +50,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class ChemicalHatchScreenTest {
+    private static final int EXPECTED_TINT = 0xFF66CCFF;
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
@@ -70,8 +72,14 @@ class ChemicalHatchScreenTest {
         ChemicalPortMenu menu = filledChemicalMenu();
         ChemicalGuiRenderer.ChemicalRenderState state = ChemicalHatchScreen.renderState(menu, 61);
 
-        assertThat(state.fillHeight()).isPositive();
-        assertThat(state.tint()).isEqualTo(menu.chemicalTint());
+        assertThat(menu.chemicalAmount()).isEqualTo(500L);
+        assertThat(menu.chemicalCapacity()).isEqualTo(64_000L);
+        assertThat(menu.chemicalTint()).isEqualTo(EXPECTED_TINT);
+        assertThat(state.fillHeight()).isEqualTo(1);
+        assertThat(state.fillHeight()).isEqualTo(
+                cn.howxu.mmcr.client.render.FluidGuiRenderer.fillHeight(
+                        menu.chemicalAmount(), menu.chemicalCapacity(), 61));
+        assertThat(state.tint()).isEqualTo(EXPECTED_TINT).isNotEqualTo(0xFFFFFFFF);
         assertThat(state.identifier()).isEqualTo(menu.chemicalIdentifier());
     }
 
@@ -109,12 +117,7 @@ class ChemicalHatchScreenTest {
         MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
         return registry.get(key).orElseGet(() -> {
             registry.unfreeze(true);
-            Chemical value = new Chemical(ChemicalBuilder.builder()) {
-                @Override
-                public int getColorRepresentation() {
-                    return 0xFF66CCFF;
-                }
-            };
+            Chemical value = new Chemical(ChemicalBuilder.builder().tint(EXPECTED_TINT));
             Registry.register(registry, key.identifier(), value);
             registry.freeze();
             return registry.get(key).orElseThrow();
