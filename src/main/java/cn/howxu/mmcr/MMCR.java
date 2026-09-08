@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
@@ -35,6 +36,7 @@ public class MMCR {
         PublicApiBootstrap.begin();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
+        MekanismBridge.get().registerTransferPolicies();
         PublicApiBootstrap.freeze();
         ModEventRegistration.register(modBus, modContainer);
         modBus.addListener((FMLConstructModEvent event) ->

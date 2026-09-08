@@ -83,7 +83,7 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class LoadedMekanismBridge implements MekanismBridge {
-    private boolean transferPoliciesRegistered;
+    private static volatile boolean transferPoliciesRegistered;
 
     /** Machine capability seam supplied by a loaded Mekanism chemical port. */
     public interface ChemicalPort extends MachineCapability {
@@ -186,6 +186,29 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                 FeatureFlags.VANILLA_SET));
         registrar.register("heat_port", () -> new MenuType<>((IContainerFactory<HeatPortMenu>) HeatPortMenu::clientOpen,
                 FeatureFlags.VANILLA_SET));
+    }
+
+    @Override
+    public Identifier capabilityIdForMenu(AbstractContainerMenu menu) {
+        if (menu instanceof ChemicalPortMenu) return MekanismRecipeTypes.CHEMICAL;
+        if (menu instanceof HeatPortMenu) return MekanismRecipeTypes.HEAT;
+        return null;
+    }
+
+    @Override
+    public boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
+        if (menu instanceof ChemicalPortMenu chemical) {
+            return matches(chemical.pos(), chemical.owner(), pos, port);
+        }
+        if (menu instanceof HeatPortMenu heat) {
+            return matches(heat.pos(), heat.owner(), pos, port);
+        }
+        return false;
+    }
+
+    private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,
+                                   BlockPos pos, IOPortBlockEntity port) {
+        return (pos == null || menuPos.equals(pos)) && (port == null || menuOwner == port);
     }
 
     @Override
