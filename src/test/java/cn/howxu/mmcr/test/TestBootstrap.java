@@ -35,6 +35,7 @@ import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -168,6 +169,15 @@ public final class TestBootstrap {
             restoreMachineDefinitions();
         }
         registerRuntimeTestContent();
+    }
+
+    /**
+     * Builds a {@link CraftingRuntime} over a freshly created test controller.
+     * Convenience helper for tests that only need an empty runtime instance.
+     */
+    public static CraftingRuntime newCraftingRuntime() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        return new CraftingRuntime(controller, controller.componentRuntime());
     }
 
     private static void registerRuntimeTestContent() {

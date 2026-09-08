@@ -152,7 +152,7 @@ public final class CraftingRuntime {
         RecipeTickContext recipeTickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
                 MachineRecipeConverter
-                        .toPublicRequirements(effectiveRequirements()), effectiveOutputs(),
+                        .toPublicRequirements(effectiveRequirements()), activeOutputs(),
                 new CapabilitySnapshot(components.capabilities()));
         if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, recipeTickContext)) return status;
         try {
@@ -220,7 +220,7 @@ public final class CraftingRuntime {
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeFinishContext finishContext = new RecipeFinishContext(machineContext,
                 activeRecipe.getRecipe(), activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(),
-                effectiveOutputs());
+                activeOutputs());
         try {
             behavior.beforeFinish().accept(finishContext);
         } catch (RuntimeException exception) {
@@ -646,9 +646,10 @@ public final class CraftingRuntime {
                 ? activeRecipe.effectiveRequirements() : effectiveRequirements;
     }
 
-    private List<MachineOutput> effectiveOutputs() {
-        return activeRecipe != null && activeRecipe.hasEffectiveExecutionSnapshot()
+    public List<MachineOutput> activeOutputs() {
+        List<MachineOutput> source = activeRecipe != null && activeRecipe.hasEffectiveExecutionSnapshot()
                 ? activeRecipe.effectiveOutputs() : effectiveOutputs;
+        return List.copyOf(source);
     }
 
     private int duration(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
