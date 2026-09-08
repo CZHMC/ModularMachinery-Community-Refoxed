@@ -151,6 +151,32 @@ public final class GameTestRegistry {
         register(event, "module_connection_module_disconnected", 100, helper -> new ModuleConnectionGameTest().moduleFormsIndependentlyButCannotRunWithoutHost(helper));
         register(event, "module_connection_connected", 100, helper -> new ModuleConnectionGameTest().sharedCouplerConnectsModuleAndEnablesHostGatedRecipes(helper));
         register(event, "module_connection_interface_conflict", 100, helper -> new ModuleConnectionGameTest().sharedInterfaceInvalidatesHost(helper));
+        register(event, "mekanism_normal_chemical_radioactive_rejection", 100,
+                helper -> new MekanismPortGameTest().normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(helper));
+        register(event, "mekanism_radioactive_chemical_only_accepts_radioactive", 100,
+                helper -> new MekanismPortGameTest().radioactiveChemicalPortRejectsNonRadioactiveAndAcceptsRadioactive(helper));
+        register(event, "mekanism_normal_chemical_capacities_match_tiers", 100,
+                helper -> new MekanismPortGameTest().normalChemicalCapacitiesMatchDeclaredTiers(helper));
+        register(event, "mekanism_radioactive_chemical_capacity_512k", 100,
+                helper -> new MekanismPortGameTest().radioactiveChemicalCapacityIsFixedTier(helper));
+        register(event, "mekanism_heat_temperature_requirement_reads_only", 100,
+                helper -> new MekanismPortGameTest().heatTemperatureRequirementReadsWithoutConsumingHeat(helper));
+        register(event, "mekanism_heat_output_handle_heat_increases_storage", 100,
+                helper -> new MekanismPortGameTest().heatOutputHandleHeatIncreasesStoredHeat(helper));
+        register(event, "mekanism_chemical_input_auto_imports", 160,
+                helper -> new MekanismPortGameTest().chemicalInputAutoImportsFromAdjacentOutput(helper));
+        register(event, "mekanism_chemical_input_ejects_to_first_target", 100,
+                helper -> new MekanismPortGameTest().chemicalInputEjectionStopsAfterFirstTarget(helper));
+        register(event, "mekanism_chemical_input_ejection_preserves_remainder", 100,
+                helper -> new MekanismPortGameTest().chemicalInputEjectionPreservesRemainder(helper));
+        register(event, "mekanism_chemical_and_heat_persist_across_reload", 100,
+                helper -> new MekanismPortGameTest().chemicalAndHeatContentsPersistAcrossReload(helper));
+        register(event, "mekanism_unavailable_bridge_still_registers_io", 100,
+                helper -> new MekanismPortGameTest().unavailableBridgeLeavesBuilderWorkingThroughCustomRecipeIo(helper));
+        register(event, "mekanism_heat_port_exchanges_with_adjacent_handler", 100,
+                helper -> new MekanismPortGameTest().heatPortExchangesHeatWithAdjacentMekHandler(helper));
+        register(event, "mekanism_formed_port_reflects_texture_change", 100,
+                helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
