@@ -44,7 +44,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         List<String> keys = new ArrayList<>();
         keys.add("structure");
         keys.add("state");
-        if (!snapshot.hasFactoryController() && !snapshot.activeRecipe().isEmpty()) keys.add("recipe");
         if (!snapshot.hasFactoryController() && snapshot.hasProgress()) keys.add("progress");
         if (snapshot.shouldShowParallelSlots()) keys.add("parallel_slots");
         if (snapshot.shouldShowParallelism()) keys.add("parallelism");
@@ -57,7 +56,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             case "structure" -> Component.translatable("jade.mmcr.machine_controller.structure." + (snapshot.formed() ? "formed" : "unformed"))
                     .withStyle(snapshot.formed() ? ChatFormatting.GREEN : ChatFormatting.RED);
             case "state" -> Component.translatable("jade.mmcr.machine_controller.status." + snapshot.status());
-            case "recipe" -> Component.literal(snapshot.activeRecipe()).withStyle(ChatFormatting.WHITE);
             case "progress" -> Component.translatable("jade.mmcr.machine_controller.progress.value",
                     snapshot.progressPercent(), snapshot.tick(), snapshot.totalTick());
             case "parallel_slots" -> Component.translatable("jade.mmcr.machine_controller.parallel_slots.value",
@@ -81,7 +79,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         boolean formed,
         boolean active,
         boolean tickMachine,
-        String activeRecipe,
             int tick,
             int totalTick,
             long parallelism,
@@ -105,7 +102,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
                     tag.getBooleanOr("formed", false),
                     tag.getBooleanOr("active", false),
                     tag.getBooleanOr("tickMachine", false),
-                    tag.getStringOr("activeRecipe", ""),
                     tag.getIntOr("tick", 0),
                     tag.getIntOr("totalTick", 0),
                     tag.getLongOr("parallelism", 0L),
@@ -156,7 +152,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
         }
 
         private boolean hasActiveWork() {
-            return active && (!activeRecipe.isEmpty() || factoryLanes > 0);
+            return active && factoryLanes > 0;
         }
     }
 }

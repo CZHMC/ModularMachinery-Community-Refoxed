@@ -276,7 +276,6 @@
   "jade.mmcr.machine_controller.parallelism.value": "%s / %s",
   "jade.mmcr.machine_controller.progress": "进度",
   "jade.mmcr.machine_controller.progress.value": "%s%% %s/%s tick",
-  "jade.mmcr.machine_controller.recipe": "配方",
   "jade.mmcr.machine_controller.recipe_output": "配方产物",
   "jade.mmcr.machine_controller.recipe_output.item": "%s %s",
   "jade.mmcr.machine_controller.recipe_output.fluid": "%s %s",
