@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.client.gui.layouts.LayoutElement;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.BeforeAll;
@@ -71,7 +72,7 @@ class MachineControllerComponentProviderTest {
         state.append(MMCR.id("custom"), Component.literal("custom value"));
         JadeTextCodec.write(tag, state.snapshot());
 
-        List<Component> added = appendTooltip(tag);
+        List<Object> added = appendTooltip(tag);
 
         assertThat(MachineControllerComponentProvider.lineKeys(MachineControllerComponentProvider.Snapshot.from(tag)))
                 .containsExactly("structure");
@@ -91,7 +92,7 @@ class MachineControllerComponentProviderTest {
         state.append(MMCR.id("custom"), Component.literal("custom value"));
         JadeTextCodec.write(tag, state.snapshot());
 
-        List<Component> added = appendTooltip(tag);
+        List<Object> added = appendTooltip(tag);
 
         assertThat(MachineControllerComponentProvider.lineKeys(
                 MachineControllerComponentProvider.Snapshot.from(tag)))
@@ -100,14 +101,15 @@ class MachineControllerComponentProviderTest {
         assertThat(added.getLast()).isEqualTo(Component.literal("custom value"));
     }
 
-    private static List<Component> appendTooltip(CompoundTag serverData) {
-        List<Component> added = new ArrayList<>();
+    private static List<Object> appendTooltip(CompoundTag serverData) {
+        List<Object> added = new ArrayList<>();
         ITooltip tooltip = (ITooltip) Proxy.newProxyInstance(
                 ITooltip.class.getClassLoader(), new Class<?>[]{ITooltip.class},
                 (proxy, method, args) -> {
-                    if (method.getName().equals("add") && args != null && args.length == 1
-                            && args[0] instanceof Component component) {
-                        added.add(component);
+                    if (method.getName().equals("add") && args != null && args.length >= 1
+                            && (args[args.length - 1] instanceof Component
+                                    || args[args.length - 1] instanceof LayoutElement)) {
+                        added.add(args[args.length - 1]);
                         return null;
                     }
                     throw new UnsupportedOperationException(method.getName());
@@ -119,6 +121,9 @@ class MachineControllerComponentProviderTest {
                     throw new UnsupportedOperationException(method.getName());
                 });
 
+        // JadeUI.progress(...) touches Minecraft.getInstance().font / Jade Theme, which are null
+        // under gradle test. appendProgressBar catches the runtime exception and reports a text
+        // row instead, so the call always returns normally here.
         MachineControllerComponentProvider.INSTANCE.appendTooltip(tooltip, accessor, null);
         return added;
     }

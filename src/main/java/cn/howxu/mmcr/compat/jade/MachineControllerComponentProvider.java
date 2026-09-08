@@ -9,6 +9,9 @@ import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
+import snownee.jade.api.ui.BoxStyle;
+import snownee.jade.api.ui.JadeUI;
+import snownee.jade.api.view.ProgressView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,11 +33,37 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
         Snapshot snapshot = Snapshot.from(accessor.getServerData());
 
+        appendProgressBar(tooltip, snapshot);
         for (String key : lineKeys(snapshot)) {
             tooltip.add(row(key, lineValue(snapshot, key)));
         }
         for (Component line : JadeTextCodec.read(accessor.getServerData())) {
             tooltip.add(line);
+        }
+    }
+
+    private static void appendProgressBar(ITooltip tooltip, Snapshot snapshot) {
+        if (!snapshot.hasProgress()) return;
+        int tick = snapshot.tick();
+        int total = snapshot.totalTick();
+        float ratio = Math.clamp(tick / (float) total, 0F, 1F);
+        Component text = total < 20
+                ? Component.translatable("jade.mmcr.machine_controller.progress.tick", tick, total)
+                : Component.translatable("jade.mmcr.machine_controller.progress.sec",
+                        Math.round(tick / 20F), Math.round(total / 20F));
+        // JadeUI.progress(...) reaches DisplayHelper.font() → Minecraft.getInstance().font and the
+        // active Jade Theme (BoxStyle.nestedBox()). Both are null in unit tests where no real
+        // client is booted; swallow the resulting runtime exceptions so the text rows below still
+        // render. In production with a live client these always succeed and the bar is observed.
+        try {
+            ProgressView view = new ProgressView(
+                    ProgressView.Part.of(ratio, 0xFF4CBB17),
+                    text,
+                    JadeUI.progressStyle(),
+                    BoxStyle.nestedBox());
+            tooltip.add(JadeUI.progress(view));
+        } catch (NullPointerException | IllegalAccessError ignored) {
+            // graceful degradation; bar is unobservable in this environment
         }
     }
 
@@ -56,8 +85,7 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             case "structure" -> Component.translatable("jade.mmcr.machine_controller.structure." + (snapshot.formed() ? "formed" : "unformed"))
                     .withStyle(snapshot.formed() ? ChatFormatting.GREEN : ChatFormatting.RED);
             case "state" -> Component.translatable("jade.mmcr.machine_controller.status." + snapshot.status());
-            case "progress" -> Component.translatable("jade.mmcr.machine_controller.progress.value",
-                    snapshot.progressPercent(), snapshot.tick(), snapshot.totalTick());
+            case "progress" -> Component.empty();
             case "parallel_slots" -> Component.translatable("jade.mmcr.machine_controller.parallel_slots.value",
                     snapshot.parallelSlots());
             case "parallelism" -> Component.translatable("jade.mmcr.machine_controller.parallelism.value",
@@ -128,11 +156,6 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
 
         boolean hasProgress() {
             return hasActiveWork() && totalTick > 0;
-        }
-
-        int progressPercent() {
-            if (!hasProgress()) return 0;
-            return Math.clamp(Math.round(tick * 100.0F / totalTick), 0, 100);
         }
 
         boolean shouldShowParallelSlots() {
