@@ -1,0 +1,298 @@
+package cn.howxu.mmcr.compat.mekanism.loaded;
+
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.SyncFacet;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.util.IOType;
+import mekanism.api.AutomationType;
+import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.IChemicalTank;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+/** MMCR capability backed by a loaded Mekanism chemical tank.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public final class ChemicalPortCapability implements LoadedMekanismBridge.ChemicalPort,
+        ResourceFacet<ChemicalResource>, TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
+    private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.CHEMICAL);
+
+    private final ChemicalPortBlockEntity port;
+    private final IChemicalTank chemicalTank;
+    private final ResourceStorage<ChemicalResource> storage;
+    private final IOType ioType;
+    private final CapabilityView view;
+
+    public ChemicalPortCapability(IChemicalTank chemicalTank, IOType ioType) {
+        this(null, chemicalTank, ioType);
+    }
+
+    public ChemicalPortCapability(ChemicalPortBlockEntity port) {
+        this(port, port.chemicalTank(), port.ioType());
+    }
+
+    public ChemicalPortCapability(@Nullable ChemicalPortBlockEntity port, IChemicalTank chemicalTank,
+                                  IOType ioType) {
+        if (chemicalTank == null) throw new IllegalArgumentException("chemicalTank must not be null");
+        if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
+        this.port = port;
+        this.chemicalTank = chemicalTank;
+        this.storage = new ChemicalStorage(chemicalTank);
+        this.ioType = ioType;
+        this.view = CapabilityFactories.view(TYPE, directions(),
+                Set.of(ResourceFacet.class, TransferFacet.class, OperationFacet.class,
+                        PresentationFacet.class, SyncFacet.class));
+    }
+
+    @Override
+    public IChemicalTank chemicalTank() {
+        return chemicalTank;
+    }
+
+    @Override
+    public ResourceStorage<ChemicalResource> storage() {
+        return storage;
+    }
+
+    @Override
+    public Class<ChemicalResource> resourceType() {
+        return ChemicalResource.class;
+    }
+
+    @Override
+    @Nullable
+    public Level level() {
+        return port == null ? null : port.getLevel();
+    }
+
+    @Override
+    public BlockPos position() {
+        return port == null ? BlockPos.ZERO : port.getBlockPos();
+    }
+
+    @Override
+    public long transferLimit() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public CapabilityType type() {
+        return TYPE;
+    }
+
+    @Override
+    public CapabilityDirections directions() {
+        return CapabilityDirections.of(ioType);
+    }
+
+    @Override
+    public CapabilityView view() {
+        return view;
+    }
+
+    @Override
+    public CapabilityOperation prepareOperation(CapabilityRequest request) {
+        if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
+            return ignored -> failure("unsupported_request");
+        }
+        return transaction -> {
+            for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
+                if (!(action.resource() instanceof ChemicalResource resource)) return failure("wrong_resource_type");
+                long moved = action.insert()
+                        ? storage.insert(action.slot(), resource, action.amount(), transaction)
+                        : storage.extract(action.slot(), resource, action.amount(), transaction);
+                if (moved != action.amount()) return failure("insufficient_resource");
+            }
+            return CapabilityResult.successful();
+        };
+    }
+
+    @Override
+    public List<CapabilityDisplay> displays(CapabilityView ignored) {
+        return List.of(new CapabilityDisplay("chemical", Long.toString(chemicalTank.amountAsLong()),
+                "mB", Optional.empty()));
+    }
+
+    @Override
+    public void encode(RegistryFriendlyByteBuf buffer) {
+        ChemicalResource resource = chemicalTank.resource();
+        ChemicalResource.STREAM_CODEC.encode(buffer, resource);
+        buffer.writeLong(chemicalTank.amountAsLong());
+        buffer.writeLong(chemicalTank.capacityAsLong(resource));
+    }
+
+    @Override
+    public void decode(RegistryFriendlyByteBuf buffer) {
+        ChemicalResource resource = ChemicalResource.STREAM_CODEC.decode(buffer);
+        long amount = buffer.readLong();
+        long capacity = buffer.readLong();
+        if (amount < 0L || capacity < amount || capacity != chemicalTank.capacityAsLong(resource)
+                || (!resource.isEmpty() && !chemicalTank.isValid(resource))) {
+            throw new IllegalArgumentException("Invalid chemical sync state");
+        }
+        chemicalTank.setContents(resource, amount, null);
+    }
+
+    static ResourceHandler<ChemicalResource> resourceHandler(IChemicalTank tank) {
+        return resourceHandler(tank, AutomationType.INTERNAL);
+    }
+
+    static ResourceHandler<ChemicalResource> resourceHandler(IChemicalTank tank, AutomationType automationType) {
+        return resourceHandler(tank, automationType, null);
+    }
+
+    static ResourceHandler<ChemicalResource> resourceHandler(IChemicalTank tank, AutomationType automationType,
+                                                              @Nullable IOType ioType) {
+        return new ResourceHandler<>() {
+            @Override
+            public int size() {
+                return 1;
+            }
+
+            @Override
+            public ChemicalResource getResource(int slot) {
+                checkSlot(slot);
+                return tank.resource();
+            }
+
+            @Override
+            public long getAmountAsLong(int slot) {
+                checkSlot(slot);
+                return tank.amountAsLong();
+            }
+
+            @Override
+            public long getCapacityAsLong(int slot, ChemicalResource resource) {
+                checkSlot(slot);
+                return tank.capacityAsLong(resource == null ? tank.resource() : resource);
+            }
+
+            @Override
+            public boolean isValid(int slot, ChemicalResource resource) {
+                checkSlot(slot);
+                return resource != null && !resource.isEmpty() && tank.isValid(resource);
+            }
+
+            @Override
+            public int insert(int slot, ChemicalResource resource, int amount, TransactionContext transaction) {
+                checkSlot(slot);
+                if (ioType == IOType.OUTPUT) return 0;
+                return tank.insert(resource, amount, transaction, automationType);
+            }
+
+            @Override
+            public int extract(int slot, ChemicalResource resource, int amount, TransactionContext transaction) {
+                checkSlot(slot);
+                if (ioType == IOType.INPUT) return 0;
+                return tank.extract(resource, amount, transaction, automationType);
+            }
+        };
+    }
+
+    private CapabilityResult failure(String reason) {
+        return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.BLOCKED,
+                type().id(), Map.of("reason", reason)));
+    }
+
+    private static void checkSlot(int slot) {
+        if (slot != 0) throw new IndexOutOfBoundsException("chemical port slot must be zero");
+    }
+
+    private static final class ChemicalStorage implements ResourceStorage<ChemicalResource> {
+        private final IChemicalTank tank;
+
+        private ChemicalStorage(IChemicalTank tank) {
+            this.tank = tank;
+        }
+
+        @Override
+        public Class<ChemicalResource> resourceType() {
+            return ChemicalResource.class;
+        }
+
+        @Override
+        public int size() {
+            return 1;
+        }
+
+        @Override
+        public ChemicalResource resource(int slot) {
+            checkSlot(slot);
+            return tank.resource();
+        }
+
+        @Override
+        public long amount(int slot) {
+            checkSlot(slot);
+            return tank.amountAsLong();
+        }
+
+        @Override
+        public long capacity(int slot, @Nullable ChemicalResource resource) {
+            checkSlot(slot);
+            return tank.capacityAsLong(resource == null ? tank.resource() : resource);
+        }
+
+        @Override
+        public boolean isValid(int slot, ChemicalResource resource) {
+            checkSlot(slot);
+            return !resource.isEmpty() && tank.isValid(resource);
+        }
+
+        @Override
+        public long insert(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
+            checkSlot(slot);
+            if (amount <= 0L || !isValid(slot, resource)) return 0L;
+            return transfer(tank, resource, amount, transaction, true);
+        }
+
+        @Override
+        public long extract(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
+            checkSlot(slot);
+            if (amount <= 0L || resource.isEmpty()) return 0L;
+            return transfer(tank, resource, amount, transaction, false);
+        }
+
+        private static long transfer(IChemicalTank tank, ChemicalResource resource, long amount,
+                                     TransactionContext transaction, boolean insert) {
+            long remaining = amount;
+            long movedTotal = 0L;
+            while (remaining > 0L) {
+                int request = (int) Math.min(remaining, Integer.MAX_VALUE);
+                int moved = insert
+                        ? tank.insert(resource, request, transaction, AutomationType.INTERNAL)
+                        : tank.extract(resource, request, transaction, AutomationType.INTERNAL);
+                if (moved <= 0) break;
+                movedTotal += moved;
+                remaining -= moved;
+            }
+            return movedTotal;
+        }
+    }
+}
