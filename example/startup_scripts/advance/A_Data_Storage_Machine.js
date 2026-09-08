@@ -8,7 +8,6 @@ MMCREvents.startup(event => {
     // Some lib we will use
     // see what, big integer
     const BigInteger = Java.loadClass("java.math.BigInteger")
-    const ReadableNumber = Java.loadClass("cn.howxu.mmcr.api.publicapi.ReadableNumber")
     const api = MMCR.getAPI()
     const RecipeIO = api.recipeIO()
     const OutputPolicy = api.outputPolicy()
@@ -127,7 +126,7 @@ MMCREvents.startup(event => {
                 ctx.screenText().append(
                     api.screenScope().OPERATION,
                     api.id("mmcr_kubejs:fe_storage_status"),
-                    Text.literal("FE stored: " + ReadableNumber.formatCompact(stored))
+                    Text.literal("FE stored: " + api.readableNumberBigInt(stored))
                 )
 
             })

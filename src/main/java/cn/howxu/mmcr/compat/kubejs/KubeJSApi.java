@@ -109,8 +109,32 @@ public final class KubeJSApi {
         return ReadableNumber.formatCompact(value);
     }
 
+    public String readableNumberBigInt(BigInteger value) {
+        return ReadableNumber.formatCompact(value);
+    }
+
+    public String readableNumberBigDecimal(BigDecimal value) {
+        return ReadableNumber.formatCompact(value);
+    }
+
     public String readableNumberExact(long value) {
         return ReadableNumber.formatExact(value);
+    }
+
+    public String readableNumberFull(long value) {
+        return ReadableNumber.format(value);
+    }
+
+    public String readableNumberFullBigInt(BigInteger value) {
+        return ReadableNumber.format(value);
+    }
+
+    public String readableNumberFullBigDecimal(BigDecimal value) {
+        return ReadableNumber.format(value);
+    }
+
+    public String readableNumberForSlot(long value, int scale, String unit) {
+        return ReadableNumber.formatForSlot(value, scale, unit);
     }
 
     public Identifier id(String id) {
