@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import com.google.gson.JsonElement;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Objects;
@@ -157,7 +158,7 @@ public final class MachineRecipeConverter {
     private static ComponentPredicate toPublicPredicate(
             cn.howxu.mmcr.api.recipe.component.ComponentPredicate predicate) {
         if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.Exact exact) {
-            return ComponentPredicate.exact((com.google.gson.JsonElement) exact.value().convert(JsonOps.INSTANCE).getValue());
+            return ComponentPredicate.exact((JsonElement) exact.value().convert(JsonOps.INSTANCE).getValue());
         }
         if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.MapValue map) {
             Map<String, ComponentPredicate> values = new LinkedHashMap<>();

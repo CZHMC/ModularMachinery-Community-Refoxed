@@ -3,6 +3,7 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
@@ -56,7 +57,7 @@ public class UpgradeBusGameTest {
         DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
         helper.assertTrue(registeredMachine != null, "Upgrade Bus test machine is registered");
         AtomicReference<List<ItemStack>> observedUpgradeItems = new AtomicReference<>();
-        AtomicReference<List<cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement>> observedRequirements = new AtomicReference<>();
+        AtomicReference<List<RecipeRequirement>> observedRequirements = new AtomicReference<>();
         Machine machine = new DynamicMachine(registeredMachine.registryName(), registeredMachine.displayNameKey(),
                 registeredMachine.pattern(), registeredMachine.controller(), registeredMachine.appearance(),
                 registeredMachine.portRequirements(), registeredMachine.portTierRequirements(),

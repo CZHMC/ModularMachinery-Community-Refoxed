@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
@@ -138,7 +139,7 @@ public final class ActiveMachineRecipe {
         this.parallelism = 1;
         this.data = new CompoundTag();
         this.effectiveRequirements = MachineRequirement.copyList(execution.requirements().stream()
-                .map(cn.howxu.mmcr.internal.registration.MachineRecipeConverter::toRequirement).toList());
+                .map(MachineRecipeConverter::toRequirement).toList());
         this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
         this.effectiveSnapshotPresent = true;
     }
@@ -357,7 +358,7 @@ public final class ActiveMachineRecipe {
         ActiveMachineRecipe result = snapshotMarker
                 ? new ActiveMachineRecipe(recipe, maxParallelism,
                 new RecipeStartContext.ExecutionSnapshot(effectiveDuration,
-                        cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toPublicRequirements(effectiveRequirements),
+                        MachineRecipeConverter.toPublicRequirements(effectiveRequirements),
                         effectiveOutputs))
                 : new ActiveMachineRecipe(recipe, maxParallelism, false);
         result.tick = tick;
@@ -396,7 +397,7 @@ public final class ActiveMachineRecipe {
 
     public RecipeStartContext.ExecutionSnapshot executionSnapshot() {
         return new RecipeStartContext.ExecutionSnapshot(
-                totalTick, cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                totalTick, MachineRecipeConverter
                         .toPublicRequirements(effectiveRequirements()), effectiveOutputs());
     }
 
@@ -407,7 +408,7 @@ public final class ActiveMachineRecipe {
         Objects.requireNonNull(execution, "execution");
         this.totalTick = execution.duration();
         this.effectiveRequirements = MachineRequirement.copyList(execution.requirements().stream()
-                .map(cn.howxu.mmcr.internal.registration.MachineRecipeConverter::toRequirement).toList());
+                .map(MachineRecipeConverter::toRequirement).toList());
         this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
         this.effectiveSnapshotPresent = true;
     }

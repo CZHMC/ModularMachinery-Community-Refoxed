@@ -1,12 +1,13 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
+import cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement;
 import java.util.Objects;
 
 /** Immutable public smart-interface recipe requirement with an inclusive value range.
  * @author howxu <dev@howxu.cn>
  */
 public record SmartInterfaceRequirement(RecipeIo io, String interfaceType, float minValue, float maxValue)
-        implements cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement {
+        implements MachineRequirement {
     public SmartInterfaceRequirement {
         Objects.requireNonNull(io, "io");
         if (interfaceType == null || interfaceType.isBlank()) throw new IllegalArgumentException("interfaceType must not be blank");

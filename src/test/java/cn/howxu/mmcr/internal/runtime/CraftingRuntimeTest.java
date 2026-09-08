@@ -35,6 +35,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -173,7 +174,7 @@ class CraftingRuntimeTest {
         MachineRecipe recipe = recipe("active_effective_snapshot", 20, List.of());
         ItemStack outputStack = stack(Items.GOLD_NUGGET, 1);
         RecipeStartContext.ExecutionSnapshot execution = new RecipeStartContext.ExecutionSnapshot(7,
-                cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toPublicRequirements(
+                MachineRecipeConverter.toPublicRequirements(
                         List.of(input(Items.IRON_INGOT, 2), output(Items.GOLD_NUGGET, 1))),
                 List.of(new MachineOutput.ItemOutput(outputStack, 1F)));
 
@@ -655,7 +656,7 @@ class CraftingRuntimeTest {
                 .beforeStart(context -> {
                     starts.incrementAndGet();
                     context.setDuration(2);
-                    context.setRequirements(cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                    context.setRequirements(MachineRecipeConverter
                             .toPublicRequirements(List.of(input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 2))));
                 }).build()));
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
@@ -696,7 +697,7 @@ class CraftingRuntimeTest {
                 .beforeStart(context -> {
                     starts.incrementAndGet();
                     context.setDuration(2);
-                    context.setRequirements(cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                    context.setRequirements(MachineRecipeConverter
                             .toPublicRequirements(List.of(input(Items.IRON_INGOT, 2))));
                 }).build()));
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 2));

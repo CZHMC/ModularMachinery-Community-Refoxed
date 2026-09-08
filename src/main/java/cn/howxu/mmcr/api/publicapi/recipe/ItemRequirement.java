@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 
@@ -10,7 +11,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record ItemRequirement(RecipeIo io, Ingredient ingredient, int count, ItemStack stack, float chance,
-                              DataComponentPredicateSet components, float consumeChance) implements cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement {
+                              DataComponentPredicateSet components, float consumeChance) implements MachineRequirement {
     public ItemRequirement {
         Objects.requireNonNull(io, "io");
         components = components == null ? DataComponentPredicateSet.EMPTY : components;

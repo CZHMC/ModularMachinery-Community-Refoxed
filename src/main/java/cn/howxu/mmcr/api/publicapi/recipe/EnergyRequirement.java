@@ -1,11 +1,12 @@
 package cn.howxu.mmcr.api.publicapi.recipe;
 
+import cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement;
 import java.util.Objects;
 
 /** Immutable public energy recipe requirement.
  * @author howxu <dev@howxu.cn>
  */
-public record EnergyRequirement(RecipeIo io, long fePerTick) implements cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement {
+public record EnergyRequirement(RecipeIo io, long fePerTick) implements MachineRequirement {
     public EnergyRequirement(long fePerTick) {
         this(RecipeIo.INPUT, fePerTick);
     }

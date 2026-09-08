@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.network.RequestFailureReason;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import cn.howxu.mmcr.api.publicapi.data.DataStorage;
 import cn.howxu.mmcr.api.publicapi.network.MachineReference;
@@ -232,7 +233,7 @@ public final class MachineBuilder {
                 new cn.howxu.mmcr.api.network.RequestInfo(request.requestId(),
                         (cn.howxu.mmcr.api.network.MachineReference) request.peer().bridgeValue()),
                 senderStorage == null ? null : (cn.howxu.mmcr.api.data.DataStorage) senderStorage.bridgeValue(),
-                cn.howxu.mmcr.api.network.RequestFailureReason.valueOf(reason.name())));
+                RequestFailureReason.valueOf(reason.name())));
     }
 
     public MachineDefinition build() {

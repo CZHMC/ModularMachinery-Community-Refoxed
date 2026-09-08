@@ -35,6 +35,8 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -44,6 +46,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
@@ -212,7 +215,7 @@ class MachineBehaviorRuntimeTest {
                     starts.incrementAndGet();
                     assertThat(input.itemStorage().amount(0)).isEqualTo(2L);
                     context.setDuration(2);
-                    context.setRequirements(cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                    context.setRequirements(MachineRecipeConverter
                             .toPublicRequirements(List.of(new ItemRequirement(RecipeModifier.IOType.INPUT,
                                     Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY), output(Items.GOLD_NUGGET))));
                 })
@@ -515,12 +518,12 @@ class MachineBehaviorRuntimeTest {
                     outputStack.set(DataComponents.MAX_STACK_SIZE, 64);
                     MachineIoPlan plan = context.ioPlan()
                             .addInput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                    cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.INPUT,
+                                    RecipeIo.INPUT,
                                     Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
-                                    cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F))
+                                    DataComponentPredicateSet.EMPTY, 1F))
                             .addOutput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                    cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.OUTPUT, null, 0, outputStack, 1F,
-                                    cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F),
+                                    RecipeIo.OUTPUT, null, 0, outputStack, 1F,
+                                    DataComponentPredicateSet.EMPTY, 1F),
                                     OutputPolicy.REQUIRE_FULL);
                     assertThat(plan.simulate().inputsSatisfied()).isTrue();
                     assertThat(plan.simulate().outputs()).singleElement()

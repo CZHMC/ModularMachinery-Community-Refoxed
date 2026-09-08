@@ -35,6 +35,7 @@ import cn.howxu.mmcr.api.publicapi.network.RequestFailureReason;
 import cn.howxu.mmcr.api.publicapi.network.RequestInfo;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
@@ -279,13 +280,13 @@ public final class MachineDefinitionConverter {
 
     private static Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> toInternalRequestFailures(
             Map<Identifier, cn.howxu.mmcr.api.publicapi.network.RequestFailed> failures) {
-        return failures.entrySet().stream().collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,
+        return failures.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
                 entry -> toInternalRequestFailed(entry.getValue()), (first, ignored) -> first, LinkedHashMap::new));
     }
 
     public static Map<Identifier, cn.howxu.mmcr.api.publicapi.network.RequestFailed> fromInternalRequestFailures(
             Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> failures) {
-        return failures.entrySet().stream().collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,
+        return failures.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
                 entry -> (body, request, senderStorage, reason) -> entry.getValue().fail(
                         (cn.howxu.mmcr.api.network.RequestBody) body.bridgeValue(),
                         new cn.howxu.mmcr.api.network.RequestInfo(request.requestId(),

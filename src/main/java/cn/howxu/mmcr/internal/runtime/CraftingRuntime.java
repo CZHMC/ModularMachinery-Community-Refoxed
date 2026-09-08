@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
@@ -98,7 +99,7 @@ public final class CraftingRuntime {
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, duration(recipe, runtime),
-                cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toPublicRequirements(requirements), outputs);
+                MachineRecipeConverter.toPublicRequirements(requirements), outputs);
         try {
             behavior.beforeStart().accept(startContext);
         } catch (RuntimeException exception) {
@@ -115,7 +116,7 @@ public final class CraftingRuntime {
         RecipeStartContext.ExecutionSnapshot effective = startContext.snapshot();
         CraftingContext context = context(runtime);
         PlanningResult result = context.planInputs(effective.requirements().stream()
-                        .map(cn.howxu.mmcr.internal.registration.MachineRecipeConverter::toRequirement).toList(), requestedParallelism,
+                        .map(MachineRecipeConverter::toRequirement).toList(), requestedParallelism,
                 Set.of(), Set.of());
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) {
@@ -130,7 +131,7 @@ public final class CraftingRuntime {
         startPlan = plan;
         finishPlan = null;
         effectiveRequirements = MachineRequirement.copyList(effective.requirements().stream()
-                .map(cn.howxu.mmcr.internal.registration.MachineRecipeConverter::toRequirement).toList());
+                .map(MachineRecipeConverter::toRequirement).toList());
         effectiveOutputs = MachineOutput.copyList(effective.outputs());
         captureInputState(effectiveRequirements, plan);
         captureVersions(runtime);
@@ -150,7 +151,7 @@ public final class CraftingRuntime {
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeTickContext recipeTickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
-                cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                MachineRecipeConverter
                         .toPublicRequirements(effectiveRequirements()), effectiveOutputs(),
                 new CapabilitySnapshot(components.capabilities()));
         if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, recipeTickContext)) return status;
@@ -425,7 +426,7 @@ public final class CraftingRuntime {
         if (!restored.hasEffectiveExecutionSnapshot()) {
             restored.setEffectiveExecutionSnapshot(new RecipeStartContext.ExecutionSnapshot(
                     duration(restored.getRecipe(), runtime),
-                    cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toPublicRequirements(requirements), outputs));
+                    MachineRecipeConverter.toPublicRequirements(requirements), outputs));
             if (restored.getTotalTick() < 1 || restored.getTick() < 0
                     || restored.getTick() > restored.getTotalTick()
                     || (restored.isFinishPending() && restored.getTick() != restored.getTotalTick() - 1)) {

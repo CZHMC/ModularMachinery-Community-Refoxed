@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.controller.JadeText;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehaviorContext;
@@ -211,8 +213,8 @@ class MachineBehaviorTest {
         List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F));
 
         context.setRequirements(List.of(ItemRequirement.output(
-                new cn.howxu.mmcr.api.publicapi.recipe.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F,
-                        cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY))));
+                new ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F,
+                        DataComponentPredicateSet.EMPTY))));
         assertThat(context.outputs()).hasSize(1);
         context.setRequirements(requirements);
         context.setOutputs(outputs);

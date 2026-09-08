@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -175,13 +177,13 @@ public final class DataStorageGameTest {
                             context.setDuration(2);
                             context.setRequirements(List.of(
                                     new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                            cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.INPUT,
+                                            RecipeIo.INPUT,
                                             Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
-                                            cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F),
+                                            DataComponentPredicateSet.EMPTY, 1F),
                                     new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                            cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.OUTPUT, null, 0,
+                                            RecipeIo.OUTPUT, null, 0,
                                             new ItemStack(Items.GOLD_NUGGET, 2), 1F,
-                                            cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F)));
+                                            DataComponentPredicateSet.EMPTY, 1F)));
                         })
                         .recipeTick(context -> {
                             ticks.incrementAndGet();

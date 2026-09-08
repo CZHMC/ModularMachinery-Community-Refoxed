@@ -14,6 +14,10 @@ import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoPlan;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -387,15 +391,15 @@ public class ControllerTickGameTest {
                     helper.assertTrue(context.dataStorage() != null,
                             "Tick callback resolves the formed DataStorage");
                     MachineIoPlan plan = context.ioPlan()
-                            .addInput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                    cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.INPUT,
+                            .addInput(new ItemRequirement(
+                                    RecipeIo.INPUT,
                                     Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
-                                    cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F))
-                            .addInput(new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(5))
-                            .addOutput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
-                                    cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.OUTPUT, null, 0,
+                                    DataComponentPredicateSet.EMPTY, 1F))
+                            .addInput(new EnergyRequirement(5))
+                            .addOutput(new ItemRequirement(
+                                    RecipeIo.OUTPUT, null, 0,
                                     new ItemStack(Items.GOLD_NUGGET, 3), 1F,
-                                    cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F),
+                                    DataComponentPredicateSet.EMPTY, 1F),
                                     OutputPolicy.ALLOW_PARTIAL);
                     List<ItemStack> firstInputBeforeSimulation = snapshot(firstInput.itemStorage());
                     List<ItemStack> secondInputBeforeSimulation = snapshot(secondInput.itemStorage());
