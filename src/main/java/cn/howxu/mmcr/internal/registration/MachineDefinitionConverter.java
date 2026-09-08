@@ -28,6 +28,11 @@ import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
 import cn.howxu.mmcr.api.publicapi.machine.LevelType;
 import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
+import cn.howxu.mmcr.api.publicapi.data.DataStorage;
+import cn.howxu.mmcr.api.publicapi.network.MachineReference;
+import cn.howxu.mmcr.api.publicapi.network.RequestBody;
+import cn.howxu.mmcr.api.publicapi.network.RequestFailureReason;
+import cn.howxu.mmcr.api.publicapi.network.RequestInfo;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.core.BlockPos;
@@ -122,8 +127,7 @@ public final class MachineDefinitionConverter {
                 definition.networkInterface(),
                 toStructureStages(structure),
                 definition.failureAction(),
-                definition.behavior(),
-                definition.requestProcessors(), definition.requestFailures());
+                definition.behavior(), definition.requestProcessors(), toInternalRequestFailures(definition.requestFailures()));
     }
 
     public static MachineRegistration toRegistration(MachineDefinition definition) {
@@ -150,7 +154,7 @@ public final class MachineDefinitionConverter {
                 .shareSmartInterfaces(definition.shareSmartInterfaces())
                 .behavior(definition.behavior());
         definition.requestProcessors().forEach(builder::requestProcess);
-        definition.requestFailures().forEach(builder::requestFailed);
+        definition.requestFailures().forEach((id, failure) -> builder.requestFailed(id, toInternalRequestFailed(failure)));
         definition.smartInterfaceTypes().values().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceType)
                 .forEach(builder::smartInterfaceType);
         definition.smartInterfaceModifiers().stream().map(MachineDefinitionConverter::toInternalSmartInterfaceModifier)
@@ -271,6 +275,32 @@ public final class MachineDefinitionConverter {
 
     private static MachineRole toInternalRole(cn.howxu.mmcr.api.publicapi.machine.MachineRole role) {
         return MachineRole.valueOf(role.name());
+    }
+
+    private static Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> toInternalRequestFailures(
+            Map<Identifier, cn.howxu.mmcr.api.publicapi.network.RequestFailed> failures) {
+        return failures.entrySet().stream().collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,
+                entry -> toInternalRequestFailed(entry.getValue()), (first, ignored) -> first, LinkedHashMap::new));
+    }
+
+    public static Map<Identifier, cn.howxu.mmcr.api.publicapi.network.RequestFailed> fromInternalRequestFailures(
+            Map<Identifier, cn.howxu.mmcr.api.network.RequestFailed> failures) {
+        return failures.entrySet().stream().collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,
+                entry -> (body, request, senderStorage, reason) -> entry.getValue().fail(
+                        (cn.howxu.mmcr.api.network.RequestBody) body.bridgeValue(),
+                        new cn.howxu.mmcr.api.network.RequestInfo(request.requestId(),
+                                (cn.howxu.mmcr.api.network.MachineReference) request.peer().bridgeValue()),
+                        senderStorage == null ? null : (cn.howxu.mmcr.api.data.DataStorage) senderStorage.bridgeValue(),
+                        cn.howxu.mmcr.api.network.RequestFailureReason.valueOf(reason.name())),
+                (first, ignored) -> first, LinkedHashMap::new));
+    }
+
+    private static cn.howxu.mmcr.api.network.RequestFailed toInternalRequestFailed(
+            cn.howxu.mmcr.api.publicapi.network.RequestFailed failure) {
+        return (body, request, senderStorage, reason) -> failure.fail(RequestBody.fromInternal(body),
+                new RequestInfo(request.requestId(), MachineReference.fromInternal(request.peer())),
+                senderStorage == null ? null : DataStorage.view(senderStorage),
+                RequestFailureReason.valueOf(reason.name()));
     }
 
     private static cn.howxu.mmcr.api.machine.SmartInterfaceType toInternalSmartInterfaceType(

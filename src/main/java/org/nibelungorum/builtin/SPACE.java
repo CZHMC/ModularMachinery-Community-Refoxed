@@ -17,7 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Map;
 
-import static cn.howxu.mmcr.internal.registration.BuiltinRegistration.id;
+import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.*;
 
 /**

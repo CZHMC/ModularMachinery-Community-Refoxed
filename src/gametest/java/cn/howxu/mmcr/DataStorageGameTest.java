@@ -174,14 +174,20 @@ public final class DataStorageGameTest {
                             starts.incrementAndGet();
                             context.setDuration(2);
                             context.setRequirements(List.of(
-                                    new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
-                                            ItemStack.EMPTY),
-                                    MachineRequirement.itemOutput(new ItemStack(Items.GOLD_NUGGET, 2))));
+                                    new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
+                                            cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.INPUT,
+                                            Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
+                                            cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F),
+                                    new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
+                                            cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.OUTPUT, null, 0,
+                                            new ItemStack(Items.GOLD_NUGGET, 2), 1F,
+                                            cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F)));
                         })
                         .recipeTick(context -> {
                             ticks.incrementAndGet();
                             if (context.totalTick() != 2
-                                    || ((ItemRequirement) context.requirements().getFirst()).count() != 2
+                                    || ((cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement)
+                                    context.requirements().getFirst()).count() != 2
                                     || ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
                                 callbackFailure.compareAndSet(null,
                                         "Recipe Tick uses the loaded effective snapshot");

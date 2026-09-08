@@ -16,7 +16,8 @@ import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import dev.latvian.mods.rhino.util.HideFromJS;
@@ -159,7 +160,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         }
         smartInterfaceTypes.forEach(registration::smartInterfaceType);
         smartInterfaceModifiers.forEach(registration::smartInterfaceModifier);
-        MachineDefinition callbacks = callbackBuilder.build();
+        var callbacks = MachineDefinitionConverter.toStartupRegistration(callbackBuilder.build());
         callbacks.requestProcessors().forEach(registration::requestProcess);
         callbacks.requestFailures().forEach(registration::requestFailed);
         return registration.build();
@@ -644,7 +645,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers().stream()
                         .map(MachineBuilderJS::toPublicSmartInterfaceModifier).toList(),
                 registration.runningSoundId(), registration.finishSoundId(), registration.pattern(), registration.behavior(),
-                registration.requestProcessors(), registration.requestFailures());
+                registration.requestProcessors(), MachineDefinitionConverter.fromInternalRequestFailures(registration.requestFailures()));
         Plugin.registerStartupMachine(definition);
     }
 

@@ -7,8 +7,7 @@ import net.minecraft.resources.Identifier;
 /** Public immutable recipe requirement boundary.
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface RecipeRequirement permits ItemRequirement, FluidRequirement, EnergyRequirement,
-        SmartInterfaceRequirement, CustomRecipeIo {
+public interface RecipeRequirement {
     /**
      * Creates a validated codec-backed recipe IO declaration.
      *

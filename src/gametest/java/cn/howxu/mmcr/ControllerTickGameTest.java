@@ -387,10 +387,15 @@ public class ControllerTickGameTest {
                     helper.assertTrue(context.dataStorage() != null,
                             "Tick callback resolves the formed DataStorage");
                     MachineIoPlan plan = context.ioPlan()
-                            .addInput(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
-                                    Ingredient.of(Items.IRON_INGOT), 2)))
-                            .addInput(MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(5)))
-                            .addOutput(MachineRequirement.itemOutput(new ItemStack(Items.GOLD_NUGGET, 3)),
+                            .addInput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
+                                    cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.INPUT,
+                                    Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY, 1F,
+                                    cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F))
+                            .addInput(new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(5))
+                            .addOutput(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(
+                                    cn.howxu.mmcr.api.publicapi.recipe.RecipeIo.OUTPUT, null, 0,
+                                    new ItemStack(Items.GOLD_NUGGET, 3), 1F,
+                                    cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY, 1F),
                                     OutputPolicy.ALLOW_PARTIAL);
                     List<ItemStack> firstInputBeforeSimulation = snapshot(firstInput.itemStorage());
                     List<ItemStack> secondInputBeforeSimulation = snapshot(secondInput.itemStorage());

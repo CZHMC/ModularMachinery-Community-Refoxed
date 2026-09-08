@@ -9,7 +9,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record FluidRequirement(RecipeIo io, FluidIngredient ingredient, int amount, FluidStack stack, float chance)
-        implements RecipeRequirement {
+        implements cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement {
     public FluidRequirement(RecipeIo io, FluidIngredient ingredient, int amount, FluidStack stack) {
         this(io, ingredient, amount, stack, 1F);
     }

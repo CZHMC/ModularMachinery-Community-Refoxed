@@ -56,7 +56,7 @@ public class UpgradeBusGameTest {
         DynamicMachine registeredMachine = (DynamicMachine) MachineRegistry.getMachine(machineId);
         helper.assertTrue(registeredMachine != null, "Upgrade Bus test machine is registered");
         AtomicReference<List<ItemStack>> observedUpgradeItems = new AtomicReference<>();
-        AtomicReference<List<MachineRequirement>> observedRequirements = new AtomicReference<>();
+        AtomicReference<List<cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement>> observedRequirements = new AtomicReference<>();
         Machine machine = new DynamicMachine(registeredMachine.registryName(), registeredMachine.displayNameKey(),
                 registeredMachine.pattern(), registeredMachine.controller(), registeredMachine.appearance(),
                 registeredMachine.portRequirements(), registeredMachine.portTierRequirements(),
@@ -126,7 +126,8 @@ public class UpgradeBusGameTest {
                     "Recipe start callback receives both Upgrade Bus items");
             helper.assertTrue(observedRequirements.get() != null
                             && observedRequirements.get().stream()
-                            .anyMatch(requirement -> requirement instanceof ItemRequirement item && item.count() == 3),
+                            .anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement item
+                                    && item.count() == 3),
                     "Recipe start callback receives the input quantity after Upgrade Bus modifiers: "
                             + observedRequirements.get());
 

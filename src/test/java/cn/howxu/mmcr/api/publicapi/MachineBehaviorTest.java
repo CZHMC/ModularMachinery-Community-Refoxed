@@ -16,11 +16,13 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.BlockPos;
@@ -205,10 +207,12 @@ class MachineBehaviorTest {
     void recipe_start_snapshot_replaces_item_and_fluid_outputs_with_defensive_copies() {
         MachineRecipe recipe = recipe();
         RecipeStartContext context = new RecipeStartContext(recipe, 1, 1);
-        List<MachineRequirement> requirements = List.of();
+        List<RecipeRequirement> requirements = List.of();
         List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F));
 
-        context.setRequirements(List.of(MachineRequirement.itemOutput(new ItemStack(Items.IRON_NUGGET))));
+        context.setRequirements(List.of(ItemRequirement.output(
+                new cn.howxu.mmcr.api.publicapi.recipe.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F,
+                        cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet.EMPTY))));
         assertThat(context.outputs()).hasSize(1);
         context.setRequirements(requirements);
         context.setOutputs(outputs);
@@ -218,6 +222,20 @@ class MachineBehaviorTest {
         assertThat(context.snapshot().requirements()).isEqualTo(context.requirements());
         assertThat(context.snapshot().outputs()).isEqualTo(context.outputs());
         assertThatThrownBy(() -> context.setDuration(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void recipe_contexts_expose_public_requirements_only() {
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("public_requirements"), MMCR.id("behavior_machine"), 20,
+                List.of(new cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement(32)), List.of());
+
+        RecipeRequirement startRequirement = new RecipeStartContext(recipe, 1, 1).requirements().getFirst();
+        RecipeRequirement tickRequirement = new RecipeTickContext(recipe, 0, 20, 1).requirements().getFirst();
+
+        assertThat(startRequirement).isInstanceOf(cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement.class);
+        assertThat(tickRequirement).isInstanceOf(cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement.class);
+        assertThat(((cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement) startRequirement).io())
+                .isEqualTo(RecipeIo.INPUT);
     }
 
     @Test

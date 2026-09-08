@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.network.RequestBody;
-import cn.howxu.mmcr.api.network.RequestFailed;
+import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
 import cn.howxu.mmcr.api.network.RequestInfo;
 import cn.howxu.mmcr.api.network.RequestProcess;
@@ -229,7 +229,7 @@ class MachineBuilderJSTest {
         assertThat(registration.networkInterface().maxConnections()).isEqualTo(3);
         assertThat(registration.networkInterface().allowedMachineIds()).containsExactly(targetId);
         assertThat(registration.requestProcessors()).containsEntry(processId, process);
-        assertThat(registration.requestFailures()).containsEntry(failureId, failure);
+        assertThat(registration.requestFailures()).containsKey(failureId);
 
         registration.requestProcessors().get(processId).process(RequestBody.of(Map.of()),
                 new RequestInfo(processId, new MachineReference(targetId, 1L)), null, null);

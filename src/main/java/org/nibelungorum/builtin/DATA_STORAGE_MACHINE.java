@@ -23,7 +23,7 @@ import java.math.BigInteger;
 
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
-import static cn.howxu.mmcr.internal.registration.BuiltinRegistration.id;
+import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 
 /**
  * @author howxu <dev@howxu.cn>

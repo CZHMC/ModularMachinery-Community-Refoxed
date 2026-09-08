@@ -17,9 +17,11 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
-import cn.howxu.mmcr.api.recipe.MachineIngredient;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
@@ -255,7 +257,7 @@ class MachineIoPlanTest {
         DataStorage data = new DataStorage();
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new EnergyHatchCapability(energy, IOType.INPUT))));
-        plan.addInput(MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(4)));
+        plan.addInput(new EnergyRequirement(4));
 
         assertThat(plan.simulate().energySatisfied()).isTrue();
         assertThat(plan.commit(transaction -> data.set("value", DataValue.of(1), transaction)).successful()).isTrue();
@@ -270,7 +272,7 @@ class MachineIoPlanTest {
         DataStorage data = new DataStorage();
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new EnergyHatchCapability(energy, IOType.INPUT))));
-        plan.addInput(MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(4)));
+        plan.addInput(new EnergyRequirement(4));
         assertThat(plan.simulate().energySatisfied()).isTrue();
 
         assertThatThrownBy(() -> plan.commit(transaction -> {
@@ -313,7 +315,7 @@ class MachineIoPlanTest {
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new ItemBusCapability(first, IOType.OUTPUT),
                 new ItemBusCapability(second, IOType.OUTPUT))));
-        plan.addOutput(MachineRequirement.itemOutput(output),
+        plan.addOutput(itemOutput(output),
                 OutputPolicy.REQUIRE_FULL);
 
         MachineIoPlan.Simulation simulation = plan.simulate();
@@ -333,7 +335,7 @@ class MachineIoPlanTest {
         insert(first, 0, gold, 63L);
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new ItemBusCapability(first, IOType.OUTPUT))));
-        plan.addOutput(MachineRequirement.itemOutput(output),
+        plan.addOutput(itemOutput(output),
                 OutputPolicy.ALLOW_PARTIAL);
 
         assertThat(plan.simulate().outputs())
@@ -353,11 +355,10 @@ class MachineIoPlanTest {
         LongValueStorage energyStorage = new LongValueStorage(100L, 100L, null);
         energyStorage.setAmount(4L);
 
-        MachineRequirement itemInput = MachineRequirement.fromInput(
-                new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1));
-        MachineRequirement energyInput = MachineRequirement.fromInput(
-                new MachineIngredient.EnergyIngredient(4));
-        MachineRequirement output = MachineRequirement.itemOutput(outputStack);
+        RecipeRequirement itemInput = new ItemRequirement(RecipeIo.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                ItemStack.EMPTY, 1F, DataComponentPredicateSet.EMPTY, 1F);
+        RecipeRequirement energyInput = new EnergyRequirement(4);
+        RecipeRequirement output = itemOutput(outputStack);
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new ItemBusCapability(outputStorage, IOType.OUTPUT),
                 new ItemBusCapability(inputStorage, IOType.INPUT),
@@ -389,7 +390,7 @@ class MachineIoPlanTest {
         LongResourceStorage<ItemResource> fullStorage = itemStorage(1);
         MachineIoPlan fullPlan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new ItemBusCapability(fullStorage, IOType.OUTPUT))));
-        fullPlan.addOutput(MachineRequirement.itemOutput(output), OutputPolicy.REQUIRE_FULL);
+        fullPlan.addOutput(itemOutput(output), OutputPolicy.REQUIRE_FULL);
 
         assertThat(fullPlan.simulate().outputs())
                 .containsExactly(new OutputSimulation(4L, 4L, OutputFit.FULL));
@@ -399,7 +400,7 @@ class MachineIoPlanTest {
         insert(noneStorage, 0, ItemResource.of(Items.COBBLESTONE), 64L);
         MachineIoPlan nonePlan = new MachineIoPlan(new CapabilitySnapshot(List.of(
                 new ItemBusCapability(noneStorage, IOType.OUTPUT))));
-        nonePlan.addOutput(MachineRequirement.itemOutput(output), OutputPolicy.REQUIRE_FULL);
+        nonePlan.addOutput(itemOutput(output), OutputPolicy.REQUIRE_FULL);
 
         assertThat(nonePlan.simulate().outputs())
                 .containsExactly(new OutputSimulation(4L, 0L, OutputFit.NONE));
@@ -411,7 +412,7 @@ class MachineIoPlanTest {
     void add_input_and_output_reject_the_wrong_direction() {
         MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of()));
 
-        assertThatThrownBy(() -> plan.addInput(MachineRequirement.itemOutput(new ItemStack(Items.IRON_INGOT))))
+        assertThatThrownBy(() -> plan.addInput(itemOutput(new ItemStack(Items.IRON_INGOT))))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> plan.addOutput(new EnergyRequirement(1), OutputPolicy.REQUIRE_FULL))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -419,6 +420,10 @@ class MachineIoPlanTest {
 
     private static MachineIoView view(MachineCapability... capabilities) {
         return new MachineIoView(new CapabilitySnapshot(List.of(capabilities)));
+    }
+
+    private static ItemRequirement itemOutput(ItemStack stack) {
+        return new ItemRequirement(RecipeIo.OUTPUT, null, 0, stack, 1F, DataComponentPredicateSet.EMPTY, 1F);
     }
 
     private static MachineCapability capability(Object storage, IOType ioType, List<String> tags) {

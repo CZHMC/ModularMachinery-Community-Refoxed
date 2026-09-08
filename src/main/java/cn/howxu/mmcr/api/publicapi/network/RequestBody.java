@@ -36,7 +36,12 @@ public final class RequestBody {
         return of(converted);
     }
 
-    cn.howxu.mmcr.api.network.RequestBody toInternal() {
+    /** Internal bridge value for MMCR adapters. */
+    public Object bridgeValue() {
+        return toInternal();
+    }
+
+    private cn.howxu.mmcr.api.network.RequestBody toInternal() {
         Map<String, cn.howxu.mmcr.api.data.DataValue> converted = new LinkedHashMap<>();
         values.forEach((key, value) -> converted.put(key, toInternal(value)));
         return cn.howxu.mmcr.api.network.RequestBody.of(converted);

@@ -6,7 +6,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record SmartInterfaceRequirement(RecipeIo io, String interfaceType, float minValue, float maxValue)
-        implements RecipeRequirement {
+        implements cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement {
     public SmartInterfaceRequirement {
         Objects.requireNonNull(io, "io");
         if (interfaceType == null || interfaceType.isBlank()) throw new IllegalArgumentException("interfaceType must not be blank");

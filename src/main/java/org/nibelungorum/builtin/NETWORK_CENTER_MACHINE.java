@@ -25,7 +25,7 @@ import java.util.Set;
 
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.block;
-import static cn.howxu.mmcr.internal.registration.BuiltinRegistration.id;
+import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 import static org.nibelungorum.builtin.NETWORK_PRODUCER_MACHINE.NETWORK_CENTER_MACHINE;
 import static org.nibelungorum.builtin.NETWORK_PRODUCER_MACHINE.REPORT_POWER;
 

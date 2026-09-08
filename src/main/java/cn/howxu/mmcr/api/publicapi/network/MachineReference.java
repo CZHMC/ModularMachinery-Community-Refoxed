@@ -12,7 +12,8 @@ public record MachineReference(Identifier type, long hash) {
         Objects.requireNonNull(type, "type");
     }
 
-    cn.howxu.mmcr.api.network.MachineReference toInternal() {
+    /** Internal bridge value for MMCR adapters. */
+    public Object bridgeValue() {
         return new cn.howxu.mmcr.api.network.MachineReference(type, hash);
     }
 

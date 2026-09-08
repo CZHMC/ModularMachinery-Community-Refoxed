@@ -23,7 +23,9 @@ public final class NetworkApi {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(body, "body");
-        cn.howxu.mmcr.api.network.NetworkApi.sendRequest(source.toInternal(), target.toInternal(), requestId,
-                body.toInternal());
+        cn.howxu.mmcr.api.network.NetworkApi.sendRequest(
+                (cn.howxu.mmcr.api.network.NetworkInterfaceReference) source.bridgeValue(),
+                (cn.howxu.mmcr.api.network.MachineReference) target.bridgeValue(), requestId,
+                (cn.howxu.mmcr.api.network.RequestBody) body.bridgeValue());
     }
 }

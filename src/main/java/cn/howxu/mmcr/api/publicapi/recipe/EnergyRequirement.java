@@ -5,7 +5,7 @@ import java.util.Objects;
 /** Immutable public energy recipe requirement.
  * @author howxu <dev@howxu.cn>
  */
-public record EnergyRequirement(RecipeIo io, long fePerTick) implements RecipeRequirement {
+public record EnergyRequirement(RecipeIo io, long fePerTick) implements cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement {
     public EnergyRequirement(long fePerTick) {
         this(RecipeIo.INPUT, fePerTick);
     }

@@ -7,7 +7,7 @@ import org.nibelungorum.client.ArtificialStarRenderer;
 import net.minecraft.resources.Identifier;
 import net.neoforged.fml.common.EventBusSubscriber;
 
-import static cn.howxu.mmcr.internal.registration.BuiltinRegistration.id;
+import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 
 /**
  * @description: TODO

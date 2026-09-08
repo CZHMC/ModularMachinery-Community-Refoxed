@@ -8,6 +8,9 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 
@@ -26,7 +29,7 @@ public final class RecipeStartContext {
     private final long requestedParallelism;
     private final long effectiveParallelism;
     private int duration;
-    private List<MachineRequirement> requirements;
+    private List<RecipeRequirement> requirements;
     private List<MachineOutput> outputs;
     private boolean cancelled;
 
@@ -34,13 +37,14 @@ public final class RecipeStartContext {
         this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
                 requestedParallelism, effectiveParallelism,
                 Math.max(1, IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(
-                        recipe.modifiers(), recipe.tickTime()))), recipe.runtimeRequirements(),
+                        recipe.modifiers(), recipe.tickTime()))),
+                MachineRecipeConverter.toPublicRequirements(recipe.runtimeRequirements()),
                 recipe.runtimeMachineOutputs());
     }
 
     public RecipeStartContext(MachineBehaviorContext machineContext, MachineRecipe recipe,
                               long requestedParallelism, long effectiveParallelism, int duration,
-                              List<MachineRequirement> requirements, List<MachineOutput> outputs) {
+                              List<RecipeRequirement> requirements, List<MachineOutput> outputs) {
         this.machineContext = Objects.requireNonNull(machineContext, "machineContext");
         this.recipe = Objects.requireNonNull(recipe, "recipe");
         if (requestedParallelism <= 0) throw new IllegalArgumentException("requestedParallelism must be positive");
@@ -49,7 +53,7 @@ public final class RecipeStartContext {
         this.requestedParallelism = requestedParallelism;
         this.effectiveParallelism = effectiveParallelism;
         this.duration = duration;
-        this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
+        this.requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
         this.outputs = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
     }
 
@@ -90,15 +94,15 @@ public final class RecipeStartContext {
     public boolean replaceExactItemInputCount(Item item, int expectedCount, int replacementCount) {
         Objects.requireNonNull(item, "item");
         if (expectedCount < 1 || replacementCount < 1) throw new IllegalArgumentException("item counts must be positive");
-        List<MachineRequirement> next = new ArrayList<>(requirements.size());
+        List<RecipeRequirement> next = new ArrayList<>(requirements.size());
         boolean replaced = false;
-        for (MachineRequirement requirement : requirements) {
-            if (!replaced && requirement instanceof ItemRequirement input
-                    && input.io() == RecipeModifier.IOType.INPUT && input.count() == expectedCount
-                    && input.item() != null && input.item().items().toList().size() == 1
-                    && input.item().items().toList().getFirst().value() == item) {
-                next.add(new ItemRequirement(input.io(), input.item(), replacementCount,
-                        input.stack(), input.chance(), input.tags(), input.components(), input.consumeChance()));
+        for (RecipeRequirement requirement : requirements) {
+            if (!replaced && requirement instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement input
+                    && input.io() == RecipeIo.INPUT && input.count() == expectedCount
+                    && input.ingredient() != null && input.ingredient().items().toList().size() == 1
+                    && input.ingredient().items().toList().getFirst().value() == item) {
+                next.add(new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(input.io(), input.ingredient(),
+                        replacementCount, input.stack(), input.chance(), input.components(), input.consumeChance()));
                 replaced = true;
             } else {
                 next.add(requirement);
@@ -108,17 +112,18 @@ public final class RecipeStartContext {
         return replaced;
     }
 
-    public List<MachineRequirement> requirements() {
+    public List<RecipeRequirement> requirements() {
         return requirements;
     }
 
-    public void setRequirements(List<MachineRequirement> requirements) {
+    public void setRequirements(List<RecipeRequirement> requirements) {
         if (outputs.stream().anyMatch(output -> !(output instanceof MachineOutput.ItemOutput)
                 && !(output instanceof MachineOutput.FluidOutput))) {
             throw new IllegalStateException("RecipeStartContext cannot derive registered custom outputs from requirements");
         }
-        this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
-        this.outputs = outputsFromRequirements(this.requirements);
+        this.requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
+        this.outputs = outputsFromRequirements(this.requirements.stream()
+                .map(MachineRecipeConverter::toRequirement).toList());
     }
 
     public List<MachineOutput> outputs() {
@@ -127,10 +132,12 @@ public final class RecipeStartContext {
 
     public void setOutputs(List<MachineOutput> outputs) {
         List<MachineOutput> copy = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
-        List<MachineRequirement> replacement = outputRequirements(copy, requirements);
+        List<MachineRequirement> internalRequirements = requirements.stream()
+                .map(MachineRecipeConverter::toRequirement).toList();
+        List<MachineRequirement> replacement = outputRequirements(copy, internalRequirements);
         List<MachineRequirement> nextRequirements = new ArrayList<>();
         int outputIndex = 0;
-        for (MachineRequirement requirement : requirements) {
+        for (MachineRequirement requirement : internalRequirements) {
             if (!OutputRegistry.matchesOutputRequirement(requirement)) {
                 nextRequirements.add(requirement);
                 continue;
@@ -139,7 +146,7 @@ public final class RecipeStartContext {
             outputIndex++;
         }
         while (outputIndex < replacement.size()) nextRequirements.add(replacement.get(outputIndex++));
-        this.requirements = List.copyOf(nextRequirements);
+        this.requirements = MachineRecipeConverter.toPublicRequirements(nextRequirements);
         this.outputs = copy;
     }
 
@@ -192,7 +199,7 @@ public final class RecipeStartContext {
         return result;
     }
 
-    public record ExecutionSnapshot(int duration, List<MachineRequirement> requirements,
+    public record ExecutionSnapshot(int duration, List<RecipeRequirement> requirements,
                                     List<MachineOutput> outputs) {
         public ExecutionSnapshot {
             if (duration <= 0) throw new IllegalArgumentException("duration must be positive");

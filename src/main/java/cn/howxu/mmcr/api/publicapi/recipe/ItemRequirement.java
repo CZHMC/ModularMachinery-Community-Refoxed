@@ -10,7 +10,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record ItemRequirement(RecipeIo io, Ingredient ingredient, int count, ItemStack stack, float chance,
-                              DataComponentPredicateSet components, float consumeChance) implements RecipeRequirement {
+                              DataComponentPredicateSet components, float consumeChance) implements cn.howxu.mmcr.api.publicapi.recipe.requirement.MachineRequirement {
     public ItemRequirement {
         Objects.requireNonNull(io, "io");
         components = components == null ? DataComponentPredicateSet.EMPTY : components;

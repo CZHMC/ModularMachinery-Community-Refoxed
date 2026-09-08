@@ -2,8 +2,8 @@ package cn.howxu.mmcr.api.publicapi;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
-import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
+import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
@@ -156,14 +156,14 @@ class PublicApiAdapterTest {
         var converted = MachineDefinitionConverter.toDynamicMachine(definition, structureFor(machineId));
 
         assertThat(converted.requestProcessors()).containsExactly(Map.entry(processId, process));
-        assertThat(converted.requestFailures()).containsExactly(Map.entry(failureId, failure));
+        assertThat(converted.requestFailures()).containsOnlyKeys(failureId);
         assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, Set.of())
                 .requestProcessors()).containsExactly(Map.entry(processId, process));
         assertThat(converted.withRole(cn.howxu.mmcr.api.machine.MachineRole.NORMAL, Set.of())
-                .requestFailures()).containsExactly(Map.entry(failureId, failure));
+                .requestFailures()).containsOnlyKeys(failureId);
         var startup = MachineDefinitionConverter.toStartupRegistration(definition);
         assertThat(startup.requestProcessors()).containsExactly(Map.entry(processId, process));
-        assertThat(startup.requestFailures()).containsExactly(Map.entry(failureId, failure));
+        assertThat(startup.requestFailures()).containsOnlyKeys(failureId);
     }
 
     @Test

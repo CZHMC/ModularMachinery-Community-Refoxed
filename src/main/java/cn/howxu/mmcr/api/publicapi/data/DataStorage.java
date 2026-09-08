@@ -44,6 +44,9 @@ public final class DataStorage {
 
     public Optional<DataValue> remove(String key) { return storage.remove(key).map(DataValue::fromInternal); }
 
+    /** Internal bridge value for MMCR adapters. */
+    public Object bridgeValue() { return storage; }
+
     /** Public write transaction shared with a machine I/O commit.
      * @author howxu <dev@howxu.cn>
      */

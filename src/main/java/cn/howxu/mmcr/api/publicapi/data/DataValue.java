@@ -45,6 +45,21 @@ public final class DataValue {
     }
 
     public Object value() { return value; }
+
+    public DataValueType type() {
+        if (value instanceof Boolean) return DataValueType.BOOLEAN;
+        if (value instanceof String) return DataValueType.STRING;
+        if (value instanceof Byte) return DataValueType.BYTE;
+        if (value instanceof Short) return DataValueType.SHORT;
+        if (value instanceof Integer) return DataValueType.INT;
+        if (value instanceof Long) return DataValueType.LONG;
+        if (value instanceof Float) return DataValueType.FLOAT;
+        if (value instanceof Double) return DataValueType.DOUBLE;
+        if (value instanceof BigInteger) return DataValueType.BIG_INTEGER;
+        if (value instanceof BigDecimal) return DataValueType.BIG_DECIMAL;
+        if (value instanceof List<?>) return DataValueType.LIST;
+        return DataValueType.MAP;
+    }
     public Optional<Boolean> asBoolean() { return as(Boolean.class); }
     public Optional<String> asString() { return as(String.class); }
     public Optional<Byte> asByte() { return as(Byte.class); }

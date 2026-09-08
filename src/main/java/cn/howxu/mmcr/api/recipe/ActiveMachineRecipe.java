@@ -137,7 +137,8 @@ public final class ActiveMachineRecipe {
         this.maxParallelism = Math.max(1, maxParallelism);
         this.parallelism = 1;
         this.data = new CompoundTag();
-        this.effectiveRequirements = MachineRequirement.copyList(execution.requirements());
+        this.effectiveRequirements = MachineRequirement.copyList(execution.requirements().stream()
+                .map(cn.howxu.mmcr.internal.registration.MachineRecipeConverter::toRequirement).toList());
         this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
         this.effectiveSnapshotPresent = true;
     }
@@ -355,7 +356,9 @@ public final class ActiveMachineRecipe {
         }
         ActiveMachineRecipe result = snapshotMarker
                 ? new ActiveMachineRecipe(recipe, maxParallelism,
-                new RecipeStartContext.ExecutionSnapshot(effectiveDuration, effectiveRequirements, effectiveOutputs))
+                new RecipeStartContext.ExecutionSnapshot(effectiveDuration,
+                        cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toPublicRequirements(effectiveRequirements),
+                        effectiveOutputs))
                 : new ActiveMachineRecipe(recipe, maxParallelism, false);
         result.tick = tick;
         result.totalTick = totalTick;
@@ -393,7 +396,8 @@ public final class ActiveMachineRecipe {
 
     public RecipeStartContext.ExecutionSnapshot executionSnapshot() {
         return new RecipeStartContext.ExecutionSnapshot(
-                totalTick, effectiveRequirements(), effectiveOutputs());
+                totalTick, cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                        .toPublicRequirements(effectiveRequirements()), effectiveOutputs());
     }
 
     /**
@@ -402,7 +406,8 @@ public final class ActiveMachineRecipe {
     public void setEffectiveExecutionSnapshot(RecipeStartContext.ExecutionSnapshot execution) {
         Objects.requireNonNull(execution, "execution");
         this.totalTick = execution.duration();
-        this.effectiveRequirements = MachineRequirement.copyList(execution.requirements());
+        this.effectiveRequirements = MachineRequirement.copyList(execution.requirements().stream()
+                .map(cn.howxu.mmcr.internal.registration.MachineRecipeConverter::toRequirement).toList());
         this.effectiveOutputs = MachineOutput.copyList(execution.outputs());
         this.effectiveSnapshotPresent = true;
     }

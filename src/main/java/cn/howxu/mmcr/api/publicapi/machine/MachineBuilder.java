@@ -2,12 +2,12 @@ package cn.howxu.mmcr.api.publicapi.machine;
 
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
-import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestProcess;
 import cn.howxu.mmcr.api.publicapi.data.DataStorage;
 import cn.howxu.mmcr.api.publicapi.network.MachineReference;
 import cn.howxu.mmcr.api.publicapi.network.RequestBody;
 import cn.howxu.mmcr.api.publicapi.network.RequestInfo;
+import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
 import java.util.Map;
 import net.minecraft.resources.Identifier;
 
@@ -221,6 +221,18 @@ public final class MachineBuilder {
             throw new IllegalArgumentException("Duplicate request failure handler: " + requestId);
         }
         return this;
+    }
+
+    /** @deprecated Use {@link #requestFailed(Identifier, RequestFailed)}. */
+    @Deprecated(forRemoval = true)
+    public MachineBuilder requestFailedLegacy(Identifier requestId, cn.howxu.mmcr.api.network.RequestFailed failure) {
+        Objects.requireNonNull(failure, "failure");
+        return requestFailed(requestId, (RequestFailed) (body, request, senderStorage, reason) -> failure.fail(
+                (cn.howxu.mmcr.api.network.RequestBody) body.bridgeValue(),
+                new cn.howxu.mmcr.api.network.RequestInfo(request.requestId(),
+                        (cn.howxu.mmcr.api.network.MachineReference) request.peer().bridgeValue()),
+                senderStorage == null ? null : (cn.howxu.mmcr.api.data.DataStorage) senderStorage.bridgeValue(),
+                cn.howxu.mmcr.api.network.RequestFailureReason.valueOf(reason.name())));
     }
 
     public MachineDefinition build() {

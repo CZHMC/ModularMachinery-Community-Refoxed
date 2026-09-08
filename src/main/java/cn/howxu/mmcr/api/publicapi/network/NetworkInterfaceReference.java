@@ -21,5 +21,6 @@ public final class NetworkInterfaceReference {
         return reference.connections().stream().map(MachineReference::fromInternal).toList();
     }
 
-    cn.howxu.mmcr.api.network.NetworkInterfaceReference toInternal() { return reference; }
+    /** Internal bridge value for MMCR adapters. */
+    public Object bridgeValue() { return reference; }
 }

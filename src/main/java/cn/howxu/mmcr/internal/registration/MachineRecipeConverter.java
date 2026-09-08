@@ -28,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Objects;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.item.ItemStack;
@@ -110,6 +111,67 @@ public final class MachineRecipeConverter {
             return new SmartInterfaceRequirement(toInternalIo(smart.io()), smart.interfaceType(), smart.minValue(), smart.maxValue());
         }
         throw new IllegalArgumentException("Unsupported public recipe requirement: " + value);
+    }
+
+    public static RecipeRequirement toPublicRequirement(MachineRequirement value) {
+        Objects.requireNonNull(value, "value");
+        RecipeIo io = value.io() == RecipeModifier.IOType.INPUT ? RecipeIo.INPUT : RecipeIo.OUTPUT;
+        if (!value.tags().isEmpty()) return codecBackedRequirement(value, io);
+        if (value instanceof ItemRequirement item) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(io, item.item(), item.count(), item.stack(),
+                    item.chance(), toPublicComponents(item.components()), item.consumeChance());
+        }
+        if (value instanceof FluidRequirement fluid) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement(io, fluid.fluid(), fluid.amount(),
+                    fluid.stack(), fluid.chance());
+        }
+        if (value instanceof EnergyRequirement energy) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(io, energy.fePerTick());
+        }
+        if (value instanceof SmartInterfaceRequirement smart) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement(io, smart.interfaceType(),
+                    smart.minValue(), smart.maxValue());
+        }
+        return codecBackedRequirement(value, io);
+    }
+
+    private static CustomRecipeIo codecBackedRequirement(MachineRequirement value, RecipeIo io) {
+        return new CustomRecipeIo(value.type().id(), io,
+                MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow());
+    }
+
+    public static List<RecipeRequirement> toPublicRequirements(List<MachineRequirement> values) {
+        return values.stream().map(MachineRecipeConverter::toPublicRequirement).toList();
+    }
+
+    private static DataComponentPredicateSet toPublicComponents(
+            cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components) {
+        if (components.isEmpty()) return DataComponentPredicateSet.EMPTY;
+        Map<Identifier, ComponentPredicate> values = new LinkedHashMap<>();
+        components.values().forEach((type, predicate) -> values.put(
+                Objects.requireNonNull(BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(type),
+                        "Unregistered data component type"), toPublicPredicate(predicate)));
+        return new DataComponentPredicateSet(values);
+    }
+
+    private static ComponentPredicate toPublicPredicate(
+            cn.howxu.mmcr.api.recipe.component.ComponentPredicate predicate) {
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.Exact exact) {
+            return ComponentPredicate.exact((com.google.gson.JsonElement) exact.value().convert(JsonOps.INSTANCE).getValue());
+        }
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.MapValue map) {
+            Map<String, ComponentPredicate> values = new LinkedHashMap<>();
+            map.values().forEach((key, value) -> values.put(key, toPublicPredicate(value)));
+            return ComponentPredicate.map(values);
+        }
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.ListValue list) {
+            return ComponentPredicate.list(list.values().stream().map(MachineRecipeConverter::toPublicPredicate).toList());
+        }
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.Range range) {
+            return ComponentPredicate.range(range.min(), range.max());
+        }
+        var text = (cn.howxu.mmcr.api.recipe.component.ComponentPredicate.TextValue) predicate;
+        return ComponentPredicate.text(text.value().getString(), ComponentPredicate.TextMode.valueOf(text.mode().name()));
     }
 
     private static cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet toInternalComponents(

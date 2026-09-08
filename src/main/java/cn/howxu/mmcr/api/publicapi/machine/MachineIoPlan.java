@@ -30,7 +30,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  */
 public final class MachineIoPlan {
     private final CapabilitySnapshot capabilitySnapshot;
-    private List<MachineRequirement> requirements = List.of();
+    private List<RecipeRequirement> requirements = List.of();
     private Map<Integer, cn.howxu.mmcr.api.capability.plan.OutputPolicy> outputPolicies = Map.of();
     private @Nullable PlanningResult simulation;
     private boolean consumed;
@@ -53,50 +53,36 @@ public final class MachineIoPlan {
         return new MachineIoView(capabilitySnapshot);
     }
 
-    public MachineIoPlan addInput(MachineRequirement requirement) {
+    public MachineIoPlan addInput(RecipeRequirement requirement) {
         return addRequirement(requirement, RecipeModifier.IOType.INPUT, null);
     }
 
-    public MachineIoPlan addInput(RecipeRequirement requirement) {
-        return addInput(MachineRecipeConverter.toRequirement(requirement));
-    }
-
-    public MachineIoPlan addOutput(MachineRequirement requirement, OutputPolicy policy) {
-        Objects.requireNonNull(policy, "policy");
+    public MachineIoPlan addOutput(RecipeRequirement requirement, OutputPolicy policy) {
         return addRequirement(requirement, RecipeModifier.IOType.OUTPUT, toInternal(policy));
     }
 
-    public MachineIoPlan addOutput(RecipeRequirement requirement, OutputPolicy policy) {
-        return addOutput(MachineRecipeConverter.toRequirement(requirement), policy);
-    }
-
-    public MachineIoPlan add(MachineRequirement requirement) {
-        Objects.requireNonNull(requirement, "requirement");
-        return requirement.io() == RecipeModifier.IOType.INPUT
+    public MachineIoPlan add(RecipeRequirement requirement) {
+        return MachineRecipeConverter.toRequirement(requirement).io() == RecipeModifier.IOType.INPUT
                 ? addInput(requirement) : addOutput(requirement, OutputPolicy.REQUIRE_FULL);
     }
 
-    public MachineIoPlan add(RecipeRequirement requirement) {
-        return add(MachineRecipeConverter.toRequirement(requirement));
-    }
-
-    private MachineIoPlan addRequirement(MachineRequirement requirement, RecipeModifier.IOType expectedIo,
+    private MachineIoPlan addRequirement(RecipeRequirement requirement, RecipeModifier.IOType expectedIo,
                                          @Nullable cn.howxu.mmcr.api.capability.plan.OutputPolicy outputPolicy) {
         Objects.requireNonNull(requirement, "requirement");
-        if (requirement.io() != expectedIo) {
+        if (MachineRecipeConverter.toRequirement(requirement).io() != expectedIo) {
             throw new IllegalArgumentException("Requirement direction must be " + expectedIo);
         }
         if (consumed) throw new IllegalStateException("Machine I/O plan has already been consumed");
         int insertionIndex = requirements.size();
         if (expectedIo == RecipeModifier.IOType.INPUT) {
             for (int index = 0; index < requirements.size(); index++) {
-                if (requirements.get(index).io() == RecipeModifier.IOType.OUTPUT) {
+                if (MachineRecipeConverter.toRequirement(requirements.get(index)).io() == RecipeModifier.IOType.OUTPUT) {
                     insertionIndex = index;
                     break;
                 }
             }
         }
-        List<MachineRequirement> next = new ArrayList<>(requirements);
+        List<RecipeRequirement> next = new ArrayList<>(requirements);
         next.add(insertionIndex, requirement);
         requirements = List.copyOf(next);
         int finalInsertionIndex = insertionIndex;
@@ -117,14 +103,14 @@ public final class MachineIoPlan {
                 : cn.howxu.mmcr.api.capability.plan.OutputPolicy.REQUIRE_FULL;
     }
 
-    public List<MachineRequirement> requirements() {
+    public List<RecipeRequirement> requirements() {
         return requirements;
     }
 
     public Simulation simulate() {
         if (consumed) throw new IllegalStateException("Machine I/O plan has already been consumed");
         CraftingContext context = new CraftingContext(capabilitySnapshot);
-        simulation = context.planRequirements(requirements, 1, outputPolicies);
+        simulation = context.planRequirements(requirements.stream().map(MachineRecipeConverter::toRequirement).toList(), 1, outputPolicies);
         return simulationView(simulation);
     }
 
@@ -169,16 +155,16 @@ public final class MachineIoPlan {
     private Simulation simulationView(PlanningResult result) {
         Integer failureIndex = result.failureRequirementIndex();
         boolean inputsSatisfied = result.failure() == null || !matchesFailure(failureIndex,
-                requirement -> requirement.io() == RecipeModifier.IOType.INPUT
-                        && !(requirement instanceof EnergyRequirement));
+                requirement -> MachineRecipeConverter.toRequirement(requirement).io() == RecipeModifier.IOType.INPUT
+                        && !(MachineRecipeConverter.toRequirement(requirement) instanceof EnergyRequirement));
         boolean energySatisfied = result.failure() == null || !matchesFailure(failureIndex,
-                requirement -> requirement instanceof EnergyRequirement
-                        && requirement.io() == RecipeModifier.IOType.INPUT);
+                requirement -> MachineRecipeConverter.toRequirement(requirement) instanceof EnergyRequirement
+                        && MachineRecipeConverter.toRequirement(requirement).io() == RecipeModifier.IOType.INPUT);
         return new Simulation(inputsSatisfied, energySatisfied, result.outputSimulations(), result.failure());
     }
 
     private boolean matchesFailure(@Nullable Integer failureIndex,
-                                   Predicate<MachineRequirement> predicate) {
+                                    Predicate<RecipeRequirement> predicate) {
         return failureIndex != null && failureIndex >= 0 && failureIndex < requirements.size()
                 && predicate.test(requirements.get(failureIndex));
     }

@@ -173,7 +173,8 @@ class CraftingRuntimeTest {
         MachineRecipe recipe = recipe("active_effective_snapshot", 20, List.of());
         ItemStack outputStack = stack(Items.GOLD_NUGGET, 1);
         RecipeStartContext.ExecutionSnapshot execution = new RecipeStartContext.ExecutionSnapshot(7,
-                List.of(input(Items.IRON_INGOT, 2), output(Items.GOLD_NUGGET, 1)),
+                cn.howxu.mmcr.internal.registration.MachineRecipeConverter.toPublicRequirements(
+                        List.of(input(Items.IRON_INGOT, 2), output(Items.GOLD_NUGGET, 1))),
                 List.of(new MachineOutput.ItemOutput(outputStack, 1F)));
 
         ActiveMachineRecipe active = new ActiveMachineRecipe(recipe, 2, execution);
@@ -654,8 +655,8 @@ class CraftingRuntimeTest {
                 .beforeStart(context -> {
                     starts.incrementAndGet();
                     context.setDuration(2);
-                    context.setRequirements(List.of(
-                            input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 2)));
+                    context.setRequirements(cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                            .toPublicRequirements(List.of(input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 2))));
                 }).build()));
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe recipe = recipe("runtime_persisted_effective_snapshot", 20, List.of(
@@ -695,7 +696,8 @@ class CraftingRuntimeTest {
                 .beforeStart(context -> {
                     starts.incrementAndGet();
                     context.setDuration(2);
-                    context.setRequirements(List.of(input(Items.IRON_INGOT, 2)));
+                    context.setRequirements(cn.howxu.mmcr.internal.registration.MachineRecipeConverter
+                            .toPublicRequirements(List.of(input(Items.IRON_INGOT, 2))));
                 }).build()));
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 2));
         MachineRecipe recipe = recipe("runtime_legacy_effective_snapshot", 20,
@@ -955,7 +957,8 @@ class CraftingRuntimeTest {
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
                 .recipeTick(context -> {
                     if (context.totalTick() != 2
-                            || ((ItemRequirement) context.requirements().getFirst()).count() != 2
+                            || ((cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement)
+                            context.requirements().getFirst()).count() != 2
                             || ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
                         callbackFailure.compareAndSet(null, "legacy restore did not expose the effective snapshot");
                     }
