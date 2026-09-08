@@ -24,12 +24,12 @@ import java.util.Set;
 public final class CapabilityFactories {
     private CapabilityFactories() {}
 
-    static CapabilityView view(CapabilityType type, CapabilityDirections directions) {
+    public static CapabilityView view(CapabilityType type, CapabilityDirections directions) {
         return view(type, directions, Set.of());
     }
 
-    static CapabilityView view(CapabilityType type, CapabilityDirections directions,
-                               Set<Class<? extends CapabilityFacet>> facets) {
+    public static CapabilityView view(CapabilityType type, CapabilityDirections directions,
+                                      Set<Class<? extends CapabilityFacet>> facets) {
         return new CapabilityView() {
             @Override
             public CapabilityType type() {

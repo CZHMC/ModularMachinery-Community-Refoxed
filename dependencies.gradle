@@ -49,6 +49,7 @@ dependencies {
     // mekanism from howxu maven, recently it's unusable
     localRuntime "mekanism:Mekanism:26.1.2-10.8.0.homebaked"
     compileOnly "mekanism:Mekanism:26.1.2-10.8.0.homebaked:api"
+    compileOnly "mekanism:Mekanism:26.1.2-10.8.0.homebaked"
 
     // guide me
     implementation "curse.maven:guideme-1173950:8204880"

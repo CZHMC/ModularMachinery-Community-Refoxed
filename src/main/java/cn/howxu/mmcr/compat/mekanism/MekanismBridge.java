@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.mekanism;
 
 import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
 /**
  * Isolates optional Mekanism integration from the common runtime.
@@ -19,4 +20,10 @@ public interface MekanismBridge {
     Identifier unavailableReason();
 
     void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat);
+
+    default void registerCapabilities(RegisterCapabilitiesEvent event) {
+    }
+
+    default void registerTransferPolicies() {
+    }
 }

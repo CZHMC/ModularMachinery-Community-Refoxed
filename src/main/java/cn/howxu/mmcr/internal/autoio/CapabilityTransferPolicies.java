@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.transfer.TransferContext;
 import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
@@ -51,6 +52,7 @@ public final class CapabilityTransferPolicies {
      * Forces class initialization before generic callers query the registry.
      */
     public static void ensureRegistered() {
+        MekanismBridge.get().registerTransferPolicies();
     }
 
     public static Optional<TransferPolicy> policyFor(MachineCapability capability) {
