@@ -213,6 +213,44 @@ public class MekanismPortGameTest {
         helper.succeed();
     }
 
+    public void heatOutputPortDoesNotAbsorbAmbientHeat(GameTestHelper helper) {
+        BlockPos heatPos = new BlockPos(0, 1, 0);
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+
+        // Set the port noticeably below ambient so the default simulateEnvironment would push heat in.
+        double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
+        double capacity = port.heatCapacitor().getHeatCapacity();
+        double coldHeat = Math.max(0D, (ambient - 50D) * capacity);
+        setHeat(port, coldHeat);
+        double before = port.heatCapacitor().getHeat();
+
+        port.serverTick();
+
+        helper.assertValueEqual(before, port.heatCapacitor().getHeat(),
+                "An output heat port does not absorb heat from its ambient environment");
+        helper.succeed();
+    }
+
+    public void heatInputPortDoesAbsorbAmbientHeat(GameTestHelper helper) {
+        BlockPos heatPos = new BlockPos(0, 1, 0);
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+
+        // Set the port noticeably below ambient; the default simulateEnvironment should push heat in.
+        double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
+        double capacity = port.heatCapacitor().getHeatCapacity();
+        double coldHeat = Math.max(0D, (ambient - 50D) * capacity);
+        setHeat(port, coldHeat);
+        double before = port.heatCapacitor().getHeat();
+
+        port.serverTick();
+
+        helper.assertTrue(port.heatCapacitor().getHeat() > before,
+                "An input heat port still absorbs heat from its ambient environment");
+        helper.succeed();
+    }
+
     public void heatPortUsesStandardAdjacentExchange(GameTestHelper helper) {
         BlockPos sourcePos = new BlockPos(0, 1, 0);
         BlockPos sinkPos = sourcePos.relative(Direction.EAST);

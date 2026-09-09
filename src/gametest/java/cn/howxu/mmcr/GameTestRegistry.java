@@ -167,6 +167,10 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().heatOutputCapabilityRejectsExternalHeatInput(helper));
         register(event, "mekanism_heat_port_loses_heat_to_environment", 100,
                 helper -> new MekanismPortGameTest().heatPortLosesHeatToItsEnvironment(helper));
+        register(event, "mekanism_heat_output_port_does_not_absorb_ambient", 100,
+                helper -> new MekanismPortGameTest().heatOutputPortDoesNotAbsorbAmbientHeat(helper));
+        register(event, "mekanism_heat_input_port_does_absorb_ambient", 100,
+                helper -> new MekanismPortGameTest().heatInputPortDoesAbsorbAmbientHeat(helper));
         register(event, "mekanism_heat_port_uses_standard_adjacent_exchange", 100,
                 helper -> new MekanismPortGameTest().heatPortUsesStandardAdjacentExchange(helper));
         register(event, "mekanism_ambient_heat_port_does_not_emit_baseline", 100,

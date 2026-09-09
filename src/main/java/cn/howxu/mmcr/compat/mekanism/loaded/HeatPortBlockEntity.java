@@ -99,6 +99,21 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
         return HeatAPI.getAmbientTemp(level, worldPosition.relative(side));
     }
 
+    /**
+     * Output ports must not absorb environmental heat. {@link ITileHeatHandler#simulateEnvironment}
+     * calls {@code heatCapacitor.handleHeat(-tempToTransfer * heatCapacity)} for every exposed
+     * side, which adds heat from ambient when the port is colder than the surrounding air. For an
+     * output port this is semantically wrong (heat is flowing in, not out), so we skip the ambient
+     * pass entirely. Neighbor exchange via {@link ITileHeatHandler#simulateAdjacent} still runs and
+     * recipes can still deposit heat into the capacitor directly.
+     */
+    @Override
+    public HeatAPI.HeatTransfer simulate(TransactionContext transaction) {
+        double adjacent = simulateAdjacent(transaction);
+        double environment = ioType() == IOType.OUTPUT ? 0D : simulateEnvironment(transaction);
+        return new HeatAPI.HeatTransfer(adjacent, environment);
+    }
+
     @Override
     protected void tick() {
         super.tick();
