@@ -683,6 +683,8 @@ public final class CraftingRuntime {
 
     private static String failureUnloc(ExecutionStatus status) {
         if (status == null) return "";
+        var registeredReason = status.reason();
+        if (registeredReason != null) return registeredReason.translationKey();
         return switch (status.details().getOrDefault("reason", "")) {
             case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
             case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";

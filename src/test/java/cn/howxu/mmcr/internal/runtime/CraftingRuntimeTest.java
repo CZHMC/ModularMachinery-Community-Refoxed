@@ -4,6 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -322,6 +324,21 @@ class CraftingRuntimeTest {
         assertThat(runtime.failure()).isNotNull();
         assertThat(runtime.failure().details()).containsEntry("reason", "insufficient_resource");
         assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void registeredFailureReasonUsesItsTranslationKey() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        FailureReason reason = new FailureReason(MMCR.id("runtime_registered_failure"),
+                "gui.mmcr.failure.runtime_registered_failure");
+        FailureReasonRegistry.register(reason);
+        Field failure = CraftingRuntime.class.getDeclaredField("failure");
+        failure.setAccessible(true);
+        failure.set(runtime, new ExecutionStatus(MMCR.id("test"), StatusSeverity.BLOCKED, MMCR.id("test"),
+                Map.of("reason", reason.id().toString())));
+
+        assertThat(runtime.failureUnloc()).isEqualTo(reason.translationKey());
     }
 
     @Test
