@@ -145,6 +145,22 @@ class KubeJSApiTest {
     }
 
     @Test
+    void interface_predicate_shortcuts_match_input_and_output_ports() {
+        assertThat(api.anyOfItemPorts().matches(
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState())).isTrue();
+        assertThat(api.anyOfItemPorts().matches(
+                ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState())).isTrue();
+        assertThat(api.anyOfFluidPorts().matches(
+                ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(api.anyOfFluidPorts().matches(
+                ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState())).isTrue();
+        assertThat(api.anyOfEnergyPorts().matches(
+                ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState())).isTrue();
+        assertThat(api.anyOfEnergyPorts().matches(
+                ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState())).isTrue();
+    }
+
+    @Test
     void ports_predicate_matches_every_builtin_port_category() {
         var combinedInput = ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState();
         var extendedItemInput = ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState();

@@ -21,16 +21,24 @@ public final class KubeJSInterfaceHelpers {
     public static BlockPredicate anyOfFluidOutput() { return convert(InterfacePredicates.anyOfFluidOutput()); }
     public static BlockPredicate anyOfEnergyInput() { return convert(InterfacePredicates.anyOfEnergyInput()); }
     public static BlockPredicate anyOfEnergyOutput() { return convert(InterfacePredicates.anyOfEnergyOutput()); }
+    public static BlockPredicate anyOfItemPorts() { return convert(InterfacePredicates.anyOfItemPorts()); }
+    public static BlockPredicate anyOfFluidPorts() { return convert(InterfacePredicates.anyOfFluidPorts()); }
+    public static BlockPredicate anyOfEnergyPorts() { return convert(InterfacePredicates.anyOfEnergyPorts()); }
     public static BlockPredicate anyOfChemicalInput() { return convert(InterfacePredicates.anyOfChemicalInput()); }
     public static BlockPredicate anyOfChemicalOutput() { return convert(InterfacePredicates.anyOfChemicalOutput()); }
+    public static BlockPredicate anyOfChemicalPorts() { return convert(InterfacePredicates.anyOfChemicalPorts()); }
     public static BlockPredicate anyOfRadioactiveChemicalInput() {
         return convert(InterfacePredicates.anyOfRadioactiveChemicalInput());
     }
     public static BlockPredicate anyOfRadioactiveChemicalOutput() {
         return convert(InterfacePredicates.anyOfRadioactiveChemicalOutput());
     }
+    public static BlockPredicate anyOfRadioactiveChemicalPorts() {
+        return convert(InterfacePredicates.anyOfRadioactiveChemicalPorts());
+    }
     public static BlockPredicate anyOfHeatInput() { return convert(InterfacePredicates.anyOfHeatInput()); }
     public static BlockPredicate anyOfHeatOutput() { return convert(InterfacePredicates.anyOfHeatOutput()); }
+    public static BlockPredicate anyOfHeatPorts() { return convert(InterfacePredicates.anyOfHeatPorts()); }
     public static BlockPredicate anyOfUpgradeBus() { return convert(InterfacePredicates.anyOfUpgradeBus()); }
 
     public static BlockPredicate anyOfPort(String... ids) {

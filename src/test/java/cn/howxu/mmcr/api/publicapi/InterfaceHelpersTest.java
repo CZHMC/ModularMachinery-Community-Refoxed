@@ -100,6 +100,18 @@ class InterfaceHelpersTest {
     }
 
     @Test
+    void interface_port_shortcuts_match_both_directions() {
+        assertPredicateContainsBlock(InterfacePredicates.anyOfItemPorts(), ModBlocks.BLOCKS.get("item_input_bus").get());
+        assertPredicateContainsBlock(InterfacePredicates.anyOfItemPorts(), ModBlocks.BLOCKS.get("item_output_bus").get());
+        assertPredicateContainsBlock(InterfacePredicates.anyOfFluidPorts(), ModBlocks.BLOCKS.get("fluid_input_hatch").get());
+        assertPredicateContainsBlock(InterfacePredicates.anyOfFluidPorts(), ModBlocks.BLOCKS.get("fluid_output_hatch").get());
+        assertPredicateContainsBlock(InterfacePredicates.anyOfEnergyPorts(), ModBlocks.BLOCKS.get("energy_input_hatch").get());
+        assertPredicateContainsBlock(InterfacePredicates.anyOfEnergyPorts(), ModBlocks.BLOCKS.get("energy_output_hatch").get());
+        assertThat(InterfacePredicates.anyEnergyPorts())
+                .isEqualTo(InterfacePredicates.anyOfEnergyPorts());
+    }
+
+    @Test
     void any_of_port_rejects_empty_alternatives() {
         assertThatThrownBy(() -> InterfacePredicates.anyOfPort())
                 .isInstanceOf(IllegalArgumentException.class)
@@ -209,6 +221,19 @@ class InterfaceHelpersTest {
     }
 
     @Test
+    void kubejs_builders_expose_bidirectional_port_shortcuts() {
+        var energyInput = ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState();
+        var energyOutput = ModBlocks.BLOCKS.get("energy_output_hatch").get().defaultBlockState();
+
+        assertThat(KubeJSInterfaceHelpers.anyOfEnergyPorts().matches(energyInput)).isTrue();
+        assertThat(KubeJSInterfaceHelpers.anyOfEnergyPorts().matches(energyOutput)).isTrue();
+        assertThat(new MachineBuilderJS("test:interfaces").anyOfEnergyPorts().matches(energyOutput)).isTrue();
+        assertThat(new MachineStructureBuilderJS("test:interfaces").anyOfEnergyPorts().matches(energyInput)).isTrue();
+        assertThat(new cn.howxu.mmcr.compat.kubejs.MachineStructureStageBuilderJS("test:interfaces")
+                .anyOfEnergyPorts().matches(energyInput)).isTrue();
+    }
+
+    @Test
     void identifier_lookup_preserves_namespace() {
         assertThat(BuiltinRegistration.block(
                 Identifier.parse("minecraft:stone")).get()).isSameAs(Blocks.STONE);
@@ -252,9 +277,11 @@ class InterfaceHelpersTest {
     }
 
     private static void assertPredicateContainsBlock(BlockPredicate predicate, Block block) {
-        assertThat(predicate.alternatives()).anySatisfy(alternative -> {
-            assertThat(alternative.blockSupplier()).isPresent();
-            assertThat(alternative.blockSupplier().orElseThrow().get()).isSameAs(block);
-        });
+        if (predicate.blockSupplier().isPresent()) {
+            assertThat(predicate.blockSupplier().orElseThrow().get()).isSameAs(block);
+        } else {
+            assertThat(predicate.alternatives()).anySatisfy(alternative ->
+                    assertPredicateContainsBlock(alternative, block));
+        }
     }
 }

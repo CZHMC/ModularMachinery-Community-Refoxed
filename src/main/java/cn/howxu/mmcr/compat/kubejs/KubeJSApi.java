@@ -165,6 +165,14 @@ public final class KubeJSApi {
     public BlockPredicate anyOfFluidOutput() { return KubeJSInterfaceHelpers.anyOfFluidOutput(); }
     public BlockPredicate anyOfEnergyInput() { return KubeJSInterfaceHelpers.anyOfEnergyInput(); }
     public BlockPredicate anyOfEnergyOutput() { return KubeJSInterfaceHelpers.anyOfEnergyOutput(); }
+    public BlockPredicate anyOfItemPorts() { return KubeJSInterfaceHelpers.anyOfItemPorts(); }
+    public BlockPredicate anyOfFluidPorts() { return KubeJSInterfaceHelpers.anyOfFluidPorts(); }
+    public BlockPredicate anyOfEnergyPorts() { return KubeJSInterfaceHelpers.anyOfEnergyPorts(); }
+    public BlockPredicate anyOfChemicalPorts() { return KubeJSInterfaceHelpers.anyOfChemicalPorts(); }
+    public BlockPredicate anyOfRadioactiveChemicalPorts() {
+        return KubeJSInterfaceHelpers.anyOfRadioactiveChemicalPorts();
+    }
+    public BlockPredicate anyOfHeatPorts() { return KubeJSInterfaceHelpers.anyOfHeatPorts(); }
     public BlockPredicate anyOfUpgradeBus() { return KubeJSInterfaceHelpers.anyOfUpgradeBus(); }
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterface() { return KubeJSInterfaceHelpers.smartInterface(); }

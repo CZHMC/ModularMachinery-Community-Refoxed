@@ -68,6 +68,30 @@ public final class InterfacePredicates {
         return anyOfEnergyOutput();
     }
 
+    public static BlockPredicate anyOfItemPorts() {
+        return combine(anyOfItemInput(), anyOfItemOutput());
+    }
+
+    public static BlockPredicate anyItemPorts() {
+        return anyOfItemPorts();
+    }
+
+    public static BlockPredicate anyOfFluidPorts() {
+        return combine(anyOfFluidInput(), anyOfFluidOutput());
+    }
+
+    public static BlockPredicate anyFluidPorts() {
+        return anyOfFluidPorts();
+    }
+
+    public static BlockPredicate anyOfEnergyPorts() {
+        return combine(anyOfEnergyInput(), anyOfEnergyOutput());
+    }
+
+    public static BlockPredicate anyEnergyPorts() {
+        return anyOfEnergyPorts();
+    }
+
     public static BlockPredicate anyOfChemicalInput() {
         return anyOfChemicalPorts(IOType.INPUT, false);
     }
@@ -100,6 +124,22 @@ public final class InterfacePredicates {
         return anyOfRadioactiveChemicalOutput();
     }
 
+    public static BlockPredicate anyOfChemicalPorts() {
+        return combine(anyOfChemicalInput(), anyOfChemicalOutput());
+    }
+
+    public static BlockPredicate anyChemicalPorts() {
+        return anyOfChemicalPorts();
+    }
+
+    public static BlockPredicate anyOfRadioactiveChemicalPorts() {
+        return combine(anyOfRadioactiveChemicalInput(), anyOfRadioactiveChemicalOutput());
+    }
+
+    public static BlockPredicate anyRadioactiveChemicalPorts() {
+        return anyOfRadioactiveChemicalPorts();
+    }
+
     public static BlockPredicate anyOfHeatInput() {
         return anyOfPorts(MekanismPortFamilies.HEAT, IOType.INPUT);
     }
@@ -114,6 +154,14 @@ public final class InterfacePredicates {
 
     public static BlockPredicate anyHeatOutput() {
         return anyOfHeatOutput();
+    }
+
+    public static BlockPredicate anyOfHeatPorts() {
+        return combine(anyOfHeatInput(), anyOfHeatOutput());
+    }
+
+    public static BlockPredicate anyHeatPorts() {
+        return anyOfHeatPorts();
     }
 
     public static BlockPredicate anyOfUpgradeBus() {
@@ -220,6 +268,12 @@ public final class InterfacePredicates {
 
     private static void addIfPresent(List<BlockPredicate> predicates, BlockPredicate predicate) {
         if (!predicate.alternatives().isEmpty()) predicates.add(predicate);
+    }
+
+    private static BlockPredicate combine(BlockPredicate... predicates) {
+        List<BlockPredicate> alternatives = new ArrayList<>();
+        for (BlockPredicate predicate : predicates) addIfPresent(alternatives, predicate);
+        return alternatives.isEmpty() ? BlockPredicate.none() : BlockPredicate.anyOf(alternatives);
     }
 
     private static boolean isUnavailableMekanismFamily(Identifier familyId) {
