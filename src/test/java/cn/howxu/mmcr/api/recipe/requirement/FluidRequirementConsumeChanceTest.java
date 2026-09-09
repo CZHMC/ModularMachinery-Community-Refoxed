@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -48,6 +49,16 @@ class FluidRequirementConsumeChanceTest {
         assertThat(decoded.consumeChance()).isEqualTo(0.25F);
     }
 
+    @Test
+    void fluid_ingredient_round_trips_consume_chance() {
+        var fluid = new MachineIngredient.FluidIngredient(water, 1000, 0.25F);
+        var encoded = MachineIngredient.CODEC.encodeStart(jsonOps(), fluid).getOrThrow();
+        var json = encoded.getAsJsonObject();
+        assertThat(json.get("consume_chance").getAsFloat()).isEqualTo(0.25F);
+
+        var decoded = MachineIngredient.CODEC.parse(jsonOps(), encoded).getOrThrow();
+        assertThat(((MachineIngredient.FluidIngredient) decoded).consumeChance()).isEqualTo(0.25F);
+    }
     @Test
     void codec_defaults_consume_chance_to_one_when_missing() {
         FluidRequirement original = new FluidRequirement(RecipeModifier.IOType.INPUT, water, 1000,

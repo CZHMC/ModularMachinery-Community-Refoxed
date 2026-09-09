@@ -52,7 +52,8 @@ public interface MachineRequirement {
                     1F, List.of(), item.components(), item.consumeChance());
         }
         if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
-            return new FluidRequirement(RecipeModifier.IOType.INPUT, fluid.fluid(), fluid.amount(), FluidStack.EMPTY);
+            return new FluidRequirement(RecipeModifier.IOType.INPUT, fluid.fluid(), fluid.amount(), FluidStack.EMPTY,
+                    1F, List.of(), fluid.consumeChance());
         }
         if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
             return new EnergyRequirement(energy.io(), energy.fePerTick());

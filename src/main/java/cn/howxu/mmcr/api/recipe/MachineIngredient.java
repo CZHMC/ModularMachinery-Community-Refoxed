@@ -26,10 +26,11 @@ public sealed interface MachineIngredient {
             return builder.build(prefix);
         }
         if (ingredient instanceof FluidIngredient fluid) {
-            return builder
+            builder = builder
                     .add("fluid", fluid.fluid(), net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC)
-                    .add("amount", ops.createInt(fluid.amount()))
-                    .build(prefix);
+                    .add("amount", ops.createInt(fluid.amount()));
+            if (fluid.consumeChance() != 1F) builder = builder.add("consume_chance", ops.createFloat(fluid.consumeChance()));
+            return builder.build(prefix);
         }
         if (ingredient instanceof EnergyIngredient energy) {
             return builder
@@ -59,7 +60,7 @@ public sealed interface MachineIngredient {
                     .flatMap(value -> net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC.parse(ops, value))
                     .flatMap(fluid -> ops.get(input, "amount")
                             .flatMap(ops::getNumberValue)
-                            .map(amount -> new FluidIngredient(fluid, amount.intValue())));
+                            .map(amount -> new FluidIngredient(fluid, amount.intValue(), decodeConsumeChance(ops, input))));
             case "energy" -> {
                 RecipeModifier.IOType io = ops.get(input, "io")
                         .flatMap(ops::getStringValue)
@@ -104,7 +105,15 @@ public sealed interface MachineIngredient {
         }
     }
 
-    record FluidIngredient(net.neoforged.neoforge.fluids.crafting.FluidIngredient fluid, int amount) implements MachineIngredient {
+    record FluidIngredient(net.neoforged.neoforge.fluids.crafting.FluidIngredient fluid, int amount, float consumeChance) implements MachineIngredient {
+        public FluidIngredient(net.neoforged.neoforge.fluids.crafting.FluidIngredient fluid, int amount) {
+            this(fluid, amount, 1F);
+        }
+
+        public FluidIngredient {
+            consumeChance = MachineOutput.clampChance(consumeChance);
+        }
+
         @Override public String type() {
             return "fluid";
         }
