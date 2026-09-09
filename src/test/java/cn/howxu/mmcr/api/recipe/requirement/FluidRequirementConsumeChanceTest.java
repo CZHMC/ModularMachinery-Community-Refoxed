@@ -1,7 +1,13 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
@@ -61,9 +67,45 @@ class FluidRequirementConsumeChanceTest {
         assertThat(FluidRequirement.copyForTest(original).consumeChance()).isEqualTo(0.5F);
     }
 
+    @Test
+    void handler_returns_no_extract_when_consume_chance_is_zero() {
+        LongFluidStorage storage = new LongFluidStorage(2_000L, null);
+        storage.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        FluidHatchCapability capability = new FluidHatchCapability(storage, IOType.INPUT);
+        FluidRequirement requirement = new FluidRequirement(RecipeModifier.IOType.INPUT, water, 1_000,
+                FluidStack.EMPTY, 1F, of(), 0F);
+        FluidRequirementHandler handler = new FluidRequirementHandler();
+
+        RequirementPlan plan = handler.plan(requirement, List.of(capability), emptyContext());
+
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.maxParallelism()).isEqualTo(1L);
+        RequirementPlan materialized = plan.materialize(1L, new PlanningReservations(), null);
+        assertThat(materialized.operations()).isEmpty();
+    }
+
+    @Test
+    void handler_uses_consume_profile_when_consume_chance_is_partial() {
+        LongFluidStorage storage = new LongFluidStorage(2_000L, null);
+        storage.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        FluidHatchCapability capability = new FluidHatchCapability(storage, IOType.INPUT);
+        FluidRequirement requirement = new FluidRequirement(RecipeModifier.IOType.INPUT, water, 1_000,
+                FluidStack.EMPTY, 1F, of(), 0.5F);
+        FluidRequirementHandler handler = new FluidRequirementHandler();
+
+        RequirementPlan plan = handler.plan(requirement, List.of(capability), emptyContext());
+
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.maxParallelism()).isEqualTo(1L);
+    }
+
     private static FluidRequirement newRequirement(RecipeModifier.IOType io, float consumeChance) {
         return new FluidRequirement(io, water, 1000,
                 FluidStack.EMPTY, 1F, of(), consumeChance);
+    }
+
+    private static PlanningContext emptyContext() {
+        return new PlanningContext(1L, 0);
     }
 
     // Helper to keep List.of(...) call sites tidy.

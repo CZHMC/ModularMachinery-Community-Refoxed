@@ -31,15 +31,16 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             int amount = IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyFluidInput(modifiers, requirement.amount()));
             float chance = IntegrationTypeHelper.applyFluidInputChance(modifiers, requirement.chance());
+            float consumeChance = IntegrationTypeHelper.applyFluidInputChance(modifiers, requirement.consumeChance());
             return new FluidRequirement(requirement.io(), requirement.fluid(), amount, requirement.stack(), chance,
-                    requirement.tags());
+                    requirement.tags(), consumeChance);
         }
         FluidStack stack = requirement.stack().copy();
         stack.setAmount(IntegrationTypeHelper.asInt(
                 IntegrationTypeHelper.applyFluidOutput(modifiers, stack.getAmount())));
         float chance = IntegrationTypeHelper.applyFluidOutputChance(modifiers, requirement.chance());
         return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), stack, chance,
-                requirement.tags());
+                requirement.tags(), requirement.consumeChance());
     }
 
     @Override
@@ -49,7 +50,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         FluidStack stack = requirement.stack().copy();
         stack.setAmount(levelOutputAmount(stack.getAmount(), outputMultiplier));
         return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), stack,
-                requirement.chance(), requirement.tags());
+                requirement.chance(), requirement.tags(), requirement.consumeChance());
     }
 
     private static int levelOutputAmount(int original, double multiplier) {
@@ -77,14 +78,19 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                     requestedAmount(requirement, context.requestedParallelism()))
                     : RequirementHandlerSupport.blockedPlan(requirement, context, "insufficient_resource");
         }
+        if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
+            return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
+        }
         if (requirement.io() == RecipeModifier.IOType.OUTPUT && requirement.stack().isEmpty()) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
+        RequirementHandlerSupport.ConsumeProfile consumed = requirement.io() == RecipeModifier.IOType.INPUT
+                ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), parallelism) : null;
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, capabilities, finalParallelism,
-                        reservations, direction, allowPartialOutput, true),
+                        consumed, reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
-                        requirement, capabilities, finalParallelism, reservations,
+                        requirement, capabilities, finalParallelism, consumed, reservations,
                         direction, allowPartialOutput, false)));
     }
 
@@ -142,12 +148,15 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
     private static RequirementPlan.OperationPlan planOperations(FluidRequirement requirement,
                                                                  List<MachineCapability> capabilities,
                                                                  long parallelism,
+                                                                 RequirementHandlerSupport.ConsumeProfile consumed,
                                                                  PlanningReservations reservations,
                                                                  IOType direction,
                                                                  boolean allowPartialOutputs,
-                                                                boolean materialize) {
+                                                                 boolean materialize) {
+        long batches = requirement.io() == RecipeModifier.IOType.INPUT
+                ? consumed.consumedBatches(parallelism) : parallelism;
         long amount = requirement.io() == RecipeModifier.IOType.INPUT
-                ? RequirementHandlerSupport.scaled(requirement.amount(), parallelism)
+                ? RequirementHandlerSupport.scaled(requirement.amount(), batches)
                 : RequirementHandlerSupport.scaled(requirement.stack().getAmount(), parallelism);
         if (amount <= 0L) return new RequirementPlan.OperationPlan(List.of(), null);
         long requestedAmount = requirement.io() == RecipeModifier.IOType.OUTPUT
