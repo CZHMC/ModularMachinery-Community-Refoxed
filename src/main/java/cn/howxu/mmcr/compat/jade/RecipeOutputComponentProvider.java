@@ -125,17 +125,16 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 : ReadableNumber.formatForSlot(amount, 3, "B");
         Component name = ComponentUtils.wrapInSquareBrackets(value.getTextComponent())
                 .withStyle(ChatFormatting.WHITE);
-        tooltip.append(Component.translatable("jade.mmcr.machine_controller.recipe_output.fluid",
-                formattedAmount, name));
+        var icon = new JadeChemicalElement(value.getIcon(), value.getTint(), 16);
+        tooltip.add(icon.offset(0, -1));
         try {
             int lineHeight = DisplayHelper.font().lineHeight;
-            var icon = new JadeChemicalElement(value.getIcon(), value.getTint(), 16);
             icon.setFreeSpace(lineHeight + 1, lineHeight - 1);
-            tooltip.add(icon.offset(0, -1));
-            tooltip.append(JadeUI.spacer(2, 0));
         } catch (RuntimeException ignored) {
-            // Icon construction requires a live Minecraft client; skip rendering the icon
-            // when the tooltip text alone is sufficient (e.g. under unit tests).
+            // Unit tests have no client font, but Jade can still lay out the default-sized icon.
         }
+        tooltip.append(JadeUI.spacer(2, 0));
+        tooltip.append(Component.translatable("jade.mmcr.machine_controller.recipe_output.fluid",
+                formattedAmount, name));
     }
 }

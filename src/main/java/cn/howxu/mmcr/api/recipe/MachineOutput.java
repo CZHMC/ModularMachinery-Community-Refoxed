@@ -25,6 +25,13 @@ public interface MachineOutput {
 
     float chance();
 
+    /**
+     * Amount represented by this output for controller-side aggregation and presentation.
+     */
+    default long amount() {
+        return 0L;
+    }
+
     default String type() {
         return outputType().serializedId();
     }
@@ -229,7 +236,7 @@ public interface MachineOutput {
     public static long scaledAmount(MachineOutput output) {
          if (output instanceof ItemOutput item) return item.stack().getCount();
          if (output instanceof FluidOutput fluid) return fluid.stack().getAmount();
-         return 0L;
+         return output.amount();
     }
 
     public static MachineOutput withScaledAmount(MachineOutput template, long amount, float chance) {

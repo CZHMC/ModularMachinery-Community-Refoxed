@@ -111,6 +111,14 @@ class RecipeOutputComponentProviderTest {
     }
 
     @Test
+    void chemicalOutputContributesItsConfiguredAmountToControllerDisplay() {
+        Holder.Reference<Chemical> chemical = registerChemical("jade_output_amount_test");
+
+        assertThat(MachineOutput.scaledAmount(new LoadedChemicalOutput(chemical.key().identifier(), 200L, 1F)))
+                .isEqualTo(200L);
+    }
+
+    @Test
     void skipsChemicalOutputWhenChemicalIsNotRegistered() {
         CompoundTag data = new CompoundTag();
         RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
