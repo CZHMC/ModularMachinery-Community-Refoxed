@@ -77,7 +77,10 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
 
     @Override
     public boolean radioactive() {
-        return port != null && port.isRadioactive();
+        if (port == null) {
+            throw new IllegalStateException("radioactive() requires host ChemicalPortBlockEntity");
+        }
+        return port.isRadioactive();
     }
 
     @Override

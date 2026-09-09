@@ -459,7 +459,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                 }
                 if (matchingPorts.isEmpty()) {
                     return RequirementHandlerSupport.blockedOutputPlan(requirement, context,
-                            "mmcr:no_output_capacity",
+                            "no_output_capacity",
                             RequirementHandlerSupport.scaled(requirement.ingredient().amount(), requestedParallelism));
                 }
                 OutputCapacity capacity = outputCapacity(matcher.exactHolder(), matchingPorts);
@@ -474,7 +474,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                 }
             } else {
                 if (matchingPorts.isEmpty()) {
-                    return RequirementHandlerSupport.blockedPlan(requirement, context, "mmcr:insufficient_resource");
+                    return RequirementHandlerSupport.blockedPlan(requirement, context, "insufficient_resource");
                 }
                 maximum = inputMaximum(matcher, matchingPorts, requirement.ingredient().amount(), requestedParallelism);
                 if (maximum <= 0L) failureReason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;

@@ -301,7 +301,7 @@ class MekanismRecipeHandlerTest {
                 List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
+        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
     }
 
     @Test
@@ -316,7 +316,7 @@ class MekanismRecipeHandlerTest {
                 List.of(new FakeChemicalPort(tank, IOType.OUTPUT)), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
+        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
     }
 
     @Test
@@ -365,7 +365,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:no_output_capacity");
+        assertThat(result.failure().details().get("reason")).isEqualTo("no_output_capacity");
     }
 
     @Test
@@ -380,7 +380,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:no_output_capacity");
+        assertThat(result.failure().details().get("reason")).isEqualTo("no_output_capacity");
     }
 
     @Test
@@ -395,7 +395,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
+        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
     }
 
     @Test
@@ -410,7 +410,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
+        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
     }
 
     @Test
