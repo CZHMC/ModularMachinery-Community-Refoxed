@@ -135,7 +135,7 @@ public class MekanismPortGameTest {
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
         double capacity = port.heatCapacitor().getHeatCapacity();
         double baseline = ambient * capacity;
-        setHeat(port, baseline * 5D);
+        setHeat(port, baseline * 5.5D);
         double before = port.heatCapacitor().getHeat();
         helper.assertTrue(before > baseline,
                 "Heat input port holds more heat than its ambient baseline before the recipe check");
@@ -161,7 +161,7 @@ public class MekanismPortGameTest {
         double baseline = ambient * port.heatCapacitor().getHeatCapacity();
         double before = port.heatCapacitor().getHeat();
 
-        double delta = port.heatCapacitor().getHeatCapacity();
+        double delta = 0.25D;
         try (Transaction transaction = Transaction.openRoot()) {
             port.heatCapacitor().handleHeat(delta, transaction);
             transaction.commit();
@@ -171,6 +171,71 @@ public class MekanismPortGameTest {
                 "Heat output port stores the heat delta delivered through handleHeat");
         helper.assertTrue(port.heatCapacitor().getHeat() > baseline,
                 "Heat output port stores more heat than its ambient baseline after handleHeat");
+        helper.succeed();
+    }
+
+    public void heatPortLosesHeatToItsEnvironment(GameTestHelper helper) {
+        BlockPos heatPos = new BlockPos(0, 1, 0);
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+
+        double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
+        double capacity = port.heatCapacitor().getHeatCapacity();
+        setHeat(port, ambient * capacity + capacity * 100D);
+        double before = port.heatCapacitor().getHeat();
+
+        port.serverTick();
+
+        helper.assertTrue(port.heatCapacitor().getHeat() < before,
+                "A hot heat port loses heat to its ambient environment during a server tick");
+        helper.assertTrue(port.heatCapacitor().getTemperature() > ambient,
+                "One environment tick does not instantly remove the port's excess heat");
+        helper.succeed();
+    }
+
+    public void heatPortUsesStandardAdjacentExchange(GameTestHelper helper) {
+        BlockPos sourcePos = new BlockPos(0, 1, 0);
+        BlockPos sinkPos = sourcePos.relative(Direction.EAST);
+        helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
+        source.setAutoIOEnabled(false);
+        sink.setAutoIOEnabled(false);
+
+        double sourceAmbient = HeatAPI.getAmbientTemp(source.getLevel(), source.getBlockPos());
+        double sinkAmbient = HeatAPI.getAmbientTemp(sink.getLevel(), sink.getBlockPos());
+        setHeat(source, sourceAmbient * source.heatCapacitor().getHeatCapacity()
+                + source.heatCapacitor().getHeatCapacity() * 100D);
+        double sourceBefore = source.heatCapacitor().getHeat();
+        double sinkBefore = sink.heatCapacitor().getHeat();
+
+        source.serverTick();
+
+        helper.assertTrue(source.heatCapacitor().getHeat() < sourceBefore,
+                "The hotter port gives up heat during adjacent exchange");
+        helper.assertTrue(sink.heatCapacitor().getHeat() > sinkBefore,
+                "The colder adjacent port receives heat during adjacent exchange");
+        helper.assertTrue(sink.heatCapacitor().getHeat() > sinkAmbient * sink.heatCapacitor().getHeatCapacity(),
+                "Adjacent exchange raises the sink above its ambient baseline");
+        helper.succeed();
+    }
+
+    public void ambientHeatPortDoesNotEmitBaselineHeat(GameTestHelper helper) {
+        BlockPos sourcePos = new BlockPos(0, 1, 0);
+        BlockPos sinkPos = sourcePos.relative(Direction.EAST);
+        helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
+        source.setAutoIOEnabled(false);
+        sink.setAutoIOEnabled(false);
+        double sinkBefore = sink.heatCapacitor().getHeat();
+
+        source.serverTick();
+
+        helper.assertValueEqual(sinkBefore, sink.heatCapacitor().getHeat(),
+                "An ambient heat port does not emit its ambient baseline to an adjacent port");
         helper.succeed();
     }
 

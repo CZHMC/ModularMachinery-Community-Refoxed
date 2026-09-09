@@ -2,19 +2,26 @@ package cn.howxu.mmcr.compat.mekanism.loaded;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.IContentsListener;
 import mekanism.api.heat.HeatAPI;
+import mekanism.api.heat.IHeatCapacitor;
 import mekanism.api.heat.IHeatHandler;
+import mekanism.common.capabilities.Capabilities;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
+import mekanism.common.capabilities.heat.ITileHeatHandler;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -22,7 +29,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public abstract class HeatPortBlockEntity extends IOPortBlockEntity {
+public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements ITileHeatHandler {
     private final BasicHeatCapacitor heatCapacitor;
     private CapabilitySnapshot capabilitySnapshot;
 
@@ -43,6 +50,36 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity {
 
     public IHeatHandler heatHandler() {
         return heatCapacitor;
+    }
+
+    @Override
+    public @Nullable IHeatCapacitor getHeatCapacitor(@Nullable Direction side) {
+        if (side == null) return heatCapacitor;
+        boolean exposed = kind().definition().bindings().stream()
+                .filter(binding -> binding.type().id().equals(MekanismRecipeTypes.HEAT))
+                .anyMatch(binding -> isNativeSideExposed(binding, side));
+        return exposed ? heatCapacitor : null;
+    }
+
+    @Override
+    public @Nullable IHeatHandler getAdjacent(Direction side) {
+        if (level == null) return null;
+        return level.getCapability(Capabilities.HEAT, worldPosition.relative(side), side.getOpposite());
+    }
+
+    @Override
+    public double getAmbientTemperature(Direction side) {
+        return HeatAPI.getAmbientTemp(level, worldPosition.relative(side));
+    }
+
+    @Override
+    protected void tick() {
+        super.tick();
+        if (level == null || level.isClientSide()) return;
+        try (Transaction transaction = Transaction.openRoot()) {
+            simulate(transaction);
+            transaction.commit();
+        }
     }
 
     @Override
