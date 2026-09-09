@@ -441,6 +441,10 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             if (!context.simulate()) {
                 source.handleHeat(-amount, context.transaction());
                 destination.handleHeat(amount, context.transaction());
+                if (context.eject() && source instanceof IHeatCapacitor capacitor) {
+                    capacitor.setHeat(HeatAPI.getAmbientTemp(transfer.level(), transfer.position())
+                            * capacitor.getHeatCapacity(), context.transaction());
+                }
             } else {
                 try (Transaction transaction = Transaction.open(context.transaction())) {
                     source.handleHeat(-amount, transaction);
