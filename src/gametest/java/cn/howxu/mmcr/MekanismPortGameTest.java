@@ -336,7 +336,7 @@ public class MekanismPortGameTest {
         chemical.chemicalTank().setContents(oxygen, 12_345L, null);
         double ambient = HeatAPI.getAmbientTemp(heat.getLevel(), heat.getBlockPos());
         double baseline = ambient * heat.heatCapacitor().getHeatCapacity();
-        setHeat(heat, baseline * 7D);
+        setHeat(heat, baseline * 7.25D);
         double heatBefore = heat.heatCapacitor().getHeat();
         helper.assertTrue(heatBefore > baseline,
                 "Heat port holds more than the ambient baseline before persistence check");
