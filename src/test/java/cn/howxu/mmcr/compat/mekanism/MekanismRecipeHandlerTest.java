@@ -301,7 +301,7 @@ class MekanismRecipeHandlerTest {
                 List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
+        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
     }
 
     @Test
@@ -316,7 +316,7 @@ class MekanismRecipeHandlerTest {
                 List.of(new FakeChemicalPort(tank, IOType.OUTPUT)), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
+        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
     }
 
     @Test
@@ -335,7 +335,7 @@ class MekanismRecipeHandlerTest {
             }
         };
         FakeChemicalPort port = new FakeChemicalPort(
-                new FakeChemicalTank(1_000L, rejectAttributes), IOType.OUTPUT);
+                new FakeChemicalTank(1_000L, rejectAttributes), IOType.OUTPUT, true);
 
         RequirementPlan result = chemicalHandler().plan(
                 LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F),
@@ -351,6 +351,66 @@ class MekanismRecipeHandlerTest {
                 new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.OUTPUT);
 
         assertThat(port.radioactive()).isFalse();
+    }
+
+    @Test
+    void radioactive_chemical_output_with_only_normal_ports_reports_missing_output() {
+        LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+        Holder.Reference<Chemical> chemical = registerChemical("missing_radioactive_output", true);
+        FakeChemicalPort port = new FakeChemicalPort(
+                new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.OUTPUT, false);
+
+        RequirementPlan result = chemicalHandler().plan(
+                LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F),
+                List.of(port), testContext());
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:no_output_capacity");
+    }
+
+    @Test
+    void normal_chemical_output_with_only_radioactive_ports_reports_missing_output() {
+        LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+        Holder.Reference<Chemical> chemical = registerChemical("missing_normal_output", false);
+        FakeChemicalPort port = new FakeChemicalPort(
+                new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.OUTPUT, true);
+
+        RequirementPlan result = chemicalHandler().plan(
+                LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F),
+                List.of(port), testContext());
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:no_output_capacity");
+    }
+
+    @Test
+    void radioactive_chemical_input_with_only_normal_ports_reports_insufficient_resource() {
+        LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+        Holder.Reference<Chemical> chemical = registerChemical("missing_radioactive_input", true);
+        FakeChemicalPort port = new FakeChemicalPort(
+                new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT, false);
+
+        RequirementPlan result = chemicalHandler().plan(
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().identifier(), 1L)),
+                List.of(port), testContext());
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
+    }
+
+    @Test
+    void normal_chemical_input_with_only_radioactive_ports_reports_insufficient_resource() {
+        LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+        Holder.Reference<Chemical> chemical = registerChemical("missing_normal_input", false);
+        FakeChemicalPort port = new FakeChemicalPort(
+                new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT, true);
+
+        RequirementPlan result = chemicalHandler().plan(
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().identifier(), 1L)),
+                List.of(port), testContext());
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details().get("reason")).isEqualTo("mmcr:insufficient_resource");
     }
 
     @Test

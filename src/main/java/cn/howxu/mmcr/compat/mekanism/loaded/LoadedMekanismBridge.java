@@ -444,6 +444,11 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
             IOType direction = IOType.valueOf(requirement.io().name());
             List<ChemicalPort> ports = chemicalPorts(capabilities, direction);
+            boolean resourceRadioactive = matcher.exactHolder() != null
+                    && matcher.exactHolder().value().isRadioactive();
+            List<ChemicalPort> matchingPorts = ports.stream()
+                    .filter(p -> p.radioactive() == resourceRadioactive)
+                    .toList();
             boolean allowPartialOutput = output && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
             long maximum;
             FailureReason failureReason = null;
@@ -452,7 +457,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     return RequirementHandlerSupport.blockedPlan(requirement, context,
                             MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH.id().toString());
                 }
-                OutputCapacity capacity = outputCapacity(matcher.exactHolder(), ports);
+                if (matchingPorts.isEmpty()) {
+                    return RequirementHandlerSupport.blockedOutputPlan(requirement, context,
+                            "mmcr:no_output_capacity",
+                            RequirementHandlerSupport.scaled(requirement.ingredient().amount(), requestedParallelism));
+                }
+                OutputCapacity capacity = outputCapacity(matcher.exactHolder(), matchingPorts);
                 maximum = allowPartialOutput
                         ? capacity.amount() > 0L ? requestedParallelism : 0L
                         : Math.min(requestedParallelism, capacity.amount() / requirement.ingredient().amount());
@@ -463,7 +473,10 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                             : MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED;
                 }
             } else {
-                maximum = inputMaximum(matcher, ports, requirement.ingredient().amount(), requestedParallelism);
+                if (matchingPorts.isEmpty()) {
+                    return RequirementHandlerSupport.blockedPlan(requirement, context, "mmcr:insufficient_resource");
+                }
+                maximum = inputMaximum(matcher, matchingPorts, requirement.ingredient().amount(), requestedParallelism);
                 if (maximum <= 0L) failureReason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
             }
 
