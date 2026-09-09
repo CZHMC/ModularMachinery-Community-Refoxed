@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
@@ -8,6 +9,9 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -15,11 +19,14 @@ import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -27,6 +34,10 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
+import mekanism.api.MekanismAPI;
+import mekanism.api.chemical.Chemical;
+import mekanism.api.chemical.ChemicalBuilder;
+import mekanism.api.chemical.ChemicalStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.junit.jupiter.api.BeforeAll;
@@ -36,6 +47,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,8 +56,14 @@ class MachineRecipeCategoryTransferTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        if (RequirementHandlerRegistry.canonicalType(LoadedChemicalRequirement.TYPE) == null) {
+            RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
+        }
+        LoadedChemicalRequirement.installUnavailableHandler();
         Items.IRON_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         Items.GOLD_INGOT.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+        registerChemical("oxygen");
+        registerChemical("hydrogen");
     }
 
     @Test
@@ -95,6 +113,34 @@ class MachineRecipeCategoryTransferTest {
                 });
         assertThat(slots.get(3).itemAdds()).singleElement()
                 .extracting(ItemStack::getCount).isEqualTo(3);
+    }
+
+    @Test
+    void transferSlotsContainChemicalInputAndOutputWithRecipeAmounts() throws Exception {
+        MachineRequirement chemicalInput = LoadedChemicalRequirement.input(
+                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_250L));
+        MachineRequirement chemicalOutput = LoadedChemicalRequirement.output(
+                Identifier.parse("mekanism:hydrogen"), 750L, 1F);
+        MachineRecipe recipe = MachineRecipe.fromCanonical(
+                MMCR.id("jei_chemical_transfer_slots"), MMCR.id("chemical_transfer_machine"), 20,
+                List.of(chemicalInput, chemicalOutput), List.of(), List.of(), 0, 1,
+                false, false, List.of(), false, Set.of());
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        List<CapturedSlot> slots = new ArrayList<>();
+
+        invokeAddTransferSlots(recipeLayoutBuilder(slots), display);
+
+        assertThat(slots).extracting(CapturedSlot::role)
+                .containsExactly(RecipeIngredientRole.INPUT, RecipeIngredientRole.OUTPUT);
+        assertThat(slots).allSatisfy(slot -> {
+            assertThat(slot.x()).isEqualTo(-1000);
+            assertThat(slot.y()).isEqualTo(-1000);
+            assertThat(slot.chemicalAdds()).hasSize(1);
+        });
+        assertThat(slots.get(0).chemicalAdds()).singleElement()
+                .extracting(ChemicalStack::amount).isEqualTo(1_250);
+        assertThat(slots.get(1).chemicalAdds()).singleElement()
+                .extracting(ChemicalStack::amount).isEqualTo(750);
     }
 
     @Test
@@ -189,6 +235,9 @@ class MachineRecipeCategoryTransferTest {
                         DataComponentPatch patch = arguments.length >= 3
                                 ? (DataComponentPatch) arguments[2] : DataComponentPatch.EMPTY;
                         capture.fluidAdds.add(new CapturedFluid(fluid, ((Number) arguments[1]).longValue(), patch));
+                    } else if (method.getName().equals("add") && arguments.length >= 2
+                            && arguments[1] instanceof ChemicalStack stack) {
+                        capture.chemicalAdds.add(stack);
                     }
                     return method.getReturnType().isAssignableFrom(IRecipeSlotBuilder.class) ? proxy : null;
                 });
@@ -201,6 +250,7 @@ class MachineRecipeCategoryTransferTest {
         private final List<ItemStack> itemStacks = new ArrayList<>();
         private final List<ItemStack> itemAdds = new ArrayList<>();
         private final List<CapturedFluid> fluidAdds = new ArrayList<>();
+        private final List<ChemicalStack> chemicalAdds = new ArrayList<>();
         private final List<IRecipeSlotRichTooltipCallback> tooltipCallbacks = new ArrayList<>();
         private boolean standardBackground;
 
@@ -234,6 +284,10 @@ class MachineRecipeCategoryTransferTest {
             return fluidAdds;
         }
 
+        private List<ChemicalStack> chemicalAdds() {
+            return chemicalAdds;
+        }
+
         private List<IRecipeSlotRichTooltipCallback> tooltipCallbacks() {
             return tooltipCallbacks;
         }
@@ -244,5 +298,21 @@ class MachineRecipeCategoryTransferTest {
     }
 
     private record CapturedFluid(Fluid fluid, long amount, DataComponentPatch componentsPatch) {
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void registerChemical(String path) {
+        ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
+                Identifier.parse("mekanism:" + path));
+        MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
+        if (registry.get(key).isPresent()) return;
+        registry.unfreeze(true);
+        Registry.register(registry, key.identifier(), new Chemical(ChemicalBuilder.builder()) {
+            @Override
+            public boolean isRadioactive() {
+                return false;
+            }
+        });
+        registry.freeze();
     }
 }

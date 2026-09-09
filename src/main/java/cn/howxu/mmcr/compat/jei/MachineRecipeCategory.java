@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import mekanism.api.chemical.ChemicalStack;
+import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -502,10 +503,36 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (JeiDisplayEntry entry : recipe.entries()) {
             if (entry.typeId().equals(ItemRequirement.TYPE.id())
                     || entry.typeId().equals(FluidRequirement.TYPE.id())) continue;
+            if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) {
+                addChemicalTransferSlot(builder, entry);
+                continue;
+            }
             if (entry.role() != RecipeIngredientRole.INPUT || !entry.transferable()) continue;
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
             addGeneric(slot, entry);
         }
+    }
+
+    private static void addChemicalTransferSlot(IRecipeLayoutBuilder builder, JeiDisplayEntry entry) {
+        IRecipeSlotBuilder slot = entry.role() == RecipeIngredientRole.INPUT
+                ? builder.addInputSlot(-1000, -1000)
+                : builder.addOutputSlot(-1000, -1000);
+        for (ChemicalStack chemical : actualChemicalStacks(entry.ingredient())) {
+            slot.add(MekanismJEI.TYPE_CHEMICAL, chemical.copyWithAmount(entry.count()));
+        }
+    }
+
+    private static List<ChemicalStack> actualChemicalStacks(Object ingredient) {
+        if (ingredient instanceof List<?> ingredients) {
+            return ingredients.stream()
+                    .filter(ChemicalStack.class::isInstance)
+                    .map(ChemicalStack.class::cast)
+                    .filter(stack -> !stack.isEmpty())
+                    .toList();
+        }
+        return ingredient instanceof ChemicalStack chemical && !chemical.isEmpty()
+                ? List.of(chemical)
+                : List.of();
     }
 
     private static void addActualItem(IRecipeSlotBuilder slot, MachineRecipeDisplay.ItemInputDisplay item) {
