@@ -25,6 +25,7 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -567,6 +568,39 @@ class MachineRecipeDisplayTest {
         List<FormattedText> inputTooltip = tooltipLines(capture.tooltips.getFirst());
         assertTranslatableTooltip(inputTooltip, "jei.mmcr.machine_recipe.item_count", "3");
         assertTranslatableTooltip(inputTooltip, "jei.mmcr.machine_recipe.consume_chance", "25%");
+    }
+
+    @Test
+    void chemicalOutputSlotTooltipDescribesOutputChance() {
+        JeiDisplayEntry output = new JeiDisplayEntry(RecipeIngredientRole.OUTPUT, MekanismRecipeTypes.CHEMICAL,
+                MekanismJEI.TYPE_CHEMICAL, ChemicalStack.EMPTY, 200, 0.25F, null, false);
+        SlotCapture capture = new SlotCapture();
+
+        MachineRecipeCategory.addGeneric((IRecipeSlotBuilder) recipeSlotBuilder(capture), output);
+
+        assertThat(capture.tooltips).hasSize(1);
+        assertTranslatableTooltip(tooltipLines(capture.tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.output_chance", "25%");
+    }
+
+    @Test
+    void fluidOutputSlotTooltipDescribesOutputChance() throws Exception {
+        MachineRequirement output = new FluidRequirement(RecipeModifier.IOType.OUTPUT,
+                FluidIngredient.of(Fluids.WATER), 1_000, new FluidStack(Fluids.WATER, 1_000), 0.25F, List.of(), 1F);
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
+                MMCR.id("fluid_output_tooltip_jei_slot"), MMCR.id("test_machine_name"), 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(output)));
+        SlotCapture capture = new SlotCapture();
+        JeiDisplayEntry outputEntry = display.entries().stream()
+                .filter(entry -> entry.role() == RecipeIngredientRole.OUTPUT)
+                .findFirst().orElseThrow();
+
+        invokeAddEntry(recipeLayoutBuilder(capture), display,
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.FLUID, 0, outputEntry), false);
+
+        assertThat(capture.tooltips).hasSize(1);
+        assertTranslatableTooltip(tooltipLines(capture.tooltips.getFirst()),
+                "jei.mmcr.machine_recipe.output_chance", "25%");
     }
 
     @Test

@@ -60,7 +60,7 @@ public record MachineRecipeDisplay(
         List<ItemOutputDisplay> itemOutputs,
         List<FluidInputDisplay> fluidInputs,
         List<ChemicalInputDisplay> chemicalInputs,
-        List<FluidStack> fluidOutputs,
+        List<FluidOutputDisplay> fluidOutputs,
         List<EnergyIngredient> energyInputs,
         List<EnergyIngredient> energyOutputs,
         List<MachineOutput> outputs,
@@ -117,7 +117,7 @@ public record MachineRecipeDisplay(
 
         List<MachineOutput> outputs = new ArrayList<>();
         List<ItemOutputDisplay> itemOutputs = new ArrayList<>();
-        List<FluidStack> fluidOutputs = new ArrayList<>();
+        List<FluidOutputDisplay> fluidOutputs = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
                 ItemStack stack = item.stack(componentOps);
@@ -125,7 +125,7 @@ public record MachineRecipeDisplay(
                 outputs.add(new MachineOutput.ItemOutput(stack, item.chance()));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
                 FluidStack stack = fluid.stack().copy();
-                fluidOutputs.add(stack);
+                fluidOutputs.add(new FluidOutputDisplay(stack, fluid.chance()));
                 outputs.add(new MachineOutput.FluidOutput(stack, fluid.chance()));
             } else if (requirement instanceof SmartInterfaceRequirement smartInterface
                     && smartInterface.io() == RecipeModifier.IOType.OUTPUT) {
@@ -395,6 +395,16 @@ public record MachineRecipeDisplay(
     public record ItemOutputDisplay(ItemStack stack, float chance) {
         public ItemOutputDisplay {
             stack = stack == null ? ItemStack.EMPTY : stack.copy();
+            chance = MachineOutput.clampChance(chance);
+        }
+    }
+
+    /**
+     * Recipe data for one fluid output, retaining the chance required by JEI overlays and tooltips.
+     */
+    public record FluidOutputDisplay(FluidStack stack, float chance) {
+        public FluidOutputDisplay {
+            stack = stack == null ? FluidStack.EMPTY : stack.copy();
             chance = MachineOutput.clampChance(chance);
         }
     }

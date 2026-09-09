@@ -111,7 +111,7 @@ class MachineRecipeCategoryTransferTest {
                 .extracting(CapturedFluid::componentsPatch)
                 .satisfies(patch -> {
                     assertThat(patch.isEmpty()).isFalse();
-                    assertThat(patch).isEqualTo(display.fluidOutputs().getFirst().getComponentsPatch());
+                    assertThat(patch).isEqualTo(display.fluidOutputs().getFirst().stack().getComponentsPatch());
                 });
         assertThat(slots.get(3).itemAdds()).singleElement()
                 .extracting(ItemStack::getCount).isEqualTo(3);

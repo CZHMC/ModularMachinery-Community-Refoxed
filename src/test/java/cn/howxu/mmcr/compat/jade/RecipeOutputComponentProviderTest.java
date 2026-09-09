@@ -97,6 +97,20 @@ class RecipeOutputComponentProviderTest {
     }
 
     @Test
+    void rendersChemicalIconBeforeItsOutputText() {
+        Holder.Reference<Chemical> chemical = registerChemical("jade_icon_order_test");
+        CompoundTag data = new CompoundTag();
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
+                new LoadedChemicalOutput(chemical.key().identifier(), 200L, 1F), 200L)));
+
+        List<TooltipCall> calls = collectCalls(data);
+
+        assertThat(calls).hasSizeGreaterThan(1);
+        assertThat(calls.get(1).method()).isEqualTo("add");
+        assertThat(calls.get(1).value()).isInstanceOf(LayoutElement.class);
+    }
+
+    @Test
     void skipsChemicalOutputWhenChemicalIsNotRegistered() {
         CompoundTag data = new CompoundTag();
         RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
@@ -109,19 +123,23 @@ class RecipeOutputComponentProviderTest {
     }
 
     private static List<Object> collect(CompoundTag data) {
+        return collectCalls(data).stream().map(TooltipCall::value).toList();
+    }
+
+    private static List<TooltipCall> collectCalls(CompoundTag data) {
         BlockAccessor accessor = (BlockAccessor) Proxy.newProxyInstance(
                 BlockAccessor.class.getClassLoader(), new Class<?>[]{BlockAccessor.class},
                 (proxy, method, args) -> {
                     if ("getServerData".equals(method.getName())) return data;
                     throw new UnsupportedOperationException(method.getName());
                 });
-        List<Object> calls = new ArrayList<>();
+        List<TooltipCall> calls = new ArrayList<>();
         ITooltip tooltip = (ITooltip) Proxy.newProxyInstance(
                 ITooltip.class.getClassLoader(), new Class<?>[]{ITooltip.class},
                 (proxy, method, args) -> {
                     if (args == null || args.length != 1) return null;
                     if (args[0] instanceof Component || args[0] instanceof LayoutElement) {
-                        calls.add(args[0]);
+                        calls.add(new TooltipCall(method.getName(), args[0]));
                     }
                     return null;
                 });
@@ -135,6 +153,8 @@ class RecipeOutputComponentProviderTest {
         }
         return calls;
     }
+
+    private record TooltipCall(String method, Object value) {}
 
     private static Holder.Reference<Chemical> registerChemical(String name) {
         ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,

@@ -455,11 +455,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             if (entry.role() == RecipeIngredientRole.INPUT) {
                 setItemOverlay(slot, inputOverlayText(entry.chance(), selectedLanguage()), quantity);
             } else {
-                setQuantityOverlay(slot, quantity);
+                setItemOverlay(slot, outputOverlayText(entry.chance()), quantity);
             }
             slot.addRichTooltipCallback((view, tooltip) -> {
                 appendChemicalQuantityTooltip(tooltip, entry.count());
-                appendConsumeChanceTooltip(tooltip, entry.chance(), entry.role() == RecipeIngredientRole.INPUT);
+                if (entry.role() == RecipeIngredientRole.INPUT) {
+                    appendConsumeChanceTooltip(tooltip, entry.chance(), true);
+                } else {
+                    appendOutputChanceTooltip(tooltip, entry.chance());
+                }
             });
         } else {
             setQuantityOverlay(slot, quantity);
@@ -498,7 +502,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
             addActualItem(slot, item);
         }
-        for (FluidStack fluid : recipe.fluidOutputs()) {
+        for (MachineRecipeDisplay.FluidOutputDisplay output : recipe.fluidOutputs()) {
+            FluidStack fluid = output.stack();
             builder.addOutputSlot(-1000, -1000)
                     .add(fluid.getFluid(), fluid.getAmount(), fluid.getComponentsPatch());
         }
@@ -605,11 +610,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 appendConsumeChanceTooltip(tooltip, fluidDisplay.consumeChance(), true);
             });
         } else {
-            var stack = recipe.fluidOutputs().get(entry.index());
-            setQuantityOverlay(jeiSlot, fluidQuantityText(stack.getAmount()));
+            var output = recipe.fluidOutputs().get(entry.index());
+            var stack = output.stack();
+            setItemOverlay(jeiSlot, outputOverlayText(output.chance()), fluidQuantityText(stack.getAmount()));
             jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
                     .add(stack.getFluid(), FLUID_SLOT_CAPACITY, stack.getComponentsPatch());
-            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, stack.getAmount()));
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> {
+                appendFluidQuantityTooltip(tooltip, stack.getAmount());
+                appendOutputChanceTooltip(tooltip, output.chance());
+            });
         }
     }
 
@@ -706,7 +715,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                             : Component.empty();
                     tooltip.add(overflowFluidEntry(amount, displayName));
                 } else {
-                    var fluidStack = recipe.fluidOutputs().get(entry.index());
+                    var fluidStack = recipe.fluidOutputs().get(entry.index()).stack();
                     tooltip.add(overflowFluidEntry(fluidStack.getAmount(), fluidStack.getHoverName()));
                 }
             } else if (entry.kind() == MachineRecipeLayout.Kind.CHEMICAL && entry.displayEntry() != null) {
@@ -759,9 +768,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         if (!quantity.isEmpty()) {
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count", quantity));
         }
-        if (output.chance() < 1F) {
+        appendOutputChanceTooltip(tooltip, output.chance());
+    }
+
+    private static void appendOutputChanceTooltip(ITooltipBuilder tooltip, float chance) {
+        if (chance < 1F) {
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.output_chance",
-                    Math.round(output.chance() * 100F) + "%"));
+                    Math.round(chance * 100F) + "%"));
         }
     }
 
