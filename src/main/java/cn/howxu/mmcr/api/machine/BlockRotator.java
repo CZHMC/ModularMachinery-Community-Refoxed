@@ -70,6 +70,34 @@ public final class BlockRotator {
         return rollFacing;
     }
 
+    public static Direction rotateDirection(Direction source, Direction target, Direction rollFacing) {
+        if (!target.getAxis().isVertical()) {
+            Direction current = Direction.SOUTH;
+            Direction rotated = source;
+            while (current != target) {
+                current = current.getCounterClockWise();
+                if (rotated.getAxis().isHorizontal()) rotated = rotated.getCounterClockWise();
+            }
+            return rotated;
+        }
+
+        Direction front = target;
+        Direction up = normalizedRoll(target, rollFacing);
+        Direction xAxis = cross(up, front);
+        int x = xAxis.getStepX() * source.getStepX() + up.getStepX() * source.getStepY()
+                + front.getStepX() * source.getStepZ();
+        int y = xAxis.getStepY() * source.getStepX() + up.getStepY() * source.getStepY()
+                + front.getStepY() * source.getStepZ();
+        int z = xAxis.getStepZ() * source.getStepX() + up.getStepZ() * source.getStepY()
+                + front.getStepZ() * source.getStepZ();
+        for (Direction direction : Direction.values()) {
+            if (direction.getStepX() == x && direction.getStepY() == y && direction.getStepZ() == z) {
+                return direction;
+            }
+        }
+        throw new IllegalArgumentException("Invalid direction rotation: " + source + ", " + target + ", " + rollFacing);
+    }
+
     private static BlockPos normalizeHorizontal(BlockPos offset, Direction sourceFace) {
         Direction current = sourceFace;
         BlockPos normalized = offset;

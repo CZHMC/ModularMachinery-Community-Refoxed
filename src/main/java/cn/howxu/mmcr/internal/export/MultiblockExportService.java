@@ -102,7 +102,8 @@ public final class MultiblockExportService {
     }
 
     private static BlockState normalizeState(Identifier blockId, BlockState state) {
-        return state != null && state.equals(BuiltInRegistries.BLOCK.getValue(blockId).defaultBlockState()) ? null : state;
+        return state != null && state.getProperties().isEmpty()
+                && state.equals(BuiltInRegistries.BLOCK.getValue(blockId).defaultBlockState()) ? null : state;
     }
 
     private static void appendLayers(StringBuilder out, PreparedExport prepared, String method) {

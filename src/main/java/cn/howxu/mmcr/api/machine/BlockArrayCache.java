@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.machine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 
 import java.util.LinkedHashMap;
 import java.util.Collection;
@@ -77,7 +79,7 @@ public final class BlockArrayCache {
         Rotation rotation = rotationFor(key.facing());
         for (var entry : key.pattern().pattern().entrySet()) {
             rotated.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()),
-                    rotatePredicate(entry.getValue(), rotation));
+                    rotatePredicate(entry.getValue(), key.facing(), key.rollFacing(), rotation));
         }
         Map<BlockPos, List<String>> rotatedTags = new LinkedHashMap<>();
         for (var entry : key.pattern().tagsByPosition().entrySet()) {
@@ -97,16 +99,48 @@ public final class BlockArrayCache {
         return Rotation.NONE;
     }
 
-    private static BlockPredicate rotatePredicate(BlockPredicate predicate, Rotation rotation) {
+    private static BlockPredicate rotatePredicate(BlockPredicate predicate, Direction facing, Direction rollFacing,
+                                                  Rotation rotation) {
         return switch (predicate) {
             case BlockPredicate.OfBlockState state ->
-                    new BlockPredicate.OfBlockState(state.state().rotate(rotation));
+                    new BlockPredicate.OfBlockState(rotateState(state.state(), facing, rollFacing, rotation));
             case BlockPredicate.AnyOf anyOf ->
                     new BlockPredicate.AnyOf(anyOf.children().stream()
-                            .map(child -> rotatePredicate(child, rotation))
+                            .map(child -> rotatePredicate(child, facing, rollFacing, rotation))
                             .toList());
             default -> predicate;
         };
+    }
+
+    private static BlockState rotateState(BlockState state, Direction facing, Direction rollFacing, Rotation rotation) {
+        if (!facing.getAxis().isVertical()) return state.rotate(rotation);
+
+        BlockState rotated = state;
+        for (Property<?> property : state.getProperties()) {
+            Object value = state.getValue(property);
+            if (value instanceof Direction direction) {
+                Direction rotatedDirection = BlockRotator.rotateDirection(direction, facing, rollFacing);
+                if (property.getPossibleValues().contains(rotatedDirection)) {
+                    rotated = setValue(rotated, property, rotatedDirection);
+                }
+            } else if (value instanceof Direction.Axis axis) {
+                Direction axisDirection = switch (axis) {
+                    case X -> Direction.EAST;
+                    case Y -> Direction.UP;
+                    case Z -> Direction.SOUTH;
+                };
+                Direction.Axis rotatedAxis = BlockRotator.rotateDirection(axisDirection, facing, rollFacing).getAxis();
+                if (property.getPossibleValues().contains(rotatedAxis)) {
+                    rotated = setValue(rotated, property, rotatedAxis);
+                }
+            }
+        }
+        return rotated;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static BlockState setValue(BlockState state, Property<?> property, Comparable<?> value) {
+        return state.setValue((Property) property, (Comparable) value);
     }
 
     private static void add(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {

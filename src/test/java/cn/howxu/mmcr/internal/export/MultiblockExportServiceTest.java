@@ -124,7 +124,7 @@ class MultiblockExportServiceTest {
     }
 
     @Test
-    void renderersNormalizeDefaultStateAndShareSymbols() {
+    void renderersPreserveStatefulDefaultsAndShareSymbols() {
         var xAxisState = Blocks.OAK_LOG.defaultBlockState()
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
         var zAxisState = Blocks.OAK_LOG.defaultBlockState()
@@ -145,11 +145,11 @@ class MultiblockExportServiceTest {
                 .contains("getStateDefinition().getProperty(\"axis\")")
                 .contains("getValue(\"x\")")
                 .contains("getValue(\"z\")")
-                .contains(".where('B', new BlockPredicate.OfBlock(BuiltInRegistries.BLOCK.getValue(Identifier.parse(\"minecraft:oak_log\"))))");
+                .contains(".where('B', new BlockPredicate.OfBlockState");
         assertThat(kubeJs).contains(".pattern(\"CXAB\")")
                 .contains(".set('X', api.state('minecraft:oak_log[axis=x]'))")
                 .contains(".set('A', api.state('minecraft:oak_log[axis=z]'))")
-                .contains(".set('B', api.block('minecraft:oak_log'))");
+                .contains(".set('B', api.state('minecraft:oak_log[axis=y]'))");
         assertThat(java).contains(".where('X', new BlockPredicate.OfBlockState");
         assertThat(kubeJs).contains(".set('X', api.state('minecraft:oak_log[axis=x]'))");
     }
@@ -172,6 +172,21 @@ class MultiblockExportServiceTest {
                 .contains("getValue(\"inner_left\")")
                 .contains("getValue(\"true\")");
         assertThat(kubeJs).contains("api.state('minecraft:oak_stairs[facing=west,half=top,shape=inner_left,waterlogged=true]')");
+    }
+
+    @Test
+    void renderersPreserveDefaultStateForStatefulBlocks() {
+        var stairs = Blocks.OAK_STAIRS.defaultBlockState();
+
+        String java = MultiblockExportService.renderJava(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, stairs, false)), Direction.SOUTH);
+        String kubeJs = MultiblockExportService.renderKubeJS(List.of(
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, stairs, false)), Direction.SOUTH);
+
+        assertThat(java).contains("new BlockPredicate.OfBlockState")
+                .contains("getStateDefinition().getProperty(\"facing\")");
+        assertThat(kubeJs).contains("api.state('minecraft:oak_stairs[")
+                .doesNotContain("api.block('minecraft:oak_stairs')");
     }
 
     @Test

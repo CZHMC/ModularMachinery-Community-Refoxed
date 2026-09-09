@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -278,6 +279,29 @@ class BlockArrayTest {
                     .get(BlockPos.ZERO);
             assertThat(rotated.state().getValue(DirectionalBlock.FACING)).isEqualTo(Direction.UP);
         }
+    }
+
+    @Test void block_array_cache_rotates_state_directions_for_vertical_facing() {
+        BlockArrayCache.clearForTesting();
+        var southState = Blocks.DISPENSER.defaultBlockState().setValue(DirectionalBlock.FACING, Direction.SOUTH);
+        var array = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlockState(southState)));
+
+        assertThat(((BlockPredicate.OfBlockState) BlockArrayCache.get(array, Direction.UP, Direction.SOUTH)
+                .get(BlockPos.ZERO)).state().getValue(DirectionalBlock.FACING)).isEqualTo(Direction.UP);
+        assertThat(((BlockPredicate.OfBlockState) BlockArrayCache.get(array, Direction.DOWN, Direction.SOUTH)
+                .get(BlockPos.ZERO)).state().getValue(DirectionalBlock.FACING)).isEqualTo(Direction.DOWN);
+    }
+
+    @Test void block_array_cache_keeps_unrepresentable_horizontal_state_for_vertical_facing() {
+        BlockArrayCache.clearForTesting();
+        var northStairs = Blocks.OAK_STAIRS.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH);
+        var array = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlockState(northStairs)));
+
+        assertThat(((BlockPredicate.OfBlockState) BlockArrayCache.get(array, Direction.UP, Direction.SOUTH)
+                .get(BlockPos.ZERO)).state().getValue(
+                        BlockStateProperties.HORIZONTAL_FACING))
+                .isEqualTo(Direction.NORTH);
     }
 
     @Test void block_rotator_treats_raw_multiblock_template_as_south_facing() {
