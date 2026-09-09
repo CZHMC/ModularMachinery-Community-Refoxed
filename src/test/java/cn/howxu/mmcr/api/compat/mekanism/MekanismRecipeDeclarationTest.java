@@ -46,9 +46,9 @@ class MekanismRecipeDeclarationTest {
 
     @Test
     void port_family_ids_are_stable() {
-        assertEquals(Identifier.parse("mmcr:mekanism_chemical"), MekanismPortFamilies.CHEMICAL);
-        assertEquals(Identifier.parse("mmcr:mekanism_heat_temperature"), MekanismPortFamilies.HEAT_TEMPERATURE);
-        assertEquals(Identifier.parse("mmcr:mekanism_heat"), MekanismPortFamilies.HEAT);
+        assertEquals(Identifier.parse("mekanism:chemical"), MekanismPortFamilies.CHEMICAL);
+        assertEquals(Identifier.parse("mekanism:temperature"), MekanismPortFamilies.HEAT_TEMPERATURE);
+        assertEquals(Identifier.parse("mekanism:heat"), MekanismPortFamilies.HEAT);
     }
 
     @Test

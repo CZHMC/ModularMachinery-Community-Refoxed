@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.mekanism;
 
-import cn.howxu.mmcr.MMCR;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -9,9 +8,9 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public final class MekanismRecipeTypes {
-    public static final Identifier CHEMICAL = MMCR.id("mekanism_chemical");
-    public static final Identifier HEAT_TEMPERATURE = MMCR.id("mekanism_heat_temperature");
-    public static final Identifier HEAT = MMCR.id("mekanism_heat");
+    public static final Identifier CHEMICAL = Identifier.fromNamespaceAndPath("mekanism", "chemical");
+    public static final Identifier HEAT_TEMPERATURE = Identifier.fromNamespaceAndPath("mekanism", "temperature");
+    public static final Identifier HEAT = Identifier.fromNamespaceAndPath("mekanism", "heat");
 
     private MekanismRecipeTypes() {
     }

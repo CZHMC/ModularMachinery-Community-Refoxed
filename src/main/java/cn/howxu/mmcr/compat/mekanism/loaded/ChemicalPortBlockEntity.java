@@ -11,6 +11,7 @@ import mekanism.api.chemical.BasicChemicalTank;
 import mekanism.api.chemical.ChemicalResource;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.functions.ConstantPredicates;
+import mekanism.api.radiation.IRadiationManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -73,6 +74,15 @@ public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
         if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
+    }
+
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        if (level != null && !level.isClientSide() && IRadiationManager.INSTANCE.isRadiationEnabled()) {
+            IRadiationManager.INSTANCE.dumpRadiation(level, worldPosition,
+                    chemicalTank.resource(), chemicalTank.amountAsLong());
+        }
+        super.preRemoveSideEffects(pos, state);
     }
 
     private void markChemicalChanged() {
