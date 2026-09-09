@@ -291,7 +291,7 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
-    void registered_exact_chemical_without_input_is_missing() {
+    void registered_exact_chemical_input_without_matching_ports_reports_insufficient_resource() {
         LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
         Holder.Reference<Chemical> chemical = registerChemical("missing_input");
 
@@ -305,7 +305,7 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
-    void chemical_input_ignores_output_only_ports() {
+    void chemical_input_with_only_output_direction_ports_reports_insufficient_resource() {
         LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
         Holder.Reference<Chemical> chemical = registerChemical("output_only");
         FakeChemicalTank tank = new FakeChemicalTank(2_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
