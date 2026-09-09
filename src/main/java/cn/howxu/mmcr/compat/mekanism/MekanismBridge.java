@@ -66,8 +66,7 @@ public interface MekanismBridge {
 
     /**
      * Checks an optional port menu without exposing its implementation type to common code.
-     * A {@code null} position is treated as a failure; a {@code null port} matches only menus
-     * whose owner is also {@code null} (e.g. a freshly opened client-side menu).
+     * A {@code null} position is treated as a failure; a {@code null port} skips owner matching.
      */
     default boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
         return false;

@@ -209,8 +209,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,
                                    BlockPos pos, IOPortBlockEntity port) {
         if (pos == null) return false;
-        if (port == null) return menuOwner == null && menuPos.equals(pos);
-        return menuPos.equals(pos) && menuOwner == port;
+        return menuPos.equals(pos) && (port == null || menuOwner == port);
     }
 
     @Override

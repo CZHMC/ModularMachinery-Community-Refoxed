@@ -222,7 +222,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private Button createAutoIOPageButton(int x, int y, Identifier capabilityId) {
-        return addRenderableWidget(Button.builder(Component.literal("⇄"), button -> {
+        return addRenderableWidget(Button.builder(Component.translatable("mmcr.auto_io.page"), button -> {
             if (autoIOPage) {
                 autoIOPage = false;
             } else {
@@ -238,7 +238,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private void updateAutoIOWidgets() {
         updateAutoIOSlotVisibility();
         if (autoIOPageButton != null) {
-            autoIOPageButton.setMessage(Component.literal(autoIOPage ? "←" : "⇄"));
+            autoIOPageButton.setMessage(Component.translatable(
+                    autoIOPage ? "mmcr.auto_io.page_back" : "mmcr.auto_io.page"));
             autoIOPageButton.setTooltip(Tooltip.create(autoIOPage
                     ? Component.translatable("mmcr.auto_io.back")
                     : Component.translatable(autoIOControlTooltipKey(supportedCapabilityIds().getFirst(), isOutputPort()))));

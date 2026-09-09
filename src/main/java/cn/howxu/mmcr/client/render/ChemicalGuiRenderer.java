@@ -2,7 +2,6 @@ package cn.howxu.mmcr.client.render;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.data.AtlasIds;
 import net.minecraft.resources.Identifier;
@@ -30,7 +29,7 @@ public final class ChemicalGuiRenderer {
         TextureAtlasSprite sprite = Minecraft.getInstance().getAtlasManager()
                 .getAtlasOrThrow(AtlasIds.BLOCKS).getSprite(state.identifier());
         int fillHeight = Math.min(state.fillHeight(), height);
-        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y + height - fillHeight,
-                width, fillHeight, state.tint());
+        FluidGuiRenderer.drawSprite(graphics, sprite, state.tint(), x, y + height - fillHeight,
+                width, fillHeight);
     }
 }

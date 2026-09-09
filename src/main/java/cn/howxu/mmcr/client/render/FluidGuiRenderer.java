@@ -68,7 +68,12 @@ public final class FluidGuiRenderer {
 
     public static void drawFluid(GuiGraphicsExtractor graphics, FluidStack fluid, int x, int y, int width, int height) {
         TextureAtlasSprite sprite = stillSprite(fluid);
-        int color = fluidColor(fluid);
+        drawSprite(graphics, sprite, fluidColor(fluid), x, y, width, height);
+    }
+
+    public static void drawSprite(GuiGraphicsExtractor graphics, TextureAtlasSprite sprite, int color,
+                                  int x, int y, int width, int height) {
+        if (sprite == null || width <= 0 || height <= 0) return;
         AbstractTexture texture = Minecraft.getInstance().getTextureManager().getTexture(sprite.atlasLocation());
         GpuTextureView textureView = texture.getTextureView();
         GpuSampler sampler = texture.getSampler();
