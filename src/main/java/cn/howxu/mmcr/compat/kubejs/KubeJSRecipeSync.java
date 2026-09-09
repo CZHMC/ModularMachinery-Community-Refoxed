@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;

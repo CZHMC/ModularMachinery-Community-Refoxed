@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;

@@ -62,4 +62,5 @@ public final class MachineRecipeDisplays {
         Minecraft minecraft = Minecraft.getInstance();
         return minecraft == null || minecraft.level == null ? null : minecraft.level.registryAccess();
     }
+
 }

@@ -83,10 +83,14 @@ public final class JeiRuntimeReloader {
                         continue;
                     }
                     var type = JeiMachineRecipeTypes.forMachine(machineId);
-                    current.getRecipeManager().hideRecipes(type, previousVisible.getOrDefault(machineId, List.of()));
-                    if (!snapshot.structures().containsKey(machineId)) continue;
+                    var recipeManager = current.getRecipeManager();
+                    recipeManager.hideRecipes(type, previousVisible.getOrDefault(machineId, List.of()));
+                    if (!snapshot.structures().containsKey(machineId)) {
+                        continue;
+                    }
                     List<MachineRecipeDisplay> displays = displaysByMachine.getOrDefault(machineId, List.of());
-                    current.getRecipeManager().addRecipes(type, displays);
+                    recipeManager.unhideRecipes(type, displays);
+                    recipeManager.addRecipes(type, displays);
                     updatedVisible.put(machineId, displays);
                 }
                 visibleDisplaysByMachine = Map.copyOf(updatedVisible);

@@ -30,8 +30,10 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
@@ -133,6 +135,23 @@ class JeiRuntimeReloaderTest {
 
         assertThat(manager.hiddenRecipeIds()).containsExactly(recipeId);
         assertThat(manager.addedRecipeIds()).containsExactly(recipeId);
+    }
+
+    @Test
+    void runtimeReloadMakesReaddedDisplaysVisibleAfterHidingPreviousDisplays() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        manager.enforceHiddenRecipes();
+        Identifier machineId = MMCR.id("test_machine_name");
+        Identifier recipeId = MMCR.id("readded_runtime_recipe");
+        MachineRecipe recipe = RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
+                List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
+        JeiRuntimeReloader.captureInitialDisplays(Map.of(machineId, List.of(MachineRecipeDisplay.from(recipe))));
+        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+
+        JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, recipeId));
+
+        assertThat(manager.visibleRecipeIds()).containsExactly(recipeId);
     }
 
     @Test
@@ -246,7 +265,10 @@ class JeiRuntimeReloaderTest {
         private final List<Identifier> addedRecipeIds = new ArrayList<>();
         private final List<IRecipeType<?>> hiddenTypes = new ArrayList<>();
         private final List<Identifier> hiddenRecipeIds = new ArrayList<>();
+        private final Set<Identifier> hiddenRecipes = new LinkedHashSet<>();
+        private final List<Identifier> visibleRecipeIds = new ArrayList<>();
         private final AtomicBoolean failNextAdd = new AtomicBoolean();
+        private boolean enforceHiddenRecipes;
 
         IRecipeManager proxy() {
             return (IRecipeManager) Proxy.newProxyInstance(
@@ -261,7 +283,12 @@ class JeiRuntimeReloaderTest {
                             ((List<?>) args[1]).stream()
                                     .map(MachineRecipeDisplay.class::cast)
                                     .map(MachineRecipeDisplay::recipeId)
-                                    .forEach(addedRecipeIds::add);
+                                    .forEach(recipeId -> {
+                                        addedRecipeIds.add(recipeId);
+                                        if (!enforceHiddenRecipes || !hiddenRecipes.contains(recipeId)) {
+                                            visibleRecipeIds.add(recipeId);
+                                        }
+                                    });
                             return null;
                         }
                         if (method.getName().equals("hideRecipes")) {
@@ -272,6 +299,18 @@ class JeiRuntimeReloaderTest {
                                     .map(MachineRecipeDisplay.class::cast)
                                     .map(MachineRecipeDisplay::recipeId)
                                     .forEach(hiddenRecipeIds::add);
+                            displays.stream()
+                                    .map(MachineRecipeDisplay.class::cast)
+                                    .map(MachineRecipeDisplay::recipeId)
+                                    .forEach(hiddenRecipes::add);
+                            return null;
+                        }
+                        if (method.getName().equals("unhideRecipes")) {
+                            Collection<?> displays = (Collection<?>) args[1];
+                            displays.stream()
+                                    .map(MachineRecipeDisplay.class::cast)
+                                    .map(MachineRecipeDisplay::recipeId)
+                                    .forEach(hiddenRecipes::remove);
                             return null;
                         }
                         if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
@@ -297,11 +336,20 @@ class JeiRuntimeReloaderTest {
             return hiddenRecipeIds;
         }
 
+        List<Identifier> visibleRecipeIds() {
+            return visibleRecipeIds;
+        }
+
+        void enforceHiddenRecipes() {
+            enforceHiddenRecipes = true;
+        }
+
         void clearRecordedCalls() {
             addedTypes.clear();
             addedRecipeIds.clear();
             hiddenTypes.clear();
             hiddenRecipeIds.clear();
+            visibleRecipeIds.clear();
         }
 
         void failNextAdd() {
