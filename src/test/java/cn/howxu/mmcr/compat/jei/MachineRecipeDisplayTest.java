@@ -25,10 +25,12 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import net.minecraft.core.Holder;
@@ -819,6 +821,33 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void outputHeatResolvesFromHeatRequirementAndProducesLocalizedLabel() {
+        registerHeatRequirements();
+        MachineRequirement heatOutput = LoadedHeatRequirement.outputHeat(500D);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("jei_output_heat"), MMCR.id("test_machine_name"),
+                20, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(heatOutput));
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.outputHeat()).hasValue(500D);
+        Component label = MachineRecipeDisplay.outputHeatLabel(500D);
+        assertThat(label.getContents()).isInstanceOf(TranslatableContents.class);
+        assertThat(((TranslatableContents) label.getContents()).getKey())
+                .isEqualTo("jei.mmcr.machine_recipe.heat_output");
+    }
+
+    @Test
+    void outputHeatIsAbsentWhenOnlyMinimumTemperatureIsPresent() {
+        registerHeatRequirements();
+        MachineRequirement heatInput = LoadedHeatRequirement.minimumTemperature(300D);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("jei_only_min_temp"), MMCR.id("test_machine_name"),
+                20, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(heatInput));
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.outputHeat()).isEmpty();
+        assertThat(display.minimumTemperature()).hasValue(300D);
+    }
+
+    @Test
     void overflowTooltipsLabelChemicalEntriesByType() throws Exception {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
                 MMCR.id("jei_typed_overflow"), MMCR.id("test_machine_name"), 20, List.of(), List.of()));
@@ -890,6 +919,15 @@ class MachineRecipeDisplayTest {
     private static MachineRecipeDisplay displayFor(SmartInterfaceRequirement requirement, Identifier machineId) {
         return MachineRecipeDisplay.from(RecipeTestSupport.create(MMCR.id("interface_jei_recipe"), machineId, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(requirement)));
+    }
+
+    private static void registerHeatRequirements() {
+        if (RequirementHandlerRegistry.canonicalType(LoadedHeatRequirement.TEMPERATURE_TYPE) == null) {
+            RequirementHandlerRegistry.register(LoadedHeatRequirement.TEMPERATURE_TYPE);
+        }
+        if (RequirementHandlerRegistry.canonicalType(LoadedHeatRequirement.HEAT_TYPE) == null) {
+            RequirementHandlerRegistry.register(LoadedHeatRequirement.HEAT_TYPE);
+        }
     }
 
     private static void registerLevel(Identifier id, Identifier typeId,

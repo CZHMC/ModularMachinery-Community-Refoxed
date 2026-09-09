@@ -184,6 +184,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
+        if (recipe.outputHeat().isPresent()) {
+            guiGraphics.text(Minecraft.getInstance().font,
+                    MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
+                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            y += TEXT_LINE_SPACING;
+        }
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
         if (!hostRequirement.getString().isEmpty()) {
             y = layout.hostRequirementTextY();

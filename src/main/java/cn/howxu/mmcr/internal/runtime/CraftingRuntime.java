@@ -26,6 +26,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -622,7 +623,9 @@ public final class CraftingRuntime {
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type()))
+            if (!(ItemRequirement.TYPE.equals(requirement.type())
+                    || FluidRequirement.TYPE.equals(requirement.type())
+                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()))
                     || requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (plan.hasOperations(index)) consumed.add(index);
             else retained.add(index);

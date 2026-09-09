@@ -309,6 +309,7 @@
   "jei.mmcr.machine_recipe.fluid_amount": "流体: %s",
   "jei.mmcr.machine_recipe.chemical_amount": "化学品: %s",
   "jei.mmcr.machine_recipe.mekanism_temperature": "Mekanism 温度: %s %s",
+  "jei.mmcr.machine_recipe.heat_output": "热量输出: %s %s",
   "jei.mmcr.machine_recipe.overflow_chemical": "化学品: %s x %s",
   "jei.mmcr.machine_recipe.overflow_entry": "%s x %s",
   "jei.mmcr.machine_recipe.overflow_fluid": "流体: %s x %s",

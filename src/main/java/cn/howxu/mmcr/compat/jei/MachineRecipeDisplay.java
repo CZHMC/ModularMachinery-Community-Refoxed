@@ -186,9 +186,24 @@ public record MachineRecipeDisplay(
                 .findFirst();
     }
 
+    public OptionalDouble outputHeat() {
+        return recipe.runtimeRequirements().stream()
+                .filter(LoadedHeatRequirement.class::isInstance)
+                .map(LoadedHeatRequirement.class::cast)
+                .filter(requirement -> requirement.heat().kind() == HeatRequirement.Kind.OUTPUT_HEAT)
+                .mapToDouble(requirement -> requirement.heat().value())
+                .findFirst();
+    }
+
     public static Component minimumTemperatureLabel(double kelvin) {
         var unit = MekanismTemperatureDisplay.configuredUnit();
         return Component.translatable("jei.mmcr.machine_recipe.mekanism_temperature",
+                MekanismTemperatureDisplay.fromKelvin(kelvin, unit), MekanismTemperatureDisplay.symbol(unit));
+    }
+
+    public static Component outputHeatLabel(double kelvin) {
+        var unit = MekanismTemperatureDisplay.configuredUnit();
+        return Component.translatable("jei.mmcr.machine_recipe.heat_output",
                 MekanismTemperatureDisplay.fromKelvin(kelvin, unit), MekanismTemperatureDisplay.symbol(unit));
     }
 

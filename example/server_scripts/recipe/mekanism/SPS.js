@@ -33,7 +33,7 @@ ServerEvents.recipes(event => {
                 type: 'mekanism:chemical',
                 io: 'input',
                 kind: 'chemical',
-                id: 'mekanism:osmium',
+                id: 'mekanism:oxygen',
                 amount: 1000,
             },
             {
@@ -56,7 +56,7 @@ ServerEvents.recipes(event => {
                 type: 'mekanism:chemical',
                 io: 'input',
                 kind: 'chemical',
-                id: 'mekanism:osmium',
+                id: 'mekanism:hydrogen',
                 amount: 1000,
             },
             {

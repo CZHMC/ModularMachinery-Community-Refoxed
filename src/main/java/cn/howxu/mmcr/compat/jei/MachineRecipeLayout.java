@@ -216,7 +216,8 @@ public record MachineRecipeLayout(
 
     private static int metadataLineCount(MachineRecipeDisplay display) {
         return 1 + display.energyInputs().size() + display.energyOutputs().size()
-                + (display.minimumTemperature().isPresent() ? 1 : 0);
+                + (display.minimumTemperature().isPresent() ? 1 : 0)
+                + (display.outputHeat().isPresent() ? 1 : 0);
     }
 
     public enum Kind { ITEM, FLUID, CHEMICAL, GENERIC, TEXT }
