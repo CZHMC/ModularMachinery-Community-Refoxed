@@ -10,7 +10,14 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
+import mekanism.api.MekanismAPI;
+import mekanism.api.chemical.Chemical;
+import mekanism.api.chemical.ChemicalBuilder;
+import mekanism.api.chemical.ChemicalStack;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
@@ -35,6 +42,24 @@ class FluidChemicalConsumeChanceDisplayTest {
         TestBootstrap.bootstrap();
         RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
         LoadedChemicalRequirement.installUnavailableHandler();
+        registerOxygen();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void registerOxygen() {
+        ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
+                Identifier.parse("mekanism:oxygen"));
+        MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
+        if (registry.get(key).isPresent()) return;
+        registry.unfreeze(true);
+        Registry.register(registry, key.identifier(),
+                new Chemical(ChemicalBuilder.builder()) {
+                    @Override
+                    public boolean isRadioactive() {
+                        return false;
+                    }
+                });
+        registry.freeze();
     }
 
     @Test
@@ -64,5 +89,23 @@ class FluidChemicalConsumeChanceDisplayTest {
                 .filter(entry -> entry.typeId().equals(MekanismRecipeTypes.CHEMICAL))
                 .findFirst().orElseThrow();
         assertThat(chemical.chance()).isEqualTo(0F);
+    }
+
+    @Test
+    void chemical_display_stack_uses_full_render_amount() {
+        MachineRequirement chemicalInput = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 1F);
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("chemical_render_amount"), MACHINE, 20,
+                List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+
+        JeiDisplayEntry chemical = MachineRecipeDisplay.from(recipe).entries().stream()
+                .filter(entry -> entry.typeId().equals(MekanismRecipeTypes.CHEMICAL))
+                .findFirst().orElseThrow();
+
+        assertThat(chemical.count()).isEqualTo(1_000);
+        assertThat(chemical.ingredient()).isInstanceOf(List.class);
+        List<?> ingredients = (List<?>) chemical.ingredient();
+        assertThat(ingredients).singleElement().isInstanceOf(ChemicalStack.class);
+        assertThat(((ChemicalStack) ingredients.getFirst()).amount()).isEqualTo(1_000);
     }
 }

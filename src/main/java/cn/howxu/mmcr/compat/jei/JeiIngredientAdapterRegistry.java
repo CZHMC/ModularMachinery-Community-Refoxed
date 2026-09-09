@@ -80,6 +80,8 @@ public final class JeiIngredientAdapterRegistry {
         return (int) Math.min(Integer.MAX_VALUE, amount);
     }
 
+    private static final long CHEMICAL_RENDER_AMOUNT = 1000L;
+
     private static final class ItemAdapter implements JeiIngredientAdapter {
         @Override
         public Identifier typeId() {
@@ -191,13 +193,13 @@ public final class JeiIngredientAdapterRegistry {
     private static List<ChemicalStack> chemicalStacks(ChemicalIngredient ingredient) {
         if (ingredient.kind() == ChemicalIngredient.Kind.CHEMICAL) {
             return MekanismAPI.CHEMICAL_REGISTRY.get(ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id()))
-                    .map(holder -> List.of(new ChemicalStack(holder, 1)))
+                    .map(holder -> List.of(new ChemicalStack(holder, (int) CHEMICAL_RENDER_AMOUNT)))
                     .orElseGet(List::of);
         }
         TagKey<Chemical> tag = TagKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id());
         return MekanismAPI.CHEMICAL_REGISTRY.get(tag).stream()
                 .flatMap(holders -> holders.stream())
-                .map(holder -> new ChemicalStack(holder, 1))
+                .map(holder -> new ChemicalStack(holder, (int) CHEMICAL_RENDER_AMOUNT))
                 .toList();
     }
 }
