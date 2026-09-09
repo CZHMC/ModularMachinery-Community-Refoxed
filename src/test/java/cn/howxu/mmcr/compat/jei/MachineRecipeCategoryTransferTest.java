@@ -17,7 +17,9 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.ingredient.IRecipeSlotRichTooltipCallback;
+import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.recipe.RecipeIngredientRole;
+import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -138,9 +140,15 @@ class MachineRecipeCategoryTransferTest {
             assertThat(slot.chemicalAdds()).hasSize(1);
         });
         assertThat(slots.get(0).chemicalAdds()).singleElement()
-                .extracting(ChemicalStack::amount).isEqualTo(1_250);
+                .satisfies(add -> {
+                    assertThat(add.type()).isEqualTo(MekanismJEI.TYPE_CHEMICAL);
+                    assertThat(add.stack().amount()).isEqualTo(1_250);
+                });
         assertThat(slots.get(1).chemicalAdds()).singleElement()
-                .extracting(ChemicalStack::amount).isEqualTo(750);
+                .satisfies(add -> {
+                    assertThat(add.type()).isEqualTo(MekanismJEI.TYPE_CHEMICAL);
+                    assertThat(add.stack().amount()).isEqualTo(750);
+                });
     }
 
     @Test
@@ -237,7 +245,7 @@ class MachineRecipeCategoryTransferTest {
                         capture.fluidAdds.add(new CapturedFluid(fluid, ((Number) arguments[1]).longValue(), patch));
                     } else if (method.getName().equals("add") && arguments.length >= 2
                             && arguments[1] instanceof ChemicalStack stack) {
-                        capture.chemicalAdds.add(stack);
+                        capture.chemicalAdds.add(new CapturedChemical((IIngredientType<?>) arguments[0], stack));
                     }
                     return method.getReturnType().isAssignableFrom(IRecipeSlotBuilder.class) ? proxy : null;
                 });
@@ -250,7 +258,7 @@ class MachineRecipeCategoryTransferTest {
         private final List<ItemStack> itemStacks = new ArrayList<>();
         private final List<ItemStack> itemAdds = new ArrayList<>();
         private final List<CapturedFluid> fluidAdds = new ArrayList<>();
-        private final List<ChemicalStack> chemicalAdds = new ArrayList<>();
+        private final List<CapturedChemical> chemicalAdds = new ArrayList<>();
         private final List<IRecipeSlotRichTooltipCallback> tooltipCallbacks = new ArrayList<>();
         private boolean standardBackground;
 
@@ -284,7 +292,7 @@ class MachineRecipeCategoryTransferTest {
             return fluidAdds;
         }
 
-        private List<ChemicalStack> chemicalAdds() {
+        private List<CapturedChemical> chemicalAdds() {
             return chemicalAdds;
         }
 
@@ -295,6 +303,9 @@ class MachineRecipeCategoryTransferTest {
         private boolean standardBackground() {
             return standardBackground;
         }
+    }
+
+    private record CapturedChemical(IIngredientType<?> type, ChemicalStack stack) {
     }
 
     private record CapturedFluid(Fluid fluid, long amount, DataComponentPatch componentsPatch) {
