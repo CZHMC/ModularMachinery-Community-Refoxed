@@ -443,6 +443,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     ? inputOverlayText(entry.chance(), selectedLanguage())
                     : outputOverlayText(entry.chance());
             setItemOverlay(slot, chance, quantity);
+        } else if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL) && entry.role() == RecipeIngredientRole.INPUT) {
+            setItemOverlay(slot, inputOverlayText(entry.chance(), selectedLanguage()), quantity);
+            slot.addRichTooltipCallback((view, tooltip) ->
+                    appendConsumeChanceTooltip(tooltip, entry.chance(), true));
         } else {
             setQuantityOverlay(slot, quantity);
         }
@@ -469,10 +473,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     private static void addTransferSlots(IRecipeLayoutBuilder builder, MachineRecipeDisplay recipe) {
-        for (int index = 0; index < recipe.fluidInputs().size(); index++) {
+        for (MachineRecipeDisplay.FluidInputDisplay fluidDisplay : recipe.fluidInputs()) {
             IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
-            int amount = recipe.fluidInputAmounts().get(index);
-            recipe.fluidInputs().get(index).fluids()
+            if (fluidDisplay.ingredient() == null) continue;
+            int amount = fluidDisplay.amount();
+            fluidDisplay.ingredient().fluids()
                     .forEach(fluid -> slot.add(fluid.value(), amount));
         }
         for (MachineRecipeDisplay.ItemInputDisplay item : recipe.itemInputs()) {
@@ -549,12 +554,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private static void addFluid(IRecipeSlotBuilder jeiSlot, MachineRecipeDisplay recipe,
             MachineRecipeLayout.EntryPlan entry, JeiDisplayEntry display, boolean input) {
         if (input) {
-            int amount = recipe.fluidInputAmounts().get(entry.index());
+            MachineRecipeDisplay.FluidInputDisplay fluidDisplay = recipe.fluidInputs().get(entry.index());
             if (!(display.ingredient() instanceof FluidStack fluid) || fluid.isEmpty()) return;
-            setQuantityOverlay(jeiSlot, fluidQuantityText(amount));
+            setItemOverlay(jeiSlot, inputOverlayText(fluidDisplay.consumeChance(), selectedLanguage()),
+                    fluidQuantityText(fluidDisplay.amount()));
             jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
                     .add(fluid.getFluid(), FLUID_SLOT_CAPACITY, fluid.getComponentsPatch());
-            jeiSlot.addRichTooltipCallback((view, tooltip) -> appendFluidQuantityTooltip(tooltip, amount));
+            jeiSlot.addRichTooltipCallback((view, tooltip) -> {
+                appendFluidQuantityTooltip(tooltip, fluidDisplay.amount());
+                appendConsumeChanceTooltip(tooltip, fluidDisplay.consumeChance(), true);
+            });
         } else {
             var stack = recipe.fluidOutputs().get(entry.index());
             setQuantityOverlay(jeiSlot, fluidQuantityText(stack.getAmount()));
@@ -638,7 +647,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 }
             } else if (entry.kind() == MachineRecipeLayout.Kind.FLUID) {
                 if (input) {
-                    int amount = recipe.fluidInputAmounts().get(entry.index());
+                    int amount = recipe.fluidInputs().get(entry.index()).amount();
                     Component displayName = entry.displayEntry() != null
                             && entry.displayEntry().ingredient() instanceof FluidStack fluid
                             && !fluid.isEmpty()
@@ -709,6 +718,16 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         String quantity = fluidTooltipQuantity(amount);
         if (!quantity.isEmpty()) {
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.fluid_amount", quantity));
+        }
+    }
+
+    static void appendConsumeChanceTooltip(ITooltipBuilder tooltip, float consumeChance, boolean input) {
+        if (!input) return;
+        if (consumeChance == 0F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.keep"));
+        } else if (consumeChance < 1F) {
+            tooltip.add(Component.translatable("jei.mmcr.machine_recipe.consume_chance",
+                    Math.round(consumeChance * 100F) + "%"));
         }
     }
 

@@ -38,6 +38,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Optional;
 import java.util.OptionalDouble;
@@ -57,8 +58,8 @@ public record MachineRecipeDisplay(
         int durationTicks,
         List<ItemInputDisplay> itemInputs,
         List<ItemOutputDisplay> itemOutputs,
-        List<FluidIngredient> fluidInputs,
-        List<Integer> fluidInputAmounts,
+        List<FluidInputDisplay> fluidInputs,
+        List<ChemicalInputDisplay> chemicalInputs,
         List<FluidStack> fluidOutputs,
         List<EnergyIngredient> energyInputs,
         List<EnergyIngredient> energyOutputs,
@@ -82,8 +83,8 @@ public record MachineRecipeDisplay(
                 ? JsonOps.INSTANCE
                 : RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         List<ItemInputDisplay> itemInputs = new ArrayList<>();
-        List<FluidIngredient> fluidInputs = new ArrayList<>();
-        List<Integer> fluidInputAmounts = new ArrayList<>();
+        List<FluidInputDisplay> fluidInputs = new ArrayList<>();
+        List<ChemicalInputDisplay> chemicalInputs = new ArrayList<>();
         List<EnergyIngredient> energyInputs = new ArrayList<>();
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
@@ -100,8 +101,9 @@ public record MachineRecipeDisplay(
                         .toList();
                 itemInputs.add(new ItemInputDisplay(item.item(), baseStacks, item.count(), item.consumeChance(), components, componentOps));
             } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
-                fluidInputs.add(fluid.fluid());
-                fluidInputAmounts.add(fluid.amount());
+                fluidInputs.add(new FluidInputDisplay(fluid.fluid(), fluid.amount(), fluid.consumeChance()));
+            } else if (requirement instanceof LoadedChemicalRequirement chemical && chemical.io() == RecipeModifier.IOType.INPUT) {
+                chemicalInputs.add(new ChemicalInputDisplay(chemical.ingredient(), chemical.ingredient().amount(), chemical.consumeChance()));
             } else if (requirement instanceof EnergyRequirement energy) {
                 EnergyIngredient ingredient = new EnergyIngredient(energy.fePerTick(), energy.io() == RecipeModifier.IOType.INPUT);
                 if (ingredient.input()) energyInputs.add(ingredient);
@@ -139,7 +141,7 @@ public record MachineRecipeDisplay(
                 List.copyOf(itemInputs),
                 List.copyOf(itemOutputs),
                 List.copyOf(fluidInputs),
-                List.copyOf(fluidInputAmounts),
+                List.copyOf(chemicalInputs),
                 List.copyOf(fluidOutputs),
                 List.copyOf(energyInputs),
                 List.copyOf(energyOutputs),
@@ -226,8 +228,12 @@ public record MachineRecipeDisplay(
         if (requirement instanceof ItemRequirement item) {
             return item.io() == RecipeModifier.IOType.INPUT ? item.consumeChance() : item.chance();
         }
-        if (requirement instanceof FluidRequirement fluid) return fluid.chance();
-        if (requirement instanceof LoadedChemicalRequirement chemical) return chemical.chance();
+        if (requirement instanceof FluidRequirement fluid) {
+            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.consumeChance() : fluid.chance();
+        }
+        if (requirement instanceof LoadedChemicalRequirement chemical) {
+            return chemical.io() == RecipeModifier.IOType.INPUT ? chemical.consumeChance() : chemical.chance();
+        }
         return 1F;
     }
 
@@ -279,6 +285,44 @@ public record MachineRecipeDisplay(
                     + atMin + ", " + atMax + "] " + operation);
         }
     }
+
+    /**
+     * Recipe data for one fluid input. The {@code ingredient} field is intentionally left
+     * nullable to mirror {@link FluidRequirement#fluid()} so empty / unbound tag ingredients
+     * remain representable; the JEI renderer skips slots whose ingredient is null or empty.
+     */
+    public record FluidInputDisplay(
+            @org.jspecify.annotations.Nullable FluidIngredient ingredient,
+            int amount,
+            float consumeChance
+    ) {
+        public FluidInputDisplay {
+            if (amount < 0) throw new IllegalArgumentException("amount must be non-negative");
+            if (!Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+                throw new IllegalArgumentException("consumeChance must be in [0, 1]");
+            }
+        }
+    }
+
+    /**
+     * Recipe data for one chemical input. Used by the JEI overlay/tooltip code path
+     * so the consume-chance semantics from {@link LoadedChemicalRequirement} survive the
+     * conversion from internal {@link MachineRequirement} to {@link JeiDisplayEntry}.
+     */
+    public record ChemicalInputDisplay(
+            cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient ingredient,
+            long amount,
+            float consumeChance
+    ) {
+        public ChemicalInputDisplay {
+            Objects.requireNonNull(ingredient, "ingredient");
+            if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
+            if (!Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+                throw new IllegalArgumentException("consumeChance must be in [0, 1]");
+            }
+        }
+    }
+
 
     /**
      * Recipe data for one item input. Mirrors the vanilla anvil recipe layout: the slot

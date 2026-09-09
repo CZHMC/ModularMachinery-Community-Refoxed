@@ -264,7 +264,7 @@ class MachineRecipeDisplayTest {
 
         MachineRecipeDisplay display = new MachineRecipeDisplay(
                 template.recipe(), template.recipeId(), template.machineId(), template.durationTicks(),
-                template.itemInputs(), template.itemOutputs(), template.fluidInputs(), template.fluidInputAmounts(),
+                template.itemInputs(), template.itemOutputs(), template.fluidInputs(), template.chemicalInputs(),
                 template.fluidOutputs(), template.energyInputs(), template.energyOutputs(), template.outputs(),
                 template.smartInterfaceInputs(), template.smartInterfaceOutputs(), template.smartInterfaceModifiers(),
                 requiredHostIds);
@@ -369,7 +369,7 @@ class MachineRecipeDisplayTest {
             assertThat(output.stack().getCount()).isEqualTo(4);
         });
         assertThat(display.fluidInputs()).hasSize(1);
-        assertThat(display.fluidInputAmounts()).containsExactly(250);
+        assertThat(display.fluidInputs().get(0).amount()).isEqualTo(250);
         assertThat(display.fluidOutputs()).hasSize(1);
         assertThat(display.energyInputs()).containsExactly(new EnergyIngredient(40, true));
         assertThat(display.energyOutputs()).isEmpty();
