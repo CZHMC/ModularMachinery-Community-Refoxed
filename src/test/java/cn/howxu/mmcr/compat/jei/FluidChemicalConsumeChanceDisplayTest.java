@@ -108,4 +108,14 @@ class FluidChemicalConsumeChanceDisplayTest {
         assertThat(ingredients).singleElement().isInstanceOf(ChemicalStack.class);
         assertThat(((ChemicalStack) ingredients.getFirst()).amount()).isEqualTo(1_000);
     }
+
+    @Test
+    void chemical_quantity_uses_b_units() {
+        assertThat(MachineRecipeCategory.chemicalQuantityText(1_000L))
+                .isEqualTo("1.00B")
+                .doesNotContain("mB");
+        assertThat(MachineRecipeCategory.chemicalTooltipQuantity(1_250L))
+                .isEqualTo("1.25B")
+                .doesNotContain("mB");
+    }
 }

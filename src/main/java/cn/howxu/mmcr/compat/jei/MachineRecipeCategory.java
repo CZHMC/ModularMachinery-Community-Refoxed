@@ -252,8 +252,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return Component.translatable("jei.mmcr.machine_recipe.overflow_fluid", ReadableNumber.format(amount), displayName);
     }
 
-    static Component overflowChemicalEntry(int amount, Component displayName) {
-        return Component.translatable("jei.mmcr.machine_recipe.overflow_chemical", ReadableNumber.format(amount), displayName);
+    static Component overflowChemicalEntry(long amount, Component displayName) {
+        return Component.translatable("jei.mmcr.machine_recipe.overflow_chemical", chemicalTooltipQuantity(amount), displayName);
     }
 
     static Component outputStackName(ItemStack stack) {
@@ -436,17 +436,25 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             slot.addRichTooltipCallback((view, tooltip) -> tooltip.add((Component) entry.ingredient()));
             return;
         }
-        String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK || entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)
-                ? itemQuantityText(entry.count()) : fluidQuantityText(entry.count());
+        boolean chemical = entry.typeId().equals(MekanismRecipeTypes.CHEMICAL);
+        String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK
+                ? itemQuantityText(entry.count())
+                : chemical ? chemicalQuantityText(entry.count()) : fluidQuantityText(entry.count());
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
             String chance = entry.role() == RecipeIngredientRole.INPUT
                     ? inputOverlayText(entry.chance(), selectedLanguage())
                     : outputOverlayText(entry.chance());
             setItemOverlay(slot, chance, quantity);
-        } else if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL) && entry.role() == RecipeIngredientRole.INPUT) {
-            setItemOverlay(slot, inputOverlayText(entry.chance(), selectedLanguage()), quantity);
-            slot.addRichTooltipCallback((view, tooltip) ->
-                    appendConsumeChanceTooltip(tooltip, entry.chance(), true));
+        } else if (chemical) {
+            if (entry.role() == RecipeIngredientRole.INPUT) {
+                setItemOverlay(slot, inputOverlayText(entry.chance(), selectedLanguage()), quantity);
+            } else {
+                setQuantityOverlay(slot, quantity);
+            }
+            slot.addRichTooltipCallback((view, tooltip) -> {
+                appendChemicalQuantityTooltip(tooltip, entry.count());
+                appendConsumeChanceTooltip(tooltip, entry.chance(), entry.role() == RecipeIngredientRole.INPUT);
+            });
         } else {
             setQuantityOverlay(slot, quantity);
         }
@@ -604,6 +612,10 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 : ReadableNumber.formatForSlot(amount, 3, "B");
     }
 
+    static String chemicalQuantityText(long amount) {
+        return ReadableNumber.formatForSlot(amount, 3, "B");
+    }
+
     static List<Component> fluidTooltip(FluidStack fluid, Item.TooltipContext context,
             @Nullable Player player, TooltipFlag tooltipFlag) {
         return fluid.getTooltipLines(context, player, tooltipFlag);
@@ -617,6 +629,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return amount <= 10
                 ? ReadableNumber.formatExact(amount) + "mB"
                 : fluidBucketText(amount, 3);
+    }
+
+    static String chemicalTooltipQuantity(long amount) {
+        return BigDecimal.valueOf(amount, 3)
+                .setScale(3, RoundingMode.DOWN)
+                .stripTrailingZeros()
+                .toPlainString() + "B";
     }
 
     private static String fluidBucketText(int amount, int decimalPlaces) {
@@ -719,6 +738,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         if (!quantity.isEmpty()) {
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.fluid_amount", quantity));
         }
+    }
+
+    private static void appendChemicalQuantityTooltip(ITooltipBuilder tooltip, long amount) {
+        tooltip.add(Component.translatable("jei.mmcr.machine_recipe.chemical_amount",
+                chemicalTooltipQuantity(amount)));
     }
 
     static void appendConsumeChanceTooltip(ITooltipBuilder tooltip, float consumeChance, boolean input) {

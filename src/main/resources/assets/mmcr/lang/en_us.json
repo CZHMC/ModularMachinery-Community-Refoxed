@@ -307,6 +307,7 @@
   "jei.mmcr.machine_recipe.output_chance": "Output Chance: %s",
   "jei.mmcr.machine_recipe.output_overflow": "Additional Outputs: ",
   "jei.mmcr.machine_recipe.fluid_amount": "Fluid: %s",
+  "jei.mmcr.machine_recipe.chemical_amount": "Chemical: %s",
   "jei.mmcr.machine_recipe.mekanism_temperature": "Mekanism Temperature: %s %s",
   "jei.mmcr.machine_recipe.overflow_chemical": "Chemical: %s x %s",
   "jei.mmcr.machine_recipe.overflow_entry": "%s x %s",
