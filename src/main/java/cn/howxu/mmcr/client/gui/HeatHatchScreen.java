@@ -3,8 +3,10 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
+import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.util.ReadableNumber;
+import mekanism.common.util.UnitDisplayUtils.TemperatureUnit;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
@@ -45,7 +47,9 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
     static List<Component> displayLines(double heat, double capacity) {
         long safeHeat = safeWhole(heat);
         long safeCapacity = safeWhole(capacity);
-        double temperature = safeCapacity <= 0L ? 0D : safeHeat / (double) safeCapacity;
+        TemperatureUnit unit = MekanismTemperatureDisplay.configuredUnit();
+        double temperature = safeCapacity <= 0L ? 0D
+                : MekanismTemperatureDisplay.fromKelvin(safeHeat / (double) safeCapacity, unit);
         return List.of(
                 Component.translatable("gui.mmcr.heat.tooltip.amount", ReadableNumber.formatExact(safeHeat),
                         Component.translatable("mmcr.unit.heat")),
@@ -53,7 +57,7 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
                         Component.translatable("mmcr.unit.heat_capacity")),
                 Component.translatable("gui.mmcr.heat.tooltip.temperature",
                         String.format(Locale.ROOT, "%.1f", temperature),
-                        Component.translatable("mmcr.unit.temperature")));
+                        Component.literal(MekanismTemperatureDisplay.symbol(unit))));
     }
 
     @Override
@@ -69,7 +73,8 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
                 Component.translatable("mmcr.unit.heat_capacity")), titleLabelX, titleLabelY + 20, TITLE_COLOR, false);
         graphics.text(font, Component.translatable("gui.mmcr.heat.temperature",
                 String.format(Locale.ROOT, "%.1f", menu.temperature()),
-                Component.translatable("mmcr.unit.temperature")), titleLabelX, titleLabelY + 30, TITLE_COLOR, false);
+                Component.literal(MekanismTemperatureDisplay.symbol(MekanismTemperatureDisplay.configuredUnit()))),
+                titleLabelX, titleLabelY + 30, TITLE_COLOR, false);
         List<Component> details = displayLines(heat, capacity);
         int tooltipWidth = details.stream().mapToInt(font::width).max().orElse(0);
         addTooltip(leftPos + titleLabelX, topPos + titleLabelY + 10, tooltipWidth, 30, details);

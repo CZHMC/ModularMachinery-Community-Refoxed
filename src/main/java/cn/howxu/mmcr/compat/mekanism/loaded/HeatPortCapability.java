@@ -120,8 +120,10 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
 
     @Override
     public List<CapabilityDisplay> displays(CapabilityView ignored) {
-        return List.of(new CapabilityDisplay("heat", Double.toString(heatCapacitor.getTemperature()),
-                "K", Optional.empty()));
+        var unit = MekanismTemperatureDisplay.configuredUnit();
+        return List.of(new CapabilityDisplay("heat",
+                Double.toString(MekanismTemperatureDisplay.fromKelvin(heatCapacitor.getTemperature(), unit)),
+                MekanismTemperatureDisplay.symbol(unit), Optional.empty()));
     }
 
     @Override

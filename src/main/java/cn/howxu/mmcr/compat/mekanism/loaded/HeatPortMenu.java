@@ -75,7 +75,7 @@ public final class HeatPortMenu extends AbstractMachineMenu {
 
     public double temperature() {
         long capacity = heatCapacity();
-        return capacity <= 0L ? 0D : heatAmount() / (double) capacity;
+        return capacity <= 0L ? 0D : MekanismTemperatureDisplay.fromKelvin(heatAmount() / (double) capacity);
     }
 
     public List<CapabilityDisplay> displayEntries() {
