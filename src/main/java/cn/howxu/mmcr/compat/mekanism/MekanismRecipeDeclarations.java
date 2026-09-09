@@ -45,9 +45,10 @@ public final class MekanismRecipeDeclarations {
             Identifier.CODEC.fieldOf("id").forGetter(value -> value.ingredient().id()),
             Codec.LONG.fieldOf("amount").forGetter(value -> value.ingredient().amount()),
             Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(UnavailableChemicalRequirement::chance),
-            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(UnavailableChemicalRequirement::tags)
-    ).apply(instance, (ignored, io, kind, id, amount, chance, tags) -> new UnavailableChemicalRequirement(
-            io, new ChemicalIngredient(parseKind(kind), id, amount), chance, tags)));
+             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(UnavailableChemicalRequirement::tags),
+             Codec.FLOAT.optionalFieldOf("consume_chance", 1F).forGetter(UnavailableChemicalRequirement::consumeChance)
+     ).apply(instance, (ignored, io, kind, id, amount, chance, tags, consumeChance) -> new UnavailableChemicalRequirement(
+             io, new ChemicalIngredient(parseKind(kind), id, amount), chance, tags, consumeChance)));
 
     static final RequirementType<UnavailableChemicalRequirement> CHEMICAL_TYPE = new RequirementType.Definition<>(
             MekanismRecipeTypes.CHEMICAL, CHEMICAL_CODEC, CHEMICAL_UNAVAILABLE,
@@ -164,12 +165,15 @@ public final class MekanismRecipeDeclarations {
     }
 
     record UnavailableChemicalRequirement(RecipeModifier.IOType io, ChemicalIngredient ingredient,
-                                          float chance, List<String> tags) implements MachineRequirement {
+                                          float chance, List<String> tags, float consumeChance) implements MachineRequirement {
         UnavailableChemicalRequirement {
             Objects.requireNonNull(io, "io");
             Objects.requireNonNull(ingredient, "ingredient");
             if (!Float.isFinite(chance) || chance < 0F || chance > 1F) {
                 throw new IllegalArgumentException("chance must be between 0 and 1");
+            }
+            if (!Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+                throw new IllegalArgumentException("consumeChance must be between 0 and 1");
             }
             if (io == RecipeModifier.IOType.OUTPUT && ingredient.kind() != ChemicalIngredient.Kind.CHEMICAL) {
                 throw new IllegalArgumentException("chemical outputs must name a chemical");
@@ -179,7 +183,7 @@ public final class MekanismRecipeDeclarations {
 
         static UnavailableChemicalRequirement output(Identifier id, long amount, float chance) {
             return new UnavailableChemicalRequirement(RecipeModifier.IOType.OUTPUT,
-                    ChemicalIngredient.chemical(id, amount), chance, List.of());
+                     ChemicalIngredient.chemical(id, amount), chance, List.of(), 1F);
         }
 
         @Override

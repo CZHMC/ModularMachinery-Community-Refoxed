@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -28,7 +29,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngredient ingredient,
-                                        float chance, List<String> tags) implements MachineRequirement {
+                                         float chance, List<String> tags, float consumeChance) implements MachineRequirement {
     private static final RequirementHandler<LoadedChemicalRequirement> UNAVAILABLE =
             (requirement, capabilities, context) -> unavailable(requirement, context);
     private static volatile RequirementHandler<LoadedChemicalRequirement> delegate = UNAVAILABLE;
@@ -44,9 +45,10 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
             Identifier.CODEC.fieldOf("id").forGetter(value -> value.ingredient().id()),
             Codec.LONG.fieldOf("amount").forGetter(value -> value.ingredient().amount()),
             Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(LoadedChemicalRequirement::chance),
-            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(LoadedChemicalRequirement::tags)
-    ).apply(instance, (ignored, io, kind, id, amount, chance, tags) ->
-            new LoadedChemicalRequirement(io, new ChemicalIngredient(parseKind(kind), id, amount), chance, tags)));
+             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(LoadedChemicalRequirement::tags),
+             Codec.FLOAT.optionalFieldOf("consume_chance", 1F).forGetter(LoadedChemicalRequirement::consumeChance)
+     ).apply(instance, (ignored, io, kind, id, amount, chance, tags, consumeChance) ->
+             new LoadedChemicalRequirement(io, new ChemicalIngredient(parseKind(kind), id, amount), chance, tags, consumeChance)));
 
     public static final RequirementType<LoadedChemicalRequirement> TYPE = new RequirementType.Definition<>(
             MekanismRecipeTypes.CHEMICAL, CODEC, DELEGATING_HANDLER,
@@ -58,6 +60,9 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
         if (!Float.isFinite(chance) || chance < 0F || chance > 1F) {
             throw new IllegalArgumentException("chance must be between 0 and 1");
         }
+        if (!Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+            throw new IllegalArgumentException("consumeChance must be between 0 and 1");
+        }
         if (io == RecipeModifier.IOType.OUTPUT && ingredient.kind() != ChemicalIngredient.Kind.CHEMICAL) {
             throw new IllegalArgumentException("chemical outputs must name a chemical");
         }
@@ -65,12 +70,12 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
     }
 
     public static LoadedChemicalRequirement input(ChemicalIngredient ingredient) {
-        return new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT, ingredient, 1F, List.of());
+        return new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT, ingredient, 1F, List.of(), 1F);
     }
 
     public static LoadedChemicalRequirement output(Identifier id, long amount, float chance) {
         return new LoadedChemicalRequirement(RecipeModifier.IOType.OUTPUT,
-                ChemicalIngredient.chemical(id, amount), chance, List.of());
+                ChemicalIngredient.chemical(id, amount), chance, List.of(), 1F);
     }
 
     @Override
@@ -88,9 +93,16 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
 
     private static LoadedChemicalRequirement copy(LoadedChemicalRequirement requirement) {
         return new LoadedChemicalRequirement(requirement.io(), requirement.ingredient(), requirement.chance(),
-                requirement.tags());
+                requirement.tags(), requirement.consumeChance());
     }
 
+    public static LoadedChemicalRequirement applyModifiers(LoadedChemicalRequirement requirement,
+                                                           List<RecipeModifier> modifiers) {
+        if (requirement.io() != RecipeModifier.IOType.INPUT) return requirement;
+        float consumeChance = IntegrationTypeHelper.applyChemicalInputChance(modifiers, requirement.consumeChance());
+        return new LoadedChemicalRequirement(requirement.io(), requirement.ingredient(), requirement.chance(),
+                requirement.tags(), consumeChance);
+    }
     private static void validateSync(LoadedChemicalRequirement requirement) {
         if (requirement.ingredient().amount() > 10_000_000_000L) {
             throw new IllegalArgumentException("Invalid chemical amount: " + requirement.ingredient().amount());

@@ -14,6 +14,7 @@ public final class IntegrationTypeHelper {
     public static final String TARGET_ITEM = "item";
     public static final String TARGET_FLUID = "fluid";
     public static final String TARGET_ENERGY = "energy";
+    public static final String TARGET_CHEMICAL = "chemical";
 
     private IntegrationTypeHelper() {
     }
@@ -63,6 +64,10 @@ public final class IntegrationTypeHelper {
         return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_FLUID, RecipeModifier.IOType.INPUT, chance, true));
     }
 
+    public static float applyChemicalInputChance(List<RecipeModifier> modifiers, float chance) {
+        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
+        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL, RecipeModifier.IOType.INPUT, chance, true));
+    }
     public static long applyEnergy(List<RecipeModifier> modifiers, long fePerTick) {
         if (modifiers == null || modifiers.isEmpty()) return fePerTick;
         double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_ENERGY,
