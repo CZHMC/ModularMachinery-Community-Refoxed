@@ -124,7 +124,7 @@ public final class MachineRecipeConverter {
         }
         if (value instanceof FluidRequirement fluid) {
             return new cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement(io, fluid.fluid(), fluid.amount(),
-                    fluid.stack(), fluid.chance());
+                    fluid.stack(), fluid.chance(), fluid.consumeChance());
         }
         if (value instanceof EnergyRequirement energy) {
             return new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(io, energy.fePerTick());

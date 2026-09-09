@@ -14,6 +14,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.BuiltInRegistries;
 
@@ -69,14 +70,25 @@ public final class MachineRecipeBuilder {
         return requirement(ItemRequirement.input(new ItemInput(item, count, components, consumeChance)));
     }
     public MachineRecipeBuilder inputFluid(Fluid fluid, int amount) { return requirement(FluidRequirement.input(new FluidInput(fluid, amount))); }
+    public MachineRecipeBuilder inputFluid(Fluid fluid, int amount, float consumeChance) {
+        return requirement(FluidRequirement.input(new FluidInput(FluidIngredient.of(fluid), amount, consumeChance)));
+    }
     public MachineRecipeBuilder outputFluid(Fluid fluid, int amount) { return requirement(FluidRequirement.output(new FluidOutput(fluid, amount))); }
     public MachineRecipeBuilder inputChemical(Identifier id, long amount) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
                 chemicalInputPayload(ChemicalIngredient.chemical(id, amount))));
     }
+    public MachineRecipeBuilder inputChemical(Identifier id, long amount, float consumeChance) {
+        return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
+                chemicalInputPayload(ChemicalIngredient.chemical(id, amount), consumeChance)));
+    }
     public MachineRecipeBuilder inputChemicalTag(Identifier id, long amount) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
                 chemicalInputPayload(ChemicalIngredient.tag(id, amount))));
+    }
+    public MachineRecipeBuilder inputChemicalTag(Identifier id, long amount, float consumeChance) {
+        return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
+                chemicalInputPayload(ChemicalIngredient.tag(id, amount), consumeChance)));
     }
     public MachineRecipeBuilder outputChemical(Identifier id, long amount, float chance) {
         return custom(new CustomRecipeIo(MekanismPortFamilies.CHEMICAL, RecipeIo.OUTPUT,
@@ -122,7 +134,7 @@ public final class MachineRecipeBuilder {
                         requirement.components(), requirement.consumeChance())).toList();
         List<FluidInput> fluidInputs = recipeRequirements.stream().filter(FluidRequirement.class::isInstance)
                 .map(FluidRequirement.class::cast).filter(requirement -> requirement.io().isInput())
-                .map(requirement -> new FluidInput(requirement.ingredient(), requirement.amount())).toList();
+                .map(requirement -> new FluidInput(requirement.ingredient(), requirement.amount(), requirement.consumeChance())).toList();
         List<EnergyInput> energyInputs = recipeRequirements.stream().filter(EnergyRequirement.class::isInstance)
                 .map(EnergyRequirement.class::cast).filter(requirement -> requirement.io().isInput())
                 .map(requirement -> new EnergyInput(requirement.fePerTick())).toList();
@@ -156,6 +168,24 @@ public final class MachineRecipeBuilder {
         payload.addProperty("id", ingredient.id().toString());
         payload.addProperty("amount", ingredient.amount());
         payload.addProperty("io", RecipeIo.INPUT.name().toLowerCase(Locale.ROOT));
+        return payload;
+    }
+
+    /**
+     * Builds the canonical chemical input payload from a public {@link ChemicalIngredient} with a consume chance override.
+     *
+     * @param ingredient validated chemical ingredient
+     * @param consumeChance consume chance value; emits {@code consume_chance} only when not 1F
+     * @return immutable JSON payload for {@code RecipeApi.custom}
+     * @author howxu <dev@howxu.cn>
+     */
+    public static JsonObject chemicalInputPayload(ChemicalIngredient ingredient, float consumeChance) {
+        if (!Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+            throw new IllegalArgumentException("consumeChance must be in [0, 1]");
+        }
+        JsonObject payload = chemicalInputPayload(ingredient);
+        if (consumeChance != 1F) payload.addProperty("consume_chance", consumeChance);
+        else payload.remove("consume_chance");
         return payload;
     }
 

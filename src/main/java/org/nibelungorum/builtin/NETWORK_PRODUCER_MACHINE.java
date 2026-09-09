@@ -81,6 +81,7 @@ public class NETWORK_PRODUCER_MACHINE {
                                     FluidIngredient.of(Fluids.WATER),
                                     100,
                                     FluidStack.EMPTY,
+                                    1F,
                                     1F));
                             var waterSim = waterPlan.simulate();
                             boolean hasWater = waterSim.inputsSatisfied();

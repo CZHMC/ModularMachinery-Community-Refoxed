@@ -18,6 +18,8 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
@@ -83,6 +85,8 @@ class PublicRecipeBuilderTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(false));
+        MekanismRecipeTypes.register();
     }
 
     @BeforeEach
@@ -351,6 +355,36 @@ class PublicRecipeBuilderTest {
         assertThat(explicitFluidAccessor.getAmount()).isEqualTo(1000);
         explicitFluidAccessor.setAmount(1);
         assertThat(fluidOutput.stack().getAmount()).isEqualTo(1000);
+    }
+
+    @Test
+    void input_fluid_supports_consume_chance() {
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_chance"), id("machine"))
+                .inputFluid(Fluids.WATER, 1000, 0.25F)
+                .build();
+
+        var fluid = (cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement) def.requirements().get(0);
+        assertThat(fluid.consumeChance()).isEqualTo(0.25F);
+    }
+
+    @Test
+    void input_fluid_consume_chance_zero_emits_not_consumed_payload() {
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_zero"), id("machine"))
+                .inputFluid(Fluids.WATER, 1000, 0F)
+                .build();
+
+        var fluid = (cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement) def.requirements().get(0);
+        assertThat(fluid.consumeChance()).isEqualTo(0F);
+    }
+
+    @Test
+    void input_chemical_supports_consume_chance() {
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("chemical_consume_chance"), id("machine"))
+                .inputChemical(Identifier.parse("mekanism:oxygen"), 1_000L, 0.25F)
+                .build();
+
+        var custom = (CustomRecipeIo) def.requirements().get(0);
+        assertThat(custom.payload().getAsJsonObject().get("consume_chance").getAsFloat()).isEqualTo(0.25F);
     }
 
     @Test
