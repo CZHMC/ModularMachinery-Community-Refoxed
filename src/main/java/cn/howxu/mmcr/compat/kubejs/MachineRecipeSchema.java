@@ -238,6 +238,42 @@ public final class MachineRecipeSchema {
                                     ChemicalIngredient.tag(id, amount));
                         }
                     }))
+            .function(new RecipeFunctionInstance("chemicalInputChance",
+                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG, NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG,
+                                    NumberComponent.doubleRange(0D, 1D));
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            Identifier id = requireChemicalId((String) args.get(0), "chemicalId");
+                            long amount = ((Number) args.get(1)).longValue();
+                            float consumeChance = ((Number) args.get(2)).floatValue();
+                            appendChemicalInput(cx.recipe(),
+                                    ChemicalIngredient.chemical(id, amount), consumeChance);
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("chemicalTagInputChance",
+                    List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG, NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG,
+                                    NumberComponent.doubleRange(0D, 1D));
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            Identifier id = requireChemicalId((String) args.get(0), "tagId");
+                            long amount = ((Number) args.get(1)).longValue();
+                            float consumeChance = ((Number) args.get(2)).floatValue();
+                            appendChemicalInput(cx.recipe(),
+                                    ChemicalIngredient.tag(id, amount), consumeChance);
+                        }
+                    }))
             .function(new RecipeFunctionInstance("chemicalOutput",
                     List.of(StringComponent.ID, NumberComponent.POSITIVE_LONG, NumberComponent.doubleRange(0D, 1D)),
                     new ResolvedRecipeSchemaFunction() {
@@ -317,8 +353,12 @@ public final class MachineRecipeSchema {
     }
 
     private static void appendChemicalInput(KubeRecipe recipe, ChemicalIngredient ingredient) {
+        appendChemicalInput(recipe, ingredient, 1F);
+    }
+
+    private static void appendChemicalInput(KubeRecipe recipe, ChemicalIngredient ingredient, float consumeChance) {
         var custom = RecipeApi.custom(MekanismPortFamilies.CHEMICAL, RecipeIo.INPUT,
-                MachineRecipeBuilder.chemicalInputPayload(ingredient));
+                MachineRecipeBuilder.chemicalInputPayload(ingredient, consumeChance));
         appendRequirement(recipe, MachineRecipeConverter.toRequirement(custom));
     }
 

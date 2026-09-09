@@ -31,7 +31,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
 import net.minecraft.core.HolderSet;
 import net.minecraft.world.item.Item;
@@ -211,6 +213,40 @@ public class MachineRecipeBuilderJS {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, consumeChance);
     }
 
+    /**
+     * Adds a fluid input resolved from a namespaced identifier.
+     *
+     * @param fluidId fluid identifier (e.g. {@code minecraft:water})
+     * @param amount required fluid amount in millibuckets
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS fluidInput(String fluidId, int amount) {
+        return addFluidInput(fluidId, amount, 1F);
+    }
+
+    /**
+     * Adds a fluid input resolved from a namespaced identifier with an explicit consume chance.
+     *
+     * @param fluidId fluid identifier (e.g. {@code minecraft:water})
+     * @param amount required fluid amount in millibuckets
+     * @param consumeChance consume chance in {@code [0, 1]}; {@code 0} leaves the input required but never consumed
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS fluidInput(String fluidId, int amount, double consumeChance) {
+        return addFluidInput(fluidId, amount, (float) consumeChance);
+    }
+
+    private MachineRecipeBuilderJS addFluidInput(String fluidId, int amount, float consumeChance) {
+        inputs.add(new MachineIngredient.FluidIngredient(FluidIngredient.of(fluid(fluidId)), amount, consumeChance));
+        return this;
+    }
+
+    private Fluid fluid(String fluidId) {
+        return BuiltInRegistries.FLUID.getValue(Identifier.parse(fluidId));
+    }
+
     public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
         outputs.add(new ItemStack(item(itemId), count));
         outputChances.add(1F);
@@ -250,6 +286,21 @@ public class MachineRecipeBuilderJS {
     }
 
     /**
+     * Adds a chemical input requirement resolved from a namespaced identifier with an explicit consume chance.
+     *
+     * @param chemicalId chemical identifier (e.g. {@code mekanism:oxygen})
+     * @param amount required chemical amount
+     * @param consumeChance consume chance in {@code [0, 1]}
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount, double consumeChance) {
+        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount), (float) consumeChance));
+    }
+
+    /**
      * Adds a chemical tag input requirement resolved from a namespaced identifier.
      *
      * @param tagId chemical tag identifier (e.g. {@code mekanism:fuels})
@@ -261,6 +312,21 @@ public class MachineRecipeBuilderJS {
         Identifier id = requireChemicalId(tagId, "tagId");
         return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount)));
+    }
+
+    /**
+     * Adds a chemical tag input requirement resolved from a namespaced identifier with an explicit consume chance.
+     *
+     * @param tagId chemical tag identifier (e.g. {@code mekanism:fuels})
+     * @param amount required chemical amount per matching chemical
+     * @param consumeChance consume chance in {@code [0, 1]}
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount, double consumeChance) {
+        Identifier id = requireChemicalId(tagId, "tagId");
+        return custom(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount), (float) consumeChance));
     }
 
     /**
