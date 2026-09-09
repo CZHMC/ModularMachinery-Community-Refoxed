@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
-import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -20,12 +19,7 @@ import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.heat.IHeatCapacitor;
 import mekanism.api.heat.IHeatHandler;
-import mekanism.api.heat.HeatAPI;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -37,52 +31,29 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
-        TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
+        OperationFacet, PresentationFacet, SyncFacet {
     private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.HEAT);
 
-    private final HeatPortBlockEntity port;
     private final IHeatCapacitor heatCapacitor;
     private final IOType ioType;
     private final CapabilityView view;
 
     public HeatPortCapability(IHeatCapacitor heatCapacitor, IOType ioType) {
-        this(null, heatCapacitor, ioType);
-    }
-
-    public HeatPortCapability(HeatPortBlockEntity port) {
-        this(port, port.heatCapacitor(), port.ioType());
-    }
-
-    public HeatPortCapability(@Nullable HeatPortBlockEntity port, IHeatCapacitor heatCapacitor,
-                              IOType ioType) {
         if (heatCapacitor == null) throw new IllegalArgumentException("heatCapacitor must not be null");
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
-        this.port = port;
         this.heatCapacitor = heatCapacitor;
         this.ioType = ioType;
         this.view = CapabilityFactories.view(TYPE, directions(),
-                Set.of(TransferFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class));
+                Set.of(OperationFacet.class, PresentationFacet.class, SyncFacet.class));
+    }
+
+    public HeatPortCapability(HeatPortBlockEntity port) {
+        this(port.heatCapacitor(), port.ioType());
     }
 
     @Override
     public IHeatHandler heatHandler() {
         return heatCapacitor;
-    }
-
-    @Override
-    @Nullable
-    public Level level() {
-        return port == null ? null : port.getLevel();
-    }
-
-    @Override
-    public BlockPos position() {
-        return port == null ? BlockPos.ZERO : port.getBlockPos();
-    }
-
-    @Override
-    public long transferLimit() {
-        return Math.max(1L, Math.round(heatCapacitor.getHeatCapacity()));
     }
 
     @Override
@@ -141,33 +112,6 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
             throw new IllegalArgumentException("Invalid heat sync state");
         }
         heatCapacitor.setHeat(heat, null);
-    }
-
-    static IHeatHandler exposedHeatHandler(IHeatCapacitor heatCapacitor, IOType ioType) {
-        return new IHeatHandler() {
-            @Override
-            public double getTemperature() {
-                return heatCapacitor.getTemperature();
-            }
-
-            @Override
-            public double getInverseConduction() {
-                return heatCapacitor.getInverseConduction();
-            }
-
-            @Override
-            public double getHeatCapacity() {
-                return heatCapacitor.getHeatCapacity();
-            }
-
-            @Override
-            public void handleHeat(double transfer, TransactionContext transaction) {
-                if ((ioType == IOType.INPUT && transfer > HeatAPI.EPSILON)
-                        || (ioType == IOType.OUTPUT && transfer < -HeatAPI.EPSILON)) {
-                    heatCapacitor.handleHeat(transfer, transaction);
-                }
-            }
-        };
     }
 
     private CapabilityResult failure(String reason) {

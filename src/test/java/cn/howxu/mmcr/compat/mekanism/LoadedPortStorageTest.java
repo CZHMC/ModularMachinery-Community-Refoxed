@@ -117,7 +117,8 @@ class LoadedPortStorageTest {
                 .contains(ResourceFacet.class, TransferFacet.class, OperationFacet.class,
                         PresentationFacet.class, SyncFacet.class);
         assertThat(heatCapability.view().facets())
-                .contains(TransferFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class);
+                .contains(OperationFacet.class, PresentationFacet.class, SyncFacet.class)
+                .doesNotContain(TransferFacet.class);
         assertThat(chemicalCapability.directions()).isEqualTo(
                 CapabilityDirections.input());
         assertThat(heatCapability.directions()).isEqualTo(
@@ -125,14 +126,14 @@ class LoadedPortStorageTest {
     }
 
     @Test
-    void loaded_bridge_registers_chemical_and_heat_transfer_policies() {
+    void loaded_bridge_registers_only_chemical_transfer_policy() {
         try (TransferStrategyRegistry.TestScope ignored = TransferStrategyRegistry.openTestScope()) {
             new LoadedMekanismBridge().registerTransferPolicies();
 
             assertThat(TransferStrategyRegistry.policyFor(new CapabilityType(MekanismRecipeTypes.CHEMICAL)))
                     .isPresent();
             assertThat(TransferStrategyRegistry.policyFor(new CapabilityType(MekanismRecipeTypes.HEAT)))
-                    .isPresent();
+                    .isEmpty();
         }
     }
 

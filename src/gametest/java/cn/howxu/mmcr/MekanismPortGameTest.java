@@ -430,18 +430,14 @@ public class MekanismPortGameTest {
         helper.assertTrue(capability != null,
                 "Heat capability is exposed on the EAST side of a heat input port");
 
-        double ambient = HeatAPI.getAmbientTemp(heat.getLevel(), heat.getBlockPos());
-        double baseline = ambient * heat.heatCapacitor().getHeatCapacity();
-        double delta = heat.heatCapacitor().getHeatCapacity() * 10D;
         double before = heat.heatCapacitor().getHeat();
         try (Transaction transaction = Transaction.openRoot()) {
-            capability.handleHeat(delta, transaction);
+            capability.handleHeat(10.25D, transaction);
+            capability.handleHeat(-0.25D, transaction);
             transaction.commit();
         }
-        helper.assertValueEqual(before + delta, heat.heatCapacitor().getHeat(),
-                "Adjacent Mek heat handler pushes the heat delta into the heat input port");
-        helper.assertTrue(heat.heatCapacitor().getHeat() > baseline,
-                "Heat input port stores more heat than its ambient baseline after adjacent push");
+        helper.assertValueEqual(before + 10D, heat.heatCapacitor().getHeat(),
+                "The exposed Mekanism heat handler accepts positive and negative heat changes");
         helper.assertTrue(adjacentEntity != null,
                 "Adjacent block entity is preserved for the heat exchange fixture");
         helper.succeed();

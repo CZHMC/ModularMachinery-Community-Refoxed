@@ -48,8 +48,6 @@ import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalResource;
 import mekanism.api.chemical.IChemicalTank;
-import mekanism.api.heat.HeatAPI;
-import mekanism.api.heat.IHeatCapacitor;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
 import net.minecraft.core.BlockPos;
@@ -299,7 +297,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             event.registerBlockEntity(Capabilities.HEAT, holder.get(), (be, side) ->
                     be instanceof HeatPortBlockEntity port
                             && exposes(port, MekanismRecipeTypes.HEAT, side)
-                            ? HeatPortCapability.exposedHeatHandler(port.heatCapacitor(), port.ioType()) : null);
+                            ? port.heatHandler() : null);
         });
     }
 
@@ -308,8 +306,6 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         if (transferPoliciesRegistered) return;
         TransferStrategyRegistry.register(new CapabilityType(MekanismRecipeTypes.CHEMICAL),
                 new ChemicalTransferPolicy());
-        TransferStrategyRegistry.register(new CapabilityType(MekanismRecipeTypes.HEAT),
-                new HeatTransferPolicy());
         transferPoliciesRegistered = true;
     }
 
@@ -402,82 +398,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         }
     }
 
-    private static final class HeatTransferPolicy implements TransferPolicy {
-        @Override
-        public boolean hasWork(MachineCapability capability) {
-            HeatPort port = heatPort(capability);
-            if (port == null) return false;
-            return capability.directions().supports(IOType.INPUT)
-                    || availableHeat(port.heatHandler()) > HeatAPI.EPSILON;
-        }
-
-        @Override
-        public boolean hasAdjacentTarget(MachineCapability capability, Direction side) {
-            return adjacentHeat(capability, side) != null;
-        }
-
-        @Override
-        public TransferResult transfer(TransferContext context) {
-            HeatPort port = heatPort(context.capability());
-            TransferFacet transfer = transferFacet(context.capability());
-            if (port == null || transfer == null) return transferBlocked("unsupported_capability");
-            if (context.eject() ? availableHeat(port.heatHandler()) <= HeatAPI.EPSILON : !hasWork(port)) {
-                return transferBlocked("no_work");
-            }
-            IHeatHandler adjacent = adjacentHeat(context.capability(), context.side());
-            if (adjacent == null) return transferBlocked("no_target");
-            IHeatHandler source;
-            IHeatHandler destination;
-            if (context.eject() || context.ioType() == IOType.OUTPUT) {
-                source = port.heatHandler();
-                destination = adjacent;
-            } else {
-                source = adjacent;
-                destination = port.heatHandler();
-            }
-            double requested = Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
-            double amount = Math.min(requested, availableHeat(source));
-            if (amount <= HeatAPI.EPSILON) return TransferResult.moved(0L);
-            if (!context.simulate()) {
-                source.handleHeat(-amount, context.transaction());
-                destination.handleHeat(amount, context.transaction());
-                if (context.eject() && source instanceof IHeatCapacitor capacitor) {
-                    capacitor.setHeat(HeatAPI.getAmbientTemp(transfer.level(), transfer.position())
-                            * capacitor.getHeatCapacity(), context.transaction());
-                }
-            } else {
-                try (Transaction transaction = Transaction.open(context.transaction())) {
-                    source.handleHeat(-amount, transaction);
-                    destination.handleHeat(amount, transaction);
-                }
-            }
-            return TransferResult.moved((long) Math.ceil(amount));
-        }
-
-        private static IHeatHandler adjacentHeat(MachineCapability capability, Direction side) {
-            TransferFacet transfer = transferFacet(capability);
-            if (transfer == null || transfer.level() == null || side == null) return null;
-            return transfer.level().getCapability(Capabilities.HEAT,
-                    transfer.position().relative(side), side.getOpposite());
-        }
-
-        private static double availableHeat(IHeatHandler handler) {
-            double heat = handler instanceof IHeatCapacitor capacitor
-                    ? capacitor.getHeat() : handler.getTemperature() * handler.getHeatCapacity();
-            return Double.isFinite(heat) ? Math.max(0D, heat) : 0D;
-        }
-    }
-
     private static TransferFacet transferFacet(MachineCapability capability) {
         return capability == null ? null : capability.facet(TransferFacet.class).orElse(null);
     }
 
     private static ChemicalPort chemicalPort(MachineCapability capability) {
         return capability instanceof ChemicalPort port ? port : null;
-    }
-
-    private static HeatPort heatPort(MachineCapability capability) {
-        return capability instanceof HeatPort port ? port : null;
     }
 
     private static TransferResult transferBlocked(String reason) {
