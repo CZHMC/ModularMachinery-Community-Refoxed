@@ -30,6 +30,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -74,12 +75,37 @@ class ChemicalConsumeChanceTest {
         assertThat(decoded.consumeChance()).isEqualTo(0.5F);
     }
 
+    @Test
+    void unavailable_chemical_codec_defaults_consume_chance_when_missing() {
+        var original = new MekanismRecipeDeclarations.UnavailableChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0.5F);
+
+        var encoded = MekanismRecipeDeclarations.CHEMICAL_CODEC.codec().encodeStart(JsonOps.INSTANCE, original).getOrThrow();
+        var json = encoded.getAsJsonObject();
+        json.remove("consume_chance");
+
+        var decoded = MekanismRecipeDeclarations.CHEMICAL_CODEC.codec().parse(JsonOps.INSTANCE, json).getOrThrow();
+        assertThat(decoded.consumeChance()).isEqualTo(1F);
+    }
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         if (FailureReasonRegistry.find(MekanismFailureReasons.MEKANISM_UNAVAILABLE.id()) == null) {
             MekanismBridgeBootstrap.bootstrap();
         }
+    }
+
+    /**
+     * The {@link BeforeAll} hook above mutates {@link MekanismAPI#CHEMICAL_REGISTRY} by registering
+     * test-only chemicals (see {@link #registerChemical(String)}). {@code MappedRegistry} cannot be
+     * unfrozen from outside Mekanism bridge code, so the global registry retains these entries
+     * across the test JVM. Tests are isolated by using unique namespaced identifiers
+     * ({@code mmcr_test:*}) so collisions with other tests or production code are impossible.
+     */
+    @AfterAll
+    static void documentRegistryLeak() {
+        // Intentionally a no-op: see Javadoc above.
     }
 
     @Test

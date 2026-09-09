@@ -368,6 +368,22 @@ class PublicRecipeBuilderTest {
     }
 
     @Test
+    void internal_fluid_requirement_preserves_consume_chance_after_conversion() {
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_chance_conversion"), id("machine"))
+                .inputFluid(Fluids.WATER, 1000, 0.25F)
+                .build();
+
+        var recipe = MachineRecipeConverter.toRecipe(def,
+                new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+
+        assertThat(recipe.requirements()).singleElement().satisfies(requirement -> {
+            assertThat(requirement).isInstanceOf(FluidRequirement.class);
+            var fluid = (FluidRequirement) requirement;
+            assertThat(fluid.consumeChance()).isEqualTo(0.25F);
+        });
+    }
+
+    @Test
     void input_fluid_consume_chance_zero_emits_not_consumed_payload() {
         MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_zero"), id("machine"))
                 .inputFluid(Fluids.WATER, 1000, 0F)

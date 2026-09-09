@@ -126,6 +126,12 @@ public final class RequirementHandlerSupport {
     }
 
     public record ConsumeProfile(boolean[] decisions, float chance) {
+        public ConsumeProfile {
+            decisions = decisions == null ? null : decisions.clone();
+        }
+        public boolean[] decisions() {
+            return decisions == null ? null : decisions.clone();
+        }
         public long consumedBatches(long parallelism) {
             if (decisions == null) return Math.round(parallelism * (double) chance);
             long consumed = 0L;

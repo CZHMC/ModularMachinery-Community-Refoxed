@@ -185,7 +185,6 @@ public final class MachineRecipeBuilder {
         }
         JsonObject payload = chemicalInputPayload(ingredient);
         if (consumeChance != 1F) payload.addProperty("consume_chance", consumeChance);
-        else payload.remove("consume_chance");
         return payload;
     }
 
