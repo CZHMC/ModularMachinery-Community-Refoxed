@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -31,6 +32,28 @@ import java.util.List;
  */
 public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements ITileHeatHandler {
     private final BasicHeatCapacitor heatCapacitor;
+    private final IHeatHandler externalHeatHandler = new IHeatHandler() {
+        @Override
+        public double getTemperature() {
+            return heatCapacitor.getTemperature();
+        }
+
+        @Override
+        public double getInverseConduction() {
+            return heatCapacitor.getInverseConduction();
+        }
+
+        @Override
+        public double getHeatCapacity() {
+            return heatCapacitor.getHeatCapacity();
+        }
+
+        @Override
+        public void handleHeat(double transfer, TransactionContext transaction) {
+            if (ioType() == IOType.OUTPUT && transfer > 0D) return;
+            heatCapacitor.handleHeat(transfer, transaction);
+        }
+    };
     private CapabilitySnapshot capabilitySnapshot;
 
     protected HeatPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state, IOPortKind kind) {
@@ -50,6 +73,10 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
 
     public IHeatHandler heatHandler() {
         return heatCapacitor;
+    }
+
+    public IHeatHandler externalHeatHandler() {
+        return externalHeatHandler;
     }
 
     @Override

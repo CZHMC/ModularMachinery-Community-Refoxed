@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import net.minecraft.client.Minecraft;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
@@ -85,7 +86,7 @@ public record MachineRecipeLayout(
     }
 
     private static int hostRequirementTextY(MachineRecipeDisplay display, int guiScale) {
-        return durationTextY(display, guiScale) + TEXT_LINE_SPACING * (1 + display.energyInputs().size() + display.energyOutputs().size());
+        return durationTextY(display, guiScale) + TEXT_LINE_SPACING * metadataLineCount(display);
     }
 
     private static int durationTextY(MachineRecipeDisplay display, int guiScale) {
@@ -112,6 +113,7 @@ public record MachineRecipeLayout(
         List<EntryPlan> entries = new ArrayList<>();
         int itemIndex = 0;
         int fluidIndex = 0;
+        int chemicalIndex = 0;
         int textIndex = 0;
         for (JeiDisplayEntry entry : displayEntries.stream()
                 .filter(candidate -> candidate.role() == role)
@@ -121,6 +123,8 @@ public record MachineRecipeLayout(
                 entries.add(new EntryPlan(Kind.ITEM, itemIndex++, entry));
             } else if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
                 entries.add(new EntryPlan(Kind.FLUID, fluidIndex++, entry));
+            } else if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) {
+                entries.add(new EntryPlan(Kind.CHEMICAL, chemicalIndex++, entry));
             } else if (!entry.isTextOnly()) {
                 entries.add(new EntryPlan(Kind.GENERIC, textIndex++, entry));
             } else {
@@ -155,8 +159,9 @@ public record MachineRecipeLayout(
 
     private static int kindOrder(JeiDisplayEntry entry) {
         if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) return 0;
-        if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 1;
-        return 2;
+        if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) return 1;
+        if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 2;
+        return 3;
     }
 
     private static OverflowSlotPlan overflowSlot(int startX, boolean rightAlign, int maxVisible) {
@@ -182,7 +187,7 @@ public record MachineRecipeLayout(
 
     public int levelRequirementSlotY(MachineRecipeDisplay display, int index) {
         int metadataY = display.requiredHostIds().isEmpty()
-                ? durationTextY + TEXT_LINE_SPACING * (1 + display.energyInputs().size() + display.energyOutputs().size())
+                ? durationTextY + TEXT_LINE_SPACING * metadataLineCount(display)
                 : hostRequirementTextY + TEXT_LINE_SPACING;
         return metadataY + SLOT_SIZE * index;
     }
@@ -192,7 +197,7 @@ public record MachineRecipeLayout(
         if (levelCount > 0) {
             return levelRequirementSlotY(display, levelCount - 1) + SLOT_SIZE + TEXT_LINE_SPACING;
         }
-        return durationTextY + TEXT_LINE_SPACING * (1 + display.energyInputs().size() + display.energyOutputs().size()
+        return durationTextY + TEXT_LINE_SPACING * (metadataLineCount(display)
                 + (display.requiredHostIds().isEmpty() ? 0 : 1));
     }
 
@@ -205,11 +210,16 @@ public record MachineRecipeLayout(
         if (levelCount > 0) {
             return levelRequirementSlotY(display, levelCount - 1);
         }
-        return durationTextY + TEXT_LINE_SPACING * (display.energyInputs().size() + display.energyOutputs().size()
+        return durationTextY + TEXT_LINE_SPACING * (metadataLineCount(display) - 1
                 + (display.requiredHostIds().isEmpty() ? 0 : 1));
     }
 
-    public enum Kind { ITEM, FLUID, GENERIC, TEXT }
+    private static int metadataLineCount(MachineRecipeDisplay display) {
+        return 1 + display.energyInputs().size() + display.energyOutputs().size()
+                + (display.minimumTemperature().isPresent() ? 1 : 0);
+    }
+
+    public enum Kind { ITEM, FLUID, CHEMICAL, GENERIC, TEXT }
 
     public record EntryPlan(Kind kind, int index, @Nullable JeiDisplayEntry displayEntry) {
         public EntryPlan(Kind kind, int index) {

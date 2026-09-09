@@ -174,6 +174,26 @@ public class MekanismPortGameTest {
         helper.succeed();
     }
 
+    public void heatOutputCapabilityRejectsExternalHeatInput(GameTestHelper helper) {
+        BlockPos heatPos = new BlockPos(0, 1, 0);
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        IHeatHandler capability = helper.getLevel().getCapability(Capabilities.HEAT,
+                helper.absolutePos(heatPos),
+                helper.getLevel().getBlockState(helper.absolutePos(heatPos)), port, Direction.EAST);
+        helper.assertTrue(capability != null,
+                "Heat capability is exposed on the EAST side of a heat output port");
+
+        double before = port.heatCapacitor().getHeat();
+        try (Transaction transaction = Transaction.openRoot()) {
+            capability.handleHeat(10D, transaction);
+            transaction.commit();
+        }
+        helper.assertValueEqual(before, port.heatCapacitor().getHeat(),
+                "The exposed heat output handler rejects external heat input");
+        helper.succeed();
+    }
+
     public void heatPortLosesHeatToItsEnvironment(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());

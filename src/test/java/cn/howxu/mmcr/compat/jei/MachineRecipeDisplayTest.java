@@ -28,6 +28,9 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import mekanism.api.chemical.ChemicalStack;
+import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponentMap;
@@ -791,6 +794,45 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void mekanismChemicalEntriesUseNativeJeiSlotsAfterFluids() {
+        JeiDisplayEntry fluid = new JeiDisplayEntry(RecipeIngredientRole.INPUT, MMCR.id("fluid"),
+                NeoForgeTypes.FLUID_STACK, new FluidStack(Fluids.WATER, 1), 1, 1F, null, false);
+        JeiDisplayEntry chemical = new JeiDisplayEntry(RecipeIngredientRole.INPUT, MekanismRecipeTypes.CHEMICAL,
+                MekanismJEI.TYPE_CHEMICAL, ChemicalStack.EMPTY, 1, 1F, null, false);
+        JeiDisplayEntry item = new JeiDisplayEntry(RecipeIngredientRole.INPUT, MMCR.id("item"),
+                VanillaTypes.ITEM_STACK, new ItemStack(Items.IRON_INGOT), 1, 1F, null, false);
+
+        assertThat(JeiIngredientAdapterRegistry.get(MekanismRecipeTypes.CHEMICAL))
+                .hasValueSatisfying(adapter -> assertThat(adapter.ingredientType()).isSameAs(MekanismJEI.TYPE_CHEMICAL));
+        assertThat(MachineRecipeLayout.regionForEntries(List.of(item, chemical, fluid), RecipeIngredientRole.INPUT, 4).slots())
+                .extracting(slot -> slot.entry().kind().name())
+                .containsExactly("FLUID", "CHEMICAL", "ITEM");
+    }
+
+    @Test
+    void minimumMekanismTemperatureAddsLocalizedJeiMetadata() {
+        Component label = MachineRecipeDisplay.minimumTemperatureLabel(450D);
+
+        assertThat(label.getContents()).isInstanceOf(TranslatableContents.class);
+        assertThat(((TranslatableContents) label.getContents()).getKey())
+                .isEqualTo("jei.mmcr.machine_recipe.mekanism_temperature");
+    }
+
+    @Test
+    void overflowTooltipsLabelChemicalEntriesByType() throws Exception {
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(RecipeTestSupport.create(
+                MMCR.id("jei_typed_overflow"), MMCR.id("test_machine_name"), 20, List.of(), List.of()));
+        JeiDisplayEntry chemical = new JeiDisplayEntry(RecipeIngredientRole.INPUT, MekanismRecipeTypes.CHEMICAL,
+                MekanismJEI.TYPE_CHEMICAL, ChemicalStack.EMPTY, 1_000, 1F, null, false);
+
+        List<Component> lines = overflowTooltip(display, List.of(
+                new MachineRecipeLayout.EntryPlan(MachineRecipeLayout.Kind.CHEMICAL, 0, chemical)));
+
+        assertThat(((TranslatableContents) lines.get(1).getContents()).getKey())
+                .isEqualTo("jei.mmcr.machine_recipe.overflow_chemical");
+    }
+
+    @Test
     void levelRequirementProvidesLocalizedLabelAndThreeSecondItemCycle() {
         var typeId = MMCR.id("coil");
         var copperId = MMCR.id("copper");
@@ -948,6 +990,24 @@ class MachineRecipeDisplayTest {
                     return null;
                 });
         callback.onRichTooltip(null, tooltip);
+        return lines;
+    }
+
+    private static List<Component> overflowTooltip(MachineRecipeDisplay display,
+            List<MachineRecipeLayout.EntryPlan> hiddenEntries) throws Exception {
+        List<Component> lines = new ArrayList<>();
+        ITooltipBuilder tooltip = (ITooltipBuilder) Proxy.newProxyInstance(
+                MachineRecipeDisplayTest.class.getClassLoader(), new Class<?>[]{ITooltipBuilder.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("add") && arguments.length == 1 && arguments[0] instanceof Component component) {
+                        lines.add(component);
+                    }
+                    return null;
+                });
+        Method method = MachineRecipeCategory.class.getDeclaredMethod("appendOverflowTooltip", ITooltipBuilder.class,
+                MachineRecipeDisplay.class, List.class, boolean.class);
+        method.setAccessible(true);
+        method.invoke(null, tooltip, display, hiddenEntries, true);
         return lines;
     }
 

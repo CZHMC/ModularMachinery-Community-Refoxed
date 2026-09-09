@@ -163,6 +163,8 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().heatTemperatureRequirementReadsWithoutConsumingHeat(helper));
         register(event, "mekanism_heat_output_handle_heat_increases_storage", 100,
                 helper -> new MekanismPortGameTest().heatOutputHandleHeatIncreasesStoredHeat(helper));
+        register(event, "mekanism_heat_output_rejects_external_input", 100,
+                helper -> new MekanismPortGameTest().heatOutputCapabilityRejectsExternalHeatInput(helper));
         register(event, "mekanism_heat_port_loses_heat_to_environment", 100,
                 helper -> new MekanismPortGameTest().heatPortLosesHeatToItsEnvironment(helper));
         register(event, "mekanism_heat_port_uses_standard_adjacent_exchange", 100,

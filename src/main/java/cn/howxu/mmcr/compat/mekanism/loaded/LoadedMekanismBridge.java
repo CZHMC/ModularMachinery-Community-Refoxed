@@ -297,7 +297,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             event.registerBlockEntity(Capabilities.HEAT, holder.get(), (be, side) ->
                     be instanceof HeatPortBlockEntity port
                             && exposes(port, MekanismRecipeTypes.HEAT, side)
-                            ? port.heatHandler() : null);
+                            ? port.externalHeatHandler() : null);
         });
     }
 

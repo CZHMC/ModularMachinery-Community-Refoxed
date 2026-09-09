@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import mekanism.api.chemical.ChemicalStack;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -176,6 +178,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
             y += TEXT_LINE_SPACING;
         }
+        if (recipe.minimumTemperature().isPresent()) {
+            guiGraphics.text(Minecraft.getInstance().font,
+                    MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
+                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            y += TEXT_LINE_SPACING;
+        }
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
         if (!hostRequirement.getString().isEmpty()) {
             y = layout.hostRequirementTextY();
@@ -238,6 +246,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     static Component overflowEntry(int amount, Component displayName) {
         return Component.translatable("jei.mmcr.machine_recipe.overflow_entry", ReadableNumber.format(amount), displayName);
+    }
+
+    static Component overflowFluidEntry(int amount, Component displayName) {
+        return Component.translatable("jei.mmcr.machine_recipe.overflow_fluid", ReadableNumber.format(amount), displayName);
+    }
+
+    static Component overflowChemicalEntry(int amount, Component displayName) {
+        return Component.translatable("jei.mmcr.machine_recipe.overflow_chemical", ReadableNumber.format(amount), displayName);
     }
 
     static Component outputStackName(ItemStack stack) {
@@ -403,11 +419,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         var type = switch (plan.kind()) {
             case ITEM -> VanillaTypes.ITEM_STACK;
             case FLUID -> NeoForgeTypes.FLUID_STACK;
+            case CHEMICAL -> null;
             case GENERIC, TEXT -> null;
         };
         return recipe.entries().stream()
                 .filter(entry -> entry.role() == (input ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT))
-                .filter(entry -> entry.ingredientType() == type)
+                .filter(entry -> plan.kind() == MachineRecipeLayout.Kind.CHEMICAL
+                        ? entry.typeId().equals(MekanismRecipeTypes.CHEMICAL) : entry.ingredientType() == type)
                 .skip(plan.index())
                 .findFirst();
     }
@@ -418,7 +436,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             slot.addRichTooltipCallback((view, tooltip) -> tooltip.add((Component) entry.ingredient()));
             return;
         }
-        String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK
+        String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK || entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)
                 ? itemQuantityText(entry.count()) : fluidQuantityText(entry.count());
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
             String chance = entry.role() == RecipeIngredientRole.INPUT
@@ -626,11 +644,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                             && !fluid.isEmpty()
                             ? fluid.copyWithAmount(amount).getHoverName()
                             : Component.empty();
-                    tooltip.add(overflowEntry(amount, displayName));
+                    tooltip.add(overflowFluidEntry(amount, displayName));
                 } else {
                     var fluidStack = recipe.fluidOutputs().get(entry.index());
-                    tooltip.add(overflowEntry(fluidStack.getAmount(), fluidStack.getHoverName()));
+                    tooltip.add(overflowFluidEntry(fluidStack.getAmount(), fluidStack.getHoverName()));
                 }
+            } else if (entry.kind() == MachineRecipeLayout.Kind.CHEMICAL && entry.displayEntry() != null) {
+                tooltip.add(overflowChemicalEntry(entry.displayEntry().count(), chemicalDisplayName(entry.displayEntry().ingredient())));
             } else if (entry.displayEntry() != null) {
                 Object ingredient = entry.displayEntry().ingredient();
                 Component name = ingredient instanceof Component component
@@ -639,6 +659,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 tooltip.add(overflowEntry(entry.displayEntry().count(), name));
             }
         }
+    }
+
+    private static Component chemicalDisplayName(Object ingredient) {
+        ChemicalStack stack = ingredient instanceof ChemicalStack chemical ? chemical
+                : ingredient instanceof List<?> ingredients
+                        ? ingredients.stream().filter(ChemicalStack.class::isInstance).map(ChemicalStack.class::cast)
+                                .findFirst().orElse(ChemicalStack.EMPTY)
+                        : ChemicalStack.EMPTY;
+        return stack.isEmpty() ? Component.empty() : stack.getChemical().getTextComponent();
     }
 
     private static void drawOverflowSlot(@Nullable OverflowSlotPlan slot,

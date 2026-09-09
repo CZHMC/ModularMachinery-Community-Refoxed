@@ -11,6 +11,10 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
+import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.network.chat.Component;
@@ -36,6 +40,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.stream.Collectors;
 
 import java.util.stream.Stream;
@@ -162,11 +167,27 @@ public record MachineRecipeDisplay(
     }
 
     public List<Component> tooltips() {
-        return Stream.concat(
+        Stream<Component> interfaceTooltips = Stream.concat(
                         Stream.concat(smartInterfaceInputs.stream(), smartInterfaceOutputs.stream())
                                 .map(SmartInterfaceDisplay::tooltip),
-                        smartInterfaceModifiers.stream().map(SmartInterfaceModifierDisplay::tooltip))
+                        smartInterfaceModifiers.stream().map(SmartInterfaceModifierDisplay::tooltip));
+        return Stream.concat(minimumTemperature().stream().mapToObj(MachineRecipeDisplay::minimumTemperatureLabel), interfaceTooltips)
                 .toList();
+    }
+
+    public OptionalDouble minimumTemperature() {
+        return recipe.runtimeRequirements().stream()
+                .filter(LoadedHeatRequirement.class::isInstance)
+                .map(LoadedHeatRequirement.class::cast)
+                .filter(requirement -> requirement.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE)
+                .mapToDouble(requirement -> requirement.heat().value())
+                .findFirst();
+    }
+
+    public static Component minimumTemperatureLabel(double kelvin) {
+        var unit = MekanismTemperatureDisplay.configuredUnit();
+        return Component.translatable("jei.mmcr.machine_recipe.mekanism_temperature",
+                MekanismTemperatureDisplay.fromKelvin(kelvin, unit), MekanismTemperatureDisplay.symbol(unit));
     }
 
     /**
@@ -177,6 +198,7 @@ public record MachineRecipeDisplay(
     public List<JeiDisplayEntry> entries() {
         return recipe.runtimeRequirements().stream()
                 .filter(requirement -> !(requirement instanceof EnergyRequirement)
+                        && !(requirement instanceof LoadedHeatRequirement)
                         && !(requirement instanceof SmartInterfaceRequirement))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT
@@ -196,6 +218,7 @@ public record MachineRecipeDisplay(
             return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
         }
         if (requirement instanceof EnergyRequirement energy) return energy.fePerTick();
+        if (requirement instanceof LoadedChemicalRequirement chemical) return chemical.ingredient().amount();
         return 1L;
     }
 
@@ -204,6 +227,7 @@ public record MachineRecipeDisplay(
             return item.io() == RecipeModifier.IOType.INPUT ? item.consumeChance() : item.chance();
         }
         if (requirement instanceof FluidRequirement fluid) return fluid.chance();
+        if (requirement instanceof LoadedChemicalRequirement chemical) return chemical.chance();
         return 1F;
     }
 

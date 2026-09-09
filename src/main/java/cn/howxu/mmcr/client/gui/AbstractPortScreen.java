@@ -169,6 +169,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private void initAutoIOButtons() {
+        if (!supportsAutoIOControlPage()) return;
         int autoIOPageButtonX = leftPos + imageWidth - 16;
         int autoIOPageButtonY = topPos + 4;
         if (isTextUi()) {
@@ -386,6 +387,10 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         Identifier mekanismCapabilityId = MekanismBridge.get().capabilityIdForMenu(menu);
         if (mekanismCapabilityId != null) return List.of(mekanismCapabilityId);
         return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+    }
+
+    protected boolean supportsAutoIOControlPage() {
+        return true;
     }
 
     static String autoIOControlTooltipKey(Identifier capabilityId, boolean outputPort) {

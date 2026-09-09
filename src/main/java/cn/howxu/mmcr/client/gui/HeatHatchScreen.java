@@ -43,6 +43,7 @@ public final class HeatHatchScreen extends AbstractPortScreen<HeatPortMenu> {
     @Override protected IOType ownerIOType() { return menu.owner() == null ? null : menu.owner().ioType(); }
     @Override protected int portSlotCount() { return 0; }
     @Override protected Identifier texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
+    @Override protected boolean supportsAutoIOControlPage() { return false; }
 
     static List<Component> displayLines(double heat, double capacity) {
         long safeHeat = safeWhole(heat);

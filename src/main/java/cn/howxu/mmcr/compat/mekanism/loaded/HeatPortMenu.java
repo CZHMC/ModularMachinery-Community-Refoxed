@@ -62,15 +62,12 @@ public final class HeatPortMenu extends AbstractMachineMenu {
     }
 
     public long heatAmount() {
-        HeatPortBlockEntity port = resolvedOwner();
-        long value = port == null ? heat.value() : boundedRound(port.heatCapacitor().getHeat());
-        return Math.max(0L, value);
+        return owner == null ? Math.max(0L, heat.value()) : boundedRound(owner.heatCapacitor().getHeat());
     }
 
     public long heatCapacity() {
-        HeatPortBlockEntity port = resolvedOwner();
-        return port == null ? Math.max(0L, capacity.value())
-                : boundedRound(port.heatCapacitor().getHeatCapacity());
+        return owner == null ? Math.max(0L, capacity.value())
+                : boundedRound(owner.heatCapacitor().getHeatCapacity());
     }
 
     public double temperature() {
