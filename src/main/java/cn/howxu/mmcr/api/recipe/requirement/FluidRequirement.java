@@ -17,7 +17,7 @@ import java.util.Optional;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags) implements MachineRequirement {
+public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags, float consumeChance) implements MachineRequirement {
     private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("minecraft", "fluid");
     public static final MapCodec<FluidRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
@@ -27,31 +27,41 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
             Codec.INT.optionalFieldOf("amount", 0).forGetter(FluidRequirement::amount),
             FluidStack.CODEC.optionalFieldOf("stack", FluidStack.EMPTY).forGetter(FluidRequirement::stack),
             Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(FluidRequirement::chance),
-            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(FluidRequirement::tags)
-    ).apply(instance, (ignored, io, fluid, amount, stack, chance, tags) ->
-            new FluidRequirement(io, fluid.orElse(null), amount, stack, chance, tags)));
+            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(FluidRequirement::tags),
+            Codec.FLOAT.optionalFieldOf("consume_chance", 1F).forGetter(FluidRequirement::consumeChance)
+    ).apply(instance, (ignored, io, fluid, amount, stack, chance, tags, consumeChance) ->
+            new FluidRequirement(io, fluid.orElse(null), amount, stack, chance, tags, consumeChance)));
     private static final RequirementHandler<FluidRequirement> HANDLER = new FluidRequirementHandler();
     public static final RequirementType<FluidRequirement> TYPE =
             new RequirementType.Definition<>(TYPE_ID, CODEC, HANDLER, FluidRequirement::copy,
                     RecipeSyncCodec.json(CODEC.codec(), FluidRequirement::validateSync));
 
     public FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack) {
-        this(io, fluid, amount, stack, 1F, List.of());
+        this(io, fluid, amount, stack, 1F, List.of(), 1F);
     }
 
     public FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, List<String> tags) {
-        this(io, fluid, amount, stack, 1F, tags);
+        this(io, fluid, amount, stack, 1F, tags, 1F);
+    }
+
+    public FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags) {
+        this(io, fluid, amount, stack, chance, tags, 1F);
     }
 
     public FluidRequirement {
         stack = stack == null ? FluidStack.EMPTY : stack.copy();
         chance = MachineOutput.clampChance(chance);
+        consumeChance = MachineOutput.clampChance(consumeChance);
         tags = tags == null ? List.of() : List.copyOf(tags);
     }
 
     private static FluidRequirement copy(FluidRequirement requirement) {
         return new FluidRequirement(requirement.io(), requirement.fluid(), requirement.amount(), requirement.stack(),
-                requirement.chance(), requirement.tags());
+                requirement.chance(), requirement.tags(), requirement.consumeChance());
+    }
+
+    static FluidRequirement copyForTest(FluidRequirement requirement) {
+        return copy(requirement);
     }
 
     private static void validateSync(FluidRequirement requirement) {
