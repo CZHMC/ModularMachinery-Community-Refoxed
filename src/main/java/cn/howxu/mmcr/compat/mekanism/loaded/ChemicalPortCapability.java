@@ -76,6 +76,11 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
     }
 
     @Override
+    public boolean radioactive() {
+        return port != null && port.isRadioactive();
+    }
+
+    @Override
     public ResourceStorage<ChemicalResource> storage() {
         return storage;
     }

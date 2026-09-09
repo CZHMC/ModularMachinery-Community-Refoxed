@@ -87,6 +87,10 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     public interface ChemicalPort extends MachineCapability {
         IChemicalTank chemicalTank();
 
+        default boolean radioactive() {
+            return false;
+        }
+
         @Override
         default CapabilityOperation prepare(CapabilityRequest request) {
             if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {

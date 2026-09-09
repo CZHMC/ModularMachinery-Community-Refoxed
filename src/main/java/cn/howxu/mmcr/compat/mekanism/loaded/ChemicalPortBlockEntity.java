@@ -27,15 +27,21 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public abstract class ChemicalPortBlockEntity extends IOPortBlockEntity {
+    private final boolean radioactive;
     private final IChemicalTank chemicalTank;
     private CapabilitySnapshot capabilitySnapshot;
 
     protected ChemicalPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state,
                                       IOPortKind kind, long capacity, boolean radioactive) {
         super(type, pos, state);
+        this.radioactive = radioactive;
         this.chemicalTank = radioactive
                 ? radioactiveChemicalTank(capacity, this::markChemicalChanged)
                 : normalChemicalTank(capacity, this::markChemicalChanged);
+    }
+
+    public boolean isRadioactive() {
+        return radioactive;
     }
 
     public static IChemicalTank normalChemicalTank(long capacity, IContentsListener listener) {

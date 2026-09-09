@@ -346,6 +346,14 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
+    void chemical_port_default_radioactive_flag_is_false() {
+        FakeChemicalPort port = new FakeChemicalPort(
+                new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.OUTPUT);
+
+        assertThat(port.radioactive()).isFalse();
+    }
+
+    @Test
     void insufficient_temperature_reports_registered_reason() {
         LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
 
@@ -435,10 +443,16 @@ class MekanismRecipeHandlerTest {
 
     private static final class FakeChemicalPort implements LoadedMekanismBridge.ChemicalPort {
         private final IChemicalTank tank;
+        private final boolean radioactive;
         private final CapabilityView view;
 
         private FakeChemicalPort(IChemicalTank tank, cn.howxu.mmcr.util.IOType ioType) {
+            this(tank, ioType, false);
+        }
+
+        private FakeChemicalPort(IChemicalTank tank, cn.howxu.mmcr.util.IOType ioType, boolean radioactive) {
             this.tank = tank;
+            this.radioactive = radioactive;
             this.view = new CapabilityView() {
                 @Override
                 public CapabilityType type() {
@@ -455,6 +469,11 @@ class MekanismRecipeHandlerTest {
         @Override
         public IChemicalTank chemicalTank() {
             return tank;
+        }
+
+        @Override
+        public boolean radioactive() {
+            return radioactive;
         }
 
         @Override
