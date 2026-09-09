@@ -358,6 +358,7 @@ public class MekanismPortGameTest {
         double baseline = ambient * heat.heatCapacitor().getHeatCapacity();
         setHeat(heat, baseline * 7.25D);
         double heatBefore = heat.heatCapacitor().getHeat();
+        double heatCapacityBefore = heat.heatCapacitor().getHeatCapacity();
         helper.assertTrue(heatBefore > baseline,
                 "Heat port holds more than the ambient baseline before persistence check");
 
@@ -370,6 +371,8 @@ public class MekanismPortGameTest {
                 "Chemical tank resource identity survives a save/load cycle");
         helper.assertValueEqual(heatBefore, heat.heatCapacitor().getHeat(),
                 "Heat capacitor value survives a save/load cycle");
+        helper.assertValueEqual(heatCapacityBefore, heat.heatCapacitor().getHeatCapacity(),
+                "Heat port capacity remains independent from saved heat");
         helper.succeed();
     }
 

@@ -166,12 +166,17 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
 
         @Override
         public void save(ValueOutput output) {
-            heatCapacitor.serialize(output);
+            output.putDouble("stored_heat", heatCapacitor.getHeat());
         }
 
         @Override
         public void load(ValueInput input) {
-            heatCapacitor.deserialize(input);
+            // Mekanism 10.8 serializes heat_capacity from the heat value. Ports have a fixed capacity,
+            // so retain it and only restore the stored heat from either the new or legacy data shape.
+            double heat = input.getDoubleOr("stored_heat", input.read("state", IHeatCapacitor.CapacitorState.CODEC)
+                    .map(IHeatCapacitor.CapacitorState::heat)
+                    .orElse(heatCapacitor.getHeat()));
+            heatCapacitor.setHeat(heat, null);
         }
     }
 }
