@@ -38,6 +38,15 @@ public final class KubeJSInterfaceHelpers {
         return convert(InterfacePredicates.anyOfPort(ids));
     }
 
+    /**
+     * Matches every built-in port (item/fluid/energy, plus chemical/heat when Mekanism is loaded).
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    public static BlockPredicate ports() {
+        return convert(InterfacePredicates.ports());
+    }
+
     public static BlockPredicate anyOfPort() {
         throw new IllegalArgumentException("At least one port is required");
     }

@@ -172,6 +172,8 @@ public final class KubeJSApi {
     public BlockPredicate factoryController() { return KubeJSInterfaceHelpers.factoryController(); }
     public BlockPredicate networkInterface() { return KubeJSInterfaceHelpers.networkInterface(); }
 
+    public BlockPredicate ports() { return KubeJSInterfaceHelpers.ports(); }
+
     public BlockPredicate block(String blockId) {
         return new BlockPredicate.OfBlock(requireBlock(blockId));
     }

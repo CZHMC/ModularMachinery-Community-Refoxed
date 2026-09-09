@@ -145,6 +145,22 @@ class KubeJSApiTest {
     }
 
     @Test
+    void ports_predicate_matches_every_builtin_port_category() {
+        var combinedInput = ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState();
+        var extendedItemInput = ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState();
+        var extendedFluidInput = ModBlocks.BLOCKS.get("extended_fluid_input_hatch_basic").get().defaultBlockState();
+        var extendedEnergyInput = ModBlocks.BLOCKS.get("extended_energy_input_hatch_reinforced").get().defaultBlockState();
+
+        var ports = api.ports();
+        assertThat(ports).isInstanceOf(BlockPredicate.AnyOf.class);
+        assertThat(ports.matches(combinedInput)).isTrue();
+        assertThat(ports.matches(extendedItemInput)).isTrue();
+        assertThat(ports.matches(extendedFluidInput)).isTrue();
+        assertThat(ports.matches(extendedEnergyInput)).isTrue();
+        assertThat(ports.matches(Blocks.STONE.defaultBlockState())).isFalse();
+    }
+
+    @Test
     void interface_predicate_factories_expose_controller_shortcuts() {
         assertThat(api.parallelControllers().children()).hasSize(8);
         assertThat(api.smartInterface()).isInstanceOf(BlockPredicate.DeferredBlock.class);
