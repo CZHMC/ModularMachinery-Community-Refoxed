@@ -1,13 +1,40 @@
 package cn.howxu.mmcr.compat.mekanism;
 
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
+import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.JsonOps;
+import mekanism.api.AutomationType;
+import mekanism.api.MekanismAPI;
+import mekanism.api.chemical.Chemical;
+import mekanism.api.chemical.ChemicalBuilder;
+import mekanism.api.chemical.ChemicalResource;
+import mekanism.api.chemical.IChemicalTank;
+import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
+import mekanism.api.resource.LargeResourceStack;
+import net.minecraft.core.Holder;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,5 +72,184 @@ class ChemicalConsumeChanceTest {
                 .getOrThrow();
         var decoded = MekanismRecipeDeclarations.CHEMICAL_CODEC.codec().parse(JsonOps.INSTANCE, encoded).getOrThrow();
         assertThat(decoded.consumeChance()).isEqualTo(0.5F);
+    }
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+        if (FailureReasonRegistry.find(MekanismFailureReasons.MEKANISM_UNAVAILABLE.id()) == null) {
+            MekanismBridgeBootstrap.bootstrap();
+        }
+    }
+
+    @Test
+    void chemical_handler_returns_no_extract_when_consume_chance_is_zero() {
+        Holder.Reference<Chemical> chemical = registerChemical("zero_consume");
+        FakeChemicalTank tank = new FakeChemicalTank(2_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        tank.setContents(ChemicalResource.of(chemical), 1_000L, null);
+        FakeChemicalPort port = new FakeChemicalPort(tank, IOType.INPUT);
+        LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0F);
+        RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
+
+        RequirementPlan plan = handler.plan(requirement, List.of(port), emptyContext());
+
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.maxParallelism()).isEqualTo(1L);
+        RequirementPlan materialized = plan.materialize(1L, new PlanningReservations(), null);
+        assertThat(materialized.operations()).isEmpty();
+        assertThat(tank.amount()).isEqualTo(1_000L);
+    }
+
+    @Test
+    void chemical_handler_uses_consume_profile_when_consume_chance_is_partial() {
+        Holder.Reference<Chemical> chemical = registerChemical("partial_consume");
+        FakeChemicalTank tank = new FakeChemicalTank(10_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        tank.setContents(ChemicalResource.of(chemical), 5_000L, null);
+        FakeChemicalPort port = new FakeChemicalPort(tank, IOType.INPUT);
+        LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0.5F);
+        RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
+        PlanningContext context = new PlanningContext(10L, 0, false, new PlanningReservations(), Map.of());
+
+        RequirementPlan plan = handler.plan(requirement, List.of(port), context);
+
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.maxParallelism()).isEqualTo(5L);
+    }
+
+    @Test
+    void chemical_handler_apply_modifiers_rewrites_consume_chance_for_input() {
+        LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 1F);
+        RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
+        List<RecipeModifier> modifiers = List.of(new RecipeModifier("chemical",
+                RecipeModifier.IOType.INPUT, -0.5F, RecipeModifier.Operation.ADD, true));
+
+        LoadedChemicalRequirement modified = handler.applyModifiers(requirement, modifiers);
+
+        assertThat(modified.consumeChance()).isEqualTo(0.5F);
+    }
+
+    private static PlanningContext emptyContext() {
+        return new PlanningContext(1L, 0, false, new PlanningReservations(), Map.of());
+    }
+
+    private static Holder.Reference<Chemical> registerChemical(String path) {
+        ResourceKey<Chemical> key = ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME,
+                Identifier.fromNamespaceAndPath("mmcr_test", path));
+        MappedRegistry<Chemical> registry = (MappedRegistry<Chemical>) MekanismAPI.CHEMICAL_REGISTRY;
+        return registry.get(key).orElseGet(() -> {
+            registry.unfreeze(true);
+            Chemical value = new Chemical(ChemicalBuilder.builder()) {
+                @Override
+                public boolean isRadioactive() {
+                    return false;
+                }
+            };
+            Registry.register(registry, key.identifier(), value);
+            registry.freeze();
+            return registry.get(key).orElseThrow();
+        });
+    }
+
+    private static final class FakeChemicalPort implements LoadedMekanismBridge.ChemicalPort {
+        private final IChemicalTank tank;
+        private final CapabilityView view;
+
+        private FakeChemicalPort(IChemicalTank tank, IOType ioType) {
+            this.tank = tank;
+            this.view = new CapabilityView() {
+                @Override
+                public CapabilityType type() {
+                    return new CapabilityType(MekanismRecipeTypes.CHEMICAL);
+                }
+
+                @Override
+                public CapabilityDirections directions() {
+                    return CapabilityDirections.of(ioType);
+                }
+            };
+        }
+
+        @Override
+        public IChemicalTank chemicalTank() {
+            return tank;
+        }
+
+        @Override
+        public CapabilityType type() {
+            return view.type();
+        }
+
+        @Override
+        public CapabilityView view() {
+            return view;
+        }
+    }
+
+    private static final class FakeChemicalTank implements IChemicalTank {
+        private final long capacity;
+        private final ChemicalAttributeValidator attributeValidator;
+        private ChemicalResource resource = ChemicalResource.EMPTY;
+        private long amount;
+
+        private FakeChemicalTank(long capacity, ChemicalAttributeValidator attributeValidator) {
+            this.capacity = capacity;
+            this.attributeValidator = attributeValidator;
+        }
+
+        @Override
+        public LargeResourceStack<ChemicalResource> asStack() {
+            return new LargeResourceStack<>(resource, amount);
+        }
+
+        @Override
+        public int insert(ChemicalResource resource, int amount, TransactionContext transaction,
+                          AutomationType automationType) {
+            long moved = Math.min(amount, Math.max(0L, capacity - this.amount));
+            if (moved <= 0L || !isValid(resource)) return 0;
+            setContents(resource, this.amount + moved, transaction);
+            return (int) moved;
+        }
+
+        @Override
+        public int extract(ChemicalResource resource, int amount, TransactionContext transaction,
+                           AutomationType automationType) {
+            if (!this.resource.equals(resource)) return 0;
+            long moved = Math.min(amount, this.amount);
+            setContents(this.resource, this.amount - moved, transaction);
+            return (int) moved;
+        }
+
+        @Override
+        public long capacityAsLong(ChemicalResource resource) {
+            return capacity;
+        }
+
+        @Override
+        public boolean isValid(ChemicalResource resource) {
+            return !resource.isEmpty();
+        }
+
+        @Override
+        public void setContents(LargeResourceStack<ChemicalResource> contents, TransactionContext transaction) {
+            resource = contents.resource();
+            amount = contents.amount();
+        }
+
+        @Override
+        public LargeResourceStack.StackHelper<ChemicalResource> stackHelper() {
+            return LargeResourceStack.CHEMICAL_HELPER;
+        }
+
+        @Override
+        public ChemicalAttributeValidator getAttributeValidator() {
+            return attributeValidator;
+        }
+
+        private long amount() {
+            return amount;
+        }
     }
 }

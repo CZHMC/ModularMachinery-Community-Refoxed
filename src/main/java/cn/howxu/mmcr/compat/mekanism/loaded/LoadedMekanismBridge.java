@@ -470,22 +470,37 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                         RequirementHandlerSupport.scaled(requirement.ingredient().amount(), requestedParallelism))
                         : RequirementHandlerSupport.blockedPlan(requirement, context, failureReason.id().toString());
             }
+            if (!output && requirement.consumeChance() <= 0F) {
+                return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
+            }
 
+            RequirementHandlerSupport.ConsumeProfile consumed = !output
+                    ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), requestedParallelism) : null;
             RequirementPlan.OperationFactory operationFactory = (parallelism, reservations) -> planOperations(
-                    requirement, matcher, ports, parallelism, reservations, direction, allowPartialOutput, true);
+                    requirement, matcher, ports, parallelism, consumed, reservations, direction, allowPartialOutput, true);
             RequirementPlan.ReservationFactory reservationFactory = RequirementHandlerSupport.reservationFactory(
                     (parallelism, reservations) -> planOperations(requirement, matcher, ports, parallelism,
-                            reservations, direction, allowPartialOutput, false));
+                            consumed, reservations, direction, allowPartialOutput, false));
             return RequirementHandlerSupport.deferredPlan(context, maximum, operationFactory, reservationFactory);
+        }
+
+        @Override
+        public LoadedChemicalRequirement applyModifiers(LoadedChemicalRequirement requirement,
+                                                         List<RecipeModifier> modifiers) {
+            return LoadedChemicalRequirement.applyModifiers(requirement, modifiers);
         }
 
         private RequirementPlan.OperationPlan planOperations(LoadedChemicalRequirement requirement,
                                                               ChemicalMatcher matcher, List<ChemicalPort> ports,
-                                                              long parallelism, PlanningReservations reservations,
+                                                              long rawParallelism,
+                                                              RequirementHandlerSupport.ConsumeProfile consumed,
+                                                              PlanningReservations reservations,
                                                               IOType direction,
                                                               boolean allowPartialOutput, boolean materialize) {
+            boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
+            long parallelism = input ? consumed.consumedBatches(rawParallelism) : rawParallelism;
             long amount = RequirementHandlerSupport.scaled(requirement.ingredient().amount(), parallelism);
-            long requested = requirement.io() == RecipeModifier.IOType.OUTPUT ? amount : 0L;
+            long requested = !input ? amount : 0L;
             ChemicalResource requestedResource = matcher.exactHolder() == null ? null
                     : ChemicalResource.of(matcher.exactHolder());
             Map<MachineCapability, List<CapabilityRequests.ResourceAction<ChemicalResource>>> actions =
