@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -25,6 +26,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
@@ -425,6 +427,17 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
+    void minimum_temperature_requirement_uses_heat_input_capability() {
+        LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+        RequirementHandlerRegistry.register(LoadedHeatRequirement.TEMPERATURE_TYPE);
+
+        PlanningResult result = new RequirementPlanner().plan(
+                List.of(LoadedHeatRequirement.minimumTemperature(350D)), List.of(new FakeHeatPort(360D)), testContext());
+
+        assertThat(result.successful()).isTrue();
+    }
+
+    @Test
     void minimum_temperature_ignores_output_only_ports() {
         LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
 
@@ -618,7 +631,7 @@ class MekanismRecipeHandlerTest {
         private final CapabilityView view = new CapabilityView() {
             @Override
             public CapabilityType type() {
-                return new CapabilityType(MekanismRecipeTypes.HEAT_TEMPERATURE);
+                return new CapabilityType(MekanismRecipeTypes.HEAT);
             }
 
             @Override

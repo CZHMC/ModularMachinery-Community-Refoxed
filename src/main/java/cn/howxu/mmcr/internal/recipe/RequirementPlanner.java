@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -162,7 +163,9 @@ public final class RequirementPlanner {
         CapabilityType type = new CapabilityType(requirement.type().id());
         IOType direction = IOType.valueOf(requirement.io().name());
         return capabilities.stream()
-                .filter(capability -> type.equals(capability.view().type()))
+                .filter(capability -> type.equals(capability.view().type())
+                        || MekanismPortFamilies.HEAT_TEMPERATURE.equals(requirement.type().id())
+                        && MekanismPortFamilies.HEAT.equals(capability.view().type().id()))
                 .filter(capability -> capability.view().directions().supports(direction))
                 .filter(capability -> requirement.tags().isEmpty()
                         || requirement.tags().stream().anyMatch(capability.view()::matchesTag))
