@@ -2,7 +2,7 @@ MMCREvents.server(event => {
     const api = event.getAPI()
 
     event
-        .createStructure("mmcr_kubejs:kubejs_blast_furnace")
+        .createStructure("mmcr_kubejs:kubejs_sps")
 
         .pattern("  KKK  ", " CXXXC ", " CXXXC ", " CXXXC ", "  CCC  ")
         .pattern(" CXXXC ", "C     C", "C     C", "C     C", " CXXXC ")

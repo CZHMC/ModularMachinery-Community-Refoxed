@@ -16,7 +16,7 @@ ServerEvents.recipes(event => {
             {
                 type: 'mekanism:chemical',
                 io: 'output',
-                kind: 'tag',
+                kind: 'chemical',
                 id: 'mekanism:spent_nuclear_waste',
                 amount: 10,
             }
@@ -83,7 +83,7 @@ ServerEvents.recipes(event => {
         tick_time: 300,
         requirements: [
             {
-                type: 'mekanism:heat_temperature',
+                type: 'mekanism:temperature',
                 io: 'input',
                 value: 450
             },
