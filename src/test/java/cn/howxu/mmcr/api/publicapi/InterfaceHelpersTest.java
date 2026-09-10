@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.InterfacePredicates;
 import cn.howxu.mmcr.api.publicapi.machine.InterfaceTiers;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortType;
 import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
 import cn.howxu.mmcr.compat.kubejs.MachineBuilderJS;
 import cn.howxu.mmcr.compat.kubejs.MachineRecipeFactory;
@@ -71,6 +73,29 @@ class InterfaceHelpersTest {
                 .allSatisfy(declaration -> assertThat(declaration.capacity()).isEqualTo(512_000L));
         assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("heat_"))
                 .allSatisfy(declaration -> assertThat(declaration.capacity()).isEqualTo(300L));
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("chemical_"))
+                .extracting(PortDeclaration::type).containsOnly(PortType.CHEMICAL);
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("chemical_"))
+                .extracting(PortDeclaration::radioactive).containsOnly(false);
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("radioactive_"))
+                .extracting(PortDeclaration::type).containsOnly(PortType.CHEMICAL);
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("radioactive_"))
+                .extracting(PortDeclaration::radioactive).containsOnly(true);
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("heat_"))
+                .extracting(PortDeclaration::type).containsOnly(PortType.HEAT);
+        assertThat(declarations).filteredOn(declaration -> declaration.id().startsWith("heat_"))
+                .extracting(PortDeclaration::radioactive).containsOnly(false);
+        assertThat(declarations).extracting(PortDeclaration::ioType)
+                .containsExactly(IOType.INPUT, IOType.OUTPUT, IOType.INPUT, IOType.OUTPUT,
+                        IOType.INPUT, IOType.OUTPUT, IOType.INPUT, IOType.OUTPUT,
+                        IOType.INPUT, IOType.OUTPUT, IOType.INPUT, IOType.OUTPUT);
+        assertThat(declarations).extracting(PortDeclaration::tier)
+                .containsExactly(PortTiers.ItemTier.NORMAL.ordinal(), PortTiers.ItemTier.NORMAL.ordinal(),
+                        PortTiers.ItemTier.REINFORCED.ordinal(), PortTiers.ItemTier.REINFORCED.ordinal(),
+                        PortTiers.ItemTier.BIG.ordinal(), PortTiers.ItemTier.BIG.ordinal(),
+                        PortTiers.ItemTier.HUGE.ordinal(), PortTiers.ItemTier.HUGE.ordinal(),
+                        PortTiers.ItemTier.HUGE.ordinal(), PortTiers.ItemTier.HUGE.ordinal(),
+                        PortTiers.EnergyTier.ULTIMATE.ordinal(), PortTiers.EnergyTier.ULTIMATE.ordinal());
     }
 
     @Test

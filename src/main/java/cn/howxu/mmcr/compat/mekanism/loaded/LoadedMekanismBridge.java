@@ -34,6 +34,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.MenuRegistrar;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;
@@ -142,19 +143,21 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         List<PortDeclaration> declarations = new ArrayList<>();
         for (MekanismPortSizes.ChemicalTier tier : MekanismPortSizes.ChemicalTier.values()) {
             declarations.add(new PortDeclaration("chemical_input_hatch_" + tier.id(), PortType.CHEMICAL,
-                    IOType.INPUT, tier.ordinal(), tier.capacity(), false));
+                    IOType.INPUT, PortTiers.ItemTier.NORMAL.ordinal() + tier.ordinal(), tier.capacity(), false));
             declarations.add(new PortDeclaration("chemical_output_hatch_" + tier.id(), PortType.CHEMICAL,
-                    IOType.OUTPUT, tier.ordinal(), tier.capacity(), false));
+                    IOType.OUTPUT, PortTiers.ItemTier.NORMAL.ordinal() + tier.ordinal(), tier.capacity(), false));
         }
         declarations.add(new PortDeclaration("radioactive_chemical_input_hatch", PortType.CHEMICAL,
-                IOType.INPUT, MekanismPortSizes.ChemicalTier.values().length,
+                IOType.INPUT, PortTiers.ItemTier.HUGE.ordinal(),
                 MekanismPortSizes.RADIOACTIVE_CHEMICAL_CAPACITY, true));
         declarations.add(new PortDeclaration("radioactive_chemical_output_hatch", PortType.CHEMICAL,
-                IOType.OUTPUT, MekanismPortSizes.ChemicalTier.values().length,
+                IOType.OUTPUT, PortTiers.ItemTier.HUGE.ordinal(),
                 MekanismPortSizes.RADIOACTIVE_CHEMICAL_CAPACITY, true));
-        declarations.add(new PortDeclaration("heat_input_hatch", PortType.HEAT, IOType.INPUT, 0,
+        declarations.add(new PortDeclaration("heat_input_hatch", PortType.HEAT, IOType.INPUT,
+                PortTiers.EnergyTier.ULTIMATE.ordinal(),
                 (long) MekanismPortSizes.HEAT_CAPACITY, false));
-        declarations.add(new PortDeclaration("heat_output_hatch", PortType.HEAT, IOType.OUTPUT, 0,
+        declarations.add(new PortDeclaration("heat_output_hatch", PortType.HEAT, IOType.OUTPUT,
+                PortTiers.EnergyTier.ULTIMATE.ordinal(),
                 (long) MekanismPortSizes.HEAT_CAPACITY, false));
         return List.copyOf(declarations);
     }
