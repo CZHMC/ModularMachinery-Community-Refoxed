@@ -18,9 +18,6 @@ public final class AE2BridgeBootstrap {
     private AE2BridgeBootstrap() {
     }
 
-    public static void bootstrap() {
-    }
-
     static AE2Bridge bridge() {
         AE2Bridge override = testingBridge;
         if (override != null) return override;
