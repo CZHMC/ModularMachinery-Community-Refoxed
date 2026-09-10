@@ -1,11 +1,10 @@
-package cn.howxu.mmcr.compat.jei;
+package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -23,10 +22,15 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class StructureMaterialSummary {
+    private static final StructureMaterialSummary EMPTY = new StructureMaterialSummary(List.of());
     private final List<Entry> entries;
 
     private StructureMaterialSummary(List<Entry> entries) {
         this.entries = List.copyOf(entries);
+    }
+
+    public static StructureMaterialSummary empty() {
+        return EMPTY;
     }
 
     public static StructureMaterialSummary from(StructurePreviewSchema schema) {

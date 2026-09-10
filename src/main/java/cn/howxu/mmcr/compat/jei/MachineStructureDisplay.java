@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchemaFactory;
 import net.minecraft.world.item.ItemStack;

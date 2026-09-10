@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.widgets.IRecipeWidget;

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.util.ReadableNumber;

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -38,10 +39,11 @@ class MachineStructureDisplayTest {
     void displayRetainsDefaultStageMaterials() {
         Machine machine = testMachineWithBlocks();
         MachineStructureDisplay display = MachineStructureDisplay.from(machine);
+        StructureMaterialSummary materials = display.materials();
 
         assertThat(display.machine()).isSameAs(machine);
         assertThat(display.defaultSchema().states()).hasSize(2);
-        assertThat(display.materials().entries()).extracting(entry -> entry.stack().getItem())
+        assertThat(materials.entries()).extracting(entry -> entry.stack().getItem())
                 .containsExactly(Blocks.STONE.asItem(), Blocks.COBBLESTONE.asItem());
         assertThat(display.ingredients()).allSatisfy(stack -> assertThat(stack.getCount()).isGreaterThan(0));
     }

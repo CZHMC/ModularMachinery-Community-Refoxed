@@ -1,7 +1,6 @@
-package cn.howxu.mmcr.compat.jei;
+package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
@@ -24,6 +23,14 @@ class StructureMaterialSummaryTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void emptySummaryHasNoEntriesOrTransferStacks() {
+        StructureMaterialSummary summary = StructureMaterialSummary.empty();
+
+        assertThat(summary.entries()).isEmpty();
+        assertThat(summary.transferStacks()).isEmpty();
     }
 
     @Test
