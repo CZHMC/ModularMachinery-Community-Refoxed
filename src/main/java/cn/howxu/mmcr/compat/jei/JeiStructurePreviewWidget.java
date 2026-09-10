@@ -79,7 +79,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (panel == null) return;
         GuiGraphicsExtractorAccessor extractor = (GuiGraphicsExtractorAccessor) graphics;
         ScreenPosition origin = absoluteGuiOrigin(extractor.mmcr$getMouseX(), extractor.mmcr$getMouseY(), mouseX, mouseY);
-        panel.render(graphics, width, height, 0.0F, origin.x(), origin.y());
+        panel.render(graphics, width, height, 0.0F, origin.x(), origin.y(), 0, 0);
         if (!panel.isReady()) return;
         graphics.nextStratum();
         String[] labels = panel.hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};

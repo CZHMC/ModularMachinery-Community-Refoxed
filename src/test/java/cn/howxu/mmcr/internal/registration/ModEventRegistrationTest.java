@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktBlueprintStageUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
 import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
@@ -143,7 +144,7 @@ class ModEventRegistrationTest {
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.SERVERBOUND,
                  PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
-                 PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
+                 PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
                 PktMachineStatePayload.TYPE,
                 PktFactoryControllerStatePayload.TYPE,
@@ -161,6 +162,7 @@ class ModEventRegistrationTest {
                 PktSmartInterfaceUpdatePayload.TYPE,
                  PktAutoIOConfigPayload.TYPE,
                  PktEjectPortContentsPayload.TYPE,
+                 PktBlueprintStageUpdatePayload.TYPE,
                  PktRecipeLockPayload.TYPE,
                  PktTerminalActionPayload.TYPE);
         assertThat(registrar.handlers).containsOnly(true);

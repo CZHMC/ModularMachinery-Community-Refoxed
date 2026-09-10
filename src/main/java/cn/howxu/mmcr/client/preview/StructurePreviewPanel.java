@@ -26,7 +26,7 @@ public final class StructurePreviewPanel implements AutoCloseable {
 
     private final Machine machine;
     private final List<MachineStructureStage> stages;
-    private final StructurePreviewCompilation compilation;
+    private StructurePreviewCompilation compilation;
     private @Nullable StructurePreviewSchema schema;
     private @Nullable StructurePreviewWidget widget;
     private StructureMaterialSummary materials = StructureMaterialSummary.empty();
@@ -43,13 +43,11 @@ public final class StructurePreviewPanel implements AutoCloseable {
         this.stages = List.copyOf(machine.structureStages());
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
         this.stageIndex = stageIndexFor(stageNumber, stages);
-        this.compilation = stageIndex == 0
-                ? StructurePreviewCompilationCache.instance().acquire(machine)
-                : StructurePreviewCompilationCache.instance().acquire(machine, stages.get(stageIndex).number());
+        this.compilation = acquireCompilation(stageIndex);
     }
 
     public void render(GuiGraphicsExtractor graphics, int width, int height,
-            float partialTick, int guiOriginX, int guiOriginY) {
+            float partialTick, int guiOriginX, int guiOriginY, int statusOriginX, int statusOriginY) {
         if (closed) return;
         ensurePreviewStarted();
         if (widget == null) {
@@ -62,10 +60,11 @@ public final class StructurePreviewPanel implements AutoCloseable {
                 status = Component.literal(compileStatus(elapsed));
             }
             Minecraft minecraft = Minecraft.getInstance();
-            graphics.enableScissor(guiOriginX, guiOriginY, guiOriginX + width, guiOriginY + height);
+            graphics.enableScissor(statusOriginX, statusOriginY,
+                    statusOriginX + width, statusOriginY + height);
             try {
-                int x = guiOriginX + Math.max(0, (width - minecraft.font.width(status)) / 2);
-                graphics.text(minecraft.font, status, x, guiOriginY + height / 2, 0xFFFFFFFF, false);
+                int x = statusOriginX + Math.max(0, (width - minecraft.font.width(status)) / 2);
+                graphics.text(minecraft.font, status, x, statusOriginY + height / 2, 0xFFFFFFFF, false);
             } finally {
                 graphics.disableScissor();
             }
@@ -170,20 +169,37 @@ public final class StructurePreviewPanel implements AutoCloseable {
 
     public void selectNextStage() {
         if (closed || widget == null || stages.size() <= 1) return;
-        widget.close();
-        stageIndex = stageIndexAfter(stageIndex, stages.size());
-        schema = new StructurePreviewSchemaFactory().create(stages.get(stageIndex), machine.registryName());
-        widget = new StructurePreviewWidget(new StructurePreviewRenderer(schema));
-        materials = StructureMaterialSummary.from(schema);
+        switchStage(stageIndexAfter(stageIndex, stages.size()));
     }
 
     public void selectPreviousStage() {
         if (closed || widget == null || stages.size() <= 1) return;
-        widget.close();
-        stageIndex = stageIndexBefore(stageIndex, stages.size());
-        schema = new StructurePreviewSchemaFactory().create(stages.get(stageIndex), machine.registryName());
-        widget = new StructurePreviewWidget(new StructurePreviewRenderer(schema));
-        materials = StructureMaterialSummary.from(schema);
+        switchStage(stageIndexBefore(stageIndex, stages.size()));
+    }
+
+    private void switchStage(int nextIndex) {
+        if (widget != null) widget.close();
+        widget = null;
+        schema = null;
+        materials = StructureMaterialSummary.empty();
+        compileAnimationStart = -1L;
+        stageIndex = nextIndex;
+        compilation = acquireCompilation(stageIndex);
+        compilation.start();
+        StructurePreviewSchema completed = compilation.schema();
+        if (completed != null) adoptCompletedSchema(completed);
+    }
+
+    private StructurePreviewCompilation acquireCompilation(int index) {
+        return stages.get(index).number() == StructurePreviewCompilationCache.DEFAULT_STAGE_NUMBER
+                ? StructurePreviewCompilationCache.instance().acquire(machine)
+                : StructurePreviewCompilationCache.instance().acquire(machine, stages.get(index).number());
+    }
+
+    private void adoptCompletedSchema(StructurePreviewSchema completed) {
+        schema = completed;
+        materials = StructureMaterialSummary.from(completed);
+        widget = new StructurePreviewWidget(new StructurePreviewRenderer(completed));
     }
 
     @Override
@@ -199,7 +215,6 @@ public final class StructurePreviewPanel implements AutoCloseable {
 
     static int candidateIndex(int slot, long timeMillis, int candidateCount, int visibleSlotCount) {
         if (slot < 0 || slot >= visibleSlotCount || visibleSlotCount <= 0 || candidateCount <= 0) return -1;
-        if (slot >= candidateCount) return -1;
         int offset = (int) (Math.floorDiv(timeMillis, 1_000L) % candidateCount);
         return Math.floorMod(slot + offset, candidateCount);
     }
@@ -233,11 +248,7 @@ public final class StructurePreviewPanel implements AutoCloseable {
     private void ensurePreviewStarted() {
         compilation.start();
         StructurePreviewSchema completed = compilation.schema();
-        if (completed != null && widget == null) {
-            schema = completed;
-            materials = StructureMaterialSummary.from(completed);
-            widget = new StructurePreviewWidget(new StructurePreviewRenderer(completed));
-        }
+        if (completed != null && widget == null) adoptCompletedSchema(completed);
     }
 
     private static String compileStatus(long elapsedMillis) {
