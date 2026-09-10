@@ -15,7 +15,7 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class PlanningReservations {
-    private final Map<ResourceStorage<?>, Map<Integer, ResourceReservation>> resources = new IdentityHashMap<>();
+    private final Map<Object, Map<Integer, ResourceReservation>> resources = new IdentityHashMap<>();
     private final Map<LongValueStorage, Long> values = new IdentityHashMap<>();
 
     public Object resource(ResourceStorage<?> storage, int slot) {
@@ -118,7 +118,7 @@ public final class PlanningReservations {
 
     public PlanningReservations copy() {
         PlanningReservations copy = new PlanningReservations();
-        for (Map.Entry<ResourceStorage<?>, Map<Integer, ResourceReservation>> entry : resources.entrySet()) {
+        for (Map.Entry<Object, Map<Integer, ResourceReservation>> entry : resources.entrySet()) {
             Map<Integer, ResourceReservation> copiedSlots = new HashMap<>();
             for (Map.Entry<Integer, ResourceReservation> slot : entry.getValue().entrySet()) {
                 ResourceReservation source = slot.getValue();
@@ -141,11 +141,12 @@ public final class PlanningReservations {
     }
 
     private ResourceReservation reservation(ResourceStorage<?> storage, int slot, boolean create) {
-        Map<Integer, ResourceReservation> bySlot = resources.get(storage);
+        Object identity = storage.reservationIdentity();
+        Map<Integer, ResourceReservation> bySlot = resources.get(identity);
         if (bySlot == null) {
             if (!create) return null;
             bySlot = new HashMap<>();
-            resources.put(storage, bySlot);
+            resources.put(identity, bySlot);
         }
         ResourceReservation reservation = bySlot.get(slot);
         if (reservation == null && create) {

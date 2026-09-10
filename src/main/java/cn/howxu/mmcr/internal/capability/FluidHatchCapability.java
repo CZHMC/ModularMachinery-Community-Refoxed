@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
@@ -29,6 +30,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -46,18 +48,25 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
     private final CapabilityView view;
 
     public FluidHatchCapability(ResourceStorage<FluidResource> storage, IOType ioType) {
-        this(null, storage, ioType);
+        this(null, storage, ioType, true);
     }
 
     public FluidHatchCapability(IOPortBlockEntity port, ResourceStorage<FluidResource> storage, IOType ioType) {
+        this(port, storage, ioType, true);
+    }
+
+    public FluidHatchCapability(IOPortBlockEntity port, ResourceStorage<FluidResource> storage, IOType ioType,
+                                boolean exposeTransferFacet) {
         if (storage == null) throw new IllegalArgumentException("storage must not be null");
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
+        Set<Class<? extends CapabilityFacet>> facets = new LinkedHashSet<>(Set.of(
+                ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class));
+        if (exposeTransferFacet) facets.add(TransferFacet.class);
         this.view = CapabilityFactories.view(type(), directions(),
-                Set.of(ResourceFacet.class, TransferFacet.class, OperationFacet.class, PresentationFacet.class,
-                        SyncFacet.class));
+                Set.copyOf(facets));
     }
 
     public FluidHatchCapability(FluidHatchBlockEntity port) {
