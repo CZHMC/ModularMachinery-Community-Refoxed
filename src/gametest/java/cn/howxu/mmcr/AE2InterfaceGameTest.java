@@ -35,9 +35,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -58,6 +64,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -135,10 +142,15 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(gridHost != null,
                     "AE2 IN_WORLD_GRID_NODE_HOST capability is exposed");
 
-            MEStorage meStorage = helper.getLevel().getCapability(
-                    AECapabilities.ME_STORAGE, portWorldPos, portState, entity, null);
+            MEStorage meStorage = null;
+            int meStoragePolls = 0;
+            while (meStorage == null && meStoragePolls++ < 5) {
+                meStorage = helper.getLevel().getCapability(
+                        AECapabilities.ME_STORAGE, portWorldPos, portState, entity, null);
+            }
             helper.assertTrue(meStorage != null,
-                    "AE2 ME_STORAGE capability is exposed after grid boot");
+                    "AE2 ME_STORAGE capability is exposed after grid boot (polled "
+                            + meStoragePolls + " times)");
 
             GenericInternalInventory genericInv = helper.getLevel().getCapability(
                     AECapabilities.GENERIC_INTERNAL_INV, portWorldPos, portState, entity, null);
@@ -195,6 +207,14 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(interfaceMenu instanceof InterfaceMenu,
                     "AE2 InterfaceMenu is constructed via the AE2 factory bound to InterfaceMenu.TYPE");
 
+            ServerPlayer connectedPlayer = makePlayerWithConnection(helper);
+            helper.assertTrue(bridge.openMenu(connectedPlayer, helper.getLevel(), portWorldPos),
+                    "AE2 bridge forwards the AE2 input interface to MenuOpener.open");
+            helper.assertTrue(entity.getInterfaceLogic().getUpgrades() != null,
+                    "AE2 upgrade inventory is visible through host.getInterfaceLogic()");
+            helper.assertTrue(entity.getInterfaceLogic().getUpgrades().isEmpty(),
+                    "AE2 upgrade inventory slots are empty before any upgrade is installed");
+
             genericInv.insert(0, AEItemKey.of(Items.IRON_INGOT), INITIAL_ITEM_COUNT,
                     Actionable.MODULATE);
             genericInv.insert(1, AEFluidKey.of(Fluids.WATER), INITIAL_FLUID_AMOUNT,
@@ -237,6 +257,16 @@ public class AE2InterfaceGameTest {
                     "AE2 local inventory item amount is unchanged after a rolled-back extraction");
             helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeRollback,
                     "AE2 local inventory fluid amount is unchanged after a rolled-back extraction");
+
+            long itemBeforeCommit = entity.itemStorage().amount(0);
+            try (Transaction transaction = Transaction.openRoot()) {
+                entity.itemStorage().extract(0,
+                        ItemResource.of(Items.IRON_INGOT), 1L, transaction);
+                transaction.commit();
+            }
+            helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeCommit - 1L,
+                    "AE2 local inventory item amount is reduced by 1 after a committed extraction amount="
+                            + entity.itemStorage().amount(0));
 
             entity.getInterfaceLogic().getConfig().setStack(2,
                     new GenericStack(AEItemKey.of(Items.COAL), 4L));
@@ -304,6 +334,17 @@ public class AE2InterfaceGameTest {
                 ClientInformation.createDefault());
     }
 
+    private static ServerPlayer makePlayerWithConnection(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerPlayer player = new ServerPlayer(server, helper.getLevel(),
+                new GameProfile(UUID.nameUUIDFromBytes(
+                        "mmcr-ae2-interface-test-connected".getBytes(StandardCharsets.UTF_8)),
+                        "mmcr-ae2-interface-connected"),
+                ClientInformation.createDefault());
+        player.connection = new RecordingConnection(server, player);
+        return player;
+    }
+
     private static void reloadBlockEntity(BlockEntity entity, GameTestHelper helper) {
         try {
             Method save = BlockEntity.class.getDeclaredMethod("saveAdditional", ValueOutput.class);
@@ -318,6 +359,28 @@ public class AE2InterfaceGameTest {
                     helper.getLevel().registryAccess(), tag));
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);
+        }
+    }
+
+    /**
+     * Minimal packet-recording connection that lets {@code MenuOpener.open} dispatch
+     * its {@code ClientboundOpenScreenPacket} without driving a real network client.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class RecordingConnection extends ServerGamePacketListenerImpl {
+        private final List<Packet<?>> packets = new ArrayList<>();
+
+        private RecordingConnection(MinecraftServer server, ServerPlayer player) {
+            super(server, new Connection(PacketFlow.CLIENTBOUND), player,
+                    CommonListenerCookie.createInitial(new GameProfile(UUID.nameUUIDFromBytes(
+                            "mmcr-ae2-interface-recording".getBytes(StandardCharsets.UTF_8)),
+                            "mmcr-ae2-interface-recording"), false));
+        }
+
+        @Override
+        public void send(Packet<?> packet) {
+            packets.add(packet);
         }
     }
 }
