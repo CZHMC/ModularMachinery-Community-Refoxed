@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.client.RuntimeContentClientApplier;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,7 +30,15 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
         return acquire(machine, RuntimeContentClientApplier.appliedContentVersion());
     }
     public StructurePreviewCompilation acquire(Machine machine, long contentVersion) {
-        return entries.computeIfAbsent(new CacheKey(machine.registryName(), contentVersion), ignored -> create(machine));
+        return entries.computeIfAbsent(new CacheKey(machine.registryName(), contentVersion, 0),
+                ignored -> create(machine, 0));
+    }
+    public StructurePreviewCompilation acquire(Machine machine, int stageNumber) {
+        return acquire(machine, stageNumber, RuntimeContentClientApplier.appliedContentVersion());
+    }
+    private StructurePreviewCompilation acquire(Machine machine, int stageNumber, long contentVersion) {
+        return entries.computeIfAbsent(new CacheKey(machine.registryName(), contentVersion, stageNumber),
+                ignored -> create(machine, stageNumber));
     }
     public boolean has(Identifier machineId) {
         long currentVersion = RuntimeContentClientApplier.appliedContentVersion();
@@ -39,11 +48,21 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
     public void clear() { entries.clear(); }
     @Override public void close() { clear(); }
 
-    private StructurePreviewCompilation create(Machine machine) {
+    private StructurePreviewCompilation create(Machine machine, int stageNumber) {
         StructurePreviewCompilation[] reference = new StructurePreviewCompilation[1];
         reference[0] = new StructurePreviewCompilation(() -> executor.execute(() -> {
             try {
-                reference[0].complete(factory.create(machine), null);
+                StructurePreviewSchema schema;
+                if (stageNumber == 0) {
+                    schema = factory.create(machine);
+                } else {
+                    MachineStructureStage stage = machine.structureStages().stream()
+                            .filter(candidate -> candidate.number() == stageNumber)
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalArgumentException("Unknown machine structure stage: " + stageNumber));
+                    schema = factory.create(stage, machine.registryName());
+                }
+                reference[0].complete(schema, null);
             } catch (Throwable throwable) {
                 reference[0].complete(null, throwable);
             }
@@ -51,6 +70,6 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
         return reference[0];
     }
 
-    private record CacheKey(Identifier machineId, long contentVersion) {
+    private record CacheKey(Identifier machineId, long contentVersion, int stageNumber) {
     }
 }

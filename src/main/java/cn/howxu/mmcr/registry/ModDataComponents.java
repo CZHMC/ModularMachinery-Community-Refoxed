@@ -48,6 +48,11 @@ public final class ModDataComponents {
                     builder.persistent(Identifier.CODEC)
                             .networkSynchronized(Identifier.STREAM_CODEC));
 
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<Integer>>
+            BLUEPRINT_STAGE = REGISTER.registerComponentType("blueprint_stage", builder ->
+                    builder.persistent(Codec.INT)
+                            .networkSynchronized(ByteBufCodecs.VAR_INT));
+
     public static void register(IEventBus bus) {
         REGISTER.register(bus);
     }

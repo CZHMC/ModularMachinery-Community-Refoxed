@@ -58,6 +58,7 @@ public class BlueprintItem extends Item {
                     .ifPresent(machineId -> {
                         ItemStack stack = context.getItemInHand();
                         stack.set(ModDataComponents.BLUEPRINT_MACHINE.get(), machineId);
+                        stack.remove(ModDataComponents.BLUEPRINT_STAGE.get());
                         stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
                     });
         }

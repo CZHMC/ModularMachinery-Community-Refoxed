@@ -13,6 +13,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,6 +55,19 @@ class PreviewSceneMeshCompilerTest {
     }
 
     @Test
+    void async_compilation_returns_before_worker_starts() {
+        AtomicReference<Runnable> pendingWorker = new AtomicReference<>();
+        Executor executor = pendingWorker::set;
+        PreviewSceneMeshCompiler.CompilationInput input = new PreviewSceneMeshCompiler.CompilationInput(
+                List.of(), PreviewVisibility.ALL, null, null, null, false, null);
+
+        var future = PreviewSceneMeshCompiler.compileAsync(input, null, new AtomicBoolean(), executor);
+
+        assertThat(future).isNotDone();
+        assertThat(pendingWorker.get()).isNotNull();
+    }
+
+    @Test
     void preview_region_uses_full_brightness_without_querying_the_light_engine() {
         StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("preview_region_test"),
                 Map.of(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState()), Map.of());
@@ -62,4 +78,5 @@ class PreviewSceneMeshCompilerTest {
         assertThat(region.getBrightness(LightLayer.BLOCK, BlockPos.ZERO)).isEqualTo(15);
         assertThat(region.getBrightness(LightLayer.SKY, BlockPos.ZERO)).isEqualTo(15);
     }
+
 }

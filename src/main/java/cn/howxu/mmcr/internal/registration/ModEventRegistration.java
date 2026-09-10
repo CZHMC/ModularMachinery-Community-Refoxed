@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.network.PktBlueprintStageUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
 import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
@@ -160,9 +161,11 @@ public final class ModEventRegistration {
                         PktSmartInterfaceUpdatePayload::handle)
                 .playToServer(PktAutoIOConfigPayload.TYPE, PktAutoIOConfigPayload.STREAM_CODEC,
                         PktAutoIOConfigPayload::handle)
-                .playToServer(PktEjectPortContentsPayload.TYPE, PktEjectPortContentsPayload.STREAM_CODEC,
-                        PktEjectPortContentsPayload::handle)
-                 .playToServer(PktRecipeLockPayload.TYPE, PktRecipeLockPayload.STREAM_CODEC,
+                 .playToServer(PktEjectPortContentsPayload.TYPE, PktEjectPortContentsPayload.STREAM_CODEC,
+                         PktEjectPortContentsPayload::handle)
+                 .playToServer(PktBlueprintStageUpdatePayload.TYPE, PktBlueprintStageUpdatePayload.STREAM_CODEC,
+                         PktBlueprintStageUpdatePayload::handle)
+                  .playToServer(PktRecipeLockPayload.TYPE, PktRecipeLockPayload.STREAM_CODEC,
                          PktRecipeLockPayload::handle)
                  .playToServer(PktTerminalActionPayload.TYPE, PktTerminalActionPayload.STREAM_CODEC,
                          PktTerminalActionPayload::handle);

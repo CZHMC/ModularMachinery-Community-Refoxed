@@ -43,6 +43,7 @@ import org.joml.Vector4f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -60,6 +61,8 @@ public final class PreviewSceneRenderer {
     private long requestedGeneration;
     private Vector3f lastEye;
     private boolean closed;
+    private CompletableFuture<PreviewSceneMeshCompiler.CompiledScene> fullCompilation;
+    private AtomicBoolean fullCompilationCancelled;
 
     public PreviewSceneRenderer(PreviewLevel level, StructurePreviewSchema schema) {
         this.level = level;
@@ -76,7 +79,10 @@ public final class PreviewSceneRenderer {
 
     public void markDirty() {
         assertRenderThread();
-        if (!closed) requestedGeneration = compileState.requestFullRebuild();
+        if (!closed) {
+            cancelFullCompilation();
+            requestedGeneration = compileState.requestFullRebuild();
+        }
     }
 
     public void render(PreviewSceneRenderContext context, PreviewCamera camera, BlockHitResult hoverHit,
@@ -89,7 +95,7 @@ public final class PreviewSceneRenderer {
             requestedGeneration = compileState.onCameraPanOrZoom();
         }
         if (compileState.pendingKind() == SceneCompileKind.FULL) {
-            compileFull(sceneCamera);
+            startFullCompilation(sceneCamera);
         }
         PreviewSceneMeshCache.FullCache owner = meshes.current();
         if (owner instanceof PreviewSceneMeshCache.Meshes cache) {
@@ -136,25 +142,61 @@ public final class PreviewSceneRenderer {
         assertRenderThread();
         if (closed) return;
         closed = true;
+        cancelFullCompilation();
         compileState.close();
         meshes.close();
         level.close();
     }
 
-    private void compileFull(PreviewSceneCamera camera) {
+    private void startFullCompilation(PreviewSceneCamera camera) {
+        if (fullCompilation != null) return;
         long generation = requestedGeneration;
         AtomicBoolean cancelled = new AtomicBoolean(closed);
+        PreviewSceneMeshCompiler.CompilationInput input =
+                PreviewSceneMeshCompiler.capture(level, schema, visibility);
+        CompletableFuture<PreviewSceneMeshCompiler.CompiledScene> compilation =
+                PreviewSceneMeshCompiler.compileAsync(input, camera, cancelled);
+        fullCompilation = compilation;
+        fullCompilationCancelled = cancelled;
+        Minecraft minecraft = Minecraft.getInstance();
+        compilation.whenComplete((compiled, failure) -> minecraft.execute(() -> finishFullCompilation(
+                compilation, generation, camera, cancelled, compiled, failure)));
+    }
+
+    private void finishFullCompilation(CompletableFuture<PreviewSceneMeshCompiler.CompiledScene> compilation,
+                                       long generation, PreviewSceneCamera camera, AtomicBoolean cancelled,
+                                       PreviewSceneMeshCompiler.CompiledScene compiled, Throwable failure) {
+        if (fullCompilation == compilation) {
+            fullCompilation = null;
+            fullCompilationCancelled = null;
+        }
+        if (failure != null) {
+            if (!cancelled.get() && !closed) {
+                MMCR.LOG.error("Cannot compile preview scene mesh", failure);
+            }
+            return;
+        }
+        if (compiled == null) return;
         PreviewSceneMeshCache.Meshes result = null;
+        boolean handedOff = false;
         try {
-            result = PreviewSceneMeshCompiler.compileFull(level, schema, visibility, camera, cancelled);
-            if (compileState.accepts(generation, SceneCompileKind.FULL) && !cancelled.get()) {
-                meshes.publish(result);
-                compileState.markFullCachePublished();
-                result = null;
+            if (!compileState.accepts(generation, SceneCompileKind.FULL) || cancelled.get() || closed) return;
+            result = PreviewSceneMeshCompiler.assemble(compiled);
+            meshes.publish(result);
+            result = null;
+            handedOff = true;
+            compileState.markFullCachePublished();
+            if (lastEye != null && !lastEye.equals(camera.eye())) {
+                requestedGeneration = compileState.onCameraPanOrZoom();
             }
         } finally {
             if (result != null) meshes.reject(result);
+            if (!handedOff) compiled.close();
         }
+    }
+
+    private void cancelFullCompilation() {
+        if (fullCompilationCancelled != null) fullCompilationCancelled.set(true);
     }
 
     private void compileTranslucent(PreviewSceneMeshCache.Meshes cache, PreviewSceneCamera camera) {

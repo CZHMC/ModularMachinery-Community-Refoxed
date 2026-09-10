@@ -64,5 +64,9 @@
 
     "block.mmcr.kubejs_network_center_machine_controller": "算力中心控制器",
     "item.mmcr.kubejs_network_center_machine_controller": "算力中心控制器",
-    "machine.mmcr_kubejs.kubejs_network_center_machine": "算力中心"
+    "machine.mmcr_kubejs.kubejs_network_center_machine": "算力中心",
+
+    "block.mmcr.kubejs_sps_controller": "SPS 控制器",
+    "item.mmcr.kubejs_sps_controller": "SPS 控制器",
+    "machine.mmcr_kubejs.kubejs_sps_machine": "SPS"
 }

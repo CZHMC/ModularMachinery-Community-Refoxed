@@ -35,10 +35,17 @@ public final class StructurePreviewPanel implements AutoCloseable {
     private boolean closed;
 
     public StructurePreviewPanel(Machine machine) {
+        this(machine, 0);
+    }
+
+    public StructurePreviewPanel(Machine machine, int stageNumber) {
         this.machine = Objects.requireNonNull(machine, "machine");
         this.stages = List.copyOf(machine.structureStages());
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
-        this.compilation = StructurePreviewCompilationCache.instance().acquire(machine);
+        this.stageIndex = stageIndexFor(stageNumber, stages);
+        this.compilation = stageIndex == 0
+                ? StructurePreviewCompilationCache.instance().acquire(machine)
+                : StructurePreviewCompilationCache.instance().acquire(machine, stages.get(stageIndex).number());
     }
 
     public void render(GuiGraphicsExtractor graphics, int width, int height,
@@ -46,15 +53,21 @@ public final class StructurePreviewPanel implements AutoCloseable {
         if (closed) return;
         ensurePreviewStarted();
         if (widget == null) {
+            Component status;
             if (compilation.failure() != null) {
-                graphics.text(Minecraft.getInstance().font,
-                        Component.translatable("jei.mmcr.structure_preview.unavailable"),
-                        0, height / 2, 0xFFFFFFFF, false);
+                status = Component.translatable("jei.mmcr.structure_preview.unavailable");
             } else {
                 if (compileAnimationStart < 0L) compileAnimationStart = System.currentTimeMillis();
                 long elapsed = Math.max(0L, System.currentTimeMillis() - compileAnimationStart);
-                graphics.text(Minecraft.getInstance().font, Component.literal(compileStatus(elapsed)),
-                        0, height / 2, 0xFFFFFFFF, false);
+                status = Component.literal(compileStatus(elapsed));
+            }
+            Minecraft minecraft = Minecraft.getInstance();
+            graphics.enableScissor(guiOriginX, guiOriginY, guiOriginX + width, guiOriginY + height);
+            try {
+                int x = guiOriginX + Math.max(0, (width - minecraft.font.width(status)) / 2);
+                graphics.text(minecraft.font, status, x, guiOriginY + height / 2, 0xFFFFFFFF, false);
+            } finally {
+                graphics.disableScissor();
             }
             return;
         }
@@ -106,8 +119,12 @@ public final class StructurePreviewPanel implements AutoCloseable {
     }
 
     public @Nullable Candidate candidateAt(int slot, long timeMillis) {
+        return candidateAt(slot, timeMillis, VISIBLE_SLOT_COUNT);
+    }
+
+    public @Nullable Candidate candidateAt(int slot, long timeMillis, int visibleSlotCount) {
         List<StructurePreviewSchema.Candidate> candidates = selectedCandidates();
-        int index = candidateIndex(slot, timeMillis, candidates.size());
+        int index = candidateIndex(slot, timeMillis, candidates.size(), visibleSlotCount);
         return index < 0 ? null : candidates.get(index);
     }
 
@@ -116,9 +133,13 @@ public final class StructurePreviewPanel implements AutoCloseable {
     }
 
     public @Nullable Entry materialAt(int slot, long timeMillis) {
-        if (slot < 0 || slot >= VISIBLE_SLOT_COUNT) return null;
+        return materialAt(slot, timeMillis, VISIBLE_SLOT_COUNT);
+    }
+
+    public @Nullable Entry materialAt(int slot, long timeMillis, int visibleSlotCount) {
+        if (slot < 0 || slot >= visibleSlotCount || visibleSlotCount <= 0) return null;
         List<StructureMaterialSummary.Entry> entries = materials.entries();
-        int first = materialPage(timeMillis, entries.size()) * VISIBLE_SLOT_COUNT;
+        int first = materialPage(timeMillis, entries.size(), visibleSlotCount) * visibleSlotCount;
         int index = first + slot;
         return index < entries.size() ? entries.get(index) : null;
     }
@@ -156,6 +177,15 @@ public final class StructurePreviewPanel implements AutoCloseable {
         materials = StructureMaterialSummary.from(schema);
     }
 
+    public void selectPreviousStage() {
+        if (closed || widget == null || stages.size() <= 1) return;
+        widget.close();
+        stageIndex = stageIndexBefore(stageIndex, stages.size());
+        schema = new StructurePreviewSchemaFactory().create(stages.get(stageIndex), machine.registryName());
+        widget = new StructurePreviewWidget(new StructurePreviewRenderer(schema));
+        materials = StructureMaterialSummary.from(schema);
+    }
+
     @Override
     public void close() {
         if (closed) return;
@@ -164,19 +194,40 @@ public final class StructurePreviewPanel implements AutoCloseable {
     }
 
     static int candidateIndex(int slot, long timeMillis, int candidateCount) {
-        if (slot < 0 || slot >= VISIBLE_SLOT_COUNT || candidateCount <= 0) return -1;
+        return candidateIndex(slot, timeMillis, candidateCount, VISIBLE_SLOT_COUNT);
+    }
+
+    static int candidateIndex(int slot, long timeMillis, int candidateCount, int visibleSlotCount) {
+        if (slot < 0 || slot >= visibleSlotCount || visibleSlotCount <= 0 || candidateCount <= 0) return -1;
+        if (slot >= candidateCount) return -1;
         int offset = (int) (Math.floorDiv(timeMillis, 1_000L) % candidateCount);
         return Math.floorMod(slot + offset, candidateCount);
     }
 
     static int materialPage(long timeMillis, int materialCount) {
-        int pageCount = (materialCount + VISIBLE_SLOT_COUNT - 1) / VISIBLE_SLOT_COUNT;
+        return materialPage(timeMillis, materialCount, VISIBLE_SLOT_COUNT);
+    }
+
+    static int materialPage(long timeMillis, int materialCount, int visibleSlotCount) {
+        if (visibleSlotCount <= 0) return 0;
+        int pageCount = (materialCount + visibleSlotCount - 1) / visibleSlotCount;
         if (pageCount == 0) return 0;
         return Math.floorMod((int) (Math.floorDiv(timeMillis, 8_000L) % pageCount), pageCount);
     }
 
     static int stageIndexAfter(int currentIndex, int stageCount) {
         return stageCount <= 1 ? currentIndex : Math.floorMod(currentIndex + 1, stageCount);
+    }
+
+    static int stageIndexBefore(int currentIndex, int stageCount) {
+        return stageCount <= 1 ? currentIndex : Math.floorMod(currentIndex - 1, stageCount);
+    }
+
+    private static int stageIndexFor(int stageNumber, List<MachineStructureStage> stages) {
+        for (int index = 0; index < stages.size(); index++) {
+            if (stages.get(index).number() == stageNumber) return index;
+        }
+        return 0;
     }
 
     private void ensurePreviewStarted() {

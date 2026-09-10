@@ -42,7 +42,7 @@ public final class BlueprintClientHandler {
             minecraft.gui.getChat().addClientSystemMessage(
                     Component.translatable("message.mmcr.blueprint.unbound"));
         } else {
-            minecraft.setScreen(new BlueprintScreen(machine));
+            minecraft.setScreen(new BlueprintScreen(machine, stack));
         }
         event.setSwingHand(false);
         event.setCanceled(true);

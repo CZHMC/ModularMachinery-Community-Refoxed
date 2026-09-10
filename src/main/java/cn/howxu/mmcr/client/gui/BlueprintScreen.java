@@ -4,11 +4,16 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.client.preview.StructureMaterialSummary.Entry;
 import cn.howxu.mmcr.client.preview.StructurePreviewPanel;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema.Candidate;
+import cn.howxu.mmcr.internal.network.PktBlueprintStageUpdatePayload;
+import cn.howxu.mmcr.registry.ModDataComponents;
+import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
@@ -23,6 +28,10 @@ public final class BlueprintScreen extends Screen {
     private static final int BASE_HEIGHT = 260;
     private static final int OUTER_MARGIN = 8;
     private static final int GAP = 6;
+    private static final int ITEM_ROW_GAP = 2;
+    private static final int ITEM_ROW_SLOT_X = OUTER_MARGIN;
+    private static final int SLOT_COUNT = 12;
+    private static final float MATERIAL_QUANTITY_SCALE = 0.6F;
     private static final int PREVIEW_HEIGHT = 190;
     private static final int SLOT_SIZE = 24;
     private static final int SLOT_ICON_OFFSET = 4;
@@ -33,6 +42,7 @@ public final class BlueprintScreen extends Screen {
     private static final int INNER_BORDER_COLOR = 0xFFDDF4FA;
 
     private final Machine machine;
+    private final ItemStack blueprint;
     private final StructurePreviewPanel panel;
     private @Nullable BlueprintLayout layout;
     private @Nullable Button previousLayerButton;
@@ -40,12 +50,15 @@ public final class BlueprintScreen extends Screen {
     private @Nullable Button allLayersButton;
     private @Nullable Button resetButton;
     private @Nullable Button nextStageButton;
+    private @Nullable Button previousStageButton;
     private boolean closed;
 
-    public BlueprintScreen(Machine machine) {
+    public BlueprintScreen(Machine machine, ItemStack blueprint) {
         super(Component.translatable("gui.mmcr.blueprint.title", machine.displayName()));
         this.machine = Objects.requireNonNull(machine, "machine");
-        this.panel = new StructurePreviewPanel(machine);
+        this.blueprint = Objects.requireNonNull(blueprint, "blueprint");
+        this.panel = new StructurePreviewPanel(machine,
+                blueprint.getOrDefault(ModDataComponents.BLUEPRINT_STAGE.get(), 0));
     }
 
     @Override
@@ -53,13 +66,21 @@ public final class BlueprintScreen extends Screen {
         super.init();
         BlueprintLayout currentLayout = layoutFor(width, height, panel.hasMultipleStages());
         layout = currentLayout;
-        previousLayerButton = addRenderableWidget(symbolButton("+", currentLayout.layerButtons()[0], panel::selectPreviousLayer));
-        nextLayerButton = addRenderableWidget(symbolButton("-", currentLayout.layerButtons()[1], panel::selectNextLayer));
-        allLayersButton = addRenderableWidget(symbolButton("A", currentLayout.layerButtons()[2], panel::showAllLayers));
-        resetButton = addRenderableWidget(symbolButton("R", currentLayout.layerButtons()[3], panel::reset));
+        previousLayerButton = addRenderableWidget(symbolButton("+", currentLayout.layerButtons()[0],
+                "jei.mmcr.structure_preview.previous_layer", panel::selectPreviousLayer));
+        nextLayerButton = addRenderableWidget(symbolButton("-", currentLayout.layerButtons()[1],
+                "jei.mmcr.structure_preview.next_layer", panel::selectNextLayer));
+        allLayersButton = addRenderableWidget(symbolButton("A", currentLayout.layerButtons()[2],
+                "jei.mmcr.structure_preview.all_layers", panel::showAllLayers));
+        resetButton = addRenderableWidget(symbolButton("R", currentLayout.layerButtons()[3],
+                "jei.mmcr.structure_preview.reset", panel::reset));
         if (currentLayout.nextStageButton() != null) {
             nextStageButton = addRenderableWidget(textButton(
-                    "gui.mmcr.blueprint.next_level", currentLayout.nextStageButton(), panel::selectNextStage));
+                    "gui.mmcr.blueprint.next_level", currentLayout.nextStageButton(),
+                    "jei.mmcr.structure_preview.next_level", this::selectNextStage));
+            previousStageButton = addRenderableWidget(textButton(
+                    "gui.mmcr.blueprint.previous_level", currentLayout.previousStageButton(),
+                    "jei.mmcr.structure_preview.previous_level", this::selectPreviousStage));
         }
     }
 
@@ -71,7 +92,12 @@ public final class BlueprintScreen extends Screen {
         drawPanel(graphics, currentLayout);
         BlueprintRect preview = currentLayout.preview();
         graphics.fill(preview.x(), preview.y(), preview.x() + preview.width(), preview.y() + preview.height(), 0xFF000000);
-        panel.render(graphics, preview.width(), preview.height(), partialTicks, preview.x(), preview.y());
+        graphics.enableScissor(preview.x(), preview.y(), preview.x() + preview.width(), preview.y() + preview.height());
+        try {
+            panel.render(graphics, preview.width(), preview.height(), partialTicks, preview.x(), preview.y());
+        } finally {
+            graphics.disableScissor();
+        }
         graphics.nextStratum();
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
         renderLabels(graphics, currentLayout);
@@ -141,8 +167,8 @@ public final class BlueprintScreen extends Screen {
         int leftWidth = Math.round((contentWidth - GAP) * 0.70F);
         int rightWidth = contentWidth - GAP - leftWidth;
         int rightX = OUTER_MARGIN + leftWidth + GAP;
-        int candidatesY = OUTER_MARGIN + PREVIEW_HEIGHT + GAP;
-        int materialsY = candidatesY + SLOT_SIZE + GAP;
+        int materialsY = OUTER_MARGIN + PREVIEW_HEIGHT + ITEM_ROW_GAP;
+        int candidatesY = materialsY + SLOT_SIZE + ITEM_ROW_GAP;
         int buttonWidth = (rightWidth - GAP) / 2;
         int controlsY = 94;
         BlueprintRect[] layerButtons = new BlueprintRect[]{
@@ -156,12 +182,16 @@ public final class BlueprintScreen extends Screen {
                 ? scaledRect(left, top, rightX, controlsY + 2 * (BUTTON_HEIGHT + GAP),
                         buttonWidth * 2 + GAP, BUTTON_HEIGHT, scale)
                 : null;
+        BlueprintRect previousStage = multipleStages
+                ? scaledRect(left, top, rightX, controlsY + 3 * (BUTTON_HEIGHT + GAP),
+                        buttonWidth * 2 + GAP, BUTTON_HEIGHT, scale)
+                : null;
         return new BlueprintLayout(left, top, scale,
                 scaledRect(left, top, OUTER_MARGIN, OUTER_MARGIN, leftWidth, PREVIEW_HEIGHT, scale),
                 scaledRect(left, top, OUTER_MARGIN, candidatesY, leftWidth, SLOT_SIZE, scale),
                 scaledRect(left, top, OUTER_MARGIN, materialsY, leftWidth, SLOT_SIZE, scale),
                 scaledRect(left, top, rightX, OUTER_MARGIN, rightWidth, 78, scale),
-                layerButtons, nextStage);
+                layerButtons, nextStage, previousStage);
     }
 
     static double localMouse(double mouse, int origin, float scale) {
@@ -172,14 +202,36 @@ public final class BlueprintScreen extends Screen {
         return mouse - origin;
     }
 
-    private Button symbolButton(String symbol, BlueprintRect rect, Runnable action) {
-        return Button.builder(Component.literal(symbol), button -> action.run())
+    private Button symbolButton(String symbol, BlueprintRect rect, String tooltipKey, Runnable action) {
+        Button button = Button.builder(Component.literal(symbol), clicked -> action.run())
                 .bounds(rect.x(), rect.y(), rect.width(), rect.height()).build();
+        button.setTooltip(Tooltip.create(Component.translatable(tooltipKey)));
+        return button;
     }
 
-    private Button textButton(String key, BlueprintRect rect, Runnable action) {
-        return Button.builder(Component.translatable(key), button -> action.run())
+    private Button textButton(String key, BlueprintRect rect, String tooltipKey, Runnable action) {
+        Button button = Button.builder(Component.translatable(key), clicked -> action.run())
                 .bounds(rect.x(), rect.y(), rect.width(), rect.height()).build();
+        button.setTooltip(Tooltip.create(Component.translatable(tooltipKey)));
+        return button;
+    }
+
+    private void selectNextStage() {
+        if (!panel.isReady()) return;
+        panel.selectNextStage();
+        saveStage();
+    }
+
+    private void selectPreviousStage() {
+        if (!panel.isReady()) return;
+        panel.selectPreviousStage();
+        saveStage();
+    }
+
+    private void saveStage() {
+        int stageNumber = panel.stageNumber();
+        blueprint.set(ModDataComponents.BLUEPRINT_STAGE.get(), stageNumber);
+        ClientPacketDistributor.sendToServer(new PktBlueprintStageUpdatePayload(stageNumber));
     }
 
     private void drawPanel(GuiGraphicsExtractor graphics, BlueprintLayout currentLayout) {
@@ -215,11 +267,6 @@ public final class BlueprintScreen extends Screen {
             graphics.text(font, Component.translatable("gui.mmcr.blueprint.level", panel.stageNumber()),
                     infoX + 4, infoY + 40, TEXT_COLOR, false);
         }
-        int rowLabelX = OUTER_MARGIN + 8 * SLOT_SIZE + GAP;
-        graphics.text(font, Component.translatable("gui.mmcr.blueprint.candidates"), rowLabelX,
-                OUTER_MARGIN + PREVIEW_HEIGHT + GAP + 7, TEXT_COLOR, false);
-        graphics.text(font, Component.translatable("gui.mmcr.blueprint.materials"), rowLabelX,
-                OUTER_MARGIN + PREVIEW_HEIGHT + 2 * (SLOT_SIZE + GAP) + 7, TEXT_COLOR, false);
         graphics.pose().popMatrix();
     }
 
@@ -228,13 +275,16 @@ public final class BlueprintScreen extends Screen {
         graphics.pose().pushMatrix();
         graphics.pose().translate(currentLayout.left(), currentLayout.top());
         graphics.pose().scale(currentLayout.scale(), currentLayout.scale());
-        for (int slot = 0; slot < StructurePreviewPanel.VISIBLE_SLOT_COUNT; slot++) {
+        int candidatesY = (int) Math.round(localMouse(currentLayout.candidates().y(), currentLayout.top(), currentLayout.scale()));
+        int materialsY = (int) Math.round(localMouse(currentLayout.materials().y(), currentLayout.top(), currentLayout.scale()));
+        int visibleSlotCount = visibleSlotCount();
+        for (int slot = 0; slot < visibleSlotCount; slot++) {
             BlueprintRect candidateSlot = slotRect(currentLayout, currentLayout.candidates(), slot);
-            Candidate candidate = panel.candidateAt(slot, timeMillis);
+            Candidate candidate = panel.candidateAt(slot, timeMillis, visibleSlotCount);
             if (candidate != null) {
                 ItemStack stack = candidate.stack();
-                int x = OUTER_MARGIN + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
-                int y = OUTER_MARGIN + PREVIEW_HEIGHT + GAP + SLOT_ICON_OFFSET;
+                int x = ITEM_ROW_SLOT_X + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
+                int y = candidatesY + SLOT_ICON_OFFSET;
                 graphics.item(stack, x, y, slot);
                 graphics.itemDecorations(font, stack, x, y);
                 if (candidateSlot.contains(mouseX, mouseY)) {
@@ -245,19 +295,32 @@ public final class BlueprintScreen extends Screen {
             }
 
             BlueprintRect materialSlot = slotRect(currentLayout, currentLayout.materials(), slot);
-            Entry entry = panel.materialAt(slot, timeMillis);
+            Entry entry = panel.materialAt(slot, timeMillis, visibleSlotCount);
             if (entry != null) {
-                ItemStack stack = entry.stack().copyWithCount(entry.count());
-                int x = OUTER_MARGIN + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
-                int y = OUTER_MARGIN + PREVIEW_HEIGHT + 2 * (SLOT_SIZE + GAP) + SLOT_ICON_OFFSET;
+                ItemStack stack = entry.stack().copyWithCount(1);
+                int x = ITEM_ROW_SLOT_X + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
+                int y = materialsY + SLOT_ICON_OFFSET;
                 graphics.item(stack, x, y, slot);
-                graphics.itemDecorations(font, stack, x, y);
+                String quantity = entry.count() > 1
+                        ? ReadableNumber.formatForSlot(entry.count(), 0, "") : null;
+                graphics.pose().pushMatrix();
+                graphics.pose().translate(x + 8, y + 8);
+                graphics.pose().scale(MATERIAL_QUANTITY_SCALE, MATERIAL_QUANTITY_SCALE);
+                graphics.itemDecorations(font, stack, 0, 0, quantity);
+                graphics.pose().popMatrix();
                 if (materialSlot.contains(mouseX, mouseY)) {
-                    graphics.setComponentTooltipForNextFrame(font, getTooltipFromItem(minecraft, stack), mouseX, mouseY);
+                    ArrayList<Component> tooltip = new ArrayList<>(getTooltipFromItem(minecraft, stack));
+                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count",
+                            ReadableNumber.formatExact(entry.count())));
+                    graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
                 }
             }
         }
         graphics.pose().popMatrix();
+    }
+
+    private int visibleSlotCount() {
+        return SLOT_COUNT;
     }
 
     private boolean itemRowAt(BlueprintLayout currentLayout, double mouseX, double mouseY) {
@@ -265,9 +328,8 @@ public final class BlueprintScreen extends Screen {
     }
 
     private BlueprintRect slotRect(BlueprintLayout currentLayout, BlueprintRect row, int slot) {
-        int baseX = OUTER_MARGIN + slot * SLOT_SIZE;
-        int baseY = row.y() == currentLayout.candidates().y()
-                ? OUTER_MARGIN + PREVIEW_HEIGHT + GAP : OUTER_MARGIN + PREVIEW_HEIGHT + 2 * (SLOT_SIZE + GAP);
+        int baseX = ITEM_ROW_SLOT_X + slot * SLOT_SIZE;
+        int baseY = (int) Math.round(localMouse(row.y(), currentLayout.top(), currentLayout.scale()));
         return scaledRect(currentLayout.left(), currentLayout.top(), baseX, baseY, SLOT_SIZE, SLOT_SIZE, currentLayout.scale());
     }
 
@@ -298,5 +360,6 @@ record BlueprintRect(int x, int y, int width, int height) {
 
 record BlueprintLayout(int left, int top, float scale, BlueprintRect preview,
         BlueprintRect candidates, BlueprintRect materials, BlueprintRect info,
-        BlueprintRect[] layerButtons, @Nullable BlueprintRect nextStageButton) {
+        BlueprintRect[] layerButtons, @Nullable BlueprintRect nextStageButton,
+        @Nullable BlueprintRect previousStageButton) {
 }

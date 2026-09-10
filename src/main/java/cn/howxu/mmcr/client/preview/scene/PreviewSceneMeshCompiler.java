@@ -46,11 +46,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.util.Util;
 
 /**
- * Tesselates the immutable preview level into a private, render-thread-owned mesh generation.
+ * Tesselates immutable preview data into CPU-side mesh parts for render-thread assembly.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -76,91 +77,84 @@ public final class PreviewSceneMeshCompiler {
         return result;
     }
 
-    static PreviewSceneMeshCache.Meshes compileFull(PreviewLevel level, StructurePreviewSchema schema,
-                                                    PreviewVisibility visibility, PreviewSceneCamera camera,
-                                                    AtomicBoolean cancelled) {
+    static CompilationInput capture(PreviewLevel level, StructurePreviewSchema schema,
+                                    PreviewVisibility visibility) {
         if (!Minecraft.getInstance().isSameThread()) {
             throw new IllegalStateException("preview mesh compilation must occur on the render thread");
         }
         Minecraft minecraft = Minecraft.getInstance();
         List<Map.Entry<BlockPos, BlockState>> entries = schema.states().entrySet().stream().toList();
-        BlockStateModelSet modelSet = minecraft.getModelManager().getBlockStateModelSet();
-        FluidStateModelSet fluidSet = minecraft.getModelManager().getFluidStateModelSet();
-        BlockColors blockColors = minecraft.getBlockColors();
-        boolean ambientOcclusion = minecraft.options.ambientOcclusion().get();
-        BlockAndTintGetter region = previewRegion(level, schema, visibility);
-        int workerCount = workerCount(entries.size());
-        List<WorkerResult> results = workerCount == 1
-                ? List.of(compilePartition(entries, 0, entries.size(), visibility, camera, cancelled,
-                        modelSet, fluidSet, blockColors, ambientOcclusion, region))
-                : compileParallel(entries, workerCount, visibility, camera, cancelled,
-                        modelSet, fluidSet, blockColors, ambientOcclusion, region);
+        return new CompilationInput(entries, visibility,
+                minecraft.getModelManager().getBlockStateModelSet(),
+                minecraft.getModelManager().getFluidStateModelSet(), minecraft.getBlockColors(),
+                minecraft.options.ambientOcclusion().get(), previewRegion(level, schema, visibility));
+    }
+
+    static CompletableFuture<CompiledScene> compileAsync(CompilationInput input, PreviewSceneCamera camera,
+                                                          AtomicBoolean cancelled) {
+        return compileAsync(input, camera, cancelled, Util.backgroundExecutor());
+    }
+
+    static CompletableFuture<CompiledScene> compileAsync(CompilationInput input, PreviewSceneCamera camera,
+                                                          AtomicBoolean cancelled, Executor executor) {
+        int workerCount = workerCount(input.entries().size());
+        List<CompletableFuture<WorkerResult>> futures = new ArrayList<>(workerCount);
+        for (Partition partition : partitions(input.entries().size(), workerCount)) {
+            futures.add(CompletableFuture.supplyAsync(() -> compilePartition(input,
+                    partition.startInclusive(), partition.endExclusive(), camera, cancelled), executor));
+        }
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+                .whenComplete((ignored, failure) -> {
+                    if (failure != null) closeCompletedWorkers(futures, unwrap(failure));
+                })
+                .thenApply(ignored -> collectWorkers(futures));
+    }
+
+    static PreviewSceneMeshCache.Meshes assemble(CompiledScene compiled) {
+        return new PreviewSceneMeshCache.Meshes(compiled.parts(), compiled.blockEntities());
+    }
+
+    private static CompiledScene collectWorkers(List<CompletableFuture<WorkerResult>> futures) {
         try {
+            List<WorkerResult> results = futures.stream().map(CompletableFuture::join).toList();
             List<PreviewSceneMeshCache.MeshPart> parts = results.stream().map(WorkerResult::part).toList();
             Set<BlockPos> blockEntities = new HashSet<>();
             results.forEach(result -> blockEntities.addAll(result.blockEntities()));
-            return new PreviewSceneMeshCache.Meshes(parts, blockEntities);
+            return new CompiledScene(parts, blockEntities);
         } catch (RuntimeException exception) {
-            results.forEach(result -> closeWorkerResult(result, exception));
+            closeCompletedWorkers(futures, exception);
             throw exception;
         }
     }
 
-    private static List<WorkerResult> compileParallel(List<Map.Entry<BlockPos, BlockState>> entries,
-                                                       int workerCount, PreviewVisibility visibility,
-                                                       PreviewSceneCamera camera, AtomicBoolean cancelled,
-                                                       BlockStateModelSet modelSet, FluidStateModelSet fluidSet,
-                                                       BlockColors blockColors, boolean ambientOcclusion,
-                                                       BlockAndTintGetter region) {
-        List<CompletableFuture<WorkerResult>> futures = new ArrayList<>(workerCount);
-        for (Partition partition : partitions(entries.size(), workerCount)) {
-            futures.add(CompletableFuture.supplyAsync(() -> compilePartition(entries,
-                    partition.startInclusive(), partition.endExclusive(), visibility, camera, cancelled,
-                    modelSet, fluidSet, blockColors, ambientOcclusion, region), Util.backgroundExecutor()));
-        }
-        try {
-            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
-            return futures.stream().map(CompletableFuture::join).toList();
-        } catch (RuntimeException exception) {
-            Throwable failure = exception instanceof CompletionException && exception.getCause() != null
-                    ? exception.getCause() : exception;
-            closeCompletedWorkers(futures, failure);
-            rethrow(failure);
-            throw new IllegalStateException("unreachable");
-        }
-    }
-
-    private static WorkerResult compilePartition(List<Map.Entry<BlockPos, BlockState>> entries,
-                                                  int startInclusive, int endExclusive,
-                                                  PreviewVisibility visibility, PreviewSceneCamera camera,
-                                                  AtomicBoolean cancelled, BlockStateModelSet modelSet,
-                                                  FluidStateModelSet fluidSet, BlockColors blockColors,
-                                                  boolean ambientOcclusion, BlockAndTintGetter region) {
+    private static WorkerResult compilePartition(CompilationInput input, int startInclusive, int endExclusive,
+                                                  PreviewSceneCamera camera, AtomicBoolean cancelled) {
         SectionBufferBuilderPack builders = new SectionBufferBuilderPack();
         Map<ChunkSectionLayer, BufferBuilder> started = new EnumMap<>(ChunkSectionLayer.class);
         Map<ChunkSectionLayer, MeshData> meshes = new EnumMap<>(ChunkSectionLayer.class);
         Set<BlockPos> blockEntities = new HashSet<>();
         BlockModelLighter.enableCaching();
         try {
-            ModelBlockRenderer blockRenderer = new ModelBlockRenderer(ambientOcclusion, true, blockColors);
-            FluidRenderer fluidRenderer = new FluidRenderer(fluidSet);
+            ModelBlockRenderer blockRenderer = new ModelBlockRenderer(input.ambientOcclusion(), true,
+                    input.blockColors());
+            FluidRenderer fluidRenderer = new FluidRenderer(input.fluidSet());
             BlockQuadOutput blockOutput = (x, y, z, quad, instance) -> builderFor(started, builders,
                     quad.materialInfo().layer()).putBlockBakedQuad(x, y, z, quad, instance);
             FluidRenderer.Output fluidOutput = layer -> new SectionOriginConsumer(builderFor(started, builders, layer));
             for (int index = startInclusive; index < endExclusive; index++) {
                 if (cancelled.get()) throw new CancelledCompilation();
-                Map.Entry<BlockPos, BlockState> entry = entries.get(index);
+                Map.Entry<BlockPos, BlockState> entry = input.entries().get(index);
                 BlockPos pos = entry.getKey();
                 BlockState state = entry.getValue();
-                if (!visibility.isVisible(pos, state) || state.isAir()) continue;
+                if (!input.visibility().isVisible(pos, state) || state.isAir()) continue;
                 if (state.hasBlockEntity()) blockEntities.add(pos);
                 FluidState fluidState = state.getFluidState();
                 if (!fluidState.isEmpty()) {
-                    fluidRenderer.tesselate(region, pos, offset(fluidOutput, pos), state, fluidState);
+                    fluidRenderer.tesselate(input.region(), pos, offset(fluidOutput, pos), state, fluidState);
                 }
                 if (state.getRenderShape() == RenderShape.MODEL) {
-                    blockRenderer.tesselateBlock(blockOutput, pos.getX(), pos.getY(), pos.getZ(), region, pos, state,
-                            modelSet.get(state), state.getSeed(pos));
+                    blockRenderer.tesselateBlock(blockOutput, pos.getX(), pos.getY(), pos.getZ(), input.region(), pos,
+                            state, input.modelSet().get(state), state.getSeed(pos));
                 }
             }
             if (cancelled.get()) throw new CancelledCompilation();
@@ -184,6 +178,11 @@ public final class PreviewSceneMeshCompiler {
         }
     }
 
+    private static Throwable unwrap(Throwable failure) {
+        return failure instanceof CompletionException && failure.getCause() != null
+                ? failure.getCause() : failure;
+    }
+
     private static void closeCompletedWorkers(List<CompletableFuture<WorkerResult>> futures, Throwable failure) {
         for (CompletableFuture<WorkerResult> future : futures) {
             if (!future.isDone() || future.isCancelled() || future.isCompletedExceptionally()) continue;
@@ -192,14 +191,6 @@ public final class PreviewSceneMeshCompiler {
             } catch (RuntimeException cleanupFailure) {
                 failure.addSuppressed(cleanupFailure);
             }
-        }
-    }
-
-    private static void closeWorkerResult(WorkerResult result, RuntimeException failure) {
-        try {
-            result.close();
-        } catch (RuntimeException cleanupFailure) {
-            failure.addSuppressed(cleanupFailure);
         }
     }
 
@@ -283,6 +274,41 @@ public final class PreviewSceneMeshCompiler {
     private static final class CancelledCompilation extends RuntimeException { }
 
     record Partition(int startInclusive, int endExclusive) { }
+
+    record CompilationInput(List<Map.Entry<BlockPos, BlockState>> entries, PreviewVisibility visibility,
+                            BlockStateModelSet modelSet, FluidStateModelSet fluidSet, BlockColors blockColors,
+                            boolean ambientOcclusion, BlockAndTintGetter region) { }
+
+    /** CPU-side mesh results that have not yet been handed to the render-thread GPU owner. */
+    static final class CompiledScene implements AutoCloseable {
+        private final List<PreviewSceneMeshCache.MeshPart> parts;
+        private final Set<BlockPos> blockEntities;
+        private boolean closed;
+
+        private CompiledScene(List<PreviewSceneMeshCache.MeshPart> parts, Set<BlockPos> blockEntities) {
+            this.parts = List.copyOf(parts);
+            this.blockEntities = Set.copyOf(blockEntities);
+        }
+
+        List<PreviewSceneMeshCache.MeshPart> parts() { return parts; }
+        Set<BlockPos> blockEntities() { return blockEntities; }
+
+        @Override
+        public void close() {
+            if (closed) return;
+            closed = true;
+            RuntimeException failure = null;
+            for (PreviewSceneMeshCache.MeshPart part : parts) {
+                try {
+                    part.close();
+                } catch (RuntimeException exception) {
+                    if (failure == null) failure = exception;
+                    else failure.addSuppressed(exception);
+                }
+            }
+            if (failure != null) throw failure;
+        }
+    }
 
     private static final class WorkerResult implements AutoCloseable {
         private final PreviewSceneMeshCache.MeshPart part;

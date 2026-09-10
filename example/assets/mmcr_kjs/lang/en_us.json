@@ -62,5 +62,9 @@
 
     "block.mmcr.kubejs_network_center_machine_controller": "Network Center Controller",
     "item.mmcr.kubejs_network_center_machine_controller": "Network Center Controller",
-    "machine.mmcr_kubejs.kubejs_network_center_machine": "Network Center"
+    "machine.mmcr_kubejs.kubejs_network_center_machine": "Network Center",
+
+    "block.mmcr.kubejs_sps_controller": "SPS Controller",
+    "item.mmcr.kubejs_sps_controller": "SPS Controller",
+    "machine.mmcr_kubejs.kubejs_sps_machine": "SPS"
 }
