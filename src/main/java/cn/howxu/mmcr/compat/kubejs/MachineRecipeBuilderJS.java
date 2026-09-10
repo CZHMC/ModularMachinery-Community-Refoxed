@@ -384,6 +384,30 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    /**
+     * Adds an energy input requirement measured in FE per tick.
+     *
+     * @param fePerTick required energy rate in FE/t
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS iFEt(long fePerTick) {
+        inputs.add(new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.INPUT, fePerTick));
+        return this;
+    }
+
+    /**
+     * Adds an energy output requirement measured in FE per tick.
+     *
+     * @param fePerTick produced energy rate in FE/t
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilderJS oFEt(long fePerTick) {
+        inputs.add(new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, fePerTick));
+        return this;
+    }
+
     public MachineRecipeBuilderJS cancelIfPerTickFails(boolean cancelIfPerTickFails) {
         this.cancelIfPerTickFails = cancelIfPerTickFails;
         return this;

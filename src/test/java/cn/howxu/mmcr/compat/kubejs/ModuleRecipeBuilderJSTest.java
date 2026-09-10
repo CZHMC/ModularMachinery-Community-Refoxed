@@ -147,6 +147,40 @@ class ModuleRecipeBuilderJSTest {
     }
 
     @Test
+    void energy_input_and_output_shortcuts_emit_per_tick_requirements_with_correct_io() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+
+        MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:energy_io_shortcuts")
+                .machine(machineId.toString())
+                .iFEt(40)
+                .oFEt(20)
+                .createObject();
+
+        assertThat(recipe.requirements()).filteredOn(EnergyRequirement.class::isInstance)
+                .map(EnergyRequirement.class::cast)
+                .containsExactlyInAnyOrder(
+                        new EnergyRequirement(RecipeModifier.IOType.INPUT, 40),
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 20));
+    }
+
+    @Test
+    void energy_output_shortcut_alone_produces_output_directed_requirement() {
+        Identifier machineId = MMCR.id("module_machine");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).build());
+
+        MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:energy_output_alone")
+                .machine(machineId.toString())
+                .oFEt(75)
+                .createObject();
+
+        assertThat(recipe.requirements()).singleElement().isInstanceOfSatisfying(EnergyRequirement.class, energy -> {
+            assertThat(energy.io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+            assertThat(energy.fePerTick()).isEqualTo(75);
+        });
+    }
+
+    @Test
     void create_object_matches_shared_json_parser_for_complete_recipe_values() {
         Identifier machineId = MMCR.id("module_machine");
         Identifier recipeId = MMCR.id("shared_parser_recipe");
