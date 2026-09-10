@@ -301,6 +301,13 @@
   "jade.mmcr.machine_controller.structure.unformed": "Unformed",
   "jade.mmcr.machine_controller.threads": "Multithreading",
   "jade.mmcr.machine_controller.threads.value": "%s / %s",
+  "jade.mmcr.ae2_input_interface": "AE2 ME Network",
+  "jade.mmcr.ae2_input_interface.online": "Online",
+  "jade.mmcr.ae2_input_interface.active": "Active",
+  "jade.mmcr.ae2_input_interface.offline": "Offline",
+  "jade.mmcr.ae2_input_interface.powered": "Powered: %s",
+  "jade.mmcr.ae2_input_interface.yes": "Yes",
+  "jade.mmcr.ae2_input_interface.no": "No",
 
   "jei.mmcr.machine_recipe": "Machine Recipe",
   "jei.mmcr.machine_recipe.component_constraints": "Additional component requirements apply",

@@ -301,6 +301,13 @@
   "jade.mmcr.machine_controller.structure.unformed": "未成型",
   "jade.mmcr.machine_controller.threads": "多线程",
   "jade.mmcr.machine_controller.threads.value": "%s / %s",
+  "jade.mmcr.ae2_input_interface": "AE2 ME 网络",
+  "jade.mmcr.ae2_input_interface.online": "已联网",
+  "jade.mmcr.ae2_input_interface.active": "工作中",
+  "jade.mmcr.ae2_input_interface.offline": "离线",
+  "jade.mmcr.ae2_input_interface.powered": "供电: %s",
+  "jade.mmcr.ae2_input_interface.yes": "是",
+  "jade.mmcr.ae2_input_interface.no": "否",
 
   "jei.mmcr.machine_recipe": "机器配方",
   "jei.mmcr.machine_recipe.component_constraints": "需要特定数据组件",
