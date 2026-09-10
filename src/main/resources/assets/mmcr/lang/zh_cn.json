@@ -1,5 +1,4 @@
 {
-  "block.mmcr.ae2_me_input_interface": "AE2 ME 输入接口",
   "block.mmcr.basic_casing": "基础机器外壳",
   "block.mmcr.data_storage": "数据存储器",
   "block.mmcr.energy_input_hatch": "普通能量输入仓",
@@ -654,5 +653,8 @@
   "mmcr.unit.chemical": "mB",
   "mmcr.unit.heat": "J",
   "mmcr.unit.heat_capacity": "J/K",
-  "mmcr.unit.temperature": "K"
+  "mmcr.unit.temperature": "K",
+
+  "block.mmcr.ae2_me_input_interface": "ME输入接口",
+  "item.mmcr.ae2_me_input_interface": "ME输入接口"
 }

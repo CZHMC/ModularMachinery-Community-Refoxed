@@ -1,5 +1,4 @@
 {
-  "block.mmcr.ae2_me_input_interface": "AE2 ME Input Interface",
   "block.mmcr.basic_casing": "Basic Machine Casing",
   "block.mmcr.data_storage": "Data Storage",
   "block.mmcr.energy_input_hatch": "Normal Energy Input Hatch",
@@ -654,5 +653,8 @@
   "mmcr.unit.chemical": "mB",
   "mmcr.unit.heat": "J",
   "mmcr.unit.heat_capacity": "J/K",
-  "mmcr.unit.temperature": "K"
+  "mmcr.unit.temperature": "K",
+
+  "block.mmcr.ae2_me_input_interface": "ME Input Interface",
+  "item.mmcr.ae2_me_input_interface": "ME Input Interface"
 }
