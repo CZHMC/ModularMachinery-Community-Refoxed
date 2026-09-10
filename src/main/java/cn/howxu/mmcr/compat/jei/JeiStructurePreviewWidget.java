@@ -256,6 +256,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         int button = input.getKey().getValue();
         if (button != 0) return false;
         if (preview == null) return false;
+        if (input.isSimulate()) previewDragActive = false;
         if (!input.isSimulate() && previewDragActive) {
             previewDragActive = false;
             boolean inside = insidePreview(mouseX, mouseY);
@@ -281,7 +282,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             return true;
         }
         if (input.isSimulate()) {
-            return insidePreview(mouseX, mouseY);
+            if (!insidePreview(mouseX, mouseY)) return false;
+            boolean handled = preview.mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
+            previewDragActive = handled;
+            return handled;
         }
         if (!insidePreview(mouseX, mouseY)) return false;
         boolean handled = preview.mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
