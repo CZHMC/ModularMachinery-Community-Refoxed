@@ -8,11 +8,11 @@ type: Feature
 
 ---
 
-**Description**
+# **Description**
 What's your idea?
 
-**Reason**
+# **Reason**
 describe the reason for this feature request.
 
-**Some implement**
+# **Some implement**
 If you already have a way to implement the feature, leave here...

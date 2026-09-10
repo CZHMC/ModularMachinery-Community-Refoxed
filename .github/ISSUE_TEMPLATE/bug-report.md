@@ -2,23 +2,23 @@
 name: Bug Report
 about: Create a report to help us improve
 title: "[Bug]"
-labels: bug
+labels: bug, help, question
 assignees: ''
 type: Bug
 
 ---
 
-**Description**
+# **Description**
 What's the bug like?
 
-**How to reproduce**
+# **How to reproduce**
 1. place a item port
 2. link a AE2 storage bus
 3. ....
 4. then ...
 
-**Environment**
+# **Environment**
 Minecraft version / Mod version / relative mods' version
 
-**Additional information**
+# **Additional information**
 screenshots / videos / game saves...
