@@ -175,10 +175,4 @@ public final class AE2InputInterfaceBlockEntity extends IOPortBlockEntity
             Block.popResource(level, worldPosition, stack);
         }
     }
-
-    @Override
-    public void clearContent() {
-        super.clearContent();
-        logic.clearContent();
-    }
 }
