@@ -104,6 +104,24 @@ public final class MachineRecipeBuilder {
     }
     public MachineRecipeBuilder inputEnergy(long fePerTick) { return requirement(new EnergyRequirement(RecipeIo.INPUT, fePerTick)); }
     public MachineRecipeBuilder outputEnergy(long fePerTick) { return requirement(new EnergyRequirement(RecipeIo.OUTPUT, fePerTick)); }
+
+    /**
+     * Alias for {@link #inputEnergy(long)} measured in FE per tick.
+     *
+     * @param fePerTick required energy rate in FE/t
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilder iFEt(long fePerTick) { return inputEnergy(fePerTick); }
+
+    /**
+     * Alias for {@link #outputEnergy(long)} measured in FE per tick.
+     *
+     * @param fePerTick produced energy rate in FE/t
+     * @return this builder
+     * @author howxu <dev@howxu.cn>
+     */
+    public MachineRecipeBuilder oFEt(long fePerTick) { return outputEnergy(fePerTick); }
     public MachineRecipeBuilder outputItem(Item item, int count) { return requirement(ItemRequirement.output(new ItemOutput(item, count))); }
     public MachineRecipeBuilder outputItem(ItemStack stack) { return requirement(ItemRequirement.output(new ItemOutput(stack))); }
     public MachineRecipeBuilder outputItem(ItemStack stack, DataComponentPredicateSet components) { return requirement(ItemRequirement.output(new ItemOutput(stack, components))); }
