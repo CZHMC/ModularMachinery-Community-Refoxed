@@ -191,6 +191,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public void dropContents() {
     }
 
+    /** Hook for hosts with additional inventory-like contents. */
+    public void clearContent() {
+    }
+
     @Override
     public void preRemoveSideEffects(BlockPos pos, BlockState state) {
         super.preRemoveSideEffects(pos, state);
