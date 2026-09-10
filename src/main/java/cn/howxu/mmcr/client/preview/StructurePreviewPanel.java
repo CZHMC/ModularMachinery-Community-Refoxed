@@ -24,15 +24,6 @@ import java.util.Objects;
 public final class StructurePreviewPanel implements AutoCloseable {
     public static final int VISIBLE_SLOT_COUNT = 8;
 
-    private static final float CONTROL_SCALE = 0.9F;
-    private static final int CONTROL_SIZE = Math.round(15 * CONTROL_SCALE);
-    private static final int CONTROL_STEP = CONTROL_SIZE + 4;
-    private static final int UI_X_OFFSET = -3;
-    private static final int CONTROL_Y_OFFSET = -13;
-    private static final float LAYER_TEXT_SCALE = 0.9F;
-    private static final int LAYER_TEXT_Y_OFFSET = -24;
-    private static final int CANDIDATE_STEP = 18;
-
     private final Machine machine;
     private final List<MachineStructureStage> stages;
     private final StructurePreviewCompilation compilation;
@@ -69,10 +60,6 @@ public final class StructurePreviewPanel implements AutoCloseable {
         }
 
         widget.render(graphics, 0, 0, width, height, partialTick, guiOriginX, guiOriginY);
-        graphics.nextStratum();
-        renderControls(graphics, height);
-        renderLayer(graphics, height);
-        renderCandidates(graphics);
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -199,53 +186,6 @@ public final class StructurePreviewPanel implements AutoCloseable {
             schema = completed;
             materials = StructureMaterialSummary.from(completed);
             widget = new StructurePreviewWidget(new StructurePreviewRenderer(completed));
-        }
-    }
-
-    private void renderControls(GuiGraphicsExtractor graphics, int height) {
-        String[] labels = hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
-        for (int index = 0; index < labels.length; index++) {
-            int controlX = UI_X_OFFSET + index * CONTROL_STEP;
-            int controlY = height + CONTROL_Y_OFFSET;
-            graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, 0xFF808080);
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(controlX + CONTROL_SIZE / 2.0F, controlY + CONTROL_SIZE / 2.0F);
-            graphics.pose().scale(CONTROL_SCALE, CONTROL_SCALE);
-            int labelWidth = Minecraft.getInstance().font.width(labels[index]);
-            graphics.text(Minecraft.getInstance().font, Component.literal(labels[index]),
-                    -labelWidth / 2, -Minecraft.getInstance().font.lineHeight / 2, 0xFFFFFFFF, false);
-            graphics.pose().popMatrix();
-        }
-    }
-
-    private void renderLayer(GuiGraphicsExtractor graphics, int height) {
-        int selectedLayer = selectedLayer();
-        List<Integer> layers = schema == null ? List.of() : schema.layers();
-        Component layerText = selectedLayer < 0
-                ? Component.translatable("jei.mmcr.structure_preview.all_layers")
-                : Component.translatable("jei.mmcr.structure_preview.layer", selectedLayer,
-                        layers.indexOf(selectedLayer) + 1, layers.size());
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(LAYER_TEXT_SCALE, LAYER_TEXT_SCALE);
-        int layerTextY = (int) ((height + LAYER_TEXT_Y_OFFSET) / LAYER_TEXT_SCALE);
-        int layerTextX = (int) (UI_X_OFFSET / LAYER_TEXT_SCALE);
-        graphics.text(Minecraft.getInstance().font, layerText, layerTextX, layerTextY, 0xFFFFFFFF, false);
-        if (hasMultipleStages()) {
-            int levelTextX = Minecraft.getInstance().font.width(layerText) + 4;
-            graphics.text(Minecraft.getInstance().font, Component.literal("Level=" + stageNumber()),
-                    (int) ((UI_X_OFFSET + levelTextX) / LAYER_TEXT_SCALE), layerTextY, 0xFFFFFFFF, false);
-        }
-        graphics.pose().popMatrix();
-    }
-
-    private void renderCandidates(GuiGraphicsExtractor graphics) {
-        List<StructurePreviewSchema.Candidate> candidates = selectedCandidates();
-        if (candidates.isEmpty()) return;
-        long timeMillis = System.currentTimeMillis();
-        int visibleCount = Math.min(VISIBLE_SLOT_COUNT, candidates.size());
-        for (int slot = 0; slot < visibleCount; slot++) {
-            StructurePreviewSchema.Candidate candidate = candidateAt(slot, timeMillis);
-            if (candidate != null) graphics.item(candidate.stack(), 0, slot * CANDIDATE_STEP, 0);
         }
     }
 
