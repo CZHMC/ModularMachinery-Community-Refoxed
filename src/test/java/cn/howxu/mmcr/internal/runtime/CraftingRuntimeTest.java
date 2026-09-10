@@ -2,7 +2,17 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.TickFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
@@ -10,12 +20,14 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -29,6 +41,8 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
@@ -38,6 +52,14 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -52,9 +74,11 @@ import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.util.IOType;
 import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -68,6 +92,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -77,6 +102,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -85,9 +111,11 @@ import java.util.List;
 import java.util.Map;
 import java.lang.reflect.Field;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -226,7 +254,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void discard_outputs_removes_item_and_energy_outputs_without_committing_them() {
+    void discard_outputs_removes_completion_outputs_without_undoing_per_tick_energy() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(-1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
         EnergyInputHatchBlockEntity inputEnergy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0));
@@ -253,7 +281,7 @@ class CraftingRuntimeTest {
         assertThat(input.itemStorage().amount(0)).isZero();
         assertThat(inputEnergy.energyStorage().getAmountAsLong()).isZero();
         assertThat(output.itemStorage().amount(0)).isZero();
-        assertThat(outputEnergy.energyStorage().getAmountAsLong()).isZero();
+        assertThat(outputEnergy.energyStorage().getAmountAsLong()).isEqualTo(4L);
     }
 
     @Test
@@ -418,6 +446,110 @@ class CraftingRuntimeTest {
 
         assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(6);
         assertThat(runtime.active()).isTrue();
+    }
+
+    @Test
+    void energyOutputIsCommittedOnEveryRecipeTick() {
+        EnergyOutputHatchBlockEntity energy = RuntimeTestFixtures.energyOutput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_energy_output_per_tick"),
+                MMCR.id("test_cube"), 3, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
+        runtime.tick();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(8L);
+        runtime.tick();
+
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(12L);
+        assertThat(runtime.finishPending()).isTrue();
+        runtime.finish();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(12L);
+    }
+
+    @Test
+    void heatOutputIsCommittedOnEveryRecipeTick() {
+        try (var requirementScope = RequirementHandlerRegistry.openTestScope();
+             var outputScope = OutputRegistry.openTestScope()) {
+            MekanismBridge bridge = MekanismBridgeBootstrap.selectForTesting(true);
+            MekanismBridgeBootstrap.installForTesting(bridge);
+            bridge.registerRecipeTypes(MekanismRecipeTypes.CHEMICAL, MekanismRecipeTypes.HEAT_TEMPERATURE,
+                    MekanismRecipeTypes.HEAT);
+
+            HeatOutputProbePort heat = new HeatOutputProbePort(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), heat);
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_heat_output_per_tick"),
+                    MMCR.id("test_cube"), 3, List.of(LoadedHeatRequirement.outputHeat(5D)),
+                    List.of(new LoadedHeatOutput(5D)), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+            double initialHeat = heat.heatCapacitor().getHeat();
+
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+            runtime.tick();
+            assertThat(heat.heatCapacitor().getHeat()).isEqualTo(initialHeat + 5D);
+            runtime.tick();
+            assertThat(heat.heatCapacitor().getHeat()).isEqualTo(initialHeat + 10D);
+            runtime.tick();
+
+            assertThat(heat.heatCapacitor().getHeat()).isEqualTo(initialHeat + 15D);
+            assertThat(runtime.finishPending()).isTrue();
+            runtime.finish();
+            assertThat(heat.heatCapacitor().getHeat()).isEqualTo(initialHeat + 15D);
+        } finally {
+            MekanismBridgeBootstrap.resetForTesting();
+        }
+    }
+
+    @Test
+    void afterInputsFailureDoesNotRepeatACommittedPerTickOutput() {
+        EnergyOutputHatchBlockEntity energy = RuntimeTestFixtures.energyOutput(new BlockPos(1, 0, 0));
+        FailOnceTickCapability capability = new FailOnceTickCapability(CapabilityTickPhase.AFTER_INPUTS, false);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, new TickCapabilityHost(capability), BlockPos.ZERO, BlockPos.ZERO,
+                        (String) null),
+                new ProcessingComponent(new MachineComponent(energy.kind(), energy.ioType()), energy,
+                        energy.getBlockPos(), energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_after_inputs_failure"),
+                MMCR.id("test_cube"), 2, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
+        assertThat(runtime.tickCount()).isEqualTo(1);
+        runtime.tick();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(8L);
+        assertThat(runtime.finishPending()).isTrue();
+    }
+
+    @Test
+    void finalAfterRecipeExceptionMovesToFinishWithoutRepeatingPerTickOutput() {
+        EnergyOutputHatchBlockEntity energy = RuntimeTestFixtures.energyOutput(new BlockPos(1, 0, 0));
+        FailOnceTickCapability capability = new FailOnceTickCapability(CapabilityTickPhase.AFTER_RECIPE, true);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, new TickCapabilityHost(capability), BlockPos.ZERO, BlockPos.ZERO,
+                        (String) null),
+                new ProcessingComponent(new MachineComponent(energy.kind(), energy.ioType()), energy,
+                        energy.getBlockPos(), energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_final_after_recipe_failure"),
+                MMCR.id("test_cube"), 1, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4)));
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
+        assertThat(runtime.finishPending()).isTrue();
+        runtime.finish();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(4L);
     }
 
     @Test
@@ -1241,6 +1373,104 @@ class CraftingRuntimeTest {
             return ((MachineControllerRuntime) field.get(controller)).craftingRuntime();
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to access controller runtime", exception);
+        }
+    }
+
+    private static final class HeatOutputProbePort extends HeatPortBlockEntity {
+        private final BasicHeatCapacitor testHeatCapacitor;
+
+        private HeatOutputProbePort(BlockPos pos) {
+            super(ModBlockEntities.BES.get("item_output_bus").get(), pos,
+                    ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState(), PortKinds.ITEM_OUTPUT);
+            testHeatCapacitor = BasicHeatCapacitor.create(300D, () -> 0D, () -> { });
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.OUTPUT;
+        }
+
+        @Override
+        public IOPortKind kind() {
+            return PortKinds.ITEM_OUTPUT;
+        }
+
+        @Override
+        public BasicHeatCapacitor heatCapacitor() {
+            return testHeatCapacitor;
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(List.of(new HeatPortCapability(heatCapacitor(), IOType.OUTPUT)));
+        }
+    }
+
+    private static final class FailOnceTickCapability implements MachineCapability, TickFacet {
+        private final CapabilityTickPhase failurePhase;
+        private final boolean throwException;
+        private final AtomicBoolean failNext = new AtomicBoolean(true);
+        private final CapabilityType type = new CapabilityType(MMCR.id("runtime_phase_failure"));
+        private final CapabilityView view = new CapabilityView() {
+            @Override
+            public CapabilityType type() {
+                return FailOnceTickCapability.this.type;
+            }
+
+            @Override
+            public CapabilityDirections directions() {
+                return CapabilityDirections.input();
+            }
+
+            @Override
+            public Set<Class<? extends CapabilityFacet>> facets() {
+                return Set.of(TickFacet.class);
+            }
+        };
+
+        private FailOnceTickCapability(CapabilityTickPhase failurePhase, boolean throwException) {
+            this.failurePhase = failurePhase;
+            this.throwException = throwException;
+        }
+
+        @Override
+        public CapabilityType type() {
+            return type;
+        }
+
+        @Override
+        public CapabilityView view() {
+            return view;
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            return transaction -> CapabilityResult.successful();
+        }
+
+        @Override
+        public CapabilityTickResult plan(CapabilityTickContext context) {
+            if (context.phase() == failurePhase && failNext.compareAndSet(true, false)) {
+                if (throwException) throw new IllegalStateException("expected tick phase exception");
+                return new CapabilityTickResult(List.of(), new ExecutionStatus(MMCR.id("runtime_phase_failure"),
+                        StatusSeverity.BLOCKED, type.id(), Map.of("reason", "per_tick")), false);
+            }
+            return CapabilityTickResult.empty();
+        }
+    }
+
+    private static final class TickCapabilityHost extends BlockEntity implements CapabilityHost {
+        private final CapabilitySnapshot snapshot;
+
+        private TickCapabilityHost(MachineCapability capability) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
+                    ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+            snapshot = new CapabilitySnapshot(List.of(capability));
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return snapshot;
         }
     }
 

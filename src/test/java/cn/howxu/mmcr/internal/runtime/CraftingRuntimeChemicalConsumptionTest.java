@@ -79,6 +79,25 @@ class CraftingRuntimeChemicalConsumptionTest {
         assertThat(retained).containsExactly(1);
     }
 
+    @Test
+    void restoredChemicalInputRemainsConsumedAtStart() throws Exception {
+        MachineRequirement chemicalInput = LoadedChemicalRequirement.input(
+                ChemicalIngredient.chemical(Identifier.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L));
+        MachineRecipe recipe = new MachineRecipe(MMCR.id("restore_chemical_input"), MMCR.id("test_cube"), 1,
+                List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+        cn.howxu.mmcr.api.recipe.ActiveMachineRecipe activeRecipe =
+                new cn.howxu.mmcr.api.recipe.ActiveMachineRecipe(recipe, 1L);
+        activeRecipe.setInputConsumptionPlan(
+                new cn.howxu.mmcr.api.recipe.ActiveMachineRecipe.InputConsumptionPlan(List.of(1)));
+        CraftingRuntime runtime = (CraftingRuntime) createBareRuntime();
+
+        runtime.restore(activeRecipe, null, 0L, 0L, 0L, 0L);
+
+        @SuppressWarnings("unchecked")
+        Set<Integer> consumed = (Set<Integer>) readField(runtime, "consumedAtStart");
+        assertThat(consumed).containsExactly(0);
+    }
+
     private static Object createBareRuntime(cn.howxu.mmcr.api.recipe.ActiveMachineRecipe activeRecipe)
             throws Exception {
         cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity controller =

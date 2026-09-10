@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -95,7 +96,8 @@ public final class ActiveMachineRecipe {
                 MachineRequirement requirement = requirements.get(index);
                 if (requirement == null || requirement.io() == null) return false;
                 boolean consumable = requirement.io() == RecipeModifier.IOType.INPUT
-                        && (requirement instanceof ItemRequirement || requirement instanceof FluidRequirement);
+                        && (requirement instanceof ItemRequirement || requirement instanceof FluidRequirement
+                        || requirement instanceof LoadedChemicalRequirement);
                 if (!consumable && consumedInputBatches.get(index) != 0) return false;
             }
             return true;

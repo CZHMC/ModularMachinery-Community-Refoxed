@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
@@ -16,6 +17,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -27,6 +29,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -38,6 +41,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -164,18 +168,28 @@ public final class CraftingRuntime {
             flushScreenTextReplacements(machineContext.screenText());
         }
         CraftingContext context = context(runtime);
-        PlanningResult result = context.planInputs(effectiveRequirements(), activeRecipe.getParallelism(),
-                consumedAtStart, retainedInputs);
+        PlanningResult result = planPerTick(context);
         CraftingPlan tickPlan = result.plan();
         if (!result.successful() || tickPlan == null || tickPlan.parallelism() < activeRecipe.getParallelism()) {
             return waiting(result.failure());
         }
-        if (!tickPlan.commit()) return waiting(tickPlan.failure());
-        if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, machineContext, recipeTickContext)) return status;
+        try {
+            if (!tickPlan.commit()) return waiting(tickPlan.failure());
+        } catch (RuntimeException exception) {
+            logTickFailure("commit", runtime, activeRecipe.getRecipe(), exception);
+            return waiting(failure("per_tick"));
+        }
+        if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, machineContext, recipeTickContext)) {
+            if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
+            return status;
+        }
 
         int gameTime = currentGameTime();
         if (activeRecipe.needsFinishCommit()) {
-            if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) return status;
+            if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) {
+                if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
+                return status;
+            }
             activeRecipe.beginFinishCommit();
             status = CraftingStatus.working();
             return status;
@@ -246,7 +260,7 @@ public final class CraftingRuntime {
         }
         PlanningResult result;
         try {
-            result = context.planOutputRequirements(effectiveRequirements(), finishContext.outputs(),
+            result = context.planOutputRequirements(finishRequirements(), finishOutputs(finishContext),
                     activeRecipe.getParallelism(), activeRecipe.getRecipe().allowPartialOutputs());
         } catch (IllegalArgumentException exception) {
             logCallbackFailure("beforeFinish.output_validation", runtime, activeRecipe.getRecipe(), exception);
@@ -298,10 +312,18 @@ public final class CraftingRuntime {
 
     private boolean executeTickPhase(CapabilityTickPhase phase, MachineBehaviorContext machineContext,
                                      RecipeTickContext recipeTickContext) {
-        CapabilityTickResult result = handleCapabilityTickResult(components.executeTickPhase(new CapabilityTickContext(
-                capabilityGameTime(), phase,
-                recipeTickContext, activeRecipe.getParallelism(), new CapabilitySnapshot(components.capabilities()),
-                machineContext)));
+        CapabilityTickResult result;
+        try {
+            result = handleCapabilityTickResult(components.executeTickPhase(new CapabilityTickContext(
+                    capabilityGameTime(), phase,
+                    recipeTickContext, activeRecipe.getParallelism(), new CapabilitySnapshot(components.capabilities()),
+                    machineContext)));
+        } catch (RuntimeException exception) {
+            MMCR.LOG.warn("Machine recipe tick capability phase failed: phase={} controller={}", phase,
+                    controller.getBlockPos(), exception);
+            handleCapabilityTickResult(new CapabilityTickResult(List.of(), failure("per_tick"), false));
+            return false;
+        }
         if (result.failure() == null) return true;
         return false;
     }
@@ -450,7 +472,8 @@ public final class CraftingRuntime {
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type()))
+            if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type())
+                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()))
                     || requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (restored.inputConsumptionPlan().consumedBatches(index) > 0) consumed.add(index);
             else retained.add(index);
@@ -582,6 +605,51 @@ public final class CraftingRuntime {
         return new CraftingContext(new CapabilitySnapshot(components.capabilities()), contextModifiers(runtime));
     }
 
+    private PlanningResult planPerTick(CraftingContext context) {
+        List<MachineRequirement> requirements = new ArrayList<>();
+        Map<Integer, OutputPolicy> outputPolicies = new LinkedHashMap<>();
+        List<MachineRequirement> source = effectiveRequirements();
+        for (int index = 0; index < source.size(); index++) {
+            MachineRequirement requirement = source.get(index);
+            if (requirement.io() == RecipeModifier.IOType.INPUT) {
+                if (consumedAtStart.contains(index)) continue;
+                if (retainedInputs.contains(index) && requirement instanceof ItemRequirement item
+                        && item.consumeChance() > 0F) {
+                    requirement = new ItemRequirement(item.io(), item.item(), item.count(), item.stack(null),
+                            item.chance(), item.tags(), item.components(), 0F);
+                }
+                requirements.add(requirement);
+            } else if (isPerTickOutput(requirement)) {
+                outputPolicies.put(requirements.size(), activeRecipe.getRecipe().allowPartialOutputs()
+                        ? OutputPolicy.ALLOW_PARTIAL : OutputPolicy.REQUIRE_FULL);
+                requirements.add(requirement);
+            }
+        }
+        return context.planRequirements(requirements, activeRecipe.getParallelism(), outputPolicies);
+    }
+
+    private List<MachineRequirement> finishRequirements() {
+        return effectiveRequirements().stream()
+                .filter(requirement -> !isPerTickOutput(requirement))
+                .toList();
+    }
+
+    private List<MachineOutput> finishOutputs(RecipeFinishContext finishContext) {
+        return finishContext.outputs().stream()
+                .filter(output -> !isPerTickOutput(output))
+                .toList();
+    }
+
+    private static boolean isPerTickOutput(MachineRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.OUTPUT
+                && (requirement instanceof EnergyRequirement
+                || MekanismRecipeTypes.HEAT.equals(requirement.type().id()));
+    }
+
+    private static boolean isPerTickOutput(MachineOutput output) {
+        return MekanismRecipeTypes.HEAT.equals(output.outputType().id());
+    }
+
     private RecipeBehavior recipeBehavior(ControllerRuntimeSnapshot runtime) {
         MachineBehavior behavior = runtime.structure().machine() == null
                 ? runtime.structure().configuredMachine() == null ? null : runtime.structure().configuredMachine().behavior()
@@ -596,8 +664,14 @@ public final class CraftingRuntime {
     }
 
     private void logFinishFailure(String phase, ControllerRuntimeSnapshot runtime, MachineRecipe recipe,
-                                  RuntimeException exception) {
+                                   RuntimeException exception) {
         MMCR.LOG.warn("Machine recipe finish failed: phase={} machine={} recipe={} controller={}", phase,
+                runtime.machineId(), recipe.id(), controller.getBlockPos(), exception);
+    }
+
+    private void logTickFailure(String phase, ControllerRuntimeSnapshot runtime, MachineRecipe recipe,
+                                 RuntimeException exception) {
+        MMCR.LOG.warn("Machine recipe tick failed: phase={} machine={} recipe={} controller={}", phase,
                 runtime.machineId(), recipe.id(), controller.getBlockPos(), exception);
     }
 
