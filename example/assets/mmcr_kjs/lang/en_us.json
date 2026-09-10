@@ -66,5 +66,5 @@
 
     "block.mmcr.kubejs_sps_controller": "SPS Controller",
     "item.mmcr.kubejs_sps_controller": "SPS Controller",
-    "machine.mmcr_kubejs.kubejs_sps_machine": "SPS"
+    "machine.mmcr_kubejs.kubejs_sps": "SPS"
 }
