@@ -114,6 +114,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 formattedAmount, name));
     }
 
+    // for mekanism
     private static void renderChemical(ITooltip tooltip, LoadedChemicalOutput chemical, long amount) {
         if (amount <= 0L) return;
         Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
@@ -125,11 +126,12 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 : ReadableNumber.formatForSlot(amount, 3, "B");
         Component name = ComponentUtils.wrapInSquareBrackets(value.getTextComponent())
                 .withStyle(ChatFormatting.WHITE);
-        var icon = new JadeChemicalElement(value.getIcon(), value.getTint(), 16);
-        tooltip.add(icon.offset(0, -1));
+        // here get an icon
+        var icon = new JadeChemicalElement(value.getIcon(), value.getTint(), 10,8);
         try {
             int lineHeight = DisplayHelper.font().lineHeight;
             icon.setFreeSpace(lineHeight + 1, lineHeight - 1);
+            tooltip.add(icon.offset(0, -1));
         } catch (RuntimeException ignored) {
             // Unit tests have no client font, but Jade can still lay out the default-sized icon.
         }

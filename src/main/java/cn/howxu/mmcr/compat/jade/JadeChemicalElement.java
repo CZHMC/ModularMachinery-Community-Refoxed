@@ -21,12 +21,22 @@ public final class JadeChemicalElement extends ProgressOverlayElement {
 
     private final Identifier spriteLocation;
     private final int tint;
+    private int width;
+    private int height;
 
+    // 方形
     public JadeChemicalElement(Identifier spriteLocation, int tint, int size) {
         this.spriteLocation = spriteLocation;
         this.tint = tint;
-        width = size;
-        height = size;
+        this.width = size;
+        this.height = size;
+    }
+
+    public JadeChemicalElement(Identifier spriteLocation, int tint, int width, int height) {
+        this.spriteLocation = spriteLocation;
+        this.tint = tint;
+        this.width = width;
+        this.height = height;
     }
 
     @Override
@@ -45,8 +55,8 @@ public final class JadeChemicalElement extends ProgressOverlayElement {
         RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
         int drawX = floatingRect == null ? getX() : (int) floatingRect.getX();
         int drawY = floatingRect == null ? getY() : (int) floatingRect.getY();
-        int drawW = floatingRect == null ? width : (int) floatingRect.getWidth();
-        int drawH = floatingRect == null ? height : (int) floatingRect.getHeight();
+        int drawW = floatingRect == null ? this.width : (int) floatingRect.getWidth();
+        int drawH = floatingRect == null ? this.height : (int) floatingRect.getHeight();
         graphics.blitSprite(pipeline, sprite, drawX, drawY, drawW, drawH, tint);
     }
 }

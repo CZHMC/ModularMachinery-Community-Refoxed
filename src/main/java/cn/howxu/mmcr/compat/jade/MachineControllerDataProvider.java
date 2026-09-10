@@ -25,6 +25,7 @@ public enum MachineControllerDataProvider implements IServerDataProvider<BlockAc
         return MachineControllerComponentProvider.UID;
     }
 
+    @Deprecated // many have been no longer used
     @Override
     public void appendServerData(CompoundTag data, BlockAccessor accessor) {
         if (!(accessor.getTarget() instanceof MachineControllerBlockEntity controller)) return;
