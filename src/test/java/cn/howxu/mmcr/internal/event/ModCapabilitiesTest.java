@@ -49,9 +49,9 @@ class ModCapabilitiesTest {
 
     @Test
     void selects_external_exposures_from_generic_port_bindings() {
-        CapabilityBinding binding = new CapabilityBinding(new CapabilityType(MMCR.id("external_test")),CapabilityDirections.input(),context -> null, PortTierPolicy.always(),
+        CapabilityBinding binding = new CapabilityBinding(new CapabilityType(MMCR.id("external_test")),CapabilityDirections.input(),_ -> null, PortTierPolicy.always(),
                 new CapabilityBinding.ExternalExposure<>(MMCR.id("external_test_native"), String.class,
-                        (host, ioType, side) -> "exposed"));
+                        (_, _, _) -> "exposed"));
         PortDefinition definition = PortDefinition.of(MMCR.id("external_test_port"), binding);
         IOPortKind kind = new IOPortKind() {
             @Override
@@ -66,7 +66,7 @@ class ModCapabilitiesTest {
 
             @Override
             public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-                return (pos, state) -> null;
+                return (_, _) -> null;
             }
 
             @Override
@@ -82,7 +82,7 @@ class ModCapabilitiesTest {
     void native_resource_provider_exposes_resource_facet_without_transfer_facet() {
         ResourceOnlyCapability capability = new ResourceOnlyCapability();
         CapabilityBinding binding = new CapabilityBinding(capability.type(), CapabilityDirections.input(),
-                context -> capability, PortTierPolicy.always());
+                _ -> capability, PortTierPolicy.always());
         ResourceOnlyPort port = new ResourceOnlyPort(binding, capability);
         Level level = LevelStub.createWithBlockEntities(List.of(port));
         port.setLevel(level);
@@ -125,7 +125,7 @@ class ModCapabilitiesTest {
     private static final class ResourceOnlyCapability implements MachineCapability, ResourceFacet<ItemResource> {
         private static final CapabilityType TYPE = new CapabilityType(MMCR.id("resource_only_test"));
         private final ResourceStorage<ItemResource> storage = new LongResourceStorage<>(ItemResource.class, 1, 64L,
-                resource -> resource.isEmpty(), () -> {});
+                ItemResource::isEmpty, () -> {});
 
         @Override public CapabilityType type() { return TYPE; }
         @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
@@ -139,7 +139,7 @@ class ModCapabilitiesTest {
             };
         }
         @Override public CapabilityOperation prepare(CapabilityRequest request) {
-            return transaction -> CapabilityResult.successful();
+            return _ -> CapabilityResult.successful();
         }
     }
 }

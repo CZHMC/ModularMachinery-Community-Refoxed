@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class PortDefinitionRegistryTest {
-    private static final CapabilityFactory FACTORY = context -> null;
+    private static final CapabilityFactory FACTORY = _ -> null;
 
     @BeforeEach
     void openRegistry() {
@@ -96,12 +96,12 @@ class PortDefinitionRegistryTest {
     @Test
     void retains_a_custom_binding_factory_and_typed_external_exposure() {
         AtomicBoolean factoryCalled = new AtomicBoolean();
-        CapabilityFactory factory = context -> {
+        CapabilityFactory factory = _ -> {
             factoryCalled.set(true);
             return null;
         };
         ExternalExposure<String> exposure = new ExternalExposure<>(id("native"), String.class,
-                (host, ioType, side) -> "exposed");
+                (_, _, _) -> "exposed");
         CapabilityBinding binding = new CapabilityBinding(
                 new CapabilityType(MMCR.id("custom")), CapabilityDirections.input(), factory, PortTierPolicy.always(), exposure);
         PortDefinitionRegistry.register(PortDefinition.of(id("custom"), binding));
@@ -126,7 +126,7 @@ class PortDefinitionRegistryTest {
                 PortKinds.ITEM_INPUT.entityFactory(), definition);
 
         assertThat(kind.definition()).isSameAs(definition);
-        assertThat(kind.bindings()).extracting(binding -> binding.type())
+        assertThat(kind.bindings()).extracting(CapabilityBinding::type)
                 .containsExactly(item.type(), fluid.type(), gas.type());
     }
 
@@ -185,7 +185,7 @@ class PortDefinitionRegistryTest {
     }
 
     private static PortTierPolicy tierAtLeast(int minimum) {
-        return (binding, tier) -> tier >= minimum;
+        return (_, tier) -> tier >= minimum;
     }
 
     private static Identifier id(String path) {

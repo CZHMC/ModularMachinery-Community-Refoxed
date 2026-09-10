@@ -131,7 +131,7 @@ class RecipeOutputComponentProviderTest {
         List<TooltipCall> calls = new ArrayList<>();
         ITooltip tooltip = (ITooltip) Proxy.newProxyInstance(
                 ITooltip.class.getClassLoader(), new Class<?>[]{ITooltip.class},
-                (proxy, method, args) -> {
+                (_, method, args) -> {
                     if (args == null || args.length != 1) return null;
                     if (args[0] instanceof Component || args[0] instanceof LayoutElement) {
                         calls.add(new TooltipCall(method.getName(), args[0]));

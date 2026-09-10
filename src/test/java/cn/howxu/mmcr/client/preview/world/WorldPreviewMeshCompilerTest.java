@@ -158,7 +158,10 @@ class WorldPreviewMeshCompilerTest {
         List<String> closed = new ArrayList<>();
         assertThatThrownBy(() -> WorldPreviewMeshCompiler.closeResources(List.of(
                 () -> closed.add("mesh"),
-                () -> { closed.add("builder"); throw new IllegalStateException("close failure"); },
+                () -> {
+                    closed.add("builder");
+                    throw new IllegalStateException("close failure");
+                },
                 () -> closed.add("remaining"))))
                 .isInstanceOf(IllegalStateException.class);
 
@@ -179,11 +182,12 @@ class WorldPreviewMeshCompilerTest {
     }
 
     private static MeshData nonEmptyMeshData() {
-        var buffer = new ByteBufferBuilder(64);
-        buffer.reserve(1);
-        return new MeshData(Objects.requireNonNull(buffer.build()),
-                new MeshData.DrawState(DefaultVertexFormat.BLOCK, 1, 0, VertexFormat.Mode.QUADS,
-                        VertexFormat.IndexType.SHORT));
+        try (var buffer = new ByteBufferBuilder(64)) {
+            buffer.reserve(1);
+            return new MeshData(Objects.requireNonNull(buffer.build()),
+                    new MeshData.DrawState(DefaultVertexFormat.BLOCK, 1, 0, VertexFormat.Mode.QUADS,
+                            VertexFormat.IndexType.SHORT));
+        }
     }
 
     private static MultiblockPreviewSnapshot.Entry entry(int y, Block block) {
