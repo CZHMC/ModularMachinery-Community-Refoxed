@@ -71,7 +71,7 @@ public abstract class AE2ResourceStorage<R> implements ResourceStorage<R> {
     @Override
     public long insert(int slot, R resource, long amount, TransactionContext transaction) {
         AEKey key = checkedKey(slot, resource, amount);
-        if (amount == 0L || !inventory.isAllowedIn(slot, key)) return 0L;
+        if (!inventory.canInsert() || amount == 0L || !inventory.isAllowedIn(slot, key)) return 0L;
 
         AEKey current = inventory.getKey(slot);
         if (current != null && !current.equals(key)) return 0L;
@@ -90,7 +90,7 @@ public abstract class AE2ResourceStorage<R> implements ResourceStorage<R> {
     @Override
     public long extract(int slot, R resource, long amount, TransactionContext transaction) {
         AEKey key = checkedKey(slot, resource, amount);
-        if (amount == 0L || !inventory.isAllowedIn(slot, key)) return 0L;
+        if (!inventory.canExtract() || amount == 0L || !inventory.isAllowedIn(slot, key)) return 0L;
 
         AEKey current = inventory.getKey(slot);
         if (current == null || !current.equals(key)) return 0L;

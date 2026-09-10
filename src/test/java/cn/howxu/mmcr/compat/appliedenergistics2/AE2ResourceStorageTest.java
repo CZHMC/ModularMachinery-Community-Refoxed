@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.stacks.AEFluidKey;
+import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.AEKeySlotFilter;
@@ -52,6 +53,7 @@ class AE2ResourceStorageTest {
             assertThat(storage.insert(0, iron, 4L, transaction)).isEqualTo(4L);
         }
         assertThat(storage.amount(0)).isZero();
+        assertThat(inventory.getStack(0)).isNull();
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 4L, transaction)).isEqualTo(4L);
@@ -114,6 +116,34 @@ class AE2ResourceStorageTest {
     }
 
     @Test
+    void insertRespectsInventoryCanInsertPermission() {
+        GenericStackInv inventory = new DirectionalInventory(false, true);
+        AE2ItemResourceStorage items = new AE2ItemResourceStorage(inventory);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(items.insert(0, ItemResource.of(Items.IRON_INGOT), 1L, transaction)).isZero();
+            transaction.commit();
+        }
+
+        assertThat(inventory.getStack(0)).isNull();
+    }
+
+    @Test
+    void extractRespectsInventoryCanExtractPermission() {
+        GenericStackInv inventory = new DirectionalInventory(true, false);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        inventory.setStack(0, new GenericStack(AEItemKey.of(iron), 3L));
+        AE2ItemResourceStorage items = new AE2ItemResourceStorage(inventory);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(items.extract(0, iron, 1L, transaction)).isZero();
+            transaction.commit();
+        }
+
+        assertThat(items.amount(0)).isEqualTo(3L);
+    }
+
+    @Test
     void wrongKeyInInventoryDoesNotBecomeAnItemResource() {
         GenericStackInv inventory = inventory(1);
         inventory.setStack(0, new GenericStack(AEFluidKey.of(Fluids.WATER), 1L));
@@ -130,6 +160,27 @@ class AE2ResourceStorageTest {
         private FilteredInventory(AEKeySlotFilter filter) {
             super(Set.of(AEKeyType.items(), AEKeyType.fluids()), null, Mode.STORAGE, 1);
             setFilter(filter);
+        }
+    }
+
+    private static final class DirectionalInventory extends GenericStackInv {
+        private final boolean canInsert;
+        private final boolean canExtract;
+
+        private DirectionalInventory(boolean canInsert, boolean canExtract) {
+            super(Set.of(AEKeyType.items(), AEKeyType.fluids()), null, Mode.STORAGE, 1);
+            this.canInsert = canInsert;
+            this.canExtract = canExtract;
+        }
+
+        @Override
+        public boolean canInsert() {
+            return canInsert;
+        }
+
+        @Override
+        public boolean canExtract() {
+            return canExtract;
         }
     }
 }
