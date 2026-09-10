@@ -168,6 +168,10 @@ public final class BlueprintScreen extends Screen {
         return (mouse - origin) / scale;
     }
 
+    static double previewMouse(double mouse, int origin) {
+        return mouse - origin;
+    }
+
     private Button symbolButton(String symbol, BlueprintRect rect, Runnable action) {
         return Button.builder(Component.literal(symbol), button -> action.run())
                 .bounds(rect.x(), rect.y(), rect.width(), rect.height()).build();
@@ -198,8 +202,8 @@ public final class BlueprintScreen extends Screen {
         graphics.pose().pushMatrix();
         graphics.pose().translate(currentLayout.left(), currentLayout.top());
         graphics.pose().scale(currentLayout.scale(), currentLayout.scale());
-        int infoX = currentLayout.info().x() - currentLayout.left();
-        int infoY = currentLayout.info().y() - currentLayout.top();
+        int infoX = (int) Math.round(localMouse(currentLayout.info().x(), currentLayout.left(), currentLayout.scale()));
+        int infoY = (int) Math.round(localMouse(currentLayout.info().y(), currentLayout.top(), currentLayout.scale()));
         graphics.text(font, title, infoX + 4, infoY + 4, TEXT_COLOR, false);
         int selectedLayer = panel.selectedLayer();
         Component layer = selectedLayer < 0
@@ -269,12 +273,12 @@ public final class BlueprintScreen extends Screen {
 
     private double previewX(double mouseX) {
         BlueprintLayout currentLayout = Objects.requireNonNull(layout, "screen not initialized");
-        return localMouse(mouseX, currentLayout.preview().x(), currentLayout.scale());
+        return previewMouse(mouseX, currentLayout.preview().x());
     }
 
     private double previewY(double mouseY) {
         BlueprintLayout currentLayout = Objects.requireNonNull(layout, "screen not initialized");
-        return localMouse(mouseY, currentLayout.preview().y(), currentLayout.scale());
+        return previewMouse(mouseY, currentLayout.preview().y());
     }
 
     private static BlueprintRect scaledRect(int left, int top, int x, int y, int width, int height, float scale) {

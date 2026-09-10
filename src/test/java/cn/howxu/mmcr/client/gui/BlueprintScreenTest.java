@@ -31,4 +31,18 @@ class BlueprintScreenTest {
     void localMouseInvertsTheLayoutScale() {
         assertThat(BlueprintScreen.localMouse(130.0, 100, 0.5F)).isEqualTo(60.0);
     }
+
+    @Test
+    void previewMouseUsesTheActualScaledViewportCoordinates() {
+        BlueprintLayout layout = BlueprintScreen.layoutFor(220, 140, false);
+
+        assertThat(BlueprintScreen.previewMouse(
+                layout.preview().x() + layout.preview().width() - 1.0,
+                layout.preview().x()))
+                .isEqualTo(layout.preview().width() - 1.0);
+        assertThat(BlueprintScreen.previewMouse(
+                layout.preview().y() + layout.preview().height() - 1.0,
+                layout.preview().y()))
+                .isEqualTo(layout.preview().height() - 1.0);
+    }
 }
