@@ -189,6 +189,8 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().heatPortExchangesHeatWithAdjacentMekHandler(helper));
         register(event, "mekanism_formed_port_reflects_texture_change", 100,
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
+        register(event, "ae2_me_input_interface", 200,
+                helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
