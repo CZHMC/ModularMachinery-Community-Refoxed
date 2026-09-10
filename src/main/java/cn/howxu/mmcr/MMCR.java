@@ -1,6 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2BridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -31,6 +32,7 @@ public class MMCR {
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
     public MMCR(IEventBus modBus, ModContainer modContainer) {
+        AE2BridgeBootstrap.bootstrap();
         MekanismBridgeBootstrap.bootstrap();
         MekanismRecipeTypes.register();
         PublicApiBootstrap.begin();
