@@ -61,10 +61,22 @@ class AE2InputInterfaceKindTest {
         AE2InputInterfaceBlockEntity entity = AE2InputInterfaceKind.INSTANCE.entityFactory()
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
 
+        assertThat(entity.kind()).isSameAs(AE2InputInterfaceKind.INSTANCE);
+        assertThat(entity.ioType()).isEqualTo(IOType.INPUT);
         assertThat(entity.itemStorage().reservationIdentity())
                 .isSameAs(entity.fluidStorage().reservationIdentity());
-        assertThat(entity.capabilitySnapshot().capabilities())
-                .allSatisfy(capability -> assertThat(capability.facet(TransferFacet.class)).isEmpty());
+        var capabilities = entity.capabilitySnapshot().capabilities();
+        assertThat(capabilities).hasSize(2)
+                .extracting(capability -> capability.type().id())
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(capabilities).allSatisfy(capability -> {
+            assertThat(capability.directions().supports(IOType.INPUT)).isTrue();
+            assertThat(capability.directions().supports(IOType.OUTPUT)).isFalse();
+            assertThat(capability.view().type()).isEqualTo(capability.type());
+            assertThat(capability.view().directions().supports(IOType.INPUT)).isTrue();
+            assertThat(capability.view().directions().supports(IOType.OUTPUT)).isFalse();
+            assertThat(capability.facet(TransferFacet.class)).isEmpty();
+        });
     }
 
     private static boolean ae2KeyTypesAreInitialized() {
