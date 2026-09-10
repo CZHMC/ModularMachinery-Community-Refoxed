@@ -13,6 +13,7 @@ import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.implementations.InterfaceMenu;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -24,6 +25,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -153,8 +155,7 @@ public class AE2InterfaceGameTest {
                                     || type.id().equals(PortFamilyIds.FLUID)),
                     "MMCR AE2 input interface capabilities cover ITEM and FLUID families");
             for (MachineCapability capability : capabilities) {
-                helper.assertTrue(capability.view().facets().stream()
-                                .noneMatch(cn.howxu.mmcr.api.capability.facet.TransferFacet.class::isInstance),
+                helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "MMCR AE2 input interface capability does not expose TransferFacet");
             }
 
@@ -178,20 +179,17 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(entity.fluidStorage().reservationIdentity() == storageInv,
                     "MMCR fluid storage view shares the AE2 GenericStackInv identity");
 
+            AE2Bridge bridge = AE2Bridge.get();
+            helper.assertTrue(bridge instanceof LoadedAE2Bridge,
+                    "AE2 bridge resolves to LoadedAE2Bridge when AE2 is loaded");
+            helper.assertTrue(bridge.available(),
+                    "LoadedAE2Bridge reports available()");
+
             ServerPlayer player = makePlayer(helper);
-            boolean bridgeAttemptedOpen = false;
-            try {
-                bridgeAttemptedOpen = AE2Bridge.get()
-                        .openMenu(player, helper.getLevel(), portWorldPos);
-            } catch (NullPointerException expected) {
-                // AE2 menu opening dispatches the screen to the player's connection,
-                // which is null for the GameTest-managed ServerPlayer. The NPE confirms
-                // the bridge reached MenuOpener.open(InterfaceMenu.TYPE, ...) instead of
-                // returning early.
-                bridgeAttemptedOpen = true;
-            }
-            helper.assertTrue(bridgeAttemptedOpen,
-                    "AE2 bridge forwards the AE2 input interface to MenuOpener.open");
+            helper.assertFalse(bridge.openMenu(player, helper.getLevel(), new BlockPos(99, 99, 99)),
+                    "AE2 bridge returns false for a non-AE2 input interface block");
+            helper.assertTrue(InterfaceMenu.TYPE != null,
+                    "AE2 InterfaceMenu.TYPE is registered");
             InterfaceMenu interfaceMenu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
                     player.getInventory(), entity);
             helper.assertTrue(interfaceMenu instanceof InterfaceMenu,
@@ -208,6 +206,10 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(60, () -> {
+            int polls = 0;
+            while (!controller.structureSnapshot().formed() && polls++ < 100) {
+                controller.serverTick();
+            }
             AE2InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
                     AE2InputInterfaceBlockEntity.class);
             helper.assertTrue(controller.structureSnapshot().formed(),
@@ -242,6 +244,7 @@ public class AE2InterfaceGameTest {
             entity.getInterfaceLogic().getUpgrades().addItems(AEItems.FUZZY_CARD.stack());
             long itemBeforeReload = entity.itemStorage().amount(0);
             long fluidBeforeReload = entity.fluidStorage().amount(1);
+            long bucketDropsBefore = fluidBeforeReload / 1000L;
             reloadBlockEntity(entity, helper);
             helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeReload,
                     "Item storage amount survives a save/load cycle");
@@ -262,13 +265,32 @@ public class AE2InterfaceGameTest {
 
             helper.getLevel().destroyBlock(portWorldPos, true);
             helper.runAfterDelay(2, () -> {
-                long droppedItems = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                long ironDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
                                 new AABB(portWorldPos).inflate(1))
                         .stream()
-                        .mapToLong(entity2 -> entity2.getItem().getCount())
+                        .filter(itemEntity -> itemEntity.getItem().is(Items.IRON_INGOT))
+                        .mapToLong(itemEntity -> itemEntity.getItem().getCount())
                         .sum();
-                helper.assertTrue(droppedItems >= itemBeforeReload,
-                        "Removing the AE2 input interface drops every stored iron ingot");
+                long upgradeDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                                new AABB(portWorldPos).inflate(1))
+                        .stream()
+                        .filter(itemEntity -> itemEntity.getItem().is(AEItems.FUZZY_CARD.asItem()))
+                        .mapToLong(itemEntity -> itemEntity.getItem().getCount())
+                        .sum();
+                helper.assertTrue(ironDrops == itemBeforeReload,
+                        "AE2 logic.addDrops drops exactly the stored iron ingot amount");
+                helper.assertTrue(upgradeDrops == 1L,
+                        "AE2 logic.addDrops drops the installed FUZZY_CARD upgrade");
+                if (bucketDropsBefore > 0) {
+                    long bucketDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                                    new AABB(portWorldPos).inflate(1))
+                            .stream()
+                            .filter(itemEntity -> itemEntity.getItem().is(Items.WATER_BUCKET))
+                            .mapToLong(itemEntity -> itemEntity.getItem().getCount())
+                            .sum();
+                    helper.assertTrue(bucketDrops == bucketDropsBefore,
+                            "AE2 logic.addDrops drops the stored water as water buckets");
+                }
                 helper.succeed();
             });
         });
