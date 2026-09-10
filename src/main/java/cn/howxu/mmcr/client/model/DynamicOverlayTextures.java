@@ -79,6 +79,8 @@ public final class DynamicOverlayTextures {
 
     private static final String[] CHEMICAL_TIER_IDS = {"basic", "advanced", "elite", "ultimate"};
 
+    // cause we have overlay now, so the overlay is from this DynamicOverlayTextures declare
+    // For AE2 we directly use AE2 resource, so it's better create a bridge
     private static Identifier chemicalOverlay(PortKinds.ChemicalKind kind) {
         if (kind.radioactive()) {
             return MMCR.id("block/overlay_radioactive_chemical_" + (kind.ioType() == IOType.INPUT ? "input" : "output"));
