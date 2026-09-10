@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
@@ -27,6 +28,7 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
@@ -97,6 +99,13 @@ public class IOPortBlock extends Block implements EntityBlock {
     protected @NonNull InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                         Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
+            if (AE2Bridge.get().isPort(kind.id())) {
+                if (player instanceof ServerPlayer serverPlayer
+                        && AE2Bridge.get().openMenu(serverPlayer, level, pos)) {
+                    return InteractionResult.SUCCESS;
+                }
+                return InteractionResult.CONSUME;
+            }
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) {
                 PortMenuKind menuKind = menuKindFor(kind.id());

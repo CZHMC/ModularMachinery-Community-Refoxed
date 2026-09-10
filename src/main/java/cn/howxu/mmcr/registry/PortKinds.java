@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
@@ -461,6 +462,7 @@ public final class PortKinds {
             defaults.add(new ExtendedCombinedPortKind(tieredId("extended_combined_output", size.id()),
                     IOType.OUTPUT, size, ExtendedCombinedPortBlockEntity::new));
         }
+        defaults.addAll(AE2Bridge.get().portKinds());
         for (MekanismBridge.PortDeclaration declaration : MekanismBridge.get().portDeclarations()) {
             if (declaration.type() == MekanismBridge.PortType.CHEMICAL) {
                 defaults.add(new ChemicalKind(declaration.id(), declaration.ioType(), declaration.tier(),

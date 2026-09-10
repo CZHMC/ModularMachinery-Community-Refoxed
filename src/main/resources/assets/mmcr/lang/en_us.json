@@ -1,4 +1,5 @@
 {
+  "block.mmcr.ae2_me_input_interface": "AE2 ME Input Interface",
   "block.mmcr.basic_casing": "Basic Machine Casing",
   "block.mmcr.data_storage": "Data Storage",
   "block.mmcr.energy_input_hatch": "Normal Energy Input Hatch",
@@ -80,6 +81,7 @@
   "config.jade.plugin_mmcr.machine_controller": "Machine Controller",
   "config.jade.plugin_mmcr.parallel_controller": "Parallel Controller",
   "config.jade.plugin_mmcr.recipe_output": "Recipe Output",
+  "container.mmcr.ae2_me_input_interface": "AE2 ME Input Interface",
   "container.mmcr.energy_input_hatch": "Normal Energy Input Hatch",
   "container.mmcr.energy_input_hatch_big": "Big Energy Input Hatch",
   "container.mmcr.energy_input_hatch_huge": "Huge Energy Input Hatch",

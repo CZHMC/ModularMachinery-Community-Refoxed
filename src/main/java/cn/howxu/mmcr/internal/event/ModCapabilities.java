@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -51,6 +52,7 @@ public final class ModCapabilities {
             registerNativePort(event, kind, context);
         }
         MekanismBridge.get().registerCapabilities(event);
+        AE2Bridge.get().registerCapabilities(event);
         event.registerBlockEntity(
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get("factory_controller").get(),
