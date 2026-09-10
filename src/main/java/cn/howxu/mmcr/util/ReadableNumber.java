@@ -127,9 +127,7 @@ public final class ReadableNumber {
         result.append(whole);
         if (decimalPlaces > 0) {
             result.append('.');
-            for (int i = decimalDigits(fraction); i < decimalPlaces; i++) {
-                result.append('0');
-            }
+            result.repeat("0", Math.max(0, decimalPlaces - decimalDigits(fraction)));
             result.append(fraction);
         }
         result.append(prefix).append(unit);

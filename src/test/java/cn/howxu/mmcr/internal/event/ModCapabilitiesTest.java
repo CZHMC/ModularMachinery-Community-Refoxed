@@ -49,9 +49,7 @@ class ModCapabilitiesTest {
 
     @Test
     void selects_external_exposures_from_generic_port_bindings() {
-        CapabilityBinding binding = new CapabilityBinding(
-                new CapabilityType(MMCR.id("external_test")), IOType.INPUT,
-                context -> null, PortTierPolicy.always(),
+        CapabilityBinding binding = new CapabilityBinding(new CapabilityType(MMCR.id("external_test")),CapabilityDirections.input(),context -> null, PortTierPolicy.always(),
                 new CapabilityBinding.ExternalExposure<>(MMCR.id("external_test_native"), String.class,
                         (host, ioType, side) -> "exposed"));
         PortDefinition definition = PortDefinition.of(MMCR.id("external_test_port"), binding);

@@ -63,8 +63,8 @@ class RecipeOutputComponentProviderTest {
         RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
                 new MachineOutput.ItemOutput(new ItemStack(Items.STONE, 2), 1F), 2L)));
         List<Object> calls = collect(data);
-        assertThat(calls.get(0)).isInstanceOf(Component.class);
-        assertThat(((Component) calls.get(0)).getString()).contains("Recipe Output");
+        assertThat(calls.getFirst()).isInstanceOf(Component.class);
+        assertThat(((Component) calls.getFirst()).getString()).contains("Recipe Output");
     }
 
     @Test
@@ -89,7 +89,7 @@ class RecipeOutputComponentProviderTest {
         List<Object> calls = collect(data);
 
         assertThat(calls).isNotEmpty();
-        assertThat(((Component) calls.get(0)).getString()).contains("Recipe Output");
+        assertThat(((Component) calls.getFirst()).getString()).contains("Recipe Output");
         String translationKey = "chemical.mmcr_test.jade_render_test";
         boolean hasChemicalKey = calls.stream().anyMatch(call -> call instanceof Component component
                 && component.getString().contains(translationKey));
@@ -124,7 +124,7 @@ class RecipeOutputComponentProviderTest {
     private static List<TooltipCall> collectCalls(CompoundTag data) {
         BlockAccessor accessor = (BlockAccessor) Proxy.newProxyInstance(
                 BlockAccessor.class.getClassLoader(), new Class<?>[]{BlockAccessor.class},
-                (proxy, method, args) -> {
+                (_, method, _) -> {
                     if ("getServerData".equals(method.getName())) return data;
                     throw new UnsupportedOperationException(method.getName());
                 });

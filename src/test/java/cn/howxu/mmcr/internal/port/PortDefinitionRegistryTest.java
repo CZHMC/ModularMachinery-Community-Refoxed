@@ -49,7 +49,7 @@ class PortDefinitionRegistryTest {
 
     @Test
     void resolves_a_single_binding_for_its_direction_and_tier() {
-        CapabilityBinding binding = binding("item", IOType.INPUT, tierAtLeast(2));
+        CapabilityBinding binding = binding("item", CapabilityDirections.input(), tierAtLeast(2));
         PortDefinition definition = PortDefinition.of(id("single"), List.of(binding));
 
         PortDefinitionRegistry.register(definition);
@@ -103,7 +103,7 @@ class PortDefinitionRegistryTest {
         ExternalExposure<String> exposure = new ExternalExposure<>(id("native"), String.class,
                 (host, ioType, side) -> "exposed");
         CapabilityBinding binding = new CapabilityBinding(
-                new CapabilityType(MMCR.id("custom")), IOType.INPUT, factory, PortTierPolicy.always(), exposure);
+                new CapabilityType(MMCR.id("custom")), CapabilityDirections.input(), factory, PortTierPolicy.always(), exposure);
         PortDefinitionRegistry.register(PortDefinition.of(id("custom"), binding));
 
         CapabilityBinding resolved = PortDefinitionRegistry.resolve(id("custom"), IOType.INPUT, 0).getFirst();
@@ -177,7 +177,7 @@ class PortDefinitionRegistryTest {
     }
 
     private static CapabilityBinding binding(String path, IOType ioType, PortTierPolicy tierPolicy) {
-        return new CapabilityBinding(new CapabilityType(MMCR.id(path)), ioType, FACTORY, tierPolicy);
+        return new CapabilityBinding(new CapabilityType(MMCR.id(path)), CapabilityDirections.of(ioType), FACTORY, tierPolicy);
     }
 
     private static CapabilityBinding binding(String path, CapabilityDirections directions, PortTierPolicy tierPolicy) {
