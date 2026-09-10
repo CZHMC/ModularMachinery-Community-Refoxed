@@ -138,14 +138,11 @@ class WorldPreviewMeshCompilerTest {
     @Test
     void productionCompileCreatesTranslucentSortMetadata() {
         Assumptions.assumeTrue(Minecraft.getInstance() != null);
-        WorldPreviewMesh mesh = WorldPreviewMeshCompiler.compile(null, BlockPos.ZERO,
+        try (WorldPreviewMesh mesh = WorldPreviewMeshCompiler.compile(null, BlockPos.ZERO,
                 List.of(entry(0, Blocks.WATER)), Integer.MAX_VALUE,
-                new Vec3(0, 0, 0), new AtomicBoolean());
-        try {
+                new Vec3(0, 0, 0), new AtomicBoolean())) {
             assertThat(mesh.meshes()).containsKey(ChunkSectionLayer.TRANSLUCENT);
             assertThat(mesh.translucentSortState()).isNotNull();
-        } finally {
-            mesh.close();
         }
     }
 

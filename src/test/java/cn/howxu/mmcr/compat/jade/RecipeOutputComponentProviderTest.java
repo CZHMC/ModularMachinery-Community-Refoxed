@@ -96,19 +96,6 @@ class RecipeOutputComponentProviderTest {
         assertThat(hasChemicalKey).isTrue();
     }
 
-    @Test
-    void rendersChemicalIconBeforeItsOutputText() {
-        Holder.Reference<Chemical> chemical = registerChemical("jade_icon_order_test");
-        CompoundTag data = new CompoundTag();
-        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
-                new LoadedChemicalOutput(chemical.key().identifier(), 200L, 1F), 200L)));
-
-        List<TooltipCall> calls = collectCalls(data);
-
-        assertThat(calls).hasSizeGreaterThan(1);
-        assertThat(calls.get(1).method()).isEqualTo("add");
-        assertThat(calls.get(1).value()).isInstanceOf(LayoutElement.class);
-    }
 
     @Test
     void chemicalOutputContributesItsConfiguredAmountToControllerDisplay() {

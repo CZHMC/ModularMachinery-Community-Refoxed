@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -31,6 +32,8 @@ public final class InterfaceTooltips {
     public static List<Component> tooltipLines(Block block) {
         if (block instanceof IOPortBlock port) {
             var kind = port.kind();
+            if (kind instanceof PortKinds.ChemicalKind chemical) return chemicalTooltip(chemical);
+            if (kind instanceof PortKinds.HeatKind heat) return heatTooltip(heat);
             return kind.itemBusSize().map(InterfaceTooltips::itemTooltip)
                     .or(() -> kind.extendedItemBusSize().map(InterfaceTooltips::itemTooltip))
                     .or(() -> kind.fluidHatchSize().map(InterfaceTooltips::fluidTooltip))
@@ -100,6 +103,14 @@ public final class InterfaceTooltips {
         return lines;
     }
 
+    private static List<Component> chemicalTooltip(PortKinds.ChemicalKind kind) {
+        return List.of(capacityLine(formatAmount(kind.capacity(), "mB")));
+    }
+
+    private static List<Component> heatTooltip(PortKinds.HeatKind kind) {
+        return List.of(capacityLine(formatAmount(kind.capacity(), "J/K")));
+    }
+
     private static List<Component> combinedTooltip(int itemTypes, int fluidTypes) {
         return List.of(
                 capacityLine(itemTypes, Component.translatable("tooltip.mmcr.interface.unit.slots")),
@@ -140,6 +151,10 @@ public final class InterfaceTooltips {
 
     private static String formatAmount(long amount, String unit) {
         return ReadableNumber.format(amount) + " " + unit;
+    }
+
+    private static String formatAmount(double amount, String unit) {
+        return java.math.BigDecimal.valueOf(amount).stripTrailingZeros().toPlainString() + " " + unit;
     }
 
     private InterfaceTooltips() {}
