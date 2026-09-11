@@ -162,10 +162,52 @@ class AE2NetworkResourceStorageTest {
         assertThat(network.amount(goldKey)).isZero();
     }
 
+    @Test
+    void extractionWaitsForCommitAndAccountsForPendingAmount() {
+        AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        FakeMEStorage network = new FakeMEStorage(ironKey, 8L);
+        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+                network, List.of(ironKey));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.extract(0, iron, 5L, transaction)).isEqualTo(5L);
+            assertThat(storage.extract(0, iron, 5L, transaction)).isEqualTo(3L);
+            assertThat(network.amount(ironKey)).isEqualTo(8L);
+            assertThat(network.simulateExtractCalls()).isEqualTo(2);
+            assertThat(network.modulateExtractCalls()).isZero();
+            transaction.commit();
+        }
+
+        assertThat(network.amount(ironKey)).isZero();
+        assertThat(network.modulateExtractCalls()).isEqualTo(1);
+        assertThat(network.modulatedAmount()).isEqualTo(8L);
+    }
+
+    @Test
+    void rollbackDiscardsPendingExtractionWithoutTouchingLiveStorage() {
+        AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        FakeMEStorage network = new FakeMEStorage(ironKey, 8L);
+        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+                network, List.of(ironKey));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.extract(0, iron, 5L, transaction)).isEqualTo(5L);
+            assertThat(network.amount(ironKey)).isEqualTo(8L);
+        }
+
+        assertThat(network.amount(ironKey)).isEqualTo(8L);
+        assertThat(network.modulateExtractCalls()).isZero();
+    }
+
     private static final class FakeMEStorage implements MEStorage {
         private final Map<AEKey, Long> amounts = new HashMap<>();
         private int insertCalls;
         private int extractCalls;
+        private int simulateExtractCalls;
+        private int modulateExtractCalls;
+        private long modulatedAmount;
 
         private FakeMEStorage(AEKey key, long amount) {
             amounts.put(key, amount);
@@ -186,7 +228,13 @@ class AE2NetworkResourceStorageTest {
             extractCalls++;
             long available = amounts.getOrDefault(key, 0L);
             long extracted = Math.min(amount, available);
-            if (mode == Actionable.MODULATE && extracted > 0L) amounts.put(key, available - extracted);
+            if (mode == Actionable.SIMULATE) {
+                simulateExtractCalls++;
+            } else if (mode == Actionable.MODULATE && extracted > 0L) {
+                modulateExtractCalls++;
+                modulatedAmount += extracted;
+                amounts.put(key, available - extracted);
+            }
             return extracted;
         }
 
@@ -205,6 +253,18 @@ class AE2NetworkResourceStorageTest {
 
         private int extractCalls() {
             return extractCalls;
+        }
+
+        private int simulateExtractCalls() {
+            return simulateExtractCalls;
+        }
+
+        private int modulateExtractCalls() {
+            return modulateExtractCalls;
+        }
+
+        private long modulatedAmount() {
+            return modulatedAmount;
         }
     }
 }

@@ -5,10 +5,13 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -17,11 +20,13 @@ import java.util.Objects;
  * @param <R> resource type exposed by the view
  * @author howxu <dev@howxu.cn>
  */
-public abstract class AE2NetworkResourceStorage<R> implements ResourceStorage<R> {
+public abstract class AE2NetworkResourceStorage<R> extends SnapshotJournal<Map<AEKey, Long>>
+        implements ResourceStorage<R> {
     private final MEStorage meStorage;
     private final List<AEKey> keys;
     private final AE2KeyAdapter<R> adapter;
     private final long[] amounts;
+    private final Map<AEKey, Long> pendingExtracts = new HashMap<>();
 
     protected AE2NetworkResourceStorage(MEStorage meStorage, List<AEKey> keys, AE2KeyAdapter<R> adapter) {
         this.meStorage = Objects.requireNonNull(meStorage, "meStorage");
@@ -84,8 +89,41 @@ public abstract class AE2NetworkResourceStorage<R> implements ResourceStorage<R>
     @Override
     public long extract(int slot, R resource, long amount, TransactionContext transaction) {
         AEKey key = checkedKey(slot, resource, amount);
-        if (!keys.get(slot).equals(key)) return 0L;
-        return meStorage.extract(key, amount, Actionable.MODULATE, IActionSource.empty());
+        if (amount == 0L || !keys.get(slot).equals(key)) return 0L;
+
+        long pending = pendingExtracts.getOrDefault(key, 0L);
+        long simulationAmount = pending > Long.MAX_VALUE - amount
+                ? Long.MAX_VALUE : pending + amount;
+        long available = meStorage.extract(key, simulationAmount, Actionable.SIMULATE, IActionSource.empty());
+        long extractable = Math.min(amount, Math.max(0L, available - pending));
+        if (extractable == 0L) return 0L;
+
+        updateSnapshots(transaction);
+        pendingExtracts.merge(key, extractable, Long::sum);
+        return extractable;
+    }
+
+    @Override
+    protected Map<AEKey, Long> createSnapshot() {
+        return new HashMap<>(pendingExtracts);
+    }
+
+    @Override
+    protected void revertToSnapshot(Map<AEKey, Long> snapshot) {
+        pendingExtracts.clear();
+        pendingExtracts.putAll(snapshot);
+    }
+
+    @Override
+    protected void onRootCommit(Map<AEKey, Long> originalState) {
+        for (Map.Entry<AEKey, Long> entry : pendingExtracts.entrySet()) {
+            long previous = originalState.getOrDefault(entry.getKey(), 0L);
+            long committed = entry.getValue() - previous;
+            if (committed > 0L) {
+                meStorage.extract(entry.getKey(), committed, Actionable.MODULATE, IActionSource.empty());
+            }
+        }
+        pendingExtracts.clear();
     }
 
     private AEKey checkedKey(int slot, R resource, long amount) {
