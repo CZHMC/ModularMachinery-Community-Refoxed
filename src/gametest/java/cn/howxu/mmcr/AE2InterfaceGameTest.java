@@ -7,6 +7,7 @@ import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
+import appeng.api.storage.MEStorage;
 import appeng.core.definitions.AEItems;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.implementations.InterfaceMenu;
@@ -145,6 +146,10 @@ public class AE2InterfaceGameTest {
                     AECapabilities.GENERIC_INTERNAL_INV, portWorldPos, portState, entity, null);
             helper.assertTrue(genericInv != null,
                     "AE2 GENERIC_INTERNAL_INV capability is exposed");
+            MEStorage meStorage = helper.getLevel().getCapability(
+                    AECapabilities.ME_STORAGE, portWorldPos, portState, entity, null);
+            helper.assertTrue(meStorage != null,
+                    "AE2 ME_STORAGE capability is exposed");
 
             CapabilitySnapshot snapshot = entity.capabilitySnapshot();
             List<MachineCapability> capabilities = snapshot.capabilities();

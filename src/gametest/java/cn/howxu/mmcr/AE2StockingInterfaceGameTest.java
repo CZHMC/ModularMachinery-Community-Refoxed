@@ -16,10 +16,14 @@ import appeng.core.definitions.AEItems;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -29,6 +33,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+
+import java.util.List;
 
 /**
  * End-to-end GameTest coverage for the AE2 stocking input interface.
@@ -115,39 +121,73 @@ public class AE2StockingInterfaceGameTest {
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "Stocking capability does not expose TransferFacet");
             }
+            MachineCapability itemCapability = snapshot.capabilities().stream()
+                    .filter(capability -> capability.type().id().equals(PortFamilyIds.ITEM))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Stocking item capability is missing"));
+            MachineCapability fluidCapability = snapshot.capabilities().stream()
+                    .filter(capability -> capability.type().id().equals(PortFamilyIds.FLUID))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Stocking fluid capability is missing"));
+            helper.assertTrue(itemCapability.type().id().equals(PortFamilyIds.ITEM),
+                    "Stocking item capability is explicitly bound to the item family");
+            helper.assertTrue(fluidCapability.type().id().equals(PortFamilyIds.FLUID),
+                    "Stocking fluid capability is explicitly bound to the fluid family");
             helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(0) == 1L,
                     "Stocking item marker is normalized to one resource");
             helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(1) == 1L,
                     "Stocking fluid marker is normalized to one resource");
-            helper.assertTrue(port.itemStorage().amount(0) == ITEM_AMOUNT,
-                    "Stocking item capability reads the network item amount");
-            helper.assertTrue(port.fluidStorage().amount(1) == FLUID_AMOUNT,
-                    "Stocking fluid capability reads the network fluid amount");
+            helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0)
+                            .equals(AEItemKey.of(Items.IRON_INGOT)),
+                    "Stocking item marker key is iron ingot");
+            helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(1)
+                            .equals(AEFluidKey.of(Fluids.WATER)),
+                    "Stocking fluid marker key is water");
             helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(0).amount() == ITEM_AMOUNT,
                     "Item display mirror follows the watcher amount");
             helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(1).amount() == FLUID_AMOUNT,
                     "Fluid display mirror follows the watcher amount");
 
+            CapabilityRequests.ResourceRequest<ItemResource> itemRequest = new CapabilityRequests.ResourceRequest<>(
+                    itemCapability.type(), IOType.INPUT, 1L,
+                    List.of(new CapabilityRequests.ResourceAction<>(
+                            0, ItemResource.of(Items.IRON_INGOT), 3L, false)));
+            CapabilityRequests.ResourceRequest<FluidResource> fluidRequest = new CapabilityRequests.ResourceRequest<>(
+                    fluidCapability.type(), IOType.INPUT, 1L,
+                    List.of(new CapabilityRequests.ResourceAction<>(
+                            1, FluidResource.of(Fluids.WATER), 1_000L, false)));
+            CapabilityOperation itemOperation = itemCapability.prepare(itemRequest);
+            CapabilityOperation fluidOperation = fluidCapability.prepare(fluidRequest);
+            MEStorage itemNetwork = itemChest.getInventory();
+            MEStorage fluidNetwork = fluidChest.getInventory();
             try (Transaction transaction = Transaction.openRoot()) {
-                helper.assertTrue(port.itemStorage().extract(0,
-                                ItemResource.of(Items.IRON_INGOT), 3L, transaction) == 3L,
-                        "Stocking item capability extracts from the network");
-                helper.assertTrue(port.fluidStorage().extract(1,
-                                FluidResource.of(Fluids.WATER), 1_000L, transaction) == 1_000L,
-                        "Stocking fluid capability extracts from the network");
+                CapabilityResult itemResult = itemOperation.commit(transaction);
+                CapabilityResult fluidResult = fluidOperation.commit(transaction);
+                helper.assertTrue(itemResult.success(),
+                        "Stocking item capability operation commits successfully");
+                helper.assertTrue(fluidResult.success(),
+                        "Stocking fluid capability operation commits successfully");
+                helper.assertTrue(itemNetwork.extract(AEItemKey.of(Items.IRON_INGOT), ITEM_AMOUNT,
+                                Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT,
+                        "Item MEStorage is unchanged before the root transaction commits");
+                helper.assertTrue(fluidNetwork.extract(AEFluidKey.of(Fluids.WATER), FLUID_AMOUNT,
+                                Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT,
+                        "Fluid MEStorage is unchanged before the root transaction commits");
                 transaction.commit();
+                helper.assertTrue(itemNetwork.extract(AEItemKey.of(Items.IRON_INGOT), ITEM_AMOUNT,
+                                Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT - 3L,
+                        "Item MEStorage quantity is deducted after transaction commit");
+                helper.assertTrue(fluidNetwork.extract(AEFluidKey.of(Fluids.WATER), FLUID_AMOUNT,
+                                Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT - 1_000L,
+                        "Fluid MEStorage quantity is deducted after transaction commit");
             }
         });
 
         helper.runAtTickTime(12, () -> {
-            helper.assertTrue(port.itemStorage().amount(0) == ITEM_AMOUNT - 3L,
-                    "Item amount updates after committed extraction");
-            helper.assertTrue(port.fluidStorage().amount(1) == FLUID_AMOUNT - 1_000L,
-                    "Fluid amount updates after committed extraction");
             helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(0).amount() == ITEM_AMOUNT - 3L,
-                    "Item display updates from watcher change without a full scan");
+                    "Item watcher display updates on the next tick without a full scan");
             helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(1).amount() == FLUID_AMOUNT - 1_000L,
-                    "Fluid display updates from watcher change without a full scan");
+                    "Fluid watcher display updates on the next tick without a full scan");
             helper.succeed();
         });
     }
