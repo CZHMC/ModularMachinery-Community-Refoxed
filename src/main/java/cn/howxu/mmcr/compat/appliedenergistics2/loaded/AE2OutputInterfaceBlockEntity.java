@@ -24,8 +24,6 @@ import org.jetbrains.annotations.Nullable;
  * @author howxu <dev@howxu.cn>
  */
 public final class AE2OutputInterfaceBlockEntity extends AE2OutputInterfaceBaseBlockEntity {
-    private static final long OPERATION_LIMIT = 256L;
-
     private final AE2OutputResourceStorage<ItemResource> itemStorage;
     private final AE2OutputResourceStorage<FluidResource> fluidStorage;
 
@@ -74,9 +72,10 @@ public final class AE2OutputInterfaceBlockEntity extends AE2OutputInterfaceBaseB
         public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
             if (!mainNode.isActive()) return TickRateModulation.SLEEP;
 
-            long moved = itemStorage.flushToNetwork(OPERATION_LIMIT);
-            if (moved < OPERATION_LIMIT) {
-                moved += fluidStorage.flushToNetwork(OPERATION_LIMIT - moved);
+            long moved = itemStorage.flushToNetwork(AE2OutputResourceStorage.BOUNDED_FLUSH_OPERATION_LIMIT);
+            if (moved < AE2OutputResourceStorage.BOUNDED_FLUSH_OPERATION_LIMIT) {
+                moved += fluidStorage.flushToNetwork(
+                        AE2OutputResourceStorage.BOUNDED_FLUSH_OPERATION_LIMIT - moved);
             }
             if (getStorage().isEmpty()) return TickRateModulation.SLEEP;
             return moved > 0L ? TickRateModulation.FASTER : TickRateModulation.SLOWER;

@@ -27,7 +27,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -79,6 +81,29 @@ class AE2OutputResourceStorageTest {
     }
 
     @Test
+    void rootCommitStoresNetworkModulationShortfallLocally() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        GenericStackInv cache = inventory(1);
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
+        network.setModulationLimit(3L);
+        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
+            assertThat(cache.getStack(0)).isNull();
+            transaction.commit();
+        }
+
+        assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(3L);
+        assertThat(storage.amount(0)).isEqualTo(5L);
+        assertThat(network.calls()).extracting(FakeMEStorage.InsertCall::mode)
+                .containsExactly(Actionable.SIMULATE, Actionable.SIMULATE, Actionable.MODULATE);
+        assertThat(network.calls()).extracting(FakeMEStorage.InsertCall::amount)
+                .containsExactly(8L, 8L, 8L);
+        assertThat(network.calls()).allSatisfy(call -> assertThat(call.source()).isNotNull());
+    }
+
+    @Test
     void disconnectedNetworkUsesOnlyTheLocalCache() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         GenericStackInv cache = inventory(1);
@@ -121,6 +146,8 @@ class AE2OutputResourceStorageTest {
 
         assertThat(network.amount(AEItemKey.of(iron))).isZero();
         assertThat(storage.amount(0)).isZero();
+        assertThat(network.calls()).extracting(FakeMEStorage.InsertCall::mode)
+                .containsOnly(Actionable.SIMULATE);
     }
 
     @Test
@@ -209,6 +236,37 @@ class AE2OutputResourceStorageTest {
     }
 
     @Test
+    void networkAcceptanceIsAttemptedBeforeTheLocalFilter() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 8L);
+        AE2OutputResourceStorage<ItemResource> storage = itemStorage(new RejectedInventory(), network);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
+            transaction.commit();
+        }
+
+        assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(8L);
+    }
+
+    @Test
+    void networkAcceptanceIsAttemptedForAKeyTypeNotSupportedLocally() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        GenericStackInv cache = new GenericStackInv(Set.of(AEKeyType.fluids()), null,
+                GenericStackInv.Mode.STORAGE, 1);
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 8L);
+        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
+            transaction.commit();
+        }
+
+        assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(8L);
+        assertThat(cache.getStack(0)).isNull();
+    }
+
+    @Test
     void localCommitInvokesTheChangeCallbackOnce() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         AtomicInteger changes = new AtomicInteger();
@@ -256,6 +314,57 @@ class AE2OutputResourceStorageTest {
         assertThat(network.amount(AEItemKey.of(iron))).isZero();
         assertThat(storage.amount(0)).isEqualTo(8L);
         assertThat(changes).hasValue(0);
+    }
+
+    @Test
+    void flushDoesNotExceedItsOperationLimit() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        GenericStackInv cache = inventory(1);
+        cache.setStack(0, new GenericStack(AEItemKey.of(iron), 8L));
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
+        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
+                AE2ItemResourceStorage.adapter(), source(), () -> {
+                });
+
+        assertThat(storage.flushToNetwork(3L)).isEqualTo(3L);
+
+        assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(3L);
+        assertThat(storage.amount(0)).isEqualTo(5L);
+        assertThat(network.calls()).allSatisfy(call -> assertThat(call.amount()).isLessThanOrEqualTo(3L));
+    }
+
+    @Test
+    void flushAppliesTheBoundedPolicyEvenForAnUnboundedRequest() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        GenericStackInv cache = inventory(9);
+        for (int slot = 0; slot < cache.size(); slot++) {
+            cache.setStack(slot, new GenericStack(AEItemKey.of(iron), 64L));
+        }
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 1_024L);
+        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
+                AE2ItemResourceStorage.adapter(), source(), () -> {
+                });
+
+        assertThat(storage.flushToNetwork(Long.MAX_VALUE)).isEqualTo(256L);
+        assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(256L);
+    }
+
+    @Test
+    void failedLocalExtractionDoesNotModulateTheNetwork() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        FlakyExtractInventory cache = new FlakyExtractInventory();
+        cache.setStack(0, new GenericStack(AEItemKey.of(iron), 8L));
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
+        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
+                AE2ItemResourceStorage.adapter(), source(), () -> {
+                });
+
+        assertThat(storage.flushToNetwork(8L)).isZero();
+
+        assertThat(network.amount(AEItemKey.of(iron))).isZero();
+        assertThat(storage.amount(0)).isEqualTo(8L);
+        assertThat(network.calls()).extracting(FakeMEStorage.InsertCall::mode)
+                .doesNotContain(Actionable.MODULATE);
     }
 
     private static AE2OutputResourceStorage<ItemResource> itemStorage(GenericStackInv cache,
@@ -307,10 +416,27 @@ class AE2OutputResourceStorageTest {
         }
     }
 
+    private static final class FlakyExtractInventory extends GenericStackInv {
+        private int canExtractCalls;
+
+        private FlakyExtractInventory() {
+            super(Set.of(AEKeyType.items(), AEKeyType.fluids()), null, Mode.STORAGE, 1);
+        }
+
+        @Override
+        public boolean canExtract() {
+            return canExtractCalls++ == 0;
+        }
+    }
+
     private static final class FakeMEStorage implements MEStorage {
         private final Map<AEKey, Long> amounts = new HashMap<>();
         private final Map<AEKey, Long> capacities = new HashMap<>();
+        private final List<InsertCall> calls = new ArrayList<>();
         private long modulationLimit = Long.MAX_VALUE;
+
+        private record InsertCall(AEKey key, long amount, Actionable mode, IActionSource source) {
+        }
 
         private FakeMEStorage(AEKey key, long capacity) {
             capacities.put(key, capacity);
@@ -322,6 +448,7 @@ class AE2OutputResourceStorageTest {
 
         @Override
         public long insert(AEKey key, long amount, Actionable mode, IActionSource source) {
+            calls.add(new InsertCall(key, amount, mode, source));
             long current = amounts.getOrDefault(key, 0L);
             long capacity = capacities.getOrDefault(key, 0L);
             long available = Math.max(0L, capacity - current);
@@ -338,6 +465,10 @@ class AE2OutputResourceStorageTest {
 
         private long amount(AEKey key) {
             return amounts.getOrDefault(key, 0L);
+        }
+
+        private List<InsertCall> calls() {
+            return List.copyOf(calls);
         }
     }
 }

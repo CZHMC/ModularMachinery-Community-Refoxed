@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
@@ -38,6 +39,8 @@ import java.util.function.Supplier;
  */
 public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2OutputResourceStorage.JournalState>
         implements OutputResourceStorage<R> {
+    /** Fixed upper bound for one output cache flush; intentionally not user-configurable. */
+    public static final long BOUNDED_FLUSH_OPERATION_LIMIT = 256L;
     private static final String FAILURE_ID = "ae2_output_interface";
 
     private final GenericStackInv inventory;
@@ -45,7 +48,7 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
     private final AE2KeyAdapter<R> adapter;
     private final IActionSource actionSource;
     private final Runnable changeCallback;
-    private final Map<MEStorage, Map<AEKey, Long>> pendingNetwork = new IdentityHashMap<>();
+    private final Map<MEStorage, Map<AEKey, PendingNetwork>> pendingNetwork = new IdentityHashMap<>();
     private boolean localChanged;
 
     public AE2OutputResourceStorage(GenericStackInv inventory,
@@ -154,11 +157,11 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
     @Override
     public long insert(int slot, R resource, long amount, TransactionContext transaction) {
         AEKey key = checkedKey(slot, resource, amount);
-        if (amount == 0L || !inventory.canInsert() || !inventory.isSupportedType(key.getType())) return 0L;
+        if (amount == 0L) return 0L;
 
         MEStorage network = networkSupplier.get();
         long networkAmount = network == null ? 0L : availableNetwork(network, key, amount);
-        if (networkAmount > 0L) stageNetwork(network, key, networkAmount, transaction);
+        if (networkAmount > 0L) stageNetwork(network, key, networkAmount, transaction, slot);
 
         long localAmount = amount - networkAmount;
         long localInserted = localAmount == 0L ? 0L : insertLocal(slot, key, localAmount, transaction);
@@ -189,6 +192,7 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
      */
     public long flushToNetwork(long operationLimit) {
         if (operationLimit <= 0L || !inventory.canExtract()) return 0L;
+        operationLimit = Math.min(operationLimit, BOUNDED_FLUSH_OPERATION_LIMIT);
         MEStorage network = networkSupplier.get();
         if (network == null) return 0L;
 
@@ -198,20 +202,24 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
             if (stack == null || stack.amount() <= 0L || !adapter.keyType().equals(stack.what().getType())) continue;
 
             long requested = Math.min(stack.amount(), operationLimit - moved);
-            long possible = network.insert(stack.what(), requested, Actionable.SIMULATE, actionSource);
-            possible = Math.min(requested, Math.max(0L, possible));
-            possible = Math.min(possible, localExtractable(slot, stack.what()));
-            if (possible == 0L) continue;
+            long originalAmount = stack.amount();
+            try (Transaction transaction = Transaction.openRoot()) {
+                long extracted = extractLocal(slot, stack.what(), requested, transaction);
+                if (extracted != requested) continue;
 
-            long accepted = StorageHelper.poweredInsert(energySource(), network, stack.what(), possible, actionSource);
-            if (accepted == 0L) continue;
+                long possible = network.insert(stack.what(), requested, Actionable.SIMULATE, actionSource);
+                possible = Math.min(requested, Math.max(0L, possible));
+                if (possible == 0L) continue;
 
-            try (var transaction = net.neoforged.neoforge.transfer.transaction.Transaction.openRoot()) {
-                long extracted = extractLocal(slot, stack.what(), accepted, transaction);
-                if (extracted != accepted) continue;
+                long accepted = StorageHelper.poweredInsert(energySource(), network, stack.what(), possible,
+                        actionSource);
+                accepted = Math.min(possible, Math.max(0L, accepted));
+                if (accepted == 0L) continue;
+
+                restoreLocalToAmount(slot, stack.what(), originalAmount - accepted, transaction);
                 transaction.commit();
+                moved += accepted;
             }
-            moved += accepted;
         }
         return moved;
     }
@@ -244,8 +252,47 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
         return extracted;
     }
 
-    private long localExtractable(int slot, AEKey key) {
-        return key.equals(inventory.getKey(slot)) ? inventory.getAmount(slot) : 0L;
+    private void restoreLocalToAmount(int slot, AEKey key, long amount, TransactionContext transaction) {
+        AEKey current = inventory.getKey(slot);
+        if (amount < 0L || current != null && !key.equals(current)) {
+            throw new IllegalStateException("Unable to restore AE2 output cache");
+        }
+        if (inventory.getAmount(slot) == amount) return;
+        updateSnapshots(transaction);
+        inventory.updateSnapshots(transaction);
+        inventory.setStack(slot, amount == 0L ? null : new GenericStack(key, amount));
+        localChanged = true;
+    }
+
+    private long compensateLocally(AEKey key, long amount, Map<Integer, Long> preferredSlots,
+                                   long anyFallbackAmount) {
+        long inserted = 0L;
+        try (Transaction transaction = Transaction.openRoot()) {
+            for (Map.Entry<Integer, Long> entry : preferredSlots.entrySet()) {
+                if (inserted >= amount) break;
+                long requested = Math.min(amount - inserted, entry.getValue());
+                inserted += insertCompensation(entry.getKey(), key, requested, transaction);
+            }
+            if (inserted < amount && anyFallbackAmount > 0L) {
+                for (int slot = 0; slot < inventory.size() && inserted < amount; slot++) {
+                    inserted += insertCompensation(slot, key, amount - inserted, transaction);
+                }
+            }
+            if (inserted > 0L) transaction.commit();
+        }
+        return inserted;
+    }
+
+    private long insertCompensation(int slot, AEKey key, long amount, TransactionContext transaction) {
+        if (amount <= 0L) return 0L;
+        long available = localAvailable(slot, key);
+        long inserted = Math.min(amount, available);
+        if (inserted == 0L) return 0L;
+        long currentAmount = inventory.getAmount(slot);
+        inventory.updateSnapshots(transaction);
+        inventory.setStack(slot, new GenericStack(key, currentAmount + inserted));
+        localChanged = true;
+        return inserted;
     }
 
     private long localAvailable(int slot, AEKey key) {
@@ -282,13 +329,27 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
     }
 
     private void stageNetwork(MEStorage network, AEKey key, long amount, TransactionContext transaction) {
+        stageNetwork(network, key, amount, transaction, null);
+    }
+
+    private void stageNetwork(MEStorage network, AEKey key, long amount, TransactionContext transaction,
+                              @Nullable Integer fallbackSlot) {
         updateSnapshots(transaction);
-        pendingNetwork.computeIfAbsent(network, ignored -> new HashMap<>())
-                .merge(key, amount, AE2OutputResourceStorage::saturatingAdd);
+        Map<AEKey, PendingNetwork> byKey = pendingNetwork.computeIfAbsent(network, ignored -> new HashMap<>());
+        PendingNetwork previous = byKey.getOrDefault(key, PendingNetwork.empty());
+        Map<Integer, Long> fallbackAmounts = new HashMap<>(previous.fallbackAmounts());
+        long anyFallbackAmount = previous.anyFallbackAmount();
+        if (fallbackSlot == null) {
+            anyFallbackAmount = saturatingAdd(anyFallbackAmount, amount);
+        } else {
+            fallbackAmounts.merge(fallbackSlot, amount, AE2OutputResourceStorage::saturatingAdd);
+        }
+        byKey.put(key, new PendingNetwork(saturatingAdd(previous.amount(), amount), fallbackAmounts,
+                anyFallbackAmount));
     }
 
     private long pendingAmount(MEStorage network, AEKey key) {
-        return pendingNetwork.getOrDefault(network, Map.of()).getOrDefault(key, 0L);
+        return pendingNetwork.getOrDefault(network, Map.of()).getOrDefault(key, PendingNetwork.empty()).amount();
     }
 
     private IEnergySource energySource() {
@@ -324,8 +385,12 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
 
     @Override
     protected JournalState createSnapshot() {
-        IdentityHashMap<MEStorage, Map<AEKey, Long>> pending = new IdentityHashMap<>();
-        pendingNetwork.forEach((network, amounts) -> pending.put(network, new HashMap<>(amounts)));
+        IdentityHashMap<MEStorage, Map<AEKey, PendingNetwork>> pending = new IdentityHashMap<>();
+        pendingNetwork.forEach((network, amounts) -> {
+            Map<AEKey, PendingNetwork> copied = new HashMap<>();
+            amounts.forEach((key, value) -> copied.put(key, value.copy()));
+            pending.put(network, copied);
+        });
         return new JournalState(pending, localChanged);
     }
 
@@ -338,15 +403,31 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
 
     @Override
     protected void onRootCommit(JournalState originalState) {
-        for (Map.Entry<MEStorage, Map<AEKey, Long>> networkEntry : pendingNetwork.entrySet()) {
-            Map<AEKey, Long> originalAmounts = originalState.pendingNetwork()
+        for (Map.Entry<MEStorage, Map<AEKey, PendingNetwork>> networkEntry : pendingNetwork.entrySet()) {
+            Map<AEKey, PendingNetwork> originalAmounts = originalState.pendingNetwork()
                     .getOrDefault(networkEntry.getKey(), Map.of());
-            for (Map.Entry<AEKey, Long> entry : networkEntry.getValue().entrySet()) {
-                long previous = originalAmounts.getOrDefault(entry.getKey(), 0L);
-                long amount = entry.getValue() - previous;
+            for (Map.Entry<AEKey, PendingNetwork> entry : networkEntry.getValue().entrySet()) {
+                PendingNetwork previous = originalAmounts.getOrDefault(entry.getKey(), PendingNetwork.empty());
+                long amount = entry.getValue().amount() - previous.amount();
                 if (amount > 0L) {
-                    StorageHelper.poweredInsert(energySource(), networkEntry.getKey(), entry.getKey(), amount,
-                            actionSource);
+                    long accepted = StorageHelper.poweredInsert(energySource(), networkEntry.getKey(),
+                            entry.getKey(), amount, actionSource);
+                    accepted = Math.min(amount, Math.max(0L, accepted));
+                    long shortfall = amount - accepted;
+                    if (shortfall > 0L) {
+                        Map<Integer, Long> fallbackAmounts = new HashMap<>();
+                        entry.getValue().fallbackAmounts().forEach((slot, current) -> {
+                            long original = previous.fallbackAmounts().getOrDefault(slot, 0L);
+                            long added = current - original;
+                            if (added > 0L) fallbackAmounts.put(slot, added);
+                        });
+                        long anyFallbackAmount = entry.getValue().anyFallbackAmount()
+                                - previous.anyFallbackAmount();
+                        if (compensateLocally(entry.getKey(), shortfall, fallbackAmounts,
+                                Math.max(0L, anyFallbackAmount)) != shortfall) {
+                            throw new IllegalStateException("Unable to retain AE2 output network shortfall");
+                        }
+                    }
                 }
             }
         }
@@ -364,7 +445,21 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
     private record LocalPortion(int slot, long amount) {
     }
 
-    record JournalState(IdentityHashMap<MEStorage, Map<AEKey, Long>> pendingNetwork,
+    private record PendingNetwork(long amount, Map<Integer, Long> fallbackAmounts, long anyFallbackAmount) {
+        private PendingNetwork {
+            fallbackAmounts = Map.copyOf(fallbackAmounts);
+        }
+
+        private static PendingNetwork empty() {
+            return new PendingNetwork(0L, Map.of(), 0L);
+        }
+
+        private PendingNetwork copy() {
+            return new PendingNetwork(amount, new HashMap<>(fallbackAmounts), anyFallbackAmount);
+        }
+    }
+
+    record JournalState(IdentityHashMap<MEStorage, Map<AEKey, PendingNetwork>> pendingNetwork,
                         boolean localChanged) {
     }
 
