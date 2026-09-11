@@ -5,21 +5,30 @@ import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
+import appeng.api.AECapabilities;
 import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2BridgeBootstrap;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -31,11 +40,14 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
+import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -50,6 +62,15 @@ class AE2InputInterfaceKindTest {
         if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
         bindTestAE2InterfaceItem();
         bindTestEntityType();
+        AE2BridgeBootstrap.installForTesting(new LoadedAE2Bridge());
+        PortKinds.clearForTesting();
+        PortKinds.register(AE2StockingInterfaceKind.INSTANCE);
+    }
+
+    @AfterAll
+    static void cleanup() {
+        PortKinds.clearForTesting();
+        AE2BridgeBootstrap.resetForTesting();
     }
 
     @Test
@@ -125,8 +146,30 @@ class AE2InputInterfaceKindTest {
         assertThat(capabilities).allSatisfy(capability -> {
             assertThat(capability.directions().supports(IOType.INPUT)).isTrue();
             assertThat(capability.directions().supports(IOType.OUTPUT)).isFalse();
+            assertThat(capability.facet(ResourceFacet.class)).isPresent();
+            assertThat(capability.facet(OperationFacet.class)).isPresent();
             assertThat(capability.facet(TransferFacet.class)).isEmpty();
         });
+    }
+
+    @Test
+    void stockingCapabilityIsNotProjectedToNativeHandlers() {
+        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        RegisterCapabilitiesEvent event = capabilityEvent();
+        ModCapabilities.register(event);
+
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var level = LevelStub.create(Blocks.IRON_BLOCK, 1, 1, 1, BlockPos.ZERO);
+        assertThat(ModCapabilities.ITEM_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+                .isNull();
+        assertThat(ModCapabilities.FLUID_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+                .isNull();
+        assertThat(AECapabilities.GENERIC_INTERNAL_INV.getCapability(level, BlockPos.ZERO, state, entity,
+                Direction.NORTH)).isNull();
+        assertThat(AECapabilities.ME_STORAGE.getCapability(level, BlockPos.ZERO, state, entity,
+                Direction.NORTH)).isNull();
+        assertThat(AECapabilities.IN_WORLD_GRID_NODE_HOST.getCapability(level, BlockPos.ZERO, state, entity,
+                null)).isSameAs(entity);
     }
 
     @Test
@@ -169,6 +212,16 @@ class AE2InputInterfaceKindTest {
                     AE2StockingInterfaceKind.INSTANCE);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to construct stocking interface test host", exception);
+        }
+    }
+
+    private static RegisterCapabilitiesEvent capabilityEvent() {
+        try {
+            Constructor<RegisterCapabilitiesEvent> constructor = RegisterCapabilitiesEvent.class.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            return constructor.newInstance();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to create capability registration event", exception);
         }
     }
 

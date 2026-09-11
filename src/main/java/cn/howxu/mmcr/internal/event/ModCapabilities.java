@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.event;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -135,7 +136,8 @@ public final class ModCapabilities {
                 (be, side) -> {
                     if (!(be instanceof IOPortBlockEntity port)
                             || port.ioType() != kind.ioType()) return null;
-                    ResourceStorage<ItemResource> storage = resourceStorage(port, bindings, side, ItemResource.class);
+                    ResourceStorage<ItemResource> storage = resourceStorage(port, bindings, side, ItemResource.class,
+                            true);
                     if (storage == null) return null;
                     return resourceStorageHandler(storage, canInsert, true);
                 });
@@ -150,7 +152,8 @@ public final class ModCapabilities {
                 (be, side) -> {
                     if (!(be instanceof IOPortBlockEntity port)
                             || port.ioType() != kind.ioType()) return null;
-                    ResourceStorage<FluidResource> storage = resourceStorage(port, bindings, side, FluidResource.class);
+                    ResourceStorage<FluidResource> storage = resourceStorage(port, bindings, side, FluidResource.class,
+                            true);
                     if (storage == null) return null;
                     return resourceStorageHandler(storage, canInsert, !canInsert);
                 });
@@ -182,9 +185,19 @@ public final class ModCapabilities {
     static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
                                                    List<CapabilityBinding> bindings, Direction side,
                                                    Class<R> resourceType) {
+        return resourceStorage(port, bindings, side, resourceType, false);
+    }
+
+    private static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
+                                                          List<CapabilityBinding> bindings, Direction side,
+                                                          Class<R> resourceType, boolean requireTransferFacet) {
         for (CapabilityBinding binding : bindings) {
             if (!port.isNativeSideExposed(binding, side)) continue;
-            ResourceStorage<R> storage = CapabilityFactories.resourceStorage(port.capability(binding.type()), resourceType);
+            var capability = port.capability(binding.type());
+            if (requireTransferFacet && capability.facet(TransferFacet.class).isEmpty()) {
+                continue;
+            }
+            ResourceStorage<R> storage = CapabilityFactories.resourceStorage(capability, resourceType);
             if (storage != null) return storage;
         }
         return null;
