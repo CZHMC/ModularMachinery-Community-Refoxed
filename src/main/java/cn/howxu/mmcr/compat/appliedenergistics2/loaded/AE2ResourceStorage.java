@@ -57,7 +57,7 @@ public abstract class AE2ResourceStorage<R> implements ResourceStorage<R> {
         if (resource == null) return inventory.getCapacity(adapter.keyType());
         if (!adapter.resourceType().isInstance(resource)) return 0L;
         AEKey key = adapter.toKey(resource);
-        return key == null ? 0L : inventory.getMaxAmount(key);
+        return key == null ? inventory.getCapacity(adapter.keyType()) : inventory.getMaxAmount(key);
     }
 
     @Override

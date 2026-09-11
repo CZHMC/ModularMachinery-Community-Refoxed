@@ -5,6 +5,7 @@ import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -13,6 +14,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import snownee.jade.api.IWailaClientRegistration;
+import snownee.jade.api.IWailaCommonRegistration;
 
 import java.util.List;
 
@@ -64,5 +67,16 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         event.registerBlockEntity(AECapabilities.ME_STORAGE, blockEntityType,
                 (be, side) -> be instanceof AE2InputInterfaceBlockEntity host
                         ? host.getInterfaceLogic().getInventory() : null);
+    }
+
+    @Override
+    public void registerJadeCommon(IWailaCommonRegistration registration) {
+        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
+                AE2InputInterfaceBlockEntity.class);
+    }
+
+    @Override
+    public void registerJadeClient(IWailaClientRegistration registration) {
+        registration.registerBlockComponent(AE2InputInterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class);
     }
 }
