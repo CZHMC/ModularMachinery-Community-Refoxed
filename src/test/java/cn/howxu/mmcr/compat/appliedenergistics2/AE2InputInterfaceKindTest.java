@@ -22,6 +22,8 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.FluidHatchSize;
+import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -97,6 +99,16 @@ class AE2InputInterfaceKindTest {
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
         assertThat(kind.definition().bindings()).extracting(binding -> binding.type().id())
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+    }
+
+    @Test
+    void ae2InputKindsOutrankEveryOrdinaryInputPort() {
+        assertThat(AE2InputInterfaceKind.INSTANCE.families())
+                .extracting(PortFamilyDescriptor::detectionTier)
+                .containsExactlyInAnyOrder(ItemBusSize.values().length, FluidHatchSize.values().length);
+        assertThat(AE2StockingInterfaceKind.INSTANCE.families())
+                .extracting(PortFamilyDescriptor::detectionTier)
+                .containsExactlyInAnyOrder(ItemBusSize.values().length, FluidHatchSize.values().length);
     }
 
     @Test

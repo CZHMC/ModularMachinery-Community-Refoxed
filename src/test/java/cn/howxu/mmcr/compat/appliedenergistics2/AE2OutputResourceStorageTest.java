@@ -35,6 +35,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies normal AE2 output storage prefers the network and keeps a bounded local cache.
@@ -101,6 +102,29 @@ class AE2OutputResourceStorageTest {
         assertThat(network.calls()).extracting(FakeMEStorage.InsertCall::amount)
                 .containsExactly(8L, 8L, 8L);
         assertThat(network.calls()).allSatisfy(call -> assertThat(call.source()).isNotNull());
+    }
+
+    @Test
+    void rootCommitRejectsAnUncompensableNetworkShortfallBeforeModulation() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        GenericStackInv cache = inventory(1);
+        cache.setStack(0, new GenericStack(AEItemKey.of(iron), 63L));
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
+        network.setModulationLimit(3L);
+        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+
+        assertThatThrownBy(() -> {
+            try (Transaction transaction = Transaction.openRoot()) {
+                storage.insert(0, iron, 8L, transaction);
+                transaction.commit();
+            }
+        }).hasRootCauseMessage("Unable to retain AE2 output network shortfall");
+
+        assertThat(network.amount(AEItemKey.of(iron))).isZero();
+        assertThat(storage.amount(0)).isEqualTo(63L);
+        assertThat(network.calls()).extracting(FakeMEStorage.InsertCall::mode)
+                .contains(Actionable.MODULATE);
+        assertThat(network.extractedAmount()).isEqualTo(3L);
     }
 
     @Test
@@ -367,6 +391,26 @@ class AE2OutputResourceStorageTest {
                 .doesNotContain(Actionable.MODULATE);
     }
 
+    @Test
+    void failedFlushRestorationRollsBackTheCacheAndNetworkInsertion() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        RestoreFailureInventory cache = new RestoreFailureInventory();
+        cache.setStack(0, new GenericStack(AEItemKey.of(iron), 8L));
+        cache.failRestore = true;
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
+        network.setModulationLimit(3L);
+        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
+                AE2ItemResourceStorage.adapter(), source(), () -> {
+                });
+
+        assertThatThrownBy(() -> storage.flushToNetwork(8L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Unable to restore AE2 output cache");
+
+        assertThat(network.amount(AEItemKey.of(iron))).isZero();
+        assertThat(storage.amount(0)).isEqualTo(8L);
+    }
+
     private static AE2OutputResourceStorage<ItemResource> itemStorage(GenericStackInv cache,
                                                                          FakeMEStorage network) {
         return new AE2OutputResourceStorage<>(cache, () -> network,
@@ -429,11 +473,28 @@ class AE2OutputResourceStorageTest {
         }
     }
 
+    private static final class RestoreFailureInventory extends GenericStackInv {
+        private boolean failRestore;
+
+        private RestoreFailureInventory() {
+            super(Set.of(AEKeyType.items(), AEKeyType.fluids()), null, Mode.STORAGE, 1);
+        }
+
+        @Override
+        public void setStack(int slot, GenericStack stack) {
+            if (failRestore && stack != null && stack.amount() == 5L) {
+                throw new IllegalStateException("Unable to restore AE2 output cache");
+            }
+            super.setStack(slot, stack);
+        }
+    }
+
     private static final class FakeMEStorage implements MEStorage {
         private final Map<AEKey, Long> amounts = new HashMap<>();
         private final Map<AEKey, Long> capacities = new HashMap<>();
         private final List<InsertCall> calls = new ArrayList<>();
         private long modulationLimit = Long.MAX_VALUE;
+        private long extractedAmount;
 
         private record InsertCall(AEKey key, long amount, Actionable mode, IActionSource source) {
         }
@@ -459,6 +520,17 @@ class AE2OutputResourceStorageTest {
         }
 
         @Override
+        public long extract(AEKey key, long amount, Actionable mode, IActionSource source) {
+            long current = amounts.getOrDefault(key, 0L);
+            long extracted = Math.min(amount, current);
+            if (mode == Actionable.MODULATE && extracted > 0L) {
+                amounts.put(key, current - extracted);
+                extractedAmount += extracted;
+            }
+            return extracted;
+        }
+
+        @Override
         public Component getDescription() {
             return Component.literal("test");
         }
@@ -469,6 +541,10 @@ class AE2OutputResourceStorageTest {
 
         private List<InsertCall> calls() {
             return List.copyOf(calls);
+        }
+
+        private long extractedAmount() {
+            return extractedAmount;
         }
     }
 }

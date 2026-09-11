@@ -7,7 +7,9 @@ import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.util.IOType;
@@ -23,8 +25,10 @@ import java.util.List;
 public final class AE2StockingInterfaceKind implements IOPortKind {
     private static final String ID = "ae2_me_stocking_input_interface";
     private static final List<PortFamilyDescriptor> FAMILIES = List.of(
-            new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, 0, List.of("item_input_bus")),
-            new PortFamilyDescriptor(PortFamilyIds.FLUID, IOType.INPUT, 0, List.of("fluid_input_hatch")));
+            new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, ItemBusSize.values().length,
+                    List.of("item_input_bus")),
+            new PortFamilyDescriptor(PortFamilyIds.FLUID, IOType.INPUT, FluidHatchSize.values().length,
+                    List.of("fluid_input_hatch")));
 
     public static final AE2StockingInterfaceKind INSTANCE = new AE2StockingInterfaceKind();
 

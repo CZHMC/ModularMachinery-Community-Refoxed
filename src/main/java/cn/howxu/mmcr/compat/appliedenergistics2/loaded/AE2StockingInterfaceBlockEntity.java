@@ -9,6 +9,7 @@ import appeng.api.networking.IStackWatcher;
 import appeng.api.networking.storage.IStorageWatcherNode;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEFluidKey;
+import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import appeng.api.util.AECableType;
 import appeng.api.storage.MEStorage;
@@ -18,6 +19,7 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.me.storage.NullInventory;
+import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2FluidNetworkResourceStorage;
@@ -98,6 +100,7 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
     AE2StockingInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
+        configureStorageMirrorCapacity();
     }
 
     @Override
@@ -235,6 +238,15 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
         configureWatcher();
     }
 
+    private void configureStorageMirrorCapacity() {
+        var storage = logic.getStorage();
+        if (storage instanceof ConfigInventoryAccessor accessor) {
+            accessor.mmcr$setAllowOverstacking(true);
+        }
+        storage.setCapacity(AEKeyType.items(), Long.MAX_VALUE);
+        storage.setCapacity(AEKeyType.fluids(), Long.MAX_VALUE);
+    }
+
     private void clearNetworkWatcher() {
         if (storageWatcher != null) storageWatcher.reset();
         storageWatcher = null;
@@ -273,6 +285,7 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     private void refreshStorageMirror() {
+        if (level != null && level.isClientSide()) return;
         IGrid grid = mainNode.getGrid();
         boolean reportAmounts = mainNode.isActive() && grid != null;
         var cachedInventory = reportAmounts ? grid.getStorageService().getCachedInventory() : null;
@@ -294,6 +307,7 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     private void updateStorageMirror(AEKey changedKey, long amount) {
+        if (level != null && level.isClientSide()) return;
         var storage = logic.getStorage();
         storage.beginBatch();
         try {

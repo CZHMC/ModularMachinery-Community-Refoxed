@@ -203,6 +203,7 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
 
             long requested = Math.min(stack.amount(), operationLimit - moved);
             long originalAmount = stack.amount();
+            long accepted = 0L;
             try (Transaction transaction = Transaction.openRoot()) {
                 long extracted = extractLocal(slot, stack.what(), requested, transaction);
                 if (extracted != requested) continue;
@@ -211,7 +212,7 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
                 possible = Math.min(requested, Math.max(0L, possible));
                 if (possible == 0L) continue;
 
-                long accepted = StorageHelper.poweredInsert(energySource(), network, stack.what(), possible,
+                accepted = StorageHelper.poweredInsert(energySource(), network, stack.what(), possible,
                         actionSource);
                 accepted = Math.min(possible, Math.max(0L, accepted));
                 if (accepted == 0L) continue;
@@ -219,9 +220,31 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
                 restoreLocalToAmount(slot, stack.what(), originalAmount - accepted, transaction);
                 transaction.commit();
                 moved += accepted;
+            } catch (RuntimeException exception) {
+                if (accepted > 0L) {
+                    try {
+                        long reverted = network.extract(stack.what(), accepted, Actionable.MODULATE, actionSource);
+                        if (reverted != accepted) {
+                            throw rollbackFailure(exception);
+                        }
+                    } catch (RuntimeException rollbackException) {
+                        if (rollbackException == exception) throw rollbackException;
+                        IllegalStateException failure = rollbackFailure(exception);
+                        failure.addSuppressed(rollbackException);
+                        throw failure;
+                    }
+                }
+                throw exception;
             }
         }
         return moved;
+    }
+
+    private static IllegalStateException rollbackFailure(RuntimeException cause) {
+        IllegalStateException failure = new IllegalStateException(
+                "Unable to roll back AE2 output network flush");
+        failure.addSuppressed(cause);
+        return failure;
     }
 
     private long insertLocal(int slot, AEKey key, long amount, TransactionContext transaction) {
@@ -278,9 +301,27 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
                     inserted += insertCompensation(slot, key, amount - inserted, transaction);
                 }
             }
-            if (inserted > 0L) transaction.commit();
+            if (inserted != amount) return 0L;
+            transaction.commit();
         }
         return inserted;
+    }
+
+    private long localCompensationCapacity(AEKey key, long amount, Map<Integer, Long> preferredSlots,
+                                           long anyFallbackAmount) {
+        long available = 0L;
+        for (Map.Entry<Integer, Long> entry : preferredSlots.entrySet()) {
+            if (available >= amount) break;
+            long requested = Math.min(amount - available, entry.getValue());
+            available = saturatingAdd(available, Math.min(requested, localAvailable(entry.getKey(), key)));
+        }
+        if (available < amount && anyFallbackAmount > 0L) {
+            for (int slot = 0; slot < inventory.size() && available < amount; slot++) {
+                available = saturatingAdd(available,
+                        Math.min(amount - available, localAvailable(slot, key)));
+            }
+        }
+        return available;
     }
 
     private long insertCompensation(int slot, AEKey key, long amount, TransactionContext transaction) {
@@ -410,21 +451,27 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
                 PendingNetwork previous = originalAmounts.getOrDefault(entry.getKey(), PendingNetwork.empty());
                 long amount = entry.getValue().amount() - previous.amount();
                 if (amount > 0L) {
+                    Map<Integer, Long> fallbackAmounts = new HashMap<>();
+                    entry.getValue().fallbackAmounts().forEach((slot, current) -> {
+                        long original = previous.fallbackAmounts().getOrDefault(slot, 0L);
+                        long added = current - original;
+                        if (added > 0L) fallbackAmounts.put(slot, added);
+                    });
+                    long anyFallbackAmount = entry.getValue().anyFallbackAmount()
+                            - previous.anyFallbackAmount();
+                    long localCapacity = localCompensationCapacity(entry.getKey(), amount, fallbackAmounts,
+                            Math.max(0L, anyFallbackAmount));
                     long accepted = StorageHelper.poweredInsert(energySource(), networkEntry.getKey(),
                             entry.getKey(), amount, actionSource);
                     accepted = Math.min(amount, Math.max(0L, accepted));
                     long shortfall = amount - accepted;
                     if (shortfall > 0L) {
-                        Map<Integer, Long> fallbackAmounts = new HashMap<>();
-                        entry.getValue().fallbackAmounts().forEach((slot, current) -> {
-                            long original = previous.fallbackAmounts().getOrDefault(slot, 0L);
-                            long added = current - original;
-                            if (added > 0L) fallbackAmounts.put(slot, added);
-                        });
-                        long anyFallbackAmount = entry.getValue().anyFallbackAmount()
-                                - previous.anyFallbackAmount();
-                        if (compensateLocally(entry.getKey(), shortfall, fallbackAmounts,
+                        if (localCapacity < shortfall
+                                || compensateLocally(entry.getKey(), shortfall, fallbackAmounts,
                                 Math.max(0L, anyFallbackAmount)) != shortfall) {
+                            if (accepted > 0L) {
+                                rollbackNetworkInsert(networkEntry.getKey(), entry.getKey(), accepted);
+                            }
                             throw new IllegalStateException("Unable to retain AE2 output network shortfall");
                         }
                     }
@@ -435,6 +482,11 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
         boolean changed = localChanged;
         localChanged = false;
         if (changed) changeCallback.run();
+    }
+
+    private void rollbackNetworkInsert(MEStorage network, AEKey key, long amount) {
+        long reverted = network.extract(key, amount, Actionable.MODULATE, actionSource);
+        if (reverted != amount) throw new IllegalStateException("Unable to roll back AE2 output network insert");
     }
 
     private CapabilityResult failure(String reason) {

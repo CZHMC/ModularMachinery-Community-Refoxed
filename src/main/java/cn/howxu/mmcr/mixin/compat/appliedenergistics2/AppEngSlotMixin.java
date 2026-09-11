@@ -4,6 +4,8 @@ import appeng.menu.AEBaseMenu;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.slot.AppEngSlot;
 import appeng.util.ConfigMenuInventory;
+import appeng.api.inventories.InternalInventory;
+import appeng.api.stacks.GenericStack;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
@@ -26,13 +28,41 @@ public abstract class AppEngSlotMixin {
     protected abstract AEBaseMenu getMenu();
 
     @Shadow
-    public abstract appeng.api.inventories.InternalInventory getInventory();
+    public abstract InternalInventory getInventory();
 
     @Inject(method = "mayPlace", at = @At("HEAD"), cancellable = true)
     private void mmcr$denyStockingDisplayInsert(ItemStack stack, CallbackInfoReturnable<Boolean> callbackInfo) {
         if (mmcr$isStockingDisplaySlot()) {
             callbackInfo.setReturnValue(false);
         }
+    }
+
+    @Inject(method = "set", at = @At("HEAD"), cancellable = true)
+    private void mmcr$syncStockingDisplay(ItemStack stack, CallbackInfo callbackInfo) {
+        if (mmcr$syncStockingDisplay(stack)) {
+            ((Slot) (Object) this).setChanged();
+            callbackInfo.cancel();
+        }
+    }
+
+    @Inject(method = "initialize", at = @At("HEAD"), cancellable = true)
+    private void mmcr$initializeStockingDisplay(ItemStack stack, CallbackInfo callbackInfo) {
+        if (mmcr$syncStockingDisplay(stack)) {
+            callbackInfo.cancel();
+        }
+    }
+
+    private boolean mmcr$syncStockingDisplay(ItemStack stack) {
+        if (getMenu() instanceof InterfaceMenu menu
+                && menu.getHost() instanceof AE2StockingInterfaceBlockEntity host) {
+            GenericStack mirrorStack = GenericStack.unwrapItemStack(stack);
+            if (!(getInventory() instanceof ConfigMenuInventory wrapper)) return false;
+            if (mirrorStack != null && wrapper.getDelegate() == host.getInterfaceLogic().getStorage()) {
+                wrapper.getDelegate().setStack(((Slot) (Object) this).getSlotIndex(), mirrorStack);
+                return true;
+            }
+        }
+        return false;
     }
 
     @Inject(method = "mayPickup", at = @At("HEAD"), cancellable = true)
@@ -46,13 +76,6 @@ public abstract class AppEngSlotMixin {
     private void mmcr$denyStockingDisplayRemove(int amount, CallbackInfoReturnable<ItemStack> callbackInfo) {
         if (mmcr$isStockingDisplaySlot()) {
             callbackInfo.setReturnValue(ItemStack.EMPTY);
-        }
-    }
-
-    @Inject(method = "set", at = @At("HEAD"), cancellable = true)
-    private void mmcr$denyStockingDisplaySet(ItemStack stack, CallbackInfo callbackInfo) {
-        if (mmcr$isStockingDisplaySlot()) {
-            callbackInfo.cancel();
         }
     }
 

@@ -18,6 +18,8 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.function.Supplier;
+
 /**
  * Normal AE2 Interface output host with a bounded local cache.
  *
@@ -26,16 +28,28 @@ import org.jetbrains.annotations.Nullable;
 public final class AE2OutputInterfaceBlockEntity extends AE2OutputInterfaceBaseBlockEntity {
     private final AE2OutputResourceStorage<ItemResource> itemStorage;
     private final AE2OutputResourceStorage<FluidResource> fluidStorage;
+    final OutputTicker outputTicker;
 
     AE2OutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
+        this(pos, state, kind, null, null);
+    }
+
+    AE2OutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind,
+                                  @Nullable Supplier<@Nullable MEStorage> networkSupplier,
+                                  @Nullable IActionSource actionSource) {
         super(pos, state, kind);
-        mainNode.addService(IGridTickable.class, new OutputTicker());
-        itemStorage = new AE2OutputResourceStorage<>(getStorage(), this::networkStorage,
-                AE2ItemResourceStorage.adapter(), IActionSource.ofMachine(this),
-                this::notifyStorageChanged);
-        fluidStorage = new AE2OutputResourceStorage<>(getStorage(), this::networkStorage,
-                AE2FluidResourceStorage.adapter(), IActionSource.ofMachine(this),
-                this::notifyStorageChanged);
+        Supplier<@Nullable MEStorage> effectiveNetworkSupplier = networkSupplier == null
+                ? this::networkStorage : networkSupplier;
+        IActionSource effectiveActionSource = actionSource == null
+                ? IActionSource.ofMachine(this) : actionSource;
+        outputTicker = new OutputTicker();
+        mainNode.addService(IGridTickable.class, outputTicker);
+        itemStorage = new AE2OutputResourceStorage<>(getStorage(), effectiveNetworkSupplier,
+                AE2ItemResourceStorage.adapter(), effectiveActionSource,
+                this::onStorageChanged);
+        fluidStorage = new AE2OutputResourceStorage<>(getStorage(), effectiveNetworkSupplier,
+                AE2FluidResourceStorage.adapter(), effectiveActionSource,
+                this::onStorageChanged);
     }
 
     @Override
@@ -51,6 +65,15 @@ public final class AE2OutputInterfaceBlockEntity extends AE2OutputInterfaceBaseB
     @Override
     protected void onNetworkChanged() {
         super.onNetworkChanged();
+        wakeOutputTicker();
+    }
+
+    private void onStorageChanged() {
+        notifyStorageChanged();
+        wakeOutputTicker();
+    }
+
+    private void wakeOutputTicker() {
         if (!getStorage().isEmpty()) {
             mainNode.ifPresent((grid, node) -> grid.getTickManager().wakeDevice(node));
         }
@@ -62,7 +85,7 @@ public final class AE2OutputInterfaceBlockEntity extends AE2OutputInterfaceBaseB
         return grid == null ? null : grid.getStorageService().getInventory();
     }
 
-    private final class OutputTicker implements IGridTickable {
+    final class OutputTicker implements IGridTickable {
         @Override
         public TickingRequest getTickingRequest(IGridNode node) {
             return new TickingRequest(TickRates.Interface, getStorage().isEmpty());
@@ -70,7 +93,7 @@ public final class AE2OutputInterfaceBlockEntity extends AE2OutputInterfaceBaseB
 
         @Override
         public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
-            if (!mainNode.isActive()) return TickRateModulation.SLEEP;
+            if (!node.isActive()) return TickRateModulation.SLEEP;
 
             long moved = itemStorage.flushToNetwork(AE2OutputResourceStorage.BOUNDED_FLUSH_OPERATION_LIMIT);
             if (moved < AE2OutputResourceStorage.BOUNDED_FLUSH_OPERATION_LIMIT) {

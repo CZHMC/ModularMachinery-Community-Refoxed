@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
@@ -193,6 +194,8 @@ public final class GameTestRegistry {
                 helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
         register(event, "ae2_me_stocking_input_interface", 100,
                 helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
+        register(event, "task2_ae2_output_lifecycle", 100,
+                helper -> new Task2AE2OutputGameTest().outputWakeUpAndActiveNodeLifecycle(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {

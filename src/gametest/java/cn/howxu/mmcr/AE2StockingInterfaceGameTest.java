@@ -51,8 +51,8 @@ import java.util.UUID;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2StockingInterfaceGameTest {
-    private static final long ITEM_AMOUNT = 16L;
-    private static final long FLUID_AMOUNT = 2_000L;
+    private static final long ITEM_AMOUNT = 128L;
+    private static final long FLUID_AMOUNT = 5_000L;
 
     public void stockingInterfaceReadsAndWatchesNetworkStorage(GameTestHelper helper) {
         helper.assertTrue(AE2Bridge.get().available(),
@@ -136,6 +136,13 @@ public class AE2StockingInterfaceGameTest {
             var displaySlot = menu.getSlots(SlotSemantics.STORAGE).get(0);
             helper.assertTrue(!displaySlot.getItem().isEmpty(),
                     "Stocking interface exposes a display fake stack for the configured item");
+            GenericStack displayedItem = GenericStack.unwrapItemStack(displaySlot.getItem());
+            helper.assertTrue(displayedItem != null && displayedItem.amount() == ITEM_AMOUNT,
+                    "Stocking item display preserves the complete network amount");
+            GenericStack displayedFluid = GenericStack.unwrapItemStack(
+                    menu.getSlots(SlotSemantics.STORAGE).get(1).getItem());
+            helper.assertTrue(displayedFluid != null && displayedFluid.amount() == FLUID_AMOUNT,
+                    "Stocking fluid display preserves the complete network amount");
             helper.assertFalse(displaySlot.mayPickup(menuPlayer),
                     "Stocking display fake stack cannot be picked up");
             helper.assertFalse(displaySlot.mayPlace(Items.IRON_INGOT.getDefaultInstance()),
