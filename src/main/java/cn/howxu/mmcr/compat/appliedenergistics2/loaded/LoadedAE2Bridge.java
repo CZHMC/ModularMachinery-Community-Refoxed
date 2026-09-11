@@ -29,6 +29,7 @@ import java.util.List;
  */
 public final class LoadedAE2Bridge implements AE2Bridge {
     private static final String INPUT_INTERFACE_ID = "ae2_me_input_interface";
+    private static final String STOCKING_INTERFACE_ID = "ae2_me_stocking_input_interface";
     private static final Identifier INTERFACE_OVERLAY_TEXTURE =
             Identifier.fromNamespaceAndPath("ae2", "block/interface");
 
@@ -39,18 +40,23 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public List<IOPortKind> portKinds() {
-        return List.of(AE2InputInterfaceKind.INSTANCE);
+        return List.of(AE2InputInterfaceKind.INSTANCE, AE2StockingInterfaceKind.INSTANCE);
     }
 
     @Override
     public boolean isPort(String id) {
-        return INPUT_INTERFACE_ID.equals(id);
+        return INPUT_INTERFACE_ID.equals(id) || STOCKING_INTERFACE_ID.equals(id);
     }
 
     @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
-        if (!(level.getBlockEntity(pos) instanceof AE2InputInterfaceBlockEntity host)) return false;
-        return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
+        if (level.getBlockEntity(pos) instanceof AE2InputInterfaceBlockEntity host) {
+            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
+        }
+        if (level.getBlockEntity(pos) instanceof AE2StockingInterfaceBlockEntity host) {
+            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
+        }
+        return false;
     }
 
     @Override
@@ -60,15 +66,18 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public void registerCapabilities(RegisterCapabilitiesEvent event) {
-        BlockEntityType<?> blockEntityType = ModBlockEntities.BES.get(INPUT_INTERFACE_ID).get();
-        event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, blockEntityType,
+        BlockEntityType<?> inputInterfaceType = ModBlockEntities.BES.get(INPUT_INTERFACE_ID).get();
+        event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, inputInterfaceType,
                 (be, ignored) -> be instanceof AE2InputInterfaceBlockEntity host ? host : null);
-        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, blockEntityType,
+        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, inputInterfaceType,
                 (be, side) -> be instanceof AE2InputInterfaceBlockEntity host
                         ? host.getInterfaceLogic().getStorage() : null);
-        event.registerBlockEntity(AECapabilities.ME_STORAGE, blockEntityType,
+        event.registerBlockEntity(AECapabilities.ME_STORAGE, inputInterfaceType,
                 (be, side) -> be instanceof AE2InputInterfaceBlockEntity host
                         ? host.getInterfaceLogic().getInventory() : null);
+        BlockEntityType<?> stockingInterfaceType = ModBlockEntities.BES.get(STOCKING_INTERFACE_ID).get();
+        event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, stockingInterfaceType,
+                (be, ignored) -> be instanceof AE2StockingInterfaceBlockEntity host ? host : null);
     }
 
     @Override

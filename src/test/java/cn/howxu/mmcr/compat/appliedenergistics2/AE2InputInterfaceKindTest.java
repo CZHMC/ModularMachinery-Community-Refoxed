@@ -8,10 +8,10 @@ import appeng.api.stacks.GenericStack;
 import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
-import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
@@ -36,8 +36,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -46,28 +44,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class AE2InputInterfaceKindTest {
-    private static final IOPortKind STOCKING_KIND = new IOPortKind() {
-        @Override
-        public String id() {
-            return AE2InputInterfaceKind.INSTANCE.id();
-        }
-
-        @Override
-        public IOType ioType() {
-            return IOType.INPUT;
-        }
-
-        @Override
-        public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-            return AE2InputInterfaceKind.INSTANCE.entityFactory();
-        }
-
-        @Override
-        public PortDefinition definition() {
-            return PortDefinition.of(MMCR.id(id()), List.of());
-        }
-    };
-
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
@@ -81,6 +57,18 @@ class AE2InputInterfaceKindTest {
         IOPortKind kind = AE2InputInterfaceKind.INSTANCE;
 
         assertThat(kind.id()).isEqualTo("ae2_me_input_interface");
+        assertThat(kind.ioType()).isEqualTo(IOType.INPUT);
+        assertThat(kind.families()).extracting(PortFamilyDescriptor::familyId)
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(kind.definition().bindings()).extracting(binding -> binding.type().id())
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+    }
+
+    @Test
+    void stockingKindCountsOneItemAndOneFluidInput() {
+        IOPortKind kind = AE2StockingInterfaceKind.INSTANCE;
+
+        assertThat(kind.id()).isEqualTo("ae2_me_stocking_input_interface");
         assertThat(kind.ioType()).isEqualTo(IOType.INPUT);
         assertThat(kind.families()).extracting(PortFamilyDescriptor::familyId)
                 .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
@@ -116,6 +104,29 @@ class AE2InputInterfaceKindTest {
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
 
         assertThat(entity).isExactlyInstanceOf(AE2InputInterfaceBlockEntity.class);
+    }
+
+    @Test
+    void entityFactoryCreatesStockingInterfaceHost() {
+        var entity = AE2StockingInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+
+        assertThat(entity).isExactlyInstanceOf(AE2StockingInterfaceBlockEntity.class);
+    }
+
+    @Test
+    void stockingEntityCapabilitiesUseNetworkStorageWithoutTransferFacet() {
+        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+
+        var capabilities = entity.capabilitySnapshot().capabilities();
+        assertThat(capabilities).hasSize(2)
+                .extracting(capability -> capability.type().id())
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(capabilities).allSatisfy(capability -> {
+            assertThat(capability.directions().supports(IOType.INPUT)).isTrue();
+            assertThat(capability.directions().supports(IOType.OUTPUT)).isFalse();
+            assertThat(capability.facet(TransferFacet.class)).isEmpty();
+        });
     }
 
     @Test
@@ -155,7 +166,7 @@ class AE2InputInterfaceKindTest {
                             IOPortKind.class);
             constructor.setAccessible(true);
             return constructor.newInstance(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
-                    STOCKING_KIND);
+                    AE2StockingInterfaceKind.INSTANCE);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to construct stocking interface test host", exception);
         }
@@ -170,18 +181,23 @@ class AE2InputInterfaceKindTest {
     }
 
     private static void bindTestEntityType() {
-        Identifier id = MMCR.id(AE2InputInterfaceKind.INSTANCE.id());
+        bindTestEntityType(AE2InputInterfaceKind.INSTANCE);
+        bindTestEntityType(AE2StockingInterfaceKind.INSTANCE);
+    }
+
+    private static void bindTestEntityType(IOPortKind kind) {
+        Identifier id = MMCR.id(kind.id());
         MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
         registry.unfreeze(true);
         try {
             if (!registry.containsKey(id)) {
                 Registry.register(registry, id,
-                        new BlockEntityType<>(AE2InputInterfaceKind.INSTANCE.entityFactory(), Blocks.IRON_BLOCK));
+                        new BlockEntityType<>(kind.entityFactory(), Blocks.IRON_BLOCK));
             }
         } finally {
             registry.freeze();
         }
-        ModBlockEntities.BES.put(AE2InputInterfaceKind.INSTANCE.id(),
+        ModBlockEntities.BES.put(kind.id(),
                 DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
     }
 

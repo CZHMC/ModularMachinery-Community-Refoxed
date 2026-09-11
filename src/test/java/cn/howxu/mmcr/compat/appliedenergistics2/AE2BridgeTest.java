@@ -44,7 +44,8 @@ class AE2BridgeTest {
 
         assertThat(bridge.available()).isTrue();
         assertThat(bridge.portKinds()).extracting(IOPortKind::id)
-                .containsExactly("ae2_me_input_interface");
+                .containsExactly("ae2_me_input_interface", "ae2_me_stocking_input_interface");
         assertThat(bridge.isPort("ae2_me_input_interface")).isTrue();
+        assertThat(bridge.isPort("ae2_me_stocking_input_interface")).isTrue();
     }
 }

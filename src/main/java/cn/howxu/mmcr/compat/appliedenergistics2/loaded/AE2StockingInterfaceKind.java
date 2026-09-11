@@ -1,0 +1,71 @@
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.util.IOType;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+
+import java.util.List;
+
+/**
+ * AE2 stocking interface-backed input port kind.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public final class AE2StockingInterfaceKind implements IOPortKind {
+    private static final String ID = "ae2_me_stocking_input_interface";
+    private static final List<PortFamilyDescriptor> FAMILIES = List.of(
+            new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, 0, List.of("item_input_bus")),
+            new PortFamilyDescriptor(PortFamilyIds.FLUID, IOType.INPUT, 0, List.of("fluid_input_hatch")));
+
+    public static final AE2StockingInterfaceKind INSTANCE = new AE2StockingInterfaceKind();
+
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
+            new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE, CapabilityDirections.of(IOType.INPUT),
+                    context -> {
+                        AE2StockingInterfaceBlockEntity host = (AE2StockingInterfaceBlockEntity) context.host();
+                        return new ItemBusCapability(host, host.itemStorage(), IOType.INPUT, false);
+                    },
+                    (binding, tier) -> true),
+            new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, CapabilityDirections.of(IOType.INPUT),
+                    context -> {
+                        AE2StockingInterfaceBlockEntity host = (AE2StockingInterfaceBlockEntity) context.host();
+                        return new FluidHatchCapability(host, host.fluidStorage(), IOType.INPUT, false);
+                    },
+                    (binding, tier) -> true)));
+
+    private AE2StockingInterfaceKind() {}
+
+    @Override
+    public String id() {
+        return ID;
+    }
+
+    @Override
+    public IOType ioType() {
+        return IOType.INPUT;
+    }
+
+    @Override
+    public List<PortFamilyDescriptor> families() {
+        return FAMILIES;
+    }
+
+    @Override
+    public BlockEntityType.BlockEntitySupplier<AE2StockingInterfaceBlockEntity> entityFactory() {
+        return (pos, state) -> new AE2StockingInterfaceBlockEntity(pos, state, this);
+    }
+
+    @Override
+    public PortDefinition definition() {
+        return definition;
+    }
+}
