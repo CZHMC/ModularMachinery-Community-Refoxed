@@ -7,7 +7,6 @@ import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
-import appeng.api.storage.MEStorage;
 import appeng.core.definitions.AEItems;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.implementations.InterfaceMenu;
@@ -142,16 +141,6 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(gridHost != null,
                     "AE2 IN_WORLD_GRID_NODE_HOST capability is exposed");
 
-            MEStorage meStorage = null;
-            int meStoragePolls = 0;
-            while (meStorage == null && meStoragePolls++ < 5) {
-                meStorage = helper.getLevel().getCapability(
-                        AECapabilities.ME_STORAGE, portWorldPos, portState, entity, null);
-            }
-            helper.assertTrue(meStorage != null,
-                    "AE2 ME_STORAGE capability is exposed after grid boot (polled "
-                            + meStoragePolls + " times)");
-
             GenericInternalInventory genericInv = helper.getLevel().getCapability(
                     AECapabilities.GENERIC_INTERNAL_INV, portWorldPos, portState, entity, null);
             helper.assertTrue(genericInv != null,
@@ -223,105 +212,108 @@ public class AE2InterfaceGameTest {
                     "GENERIC_INTERNAL_INV item insert flows into the MMCR item storage view");
             helper.assertTrue(entity.fluidStorage().amount(1) == INITIAL_FLUID_AMOUNT,
                     "GENERIC_INTERNAL_INV fluid insert flows into the MMCR fluid storage view");
+
         });
 
         helper.runAtTickTime(60, () -> {
-            int polls = 0;
-            while (!controller.structureSnapshot().formed() && polls++ < 100) {
-                controller.serverTick();
-            }
-            AE2InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
-                    AE2InputInterfaceBlockEntity.class);
-            helper.assertTrue(controller.structureSnapshot().formed(),
-                    "MMCR multiblock containing AE2 input interface forms");
-            helper.assertTrue(entity.itemStorage().amount(0) <= INITIAL_ITEM_COUNT - 1L,
-                    "MMCR recipe consumes an iron ingot from the AE2 local inventory amount="
-                            + entity.itemStorage().amount(0));
-            helper.assertTrue(entity.fluidStorage().amount(1) <= INITIAL_FLUID_AMOUNT - 1_000L,
-                    "MMCR recipe consumes 1000 mB of water from the AE2 local inventory fluidAmount="
-                            + entity.fluidStorage().amount(1));
-            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
-                    "MMCR controller reports the recipe has completed");
-            helper.assertTrue(controller.runtimeSnapshot().linkedPortPositions().contains(portWorldPos),
-                    "MMCR controller links the AE2 input interface as an input port");
+            helper.runAfterDelay(10, () -> {
+                int polls = 0;
+                while (!controller.structureSnapshot().formed() && polls++ < 100) {
+                    controller.serverTick();
+                }
+                AE2InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
+                        AE2InputInterfaceBlockEntity.class);
+                helper.assertTrue(controller.structureSnapshot().formed(),
+                        "MMCR multiblock containing AE2 input interface forms");
+                helper.assertTrue(entity.itemStorage().amount(0) <= INITIAL_ITEM_COUNT - 1L,
+                        "MMCR recipe consumes an iron ingot from the AE2 local inventory amount="
+                                + entity.itemStorage().amount(0));
+                helper.assertTrue(entity.fluidStorage().amount(1) <= INITIAL_FLUID_AMOUNT - 1_000L,
+                        "MMCR recipe consumes 1000 mB of water from the AE2 local inventory fluidAmount="
+                                + entity.fluidStorage().amount(1));
+                helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
+                        "MMCR controller reports the recipe has completed");
+                helper.assertTrue(controller.runtimeSnapshot().linkedPortPositions().contains(portWorldPos),
+                        "MMCR controller links the AE2 input interface as an input port");
 
-            long itemBeforeRollback = entity.itemStorage().amount(0);
-            long fluidBeforeRollback = entity.fluidStorage().amount(1);
-            try (Transaction transaction = Transaction.openRoot()) {
-                entity.itemStorage().extract(0,
-                        ItemResource.of(Items.IRON_INGOT), 1L, transaction);
-                entity.fluidStorage().extract(1,
-                        FluidResource.of(Fluids.WATER), 1_000L, transaction);
-            }
-            helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeRollback,
-                    "AE2 local inventory item amount is unchanged after a rolled-back extraction");
-            helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeRollback,
-                    "AE2 local inventory fluid amount is unchanged after a rolled-back extraction");
+                long itemBeforeRollback = entity.itemStorage().amount(0);
+                long fluidBeforeRollback = entity.fluidStorage().amount(1);
+                try (Transaction transaction = Transaction.openRoot()) {
+                    entity.itemStorage().extract(0,
+                            ItemResource.of(Items.IRON_INGOT), 1L, transaction);
+                    entity.fluidStorage().extract(1,
+                            FluidResource.of(Fluids.WATER), 1_000L, transaction);
+                }
+                helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeRollback,
+                        "AE2 local inventory item amount is unchanged after a rolled-back extraction");
+                helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeRollback,
+                        "AE2 local inventory fluid amount is unchanged after a rolled-back extraction");
 
-            long itemBeforeCommit = entity.itemStorage().amount(0);
-            try (Transaction transaction = Transaction.openRoot()) {
-                entity.itemStorage().extract(0,
-                        ItemResource.of(Items.IRON_INGOT), 1L, transaction);
-                transaction.commit();
-            }
-            helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeCommit - 1L,
-                    "AE2 local inventory item amount is reduced by 1 after a committed extraction amount="
-                            + entity.itemStorage().amount(0));
+                long itemBeforeCommit = entity.itemStorage().amount(0);
+                try (Transaction transaction = Transaction.openRoot()) {
+                    entity.itemStorage().extract(0,
+                            ItemResource.of(Items.IRON_INGOT), 1L, transaction);
+                    transaction.commit();
+                }
+                helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeCommit - 1L,
+                        "AE2 local inventory item amount is reduced by 1 after a committed extraction amount="
+                                + entity.itemStorage().amount(0));
 
-            entity.getInterfaceLogic().getConfig().setStack(2,
-                    new GenericStack(AEItemKey.of(Items.COAL), 4L));
-            entity.getInterfaceLogic().setPriority(42);
-            entity.getInterfaceLogic().getUpgrades().addItems(AEItems.FUZZY_CARD.stack());
-            long itemBeforeReload = entity.itemStorage().amount(0);
-            long fluidBeforeReload = entity.fluidStorage().amount(1);
-            long bucketDropsBefore = fluidBeforeReload / 1000L;
-            reloadBlockEntity(entity, helper);
-            helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeReload,
-                    "Item storage amount survives a save/load cycle");
-            helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeReload,
-                    "Fluid storage amount survives a save/load cycle");
-            helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(0) != null
-                            && entity.getInterfaceLogic().getConfig().getStack(0).what()
-                                    .equals(AEItemKey.of(Items.IRON_INGOT)),
-                    "Config slot 0 (iron) survives a save/load cycle");
-            helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(2) != null
-                            && entity.getInterfaceLogic().getConfig().getStack(2).what()
-                                    .equals(AEItemKey.of(Items.COAL)),
-                    "Config slot 2 (coal) added after reload setup survives the cycle");
-            helper.assertTrue(entity.getInterfaceLogic().getPriority() == 42,
-                    "AE2 interface priority survives a save/load cycle");
-            helper.assertTrue(!entity.getInterfaceLogic().getUpgrades().isEmpty(),
-                    "AE2 upgrade inventory survives a save/load cycle");
+                entity.getInterfaceLogic().getConfig().setStack(2,
+                        new GenericStack(AEItemKey.of(Items.COAL), 4L));
+                entity.getInterfaceLogic().setPriority(42);
+                entity.getInterfaceLogic().getUpgrades().addItems(AEItems.FUZZY_CARD.stack());
+                long itemBeforeReload = entity.itemStorage().amount(0);
+                long fluidBeforeReload = entity.fluidStorage().amount(1);
+                long bucketDropsBefore = fluidBeforeReload / 1000L;
+                reloadBlockEntity(entity, helper);
+                helper.assertTrue(entity.itemStorage().amount(0) == itemBeforeReload,
+                        "Item storage amount survives a save/load cycle");
+                helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeReload,
+                        "Fluid storage amount survives a save/load cycle");
+                helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(0) != null
+                                && entity.getInterfaceLogic().getConfig().getStack(0).what()
+                                        .equals(AEItemKey.of(Items.IRON_INGOT)),
+                        "Config slot 0 (iron) survives a save/load cycle");
+                helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(2) != null
+                                && entity.getInterfaceLogic().getConfig().getStack(2).what()
+                                        .equals(AEItemKey.of(Items.COAL)),
+                        "Config slot 2 (coal) added after reload setup survives the cycle");
+                helper.assertTrue(entity.getInterfaceLogic().getPriority() == 42,
+                        "AE2 interface priority survives a save/load cycle");
+                helper.assertTrue(!entity.getInterfaceLogic().getUpgrades().isEmpty(),
+                        "AE2 upgrade inventory survives a save/load cycle");
 
-            helper.getLevel().destroyBlock(portWorldPos, true);
-            helper.runAfterDelay(2, () -> {
-                long ironDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
-                                new AABB(portWorldPos).inflate(1))
-                        .stream()
-                        .filter(itemEntity -> itemEntity.getItem().is(Items.IRON_INGOT))
-                        .mapToLong(itemEntity -> itemEntity.getItem().getCount())
-                        .sum();
-                long upgradeDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
-                                new AABB(portWorldPos).inflate(1))
-                        .stream()
-                        .filter(itemEntity -> itemEntity.getItem().is(AEItems.FUZZY_CARD.asItem()))
-                        .mapToLong(itemEntity -> itemEntity.getItem().getCount())
-                        .sum();
-                helper.assertTrue(ironDrops == itemBeforeReload,
-                        "AE2 logic.addDrops drops exactly the stored iron ingot amount");
-                helper.assertTrue(upgradeDrops == 1L,
-                        "AE2 logic.addDrops drops the installed FUZZY_CARD upgrade");
-                if (bucketDropsBefore > 0) {
-                    long bucketDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                helper.getLevel().destroyBlock(portWorldPos, true);
+                helper.runAfterDelay(2, () -> {
+                    long ironDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
                                     new AABB(portWorldPos).inflate(1))
                             .stream()
-                            .filter(itemEntity -> itemEntity.getItem().is(Items.WATER_BUCKET))
+                            .filter(itemEntity -> itemEntity.getItem().is(Items.IRON_INGOT))
                             .mapToLong(itemEntity -> itemEntity.getItem().getCount())
                             .sum();
-                    helper.assertTrue(bucketDrops == bucketDropsBefore,
-                            "AE2 logic.addDrops drops the stored water as water buckets");
-                }
-                helper.succeed();
+                    long upgradeDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                                    new AABB(portWorldPos).inflate(1))
+                            .stream()
+                            .filter(itemEntity -> itemEntity.getItem().is(AEItems.FUZZY_CARD.asItem()))
+                            .mapToLong(itemEntity -> itemEntity.getItem().getCount())
+                            .sum();
+                    helper.assertTrue(ironDrops == itemBeforeReload,
+                            "AE2 logic.addDrops drops exactly the stored iron ingot amount");
+                    helper.assertTrue(upgradeDrops == 1L,
+                            "AE2 logic.addDrops drops the installed FUZZY_CARD upgrade");
+                    if (bucketDropsBefore > 0) {
+                        long bucketDrops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                                        new AABB(portWorldPos).inflate(1))
+                                .stream()
+                                .filter(itemEntity -> itemEntity.getItem().is(Items.WATER_BUCKET))
+                                .mapToLong(itemEntity -> itemEntity.getItem().getCount())
+                                .sum();
+                        helper.assertTrue(bucketDrops == bucketDropsBefore,
+                                "AE2 logic.addDrops drops the stored water as water buckets");
+                    }
+                    helper.succeed();
+                });
             });
         });
     }

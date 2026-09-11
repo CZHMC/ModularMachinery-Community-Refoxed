@@ -3,11 +3,16 @@ package cn.howxu.mmcr.compat.appliedenergistics2;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
+import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.GenericStack;
 import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -23,10 +28,15 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Constructor;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,6 +46,28 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class AE2InputInterfaceKindTest {
+    private static final IOPortKind STOCKING_KIND = new IOPortKind() {
+        @Override
+        public String id() {
+            return AE2InputInterfaceKind.INSTANCE.id();
+        }
+
+        @Override
+        public IOType ioType() {
+            return IOType.INPUT;
+        }
+
+        @Override
+        public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+            return AE2InputInterfaceKind.INSTANCE.entityFactory();
+        }
+
+        @Override
+        public PortDefinition definition() {
+            return PortDefinition.of(MMCR.id(id()), List.of());
+        }
+    };
+
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
@@ -58,8 +90,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void entityViewsShareStorageIdentityAndDoNotExposeTransferFacet() {
-        AE2InputInterfaceBlockEntity entity = AE2InputInterfaceKind.INSTANCE.entityFactory()
-                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+        AE2InputInterfaceBlockEntity entity = ordinaryEntity();
 
         assertThat(entity.kind()).isSameAs(AE2InputInterfaceKind.INSTANCE);
         assertThat(entity.ioType()).isEqualTo(IOType.INPUT);
@@ -77,6 +108,57 @@ class AE2InputInterfaceKindTest {
             assertThat(capability.view().directions().supports(IOType.OUTPUT)).isFalse();
             assertThat(capability.facet(TransferFacet.class)).isEmpty();
         });
+    }
+
+    @Test
+    void entityFactoryCreatesOrdinaryInterfaceHost() {
+        var entity = AE2InputInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+
+        assertThat(entity).isExactlyInstanceOf(AE2InputInterfaceBlockEntity.class);
+    }
+
+    @Test
+    void configMarkersAlwaysUseOneResource() {
+        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+
+        entity.getInterfaceLogic().getConfig().setStack(0,
+                new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
+
+        assertThat(entity.getInterfaceLogic().getConfig().getAmount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void stockingSaveWithoutGridClearsStorageMirror() {
+        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        entity.getInterfaceLogic().getConfig().setStack(0,
+                new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+        entity.getInterfaceLogic().getStorage().setStack(0,
+                new GenericStack(AEItemKey.of(Items.IRON_INGOT), 8L));
+
+        entity.saveChanges();
+
+        assertThat(entity.getInterfaceLogic().getStorage().getStack(0)).isNull();
+        assertThat(entity.itemStorage().amount(0)).isZero();
+    }
+
+    private static AE2InputInterfaceBlockEntity ordinaryEntity() {
+        return AE2InputInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    private static AE2StockingInterfaceBlockEntity newStockingEntity() {
+        try {
+            Constructor<AE2StockingInterfaceBlockEntity> constructor =
+                    AE2StockingInterfaceBlockEntity.class.getDeclaredConstructor(
+                            BlockPos.class, BlockState.class,
+                            IOPortKind.class);
+            constructor.setAccessible(true);
+            return constructor.newInstance(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
+                    STOCKING_KIND);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to construct stocking interface test host", exception);
+        }
     }
 
     private static boolean ae2KeyTypesAreInitialized() {

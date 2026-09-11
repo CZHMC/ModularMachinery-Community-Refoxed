@@ -5,6 +5,8 @@ import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.AE2InputInterfaceJadeComponentProvider;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.AE2InputInterfaceJadeDataProvider;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;

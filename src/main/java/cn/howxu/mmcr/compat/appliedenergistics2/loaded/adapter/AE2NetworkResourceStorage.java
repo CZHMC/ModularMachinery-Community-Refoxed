@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;

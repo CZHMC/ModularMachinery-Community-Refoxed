@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 
 import appeng.api.networking.IGridNode;
 import appeng.me.helpers.IGridConnectedBlockEntity;
