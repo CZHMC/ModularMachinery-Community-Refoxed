@@ -183,6 +183,19 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
+    void normalizedConfigMarkerCanStillBeCleared() {
+        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        var config = entity.getInterfaceLogic().getConfig();
+
+        config.setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
+        assertThat(config.getAmount(0)).isEqualTo(1L);
+
+        config.setStack(0, null);
+
+        assertThat(config.getStack(0)).isNull();
+    }
+
+    @Test
     void stockingSaveWithoutGridClearsStorageMirror() {
         AE2StockingInterfaceBlockEntity entity = newStockingEntity();
         entity.getInterfaceLogic().getConfig().setStack(0,

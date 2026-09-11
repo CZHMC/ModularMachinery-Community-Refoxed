@@ -311,9 +311,9 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
         config.beginBatch();
         try {
             for (int slot = 0; slot < config.size(); slot++) {
-                AEKey key = config.getKey(slot);
-                if (key != null && config.getAmount(slot) != 1L) {
-                    config.setStack(slot, new GenericStack(key, 1L));
+                GenericStack stack = config.getStack(slot);
+                if (stack != null && stack.amount() != 1L) {
+                    config.setStack(slot, new GenericStack(stack.what(), 1L));
                 }
             }
         } finally {
