@@ -39,4 +39,16 @@ class PlanningReservationsTest {
         assertThat(reservations.reserveValue(storage, 6L, true)).isFalse();
         assertThat(reservations.valueAvailable(storage, true)).isEqualTo(5L);
     }
+
+    @Test
+    void output_reservations_are_keyed_by_network_and_copyable() {
+        Object network = new Object();
+        Object key = new Object();
+        PlanningReservations reservations = new PlanningReservations();
+
+        assertThat(reservations.outputAvailable(network, key, 5L)).isEqualTo(5L);
+        assertThat(reservations.reserveOutput(network, key, 4L)).isTrue();
+        assertThat(reservations.outputAvailable(network, key, 5L)).isEqualTo(1L);
+        assertThat(reservations.copy().outputAvailable(network, key, 5L)).isEqualTo(1L);
+    }
 }

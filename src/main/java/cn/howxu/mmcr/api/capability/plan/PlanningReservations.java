@@ -16,6 +16,7 @@ import java.util.Map;
  */
 public final class PlanningReservations {
     private final Map<Object, Map<Integer, ResourceReservation>> resources = new IdentityHashMap<>();
+    private final Map<Object, Map<Object, Long>> outputReservations = new IdentityHashMap<>();
     private final Map<LongValueStorage, Long> values = new IdentityHashMap<>();
 
     public Object resource(ResourceStorage<?> storage, int slot) {
@@ -67,6 +68,37 @@ public final class PlanningReservations {
         }
         reservation.insertedResource = resource;
         reservation.inserted = inserted;
+        return true;
+    }
+
+    public long outputAvailable(Object identity, Object key, long capacity) {
+        checkOutputReservationKey(identity, key);
+        if (capacity < 0L) throw new IllegalArgumentException("capacity must be non-negative");
+        Map<Object, Long> byKey = outputReservations.get(identity);
+        long reserved = byKey == null ? 0L : byKey.getOrDefault(key, 0L);
+        try {
+            return Math.max(0L, Math.subtractExact(capacity, reserved));
+        } catch (ArithmeticException ignored) {
+            return 0L;
+        }
+    }
+
+    public boolean reserveOutput(Object identity, Object key, long amount) {
+        checkOutputReservationKey(identity, key);
+        if (amount <= 0L) return false;
+        Map<Object, Long> byKey = outputReservations.get(identity);
+        long reserved = byKey == null ? 0L : byKey.getOrDefault(key, 0L);
+        long next;
+        try {
+            next = Math.addExact(reserved, amount);
+        } catch (ArithmeticException ignored) {
+            return false;
+        }
+        if (byKey == null) {
+            byKey = new HashMap<>();
+            outputReservations.put(identity, byKey);
+        }
+        byKey.put(key, next);
         return true;
     }
 
@@ -131,7 +163,15 @@ public final class PlanningReservations {
             copy.resources.put(entry.getKey(), copiedSlots);
         }
         copy.values.putAll(values);
+        for (Map.Entry<Object, Map<Object, Long>> entry : outputReservations.entrySet()) {
+            copy.outputReservations.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        }
         return copy;
+    }
+
+    private static void checkOutputReservationKey(Object identity, Object key) {
+        if (identity == null) throw new IllegalArgumentException("identity must not be null");
+        if (key == null) throw new IllegalArgumentException("key must not be null");
     }
 
     private static boolean mismatchedNonEmptyResource(Object current, Object requested) {
