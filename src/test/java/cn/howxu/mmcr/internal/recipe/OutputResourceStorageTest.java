@@ -23,6 +23,8 @@ class OutputResourceStorageTest {
 
         assertThat(plan.accepted()).isEqualTo(3L);
         assertThat(plan.operation()).isNotNull();
+        assertThat(plan.operation().commit(null)).isEqualTo(CapabilityResult.successful());
+        assertThat(storage.amount(0)).isEqualTo(3L);
     }
 
     @Test
