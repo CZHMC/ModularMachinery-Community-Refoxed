@@ -14,8 +14,12 @@ import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2BridgeBootstrap;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
@@ -150,6 +154,132 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
+    void outputKindExposesOneItemAndOneFluidOutput() {
+        IOPortKind kind = AE2OutputInterfaceKind.INSTANCE;
+
+        assertThat(kind.id()).isEqualTo("ae2_me_output_interface");
+        assertThat(kind.ioType()).isEqualTo(IOType.OUTPUT);
+        assertThat(kind.families()).extracting(PortFamilyDescriptor::familyId)
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(kind.definition().bindings()).extracting(binding -> binding.type().id())
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+    }
+
+    @Test
+    void asyncOutputKindExposesOneItemAndOneFluidOutput() {
+        IOPortKind kind = AE2AsyncOutputInterfaceKind.INSTANCE;
+
+        assertThat(kind.id()).isEqualTo("ae2_me_async_output_interface");
+        assertThat(kind.ioType()).isEqualTo(IOType.OUTPUT);
+        assertThat(kind.families()).extracting(PortFamilyDescriptor::familyId)
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(kind.definition().bindings()).extracting(binding -> binding.type().id())
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+    }
+
+    @Test
+    void outputKindUsesOutputAliasesAndMaxPlusOneTiers() {
+        AE2OutputInterfaceKind kind = AE2OutputInterfaceKind.INSTANCE;
+
+        assertThat(kind.families())
+                .allSatisfy(family -> {
+                    int expected = family.familyId().equals(PortFamilyIds.ITEM)
+                            ? ItemBusSize.LUDICROUS.ordinal() + 1
+                            : FluidHatchSize.VACUUM.ordinal() + 1;
+                    assertThat(family.detectionTier()).isEqualTo(expected);
+                })
+                .extracting(PortFamilyDescriptor::countAliases)
+                .containsExactlyInAnyOrder(List.of("item_output_bus"), List.of("fluid_output_hatch"));
+    }
+
+    @Test
+    void asyncOutputKindUsesOutputAliasesAndMaxPlusOneTiers() {
+        AE2AsyncOutputInterfaceKind kind = AE2AsyncOutputInterfaceKind.INSTANCE;
+
+        assertThat(kind.families())
+                .allSatisfy(family -> {
+                    int expected = family.familyId().equals(PortFamilyIds.ITEM)
+                            ? ItemBusSize.LUDICROUS.ordinal() + 1
+                            : FluidHatchSize.VACUUM.ordinal() + 1;
+                    assertThat(family.detectionTier()).isEqualTo(expected);
+                })
+                .extracting(PortFamilyDescriptor::countAliases)
+                .containsExactlyInAnyOrder(List.of("item_output_bus"), List.of("fluid_output_hatch"));
+    }
+
+    @Test
+    void existingInputKindsRemainInputOnly() {
+        assertThat(AE2InputInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
+        assertThat(AE2StockingInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
+    }
+
+    @Test
+    void entityFactoryCreatesOutputInterfaceHost() {
+        var entity = AE2OutputInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+
+        assertThat(entity).isExactlyInstanceOf(AE2OutputInterfaceBlockEntity.class);
+    }
+
+    @Test
+    void entityFactoryCreatesAsyncOutputInterfaceHost() {
+        var entity = AE2AsyncOutputInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+
+        assertThat(entity).isExactlyInstanceOf(AE2AsyncOutputInterfaceBlockEntity.class);
+    }
+
+    @Test
+    void outputEntityCapabilitiesAreOutputOnlyWithoutTransferFacet() {
+        AE2OutputInterfaceBlockEntity entity = newOutputEntity();
+
+        var capabilities = entity.capabilitySnapshot().capabilities();
+        assertThat(capabilities).hasSize(2)
+                .extracting(capability -> capability.type().id())
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(capabilities).allSatisfy(capability -> {
+            assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
+            assertThat(capability.directions().supports(IOType.INPUT)).isFalse();
+            assertThat(capability.facet(TransferFacet.class)).isEmpty();
+        });
+    }
+
+    @Test
+    void asyncOutputEntityCapabilitiesAreOutputOnlyWithoutTransferFacet() {
+        AE2AsyncOutputInterfaceBlockEntity entity = newAsyncOutputEntity();
+
+        var capabilities = entity.capabilitySnapshot().capabilities();
+        assertThat(capabilities).hasSize(2)
+                .extracting(capability -> capability.type().id())
+                .containsExactlyInAnyOrder(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+        assertThat(capabilities).allSatisfy(capability -> {
+            assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
+            assertThat(capability.directions().supports(IOType.INPUT)).isFalse();
+            assertThat(capability.facet(TransferFacet.class)).isEmpty();
+        });
+    }
+
+    @Test
+    void outputCapabilitiesAreNotProjectedToNativeHandlers() {
+        AE2OutputInterfaceBlockEntity entity = newOutputEntity();
+        RegisterCapabilitiesEvent event = capabilityEvent();
+        ModCapabilities.register(event);
+
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var level = LevelStub.create(Blocks.IRON_BLOCK, 1, 1, 1, BlockPos.ZERO);
+        assertThat(ModCapabilities.ITEM_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+                .isNull();
+        assertThat(ModCapabilities.FLUID_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
+                .isNull();
+        assertThat(AECapabilities.GENERIC_INTERNAL_INV.getCapability(level, BlockPos.ZERO, state, entity,
+                Direction.NORTH)).isNull();
+        assertThat(AECapabilities.ME_STORAGE.getCapability(level, BlockPos.ZERO, state, entity,
+                Direction.NORTH)).isNull();
+        assertThat(AECapabilities.IN_WORLD_GRID_NODE_HOST.getCapability(level, BlockPos.ZERO, state, entity,
+                null)).isSameAs(entity);
+    }
+
+    @Test
     void stockingEntityCapabilitiesUseNetworkStorageWithoutTransferFacet() {
         AE2StockingInterfaceBlockEntity entity = newStockingEntity();
 
@@ -252,6 +382,34 @@ class AE2InputInterfaceKindTest {
         }
     }
 
+    private static AE2OutputInterfaceBlockEntity newOutputEntity() {
+        try {
+            Constructor<AE2OutputInterfaceBlockEntity> constructor =
+                    AE2OutputInterfaceBlockEntity.class.getDeclaredConstructor(
+                            BlockPos.class, BlockState.class,
+                            IOPortKind.class);
+            constructor.setAccessible(true);
+            return constructor.newInstance(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
+                    AE2OutputInterfaceKind.INSTANCE);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to construct output interface test host", exception);
+        }
+    }
+
+    private static AE2AsyncOutputInterfaceBlockEntity newAsyncOutputEntity() {
+        try {
+            Constructor<AE2AsyncOutputInterfaceBlockEntity> constructor =
+                    AE2AsyncOutputInterfaceBlockEntity.class.getDeclaredConstructor(
+                            BlockPos.class, BlockState.class,
+                            IOPortKind.class);
+            constructor.setAccessible(true);
+            return constructor.newInstance(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
+                    AE2AsyncOutputInterfaceKind.INSTANCE);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to construct async output interface test host", exception);
+        }
+    }
+
     private static RegisterCapabilitiesEvent capabilityEvent() {
         try {
             Constructor<RegisterCapabilitiesEvent> constructor = RegisterCapabilitiesEvent.class.getDeclaredConstructor();
@@ -273,6 +431,8 @@ class AE2InputInterfaceKindTest {
     private static void bindTestEntityType() {
         bindTestEntityType(AE2InputInterfaceKind.INSTANCE);
         bindTestEntityType(AE2StockingInterfaceKind.INSTANCE);
+        bindTestEntityType(AE2OutputInterfaceKind.INSTANCE);
+        bindTestEntityType(AE2AsyncOutputInterfaceKind.INSTANCE);
     }
 
     private static void bindTestEntityType(IOPortKind kind) {

@@ -22,14 +22,16 @@ import snownee.jade.api.IWailaCommonRegistration;
 import java.util.List;
 
 /**
- * AE2-present bridge implementation: registers the native input port kind and
- * routes the native Interface UI through AE2's menu opener.
+ * AE2-present bridge implementation: registers the native input and output port kinds
+ * and routes the native Interface UI through AE2's menu opener.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class LoadedAE2Bridge implements AE2Bridge {
     private static final String INPUT_INTERFACE_ID = "ae2_me_input_interface";
     private static final String STOCKING_INTERFACE_ID = "ae2_me_stocking_input_interface";
+    private static final String OUTPUT_INTERFACE_ID = "ae2_me_output_interface";
+    private static final String ASYNC_OUTPUT_INTERFACE_ID = "ae2_me_async_output_interface";
     private static final Identifier INTERFACE_OVERLAY_TEXTURE =
             Identifier.fromNamespaceAndPath("ae2", "block/interface");
 
@@ -40,12 +42,19 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public List<IOPortKind> portKinds() {
-        return List.of(AE2InputInterfaceKind.INSTANCE, AE2StockingInterfaceKind.INSTANCE);
+        return List.of(
+                AE2InputInterfaceKind.INSTANCE,
+                AE2StockingInterfaceKind.INSTANCE,
+                AE2OutputInterfaceKind.INSTANCE,
+                AE2AsyncOutputInterfaceKind.INSTANCE);
     }
 
     @Override
     public boolean isPort(String id) {
-        return INPUT_INTERFACE_ID.equals(id) || STOCKING_INTERFACE_ID.equals(id);
+        return INPUT_INTERFACE_ID.equals(id)
+                || STOCKING_INTERFACE_ID.equals(id)
+                || OUTPUT_INTERFACE_ID.equals(id)
+                || ASYNC_OUTPUT_INTERFACE_ID.equals(id);
     }
 
     @Override
@@ -54,6 +63,12 @@ public final class LoadedAE2Bridge implements AE2Bridge {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
         if (level.getBlockEntity(pos) instanceof AE2StockingInterfaceBlockEntity host) {
+            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
+        }
+        if (level.getBlockEntity(pos) instanceof AE2OutputInterfaceBlockEntity host) {
+            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
+        }
+        if (level.getBlockEntity(pos) instanceof AE2AsyncOutputInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
         return false;
@@ -78,6 +93,12 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         BlockEntityType<?> stockingInterfaceType = ModBlockEntities.BES.get(STOCKING_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, stockingInterfaceType,
                 (be, ignored) -> be instanceof AE2StockingInterfaceBlockEntity host ? host : null);
+        BlockEntityType<?> outputInterfaceType = ModBlockEntities.BES.get(OUTPUT_INTERFACE_ID).get();
+        event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, outputInterfaceType,
+                (be, ignored) -> be instanceof AE2OutputInterfaceBlockEntity host ? host : null);
+        BlockEntityType<?> asyncOutputInterfaceType = ModBlockEntities.BES.get(ASYNC_OUTPUT_INTERFACE_ID).get();
+        event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, asyncOutputInterfaceType,
+                (be, ignored) -> be instanceof AE2AsyncOutputInterfaceBlockEntity host ? host : null);
     }
 
     @Override

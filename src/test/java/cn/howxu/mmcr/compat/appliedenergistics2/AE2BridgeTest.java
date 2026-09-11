@@ -44,8 +44,39 @@ class AE2BridgeTest {
 
         assertThat(bridge.available()).isTrue();
         assertThat(bridge.portKinds()).extracting(IOPortKind::id)
-                .containsExactly("ae2_me_input_interface", "ae2_me_stocking_input_interface");
+                .contains(
+                        "ae2_me_input_interface",
+                        "ae2_me_stocking_input_interface");
         assertThat(bridge.isPort("ae2_me_input_interface")).isTrue();
         assertThat(bridge.isPort("ae2_me_stocking_input_interface")).isTrue();
+    }
+
+    @Test
+    void loadedBridgeAlsoContributesTheTwoOutputKinds() {
+        AE2Bridge bridge = AE2BridgeBootstrap.selectForTesting(true);
+
+        assertThat(bridge.portKinds()).extracting(IOPortKind::id)
+                .containsExactlyInAnyOrder(
+                        "ae2_me_input_interface",
+                        "ae2_me_stocking_input_interface",
+                        "ae2_me_output_interface",
+                        "ae2_me_async_output_interface");
+    }
+
+    @Test
+    void loadedBridgeRecognisesTheTwoOutputIds() {
+        AE2Bridge bridge = AE2BridgeBootstrap.selectForTesting(true);
+
+        assertThat(bridge.isPort("ae2_me_output_interface")).isTrue();
+        assertThat(bridge.isPort("ae2_me_async_output_interface")).isTrue();
+    }
+
+    @Test
+    void loadedBridgeReturnsOverlayForAllFourInterfaceIds() {
+        AE2Bridge bridge = AE2BridgeBootstrap.selectForTesting(true);
+        var expected = net.minecraft.resources.Identifier.fromNamespaceAndPath("ae2", "block/interface");
+
+        assertThat(bridge.portKinds())
+                .allSatisfy(kind -> assertThat(bridge.portOverlayTexture(kind)).isEqualTo(expected));
     }
 }
