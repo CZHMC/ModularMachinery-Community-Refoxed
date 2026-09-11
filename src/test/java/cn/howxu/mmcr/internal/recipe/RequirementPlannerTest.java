@@ -55,6 +55,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.minecraft.world.level.material.Fluids;
+import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
@@ -1630,6 +1631,463 @@ class RequirementPlannerTest {
         assertThat(untaggedStorage.resource(0).toStack(1).is(Items.DIAMOND)).isTrue();
         assertThat(taggedStorage.amount(0)).isEqualTo(1L);
         assertThat(taggedStorage.resource(0).toStack(1).is(Items.GOLD_NUGGET)).isTrue();
+    }
+
+    @Test
+    void output_capability_fake_routes_unaccepted_remainder_to_local_slots() {
+        FakeOutputItemStorage storage = new FakeOutputItemStorage(1, 4L, 2L);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(6), 1F, List.of());
+
+        var result = new RequirementPlanner().plan(
+                List.of(requirement),
+                List.of(capability),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(6L);
+                    assertThat(simulation.accepted()).isEqualTo(6L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
+                });
+        assertThat(result.plan().requirements()).singleElement().satisfies(plan ->
+                assertThat(plan.operations()).hasSize(1));
+    }
+
+    @Test
+    void output_capability_fake_shares_network_capacity_between_two_requirements() {
+        FakeOutputItemStorage storage = new FakeOutputItemStorage(0, 0L, 8L);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
+        List<MachineRequirement> outputs = List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(4)));
+
+        var result = new RequirementPlanner().plan(
+                outputs,
+                List.of(capability),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1L);
+        assertThat(result.plan().outputSimulations()).hasSize(2)
+                .allSatisfy(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(4L);
+                    assertThat(simulation.accepted()).isEqualTo(4L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
+                });
+        assertThat(result.plan().requirements()).allSatisfy(plan ->
+                assertThat(plan.operations()).hasSize(1));
+        assertThat(storage.planOutputCalls).isEqualTo(6);
+    }
+
+    @Test
+    void output_capability_fake_keeps_shared_network_total_within_capacity() {
+        FakeOutputItemStorage storage = new FakeOutputItemStorage(0, 0L, 8L);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
+        List<MachineRequirement> outputs = List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(6)),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(6)));
+        PlanningReservations shared = new PlanningReservations();
+
+        var result = new RequirementPlanner().plan(
+                outputs,
+                List.of(capability),
+                new PlanningContext(2, 0, true, shared));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1L);
+        long totalAccepted = result.plan().outputSimulations().stream()
+                .mapToLong(simulation -> simulation.accepted()).sum();
+        assertThat(totalAccepted).isEqualTo(8L);
+        assertThat(result.plan().outputSimulations()).satisfiesExactly(
+                first -> {
+                    assertThat(first.requested()).isEqualTo(6L);
+                    assertThat(first.accepted()).isEqualTo(6L);
+                    assertThat(first.fit()).isEqualTo(OutputFit.FULL);
+                },
+                second -> {
+                    assertThat(second.requested()).isEqualTo(6L);
+                    assertThat(second.accepted()).isEqualTo(2L);
+                    assertThat(second.fit()).isEqualTo(OutputFit.PARTIAL);
+                });
+    }
+
+    @Test
+    void async_output_capability_fake_with_zero_network_returns_no_output_capacity() {
+        FakeAsyncOutputItemStorage storage = new FakeAsyncOutputItemStorage(0L);
+        StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
+        ItemRequirement requirement = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                ironStack(1), 1F, List.of());
+
+        var result = new RequirementPlanner().plan(
+                List.of(requirement),
+                List.of(capability),
+                new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(1L);
+                    assertThat(simulation.accepted()).isZero();
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
+                });
+        assertThat(storage.planOutputCalls).isZero();
+    }
+
+    @Test
+    void fluid_output_capability_fake_shares_network_capacity_between_two_requirements() {
+        FakeOutputFluidStorage storage = new FakeOutputFluidStorage(0, 0L, 1_200L);
+        StorageCapability capability = new StorageCapability(FluidRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
+        List<MachineRequirement> outputs = List.of(
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new FluidStack(Fluids.WATER, 600), 1F, List.of()),
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                        new FluidStack(Fluids.WATER, 600), 1F, List.of()));
+
+        var result = new RequirementPlanner().plan(
+                outputs,
+                List.of(capability),
+                new PlanningContext(2, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(1L);
+        assertThat(result.plan().outputSimulations()).hasSize(2)
+                .allSatisfy(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(600L);
+                    assertThat(simulation.accepted()).isEqualTo(600L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.FULL);
+                });
+    }
+
+    private static final class FakeOutputItemStorage implements OutputResourceStorage<ItemResource> {
+        final Object networkIdentity = new Object();
+        private final long networkCapacity;
+        private final int slotCount;
+        private final long slotCapacity;
+        private final List<@org.jetbrains.annotations.Nullable ItemResource> slotResources;
+        private final long[] slotAmounts;
+        int planOutputCalls;
+
+        FakeOutputItemStorage(int slots, long slotCapacity, long networkCapacity) {
+            this.networkCapacity = networkCapacity;
+            this.slotCount = Math.max(0, slots);
+            this.slotCapacity = slotCapacity;
+            this.slotResources = new ArrayList<>(java.util.Collections.nCopies(slotCount, null));
+            this.slotAmounts = new long[slotCount];
+        }
+
+        @Override
+        public Class<ItemResource> resourceType() {
+            return ItemResource.class;
+        }
+
+        @Override
+        public int size() {
+            return slotCount;
+        }
+
+        @Override
+        public @org.jetbrains.annotations.Nullable ItemResource resource(int slot) {
+            checkSlot(slot);
+            return slotResources.get(slot);
+        }
+
+        @Override
+        public long amount(int slot) {
+            checkSlot(slot);
+            return slotAmounts[slot];
+        }
+
+        @Override
+        public long capacity(int slot, @org.jetbrains.annotations.Nullable ItemResource resource) {
+            checkSlot(slot);
+            return slotCapacity;
+        }
+
+        @Override
+        public boolean isValid(int slot, ItemResource resource) {
+            checkSlot(slot);
+            if (resource == null || resource.isEmpty()) return false;
+            ItemResource current = slotResources.get(slot);
+            return current == null || current.equals(resource);
+        }
+
+        @Override
+        public long insert(int slot, ItemResource resource, long amount, TransactionContext transaction) {
+            if (!isValid(slot, resource)) return 0L;
+            long current = slotAmounts[slot];
+            long inserted = Math.min(amount, Math.max(0L, slotCapacity - current));
+            if (inserted > 0L) {
+                if (current == 0L) slotResources.set(slot, resource);
+                slotAmounts[slot] = current + inserted;
+            }
+            return inserted;
+        }
+
+        @Override
+        public long extract(int slot, ItemResource resource, long amount, TransactionContext transaction) {
+            if (!resource.equals(slotResources.get(slot))) return 0L;
+            long current = slotAmounts[slot];
+            long extracted = Math.min(amount, current);
+            if (extracted > 0L) {
+                slotAmounts[slot] = current - extracted;
+                if (slotAmounts[slot] == 0L) slotResources.set(slot, null);
+            }
+            return extracted;
+        }
+
+        @Override
+        public long outputCapacity(ItemResource resource) {
+            long total = networkCapacity;
+            for (int slot = 0; slot < slotCount; slot++) {
+                if (!isValidResource(slot, resource)) continue;
+                total = saturatingAdd(total, Math.max(0L, capacityResource(slot, resource) - slotAmounts[slot]));
+            }
+            return total;
+        }
+
+        @Override
+        public OutputPlan planOutput(ItemResource resource, long amount, PlanningReservations reservations,
+                                     boolean materialize) {
+            planOutputCalls++;
+            long networkAmount = 0L;
+            if (amount > 0L && networkCapacity > 0L) {
+                long available = reservations.outputAvailable(networkIdentity, resource, networkCapacity);
+                long portion = Math.min(amount, available);
+                if (portion > 0L && reservations.reserveOutput(networkIdentity, resource, portion)) {
+                    networkAmount = portion;
+                }
+            }
+
+            long remaining = amount - networkAmount;
+            for (int slot = 0; slot < slotCount && remaining > 0L; slot++) {
+                if (!isValidResource(slot, resource)) continue;
+                long current = reservations.amount(this, slot);
+                long available = Math.max(0L, capacityResource(slot, resource) - current);
+                long portion = Math.min(remaining, available);
+                if (portion > 0L && reservations.reserveInsert(this, slot, resource, portion)) {
+                    remaining -= portion;
+                }
+            }
+
+            long accepted = amount - remaining;
+            CapabilityOperation operation = materialize && accepted > 0L
+                    ? transaction -> CapabilityResult.successful()
+                    : null;
+            return new OutputPlan(accepted, operation);
+        }
+
+        private void checkSlot(int slot) {
+            if (slot < 0 || slot >= slotCount) throw new IndexOutOfBoundsException(slot);
+        }
+
+        private static long saturatingAdd(long first, long second) {
+            return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
+        }
+    }
+
+    private static final class FakeAsyncOutputItemStorage implements OutputResourceStorage<ItemResource> {
+        final Object networkIdentity = new Object();
+        private final long networkCapacity;
+        int planOutputCalls;
+
+        FakeAsyncOutputItemStorage(long networkCapacity) {
+            this.networkCapacity = networkCapacity;
+        }
+
+        @Override
+        public Class<ItemResource> resourceType() {
+            return ItemResource.class;
+        }
+
+        @Override
+        public int size() {
+            return 0;
+        }
+
+        @Override
+        public ItemResource resource(int slot) {
+            return null;
+        }
+
+        @Override
+        public long amount(int slot) {
+            return 0L;
+        }
+
+        @Override
+        public long capacity(int slot, @org.jetbrains.annotations.Nullable ItemResource resource) {
+            return 0L;
+        }
+
+        @Override
+        public boolean isValid(int slot, ItemResource resource) {
+            return false;
+        }
+
+        @Override
+        public long insert(int slot, ItemResource resource, long amount, TransactionContext transaction) {
+            return 0L;
+        }
+
+        @Override
+        public long extract(int slot, ItemResource resource, long amount, TransactionContext transaction) {
+            return 0L;
+        }
+
+        @Override
+        public long outputCapacity(ItemResource resource) {
+            return networkCapacity;
+        }
+
+        @Override
+        public OutputPlan planOutput(ItemResource resource, long amount, PlanningReservations reservations,
+                                     boolean materialize) {
+            planOutputCalls++;
+            if (amount <= 0L) return new OutputPlan(0L, null);
+            long available = reservations.outputAvailable(networkIdentity, resource, networkCapacity);
+            long accepted = Math.min(amount, available);
+            if (accepted <= 0L || !reservations.reserveOutput(networkIdentity, resource, accepted)) {
+                return new OutputPlan(0L, null);
+            }
+            CapabilityOperation operation = materialize
+                    ? transaction -> CapabilityResult.successful()
+                    : null;
+            return new OutputPlan(accepted, operation);
+        }
+    }
+
+    private static final class FakeOutputFluidStorage implements OutputResourceStorage<FluidResource> {
+        final Object networkIdentity = new Object();
+        private final long networkCapacity;
+        private final int slotCount;
+        private final long slotCapacity;
+        private final List<@org.jetbrains.annotations.Nullable FluidResource> slotResources;
+        private final long[] slotAmounts;
+
+        FakeOutputFluidStorage(int slots, long slotCapacity, long networkCapacity) {
+            this.networkCapacity = networkCapacity;
+            this.slotCount = Math.max(0, slots);
+            this.slotCapacity = slotCapacity;
+            this.slotResources = new ArrayList<>(java.util.Collections.nCopies(slotCount, null));
+            this.slotAmounts = new long[slotCount];
+        }
+
+        @Override
+        public Class<FluidResource> resourceType() {
+            return FluidResource.class;
+        }
+
+        @Override
+        public int size() {
+            return slotCount;
+        }
+
+        @Override
+        public @org.jetbrains.annotations.Nullable FluidResource resource(int slot) {
+            checkSlot(slot);
+            return slotResources.get(slot);
+        }
+
+        @Override
+        public long amount(int slot) {
+            checkSlot(slot);
+            return slotAmounts[slot];
+        }
+
+        @Override
+        public long capacity(int slot, @org.jetbrains.annotations.Nullable FluidResource resource) {
+            checkSlot(slot);
+            return slotCapacity;
+        }
+
+        @Override
+        public boolean isValid(int slot, FluidResource resource) {
+            checkSlot(slot);
+            if (resource == null || resource.isEmpty()) return false;
+            FluidResource current = slotResources.get(slot);
+            return current == null || current.equals(resource);
+        }
+
+        @Override
+        public long insert(int slot, FluidResource resource, long amount, TransactionContext transaction) {
+            if (!isValid(slot, resource)) return 0L;
+            long current = slotAmounts[slot];
+            long inserted = Math.min(amount, Math.max(0L, slotCapacity - current));
+            if (inserted > 0L) {
+                if (current == 0L) slotResources.set(slot, resource);
+                slotAmounts[slot] = current + inserted;
+            }
+            return inserted;
+        }
+
+        @Override
+        public long extract(int slot, FluidResource resource, long amount, TransactionContext transaction) {
+            if (!resource.equals(slotResources.get(slot))) return 0L;
+            long current = slotAmounts[slot];
+            long extracted = Math.min(amount, current);
+            if (extracted > 0L) {
+                slotAmounts[slot] = current - extracted;
+                if (slotAmounts[slot] == 0L) slotResources.set(slot, null);
+            }
+            return extracted;
+        }
+
+        @Override
+        public long outputCapacity(FluidResource resource) {
+            long total = networkCapacity;
+            for (int slot = 0; slot < slotCount; slot++) {
+                if (!isValidResource(slot, resource)) continue;
+                total = saturatingAdd(total, Math.max(0L, capacityResource(slot, resource) - slotAmounts[slot]));
+            }
+            return total;
+        }
+
+        @Override
+        public OutputPlan planOutput(FluidResource resource, long amount, PlanningReservations reservations,
+                                     boolean materialize) {
+            long networkAmount = 0L;
+            if (amount > 0L && networkCapacity > 0L) {
+                long available = reservations.outputAvailable(networkIdentity, resource, networkCapacity);
+                long portion = Math.min(amount, available);
+                if (portion > 0L && reservations.reserveOutput(networkIdentity, resource, portion)) {
+                    networkAmount = portion;
+                }
+            }
+
+            long remaining = amount - networkAmount;
+            for (int slot = 0; slot < slotCount && remaining > 0L; slot++) {
+                if (!isValidResource(slot, resource)) continue;
+                long current = reservations.amount(this, slot);
+                long available = Math.max(0L, capacityResource(slot, resource) - current);
+                long portion = Math.min(remaining, available);
+                if (portion > 0L && reservations.reserveInsert(this, slot, resource, portion)) {
+                    remaining -= portion;
+                }
+            }
+
+            long accepted = amount - remaining;
+            CapabilityOperation operation = materialize && accepted > 0L
+                    ? transaction -> CapabilityResult.successful()
+                    : null;
+            return new OutputPlan(accepted, operation);
+        }
+
+        private void checkSlot(int slot) {
+            if (slot < 0 || slot >= slotCount) throw new IndexOutOfBoundsException(slot);
+        }
+
+        private static long saturatingAdd(long first, long second) {
+            return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
+        }
     }
 
     private static ItemStack ironStack(int count) {

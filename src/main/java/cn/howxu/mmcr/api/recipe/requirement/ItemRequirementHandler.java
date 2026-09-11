@@ -2,12 +2,14 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.util.IOType;
@@ -138,17 +140,22 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         for (MachineCapability capability : capabilities) {
             ResourceStorage<?> storage = RequirementHandlerSupport.resourceStorage(capability, ItemResource.class);
             if (storage == null) continue;
-            for (int slot = 0; slot < storage.size(); slot++) {
-                Object current = storage.resource(slot);
-                if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
-                if (!storage.isValidResource(slot, resource)) continue;
-                long slotCapacity = storage.capacityResource(slot, resource);
-                ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
-                if (facet == null || !facet.supportsLargeStacks()) {
-                    slotCapacity = Math.min(slotCapacity, stack.getMaxStackSize());
-                }
+            if (storage instanceof OutputResourceStorage<?> outputStorage) {
                 capacity = RequirementHandlerSupport.saturatingAdd(capacity,
-                        Math.max(0L, slotCapacity - storage.amount(slot)));
+                        outputCapacity(outputStorage, resource));
+            } else {
+                for (int slot = 0; slot < storage.size(); slot++) {
+                    Object current = storage.resource(slot);
+                    if (current instanceof ItemResource existing && !existing.isEmpty() && !existing.equals(resource)) continue;
+                    if (!storage.isValidResource(slot, resource)) continue;
+                    long slotCapacity = storage.capacityResource(slot, resource);
+                    ResourceFacet<?> facet = capability.facet(ResourceFacet.class).orElse(null);
+                    if (facet == null || !facet.supportsLargeStacks()) {
+                        slotCapacity = Math.min(slotCapacity, stack.getMaxStackSize());
+                    }
+                    capacity = RequirementHandlerSupport.saturatingAdd(capacity,
+                            Math.max(0L, slotCapacity - storage.amount(slot)));
+                }
             }
         }
         if (allowPartialOutputs) return capacity > 0L ? requested : 0;
@@ -177,10 +184,23 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         int stackLimit = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? requirement.stack(null).getMaxStackSize() : 0;
         Map<MachineCapability, List<CapabilityRequests.ResourceAction<ItemResource>>> actionMap = new LinkedHashMap<>();
+        List<CapabilityOperation> dynamicOperations = new ArrayList<>();
         long remaining = amount;
         for (MachineCapability capability : capabilities) {
             ResourceStorage<?> storage = RequirementHandlerSupport.resourceStorage(capability, ItemResource.class);
             if (storage == null) continue;
+            if (storage instanceof OutputResourceStorage<?> outputStorage
+                    && requirement.io() == RecipeModifier.IOType.OUTPUT) {
+                OutputResourceStorage.OutputPlan planned = planDynamicOutput(outputStorage, requestedResource,
+                        remaining, reservations, materialize);
+                long taken = planned.accepted();
+                remaining -= taken;
+                if (materialize && planned.operation() != null) {
+                    dynamicOperations.add(planned.operation());
+                }
+                if (remaining == 0L) break;
+                continue;
+            }
             List<CapabilityRequests.ResourceAction<ItemResource>> actions = new ArrayList<>();
             for (int slot = 0; slot < storage.size() && remaining > 0L; slot++) {
                 Object current = reservations.resource(storage, slot);
@@ -213,17 +233,33 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
             if (remaining == 0L) break;
         }
         if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
-            String reason = requirement.io() == RecipeModifier.IOType.OUTPUT && actionMap.isEmpty()
+            String reason = requirement.io() == RecipeModifier.IOType.OUTPUT
+                    && amount - remaining == 0L
                     ? "no_output_capacity" : "insufficient_resource";
             return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
                     reason), RequirementHandlerSupport.outputSimulation(
                     requestedAmount, amount - remaining));
         }
-        if (actionMap.isEmpty()) return new RequirementPlan.OperationPlan(List.of(),
-                RequirementHandlerSupport.blocked(requirement, "no_output_capacity"),
-                RequirementHandlerSupport.outputSimulation(requestedAmount, 0L));
-        return RequirementHandlerSupport.resourceOperations(actionMap, direction, parallelism, materialize,
-                RequirementHandlerSupport.outputSimulation(requestedAmount, amount - remaining));
+        if (amount - remaining == 0L) {
+            return new RequirementPlan.OperationPlan(List.of(),
+                    RequirementHandlerSupport.blocked(requirement, "no_output_capacity"),
+                    RequirementHandlerSupport.outputSimulation(requestedAmount, 0L));
+        }
+        return RequirementHandlerSupport.resourceOperations(actionMap, dynamicOperations, direction, parallelism,
+                materialize, RequirementHandlerSupport.outputSimulation(requestedAmount, amount - remaining));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static OutputResourceStorage.OutputPlan planDynamicOutput(OutputResourceStorage<?> storage,
+                                                                       Object resource, long amount,
+                                                                       PlanningReservations reservations,
+                                                                       boolean materialize) {
+        return ((OutputResourceStorage) storage).planOutput(resource, amount, reservations, materialize);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static long outputCapacity(OutputResourceStorage<?> storage, Object resource) {
+        return ((OutputResourceStorage) storage).outputCapacity(resource);
     }
 
     private static boolean matchesItem(ItemRequirement requirement, ItemResource resource) {

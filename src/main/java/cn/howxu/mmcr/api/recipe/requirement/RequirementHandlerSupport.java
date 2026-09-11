@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.SaturatingLong;
 import cn.howxu.mmcr.util.IOType;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,14 +97,22 @@ public final class RequirementHandlerSupport {
     public static <R> RequirementPlan.OperationPlan resourceOperations(
             Map<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> actionMap,
             IOType direction, long parallelism, boolean materialize, OutputSimulation outputSimulation) {
-        List<CapabilityOperation> operations = materialize
-                ? actionMap.entrySet().stream()
-                .map(entry -> entry.getKey().prepare(new CapabilityRequests.ResourceRequest<>(
+        return resourceOperations(actionMap, List.of(), direction, parallelism, materialize, outputSimulation);
+    }
+
+    public static <R> RequirementPlan.OperationPlan resourceOperations(
+            Map<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> actionMap,
+            List<CapabilityOperation> dynamicOperations, IOType direction,
+            long parallelism, boolean materialize, OutputSimulation outputSimulation) {
+        List<CapabilityOperation> operations = new ArrayList<>(dynamicOperations);
+        if (materialize) {
+            for (Map.Entry<MachineCapability, List<CapabilityRequests.ResourceAction<R>>> entry : actionMap.entrySet()) {
+                operations.add(entry.getKey().prepare(new CapabilityRequests.ResourceRequest<>(
                         entry.getKey().view().type(), direction,
-                        parallelism, entry.getValue())))
-                .toList()
-                : List.of();
-        return new RequirementPlan.OperationPlan(operations, null, outputSimulation);
+                        parallelism, entry.getValue())));
+            }
+        }
+        return new RequirementPlan.OperationPlan(List.copyOf(operations), null, outputSimulation);
     }
 
     public static long saturatingAdd(long first, long second) {
