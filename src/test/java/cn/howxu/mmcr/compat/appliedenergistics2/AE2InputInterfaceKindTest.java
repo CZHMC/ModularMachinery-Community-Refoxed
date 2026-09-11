@@ -4,6 +4,7 @@ import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.AECapabilities;
 import com.mojang.serialization.Lifecycle;
@@ -42,6 +43,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
+import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -180,6 +182,16 @@ class AE2InputInterfaceKindTest {
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
 
         assertThat(entity.getInterfaceLogic().getConfig().getAmount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void fluidMarkersDefaultToOneBucket() {
+        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+
+        entity.getInterfaceLogic().getConfig().setStack(1,
+                new GenericStack(AEFluidKey.of(Fluids.WATER), 1L));
+
+        assertThat(entity.getInterfaceLogic().getConfig().getAmount(1)).isEqualTo(1_000L);
     }
 
     @Test

@@ -8,6 +8,7 @@ import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.IStackWatcher;
 import appeng.api.networking.storage.IStorageWatcherNode;
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.util.AECableType;
 import appeng.api.storage.MEStorage;
@@ -273,7 +274,7 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
 
     private void refreshStorageMirror() {
         IGrid grid = mainNode.getGrid();
-        boolean reportAmounts = storageWatcher != null && mainNode.isActive() && grid != null;
+        boolean reportAmounts = mainNode.isActive() && grid != null;
         var cachedInventory = reportAmounts ? grid.getStorageService().getCachedInventory() : null;
         var storage = logic.getStorage();
         storage.beginBatch();
@@ -312,8 +313,11 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
         try {
             for (int slot = 0; slot < config.size(); slot++) {
                 GenericStack stack = config.getStack(slot);
-                if (stack != null && stack.amount() != 1L) {
-                    config.setStack(slot, new GenericStack(stack.what(), 1L));
+                long defaultAmount = stack != null && stack.what() instanceof AEFluidKey
+                        ? 1_000L
+                        : 1L;
+                if (stack != null && stack.amount() != defaultAmount) {
+                    config.setStack(slot, new GenericStack(stack.what(), defaultAmount));
                 }
             }
         } finally {

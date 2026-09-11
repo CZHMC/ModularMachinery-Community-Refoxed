@@ -31,6 +31,7 @@ public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
         if (getMenu().getHost() instanceof AE2StockingInterfaceBlockEntity) {
             for (Button button : amountButtons) {
                 button.visible = false;
+                button.active = false;
             }
         }
     }

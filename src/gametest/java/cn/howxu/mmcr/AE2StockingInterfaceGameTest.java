@@ -9,6 +9,8 @@ import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
+import appeng.menu.SlotSemantics;
+import appeng.menu.implementations.InterfaceMenu;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
@@ -27,14 +29,21 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
+import com.mojang.authlib.GameProfile;
+
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * End-to-end GameTest coverage for the AE2 stocking input interface.
@@ -110,6 +119,27 @@ public class AE2StockingInterfaceGameTest {
             helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE,
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Stocking interface does not expose ME_STORAGE");
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
+                            helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
+                    "Stocking interface does not expose an external item handler");
+            helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
+                            helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
+                    "Stocking interface does not expose an external fluid handler");
+
+            ServerPlayer menuPlayer = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                    new GameProfile(UUID.nameUUIDFromBytes(
+                            "mmcr-ae2-stocking-menu-test".getBytes(StandardCharsets.UTF_8)),
+                            "mmcr-ae2-stocking-menu"),
+                    ClientInformation.createDefault());
+            InterfaceMenu menu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
+                    menuPlayer.getInventory(), port);
+            var displaySlot = menu.getSlots(SlotSemantics.STORAGE).get(0);
+            helper.assertTrue(!displaySlot.getItem().isEmpty(),
+                    "Stocking interface exposes a display fake stack for the configured item");
+            helper.assertFalse(displaySlot.mayPickup(menuPlayer),
+                    "Stocking display fake stack cannot be picked up");
+            helper.assertFalse(displaySlot.mayPlace(Items.IRON_INGOT.getDefaultInstance()),
+                    "Stocking display fake stack cannot accept external insertion");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
             helper.assertTrue(snapshot.capabilities().size() == 2,
@@ -135,8 +165,8 @@ public class AE2StockingInterfaceGameTest {
                     "Stocking fluid capability is explicitly bound to the fluid family");
             helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(0) == 1L,
                     "Stocking item marker is normalized to one resource");
-            helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(1) == 1L,
-                    "Stocking fluid marker is normalized to one resource");
+            helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(1) == 1_000L,
+                    "Stocking fluid marker is normalized to one bucket");
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0)
                             .equals(AEItemKey.of(Items.IRON_INGOT)),
                     "Stocking item marker key is iron ingot");
