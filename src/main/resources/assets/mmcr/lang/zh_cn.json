@@ -657,5 +657,7 @@
   "mmcr.unit.temperature": "K",
 
   "block.mmcr.ae2_me_input_interface": "ME输入接口",
-  "item.mmcr.ae2_me_input_interface": "ME输入接口"
+  "item.mmcr.ae2_me_input_interface": "ME输入接口",
+  "block.mmcr.ae2_me_stocking_input_interface": "ME库存输入接口",
+  "item.mmcr.ae2_me_stocking_input_interface": "ME库存输入接口"
 }

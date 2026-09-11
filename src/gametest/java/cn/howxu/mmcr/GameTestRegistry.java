@@ -191,6 +191,8 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
         register(event, "ae2_me_input_interface", 200,
                 helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
+        register(event, "ae2_me_stocking_input_interface", 100,
+                helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
