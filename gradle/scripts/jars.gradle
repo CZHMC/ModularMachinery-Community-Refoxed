@@ -3,5 +3,5 @@ tasks.named('wrapper', Wrapper).configure {
 }
 
 base {
-    archivesName = mod_id + "-neoforge-" + minecraft_version
+    archivesName = mod_id + "-neoforge-mc" + minecraft_version
 }
