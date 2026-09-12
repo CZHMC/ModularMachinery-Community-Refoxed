@@ -4,6 +4,7 @@ import appeng.me.helpers.IGridConnectedBlockEntity;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NonNull;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IComponentProvider;
 import snownee.jade.api.ITooltip;
@@ -19,7 +20,7 @@ public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAc
     INSTANCE;
 
     @Override
-    public Identifier getUid() {
+    public @NonNull Identifier getUid() {
         return InterfaceJadeDataProvider.UID;
     }
 
@@ -29,7 +30,7 @@ public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAc
     }
 
     @Override
-    public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
+    public void appendTooltip(@NonNull ITooltip tooltip, BlockAccessor accessor, @NonNull IPluginConfig config) {
         if (!(accessor.getTarget() instanceof IGridConnectedBlockEntity)) return;
         int state = accessor.getServerData().getByteOr(InterfaceJadeDataProvider.STATE, (byte) 0);
         String key = switch (state) {

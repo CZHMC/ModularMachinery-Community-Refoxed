@@ -5,6 +5,7 @@ import appeng.me.helpers.IGridConnectedBlockEntity;
 import cn.howxu.mmcr.MMCR;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NonNull;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IServerDataProvider;
 
@@ -20,12 +21,12 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
     static final String STATE = "gridNodeState";
 
     @Override
-    public Identifier getUid() {
+    public @NonNull Identifier getUid() {
         return UID;
     }
 
     @Override
-    public void appendServerData(CompoundTag data, BlockAccessor accessor) {
+    public void appendServerData(@NonNull CompoundTag data, BlockAccessor accessor) {
         if (!(accessor.getTarget() instanceof IGridConnectedBlockEntity host)) return;
         data.putByte(STATE, (byte) state(host.getActionableNode()));
     }

@@ -16,6 +16,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.Objects;
+
 /**
  * Minimal world-level coverage for the Task 2 AE2 output lifecycle and wake-up.
  *
@@ -45,8 +47,12 @@ public final class Task2AE2OutputGameTest {
             output.getStorage().setStack(0,
                     new GenericStack(AEItemKey.of(net.minecraft.world.item.Items.IRON_INGOT), 8L));
             IGridNode outputNode = output.getMainNode().getNode();
-            GridHelper.createConnection(outputNode, chest.getMainNode().getNode());
-            GridHelper.createConnection(outputNode, energy.getMainNode().getNode());
+            if (outputNode != null) {
+                GridHelper.createConnection(outputNode, Objects.requireNonNull(chest.getMainNode().getNode()));
+            }
+            if (outputNode != null) {
+                GridHelper.createConnection(outputNode, Objects.requireNonNull(energy.getMainNode().getNode()));
+            }
         });
 
         helper.runAtTickTime(12, () -> {

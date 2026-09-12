@@ -96,7 +96,7 @@ public abstract class NetworkResourceStorage<R> extends SnapshotJournal<Map<AEKe
         long simulationAmount = pending > Long.MAX_VALUE - amount
                 ? Long.MAX_VALUE : pending + amount;
         long available = meStorage.extract(key, simulationAmount, Actionable.SIMULATE, IActionSource.empty());
-        long extractable = Math.min(amount, Math.max(0L, available - pending));
+        long extractable = Math.clamp(available - pending, 0L, amount);
         if (extractable == 0L) return 0L;
 
         updateSnapshots(transaction);

@@ -148,8 +148,12 @@ public class AE2AsyncOutputInterfaceGameTest {
             helper.assertTrue(fluidPlan.accepted() == FLUID_AMOUNT,
                     "Async output fluid plan accepts the requested amount");
             try (Transaction transaction = Transaction.openRoot()) {
-                itemPlan.operation().commit(transaction);
-                fluidPlan.operation().commit(transaction);
+                if (itemPlan.operation() != null) {
+                    itemPlan.operation().commit(transaction);
+                }
+                if (fluidPlan.operation() != null) {
+                    fluidPlan.operation().commit(transaction);
+                }
                 transaction.commit();
             }
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),

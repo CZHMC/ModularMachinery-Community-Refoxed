@@ -122,7 +122,7 @@ public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEK
 
         long simulated = network.insert(key, amount, Actionable.SIMULATE, actionSource);
         long available = simulated <= 0L ? 0L : reservations.outputAvailable(network, key, simulated);
-        long accepted = Math.min(amount, Math.max(0L, available));
+        long accepted = Math.clamp(available, 0L, amount);
         if (accepted == 0L) return new OutputPlan(0L, null);
         if (!reservations.reserveOutput(network, key, accepted)) return new OutputPlan(0L, null);
 

@@ -61,14 +61,11 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import org.jspecify.annotations.NonNull;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * End-to-end GameTest coverage for the AE2 input interface MMCR integration.
@@ -173,11 +170,11 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(entity.getInterfaceLogic().getConfig().size() == 9,
                     "AE2 input interface config inventory has nine slots");
             helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(0) != null
-                            && entity.getInterfaceLogic().getConfig().getStack(0).what()
+                            && Objects.requireNonNull(entity.getInterfaceLogic().getConfig().getStack(0)).what()
                                     .equals(AEItemKey.of(Items.IRON_INGOT)),
                     "AE2 config slot 0 holds the iron filter");
             helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(1) != null
-                            && entity.getInterfaceLogic().getConfig().getStack(1).what()
+                            && Objects.requireNonNull(entity.getInterfaceLogic().getConfig().getStack(1)).what()
                                     .equals(AEFluidKey.of(Fluids.WATER)),
                     "AE2 config slot 1 holds the water filter");
             helper.assertTrue(entity.itemStorage().reservationIdentity() == storageInv,
@@ -209,10 +206,14 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(entity.getInterfaceLogic().getUpgrades().isEmpty(),
                     "AE2 upgrade inventory slots are empty before any upgrade is installed");
 
-            genericInv.insert(0, AEItemKey.of(Items.IRON_INGOT), INITIAL_ITEM_COUNT,
-                    Actionable.MODULATE);
-            genericInv.insert(1, AEFluidKey.of(Fluids.WATER), INITIAL_FLUID_AMOUNT,
-                    Actionable.MODULATE);
+            if (genericInv != null) {
+                genericInv.insert(0, AEItemKey.of(Items.IRON_INGOT), INITIAL_ITEM_COUNT,
+                        Actionable.MODULATE);
+            }
+            if (genericInv != null) {
+                genericInv.insert(1, AEFluidKey.of(Fluids.WATER), INITIAL_FLUID_AMOUNT,
+                        Actionable.MODULATE);
+            }
             helper.assertTrue(entity.itemStorage().amount(0) == INITIAL_ITEM_COUNT,
                     "GENERIC_INTERNAL_INV item insert flows into the MMCR item storage view");
             helper.assertTrue(entity.fluidStorage().amount(1) == INITIAL_FLUID_AMOUNT,
@@ -277,11 +278,11 @@ public class AE2InterfaceGameTest {
                 helper.assertTrue(entity.fluidStorage().amount(1) == fluidBeforeReload,
                         "Fluid storage amount survives a save/load cycle");
                 helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(0) != null
-                                && entity.getInterfaceLogic().getConfig().getStack(0).what()
+                                && Objects.requireNonNull(entity.getInterfaceLogic().getConfig().getStack(0)).what()
                                         .equals(AEItemKey.of(Items.IRON_INGOT)),
                         "Config slot 0 (iron) survives a save/load cycle");
                 helper.assertTrue(entity.getInterfaceLogic().getConfig().getStack(2) != null
-                                && entity.getInterfaceLogic().getConfig().getStack(2).what()
+                                && Objects.requireNonNull(entity.getInterfaceLogic().getConfig().getStack(2)).what()
                                         .equals(AEItemKey.of(Items.COAL)),
                         "Config slot 2 (coal) added after reload setup survives the cycle");
                 helper.assertTrue(entity.getInterfaceLogic().getPriority() == 42,
@@ -376,7 +377,7 @@ public class AE2InterfaceGameTest {
         }
 
         @Override
-        public void send(Packet<?> packet) {
+        public void send(@NonNull Packet<?> packet) {
             packets.add(packet);
         }
     }

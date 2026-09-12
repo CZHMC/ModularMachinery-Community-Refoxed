@@ -43,6 +43,7 @@ import com.mojang.authlib.GameProfile;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -133,7 +134,7 @@ public class AE2StockingInterfaceGameTest {
                     ClientInformation.createDefault());
             InterfaceMenu menu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
                     menuPlayer.getInventory(), port);
-            var displaySlot = menu.getSlots(SlotSemantics.STORAGE).get(0);
+            var displaySlot = menu.getSlots(SlotSemantics.STORAGE).getFirst();
             helper.assertTrue(!displaySlot.getItem().isEmpty(),
                     "Stocking interface exposes a display fake stack for the configured item");
             GenericStack displayedItem = GenericStack.unwrapItemStack(displaySlot.getItem());
@@ -174,15 +175,13 @@ public class AE2StockingInterfaceGameTest {
                     "Stocking item marker is normalized to one resource");
             helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(1) == 1_000L,
                     "Stocking fluid marker is normalized to one bucket");
-            helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0)
-                            .equals(AEItemKey.of(Items.IRON_INGOT)),
+            helper.assertTrue(Objects.equals(port.getInterfaceLogic().getConfig().getKey(0), AEItemKey.of(Items.IRON_INGOT)),
                     "Stocking item marker key is iron ingot");
-            helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(1)
-                            .equals(AEFluidKey.of(Fluids.WATER)),
+            helper.assertTrue(Objects.equals(port.getInterfaceLogic().getConfig().getKey(1), AEFluidKey.of(Fluids.WATER)),
                     "Stocking fluid marker key is water");
-            helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(0).amount() == ITEM_AMOUNT,
+            helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(0)).amount() == ITEM_AMOUNT,
                     "Item display mirror follows the watcher amount");
-            helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(1).amount() == FLUID_AMOUNT,
+            helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(1)).amount() == FLUID_AMOUNT,
                     "Fluid display mirror follows the watcher amount");
 
             CapabilityRequests.ResourceRequest<ItemResource> itemRequest = new CapabilityRequests.ResourceRequest<>(
@@ -221,9 +220,9 @@ public class AE2StockingInterfaceGameTest {
         });
 
         helper.runAtTickTime(12, () -> {
-            helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(0).amount() == ITEM_AMOUNT - 3L,
+            helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(0)).amount() == ITEM_AMOUNT - 3L,
                     "Item watcher display updates on the next tick without a full scan");
-            helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(1).amount() == FLUID_AMOUNT - 1_000L,
+            helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(1)).amount() == FLUID_AMOUNT - 1_000L,
                     "Fluid watcher display updates on the next tick without a full scan");
             helper.succeed();
         });

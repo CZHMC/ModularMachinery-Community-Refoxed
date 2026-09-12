@@ -58,7 +58,7 @@ public final class AsyncOutputService {
                 continue;
             }
             long accepted = StorageHelper.poweredInsert(energy, storage, key, amount, source);
-            accepted = Math.min(amount, Math.max(0L, accepted));
+            accepted = Math.clamp(accepted, 0L, amount);
             if (accepted > 0L) {
                 long acceptedAmount = accepted;
                 pending.compute(key, (ignored, queued) -> {

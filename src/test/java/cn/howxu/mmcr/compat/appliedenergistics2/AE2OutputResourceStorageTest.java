@@ -442,16 +442,16 @@ class AE2OutputResourceStorageTest {
     private static IActionSource source() {
         IEnergyService energy = (IEnergyService) Proxy.newProxyInstance(
                 IEnergyService.class.getClassLoader(), new Class<?>[]{IEnergyService.class},
-                (proxy, method, args) -> method.getName().equals("extractAEPower") ? 1_000_000D
+                (_, method, _) -> method.getName().equals("extractAEPower") ? 1_000_000D
                         : defaultValue(method.getReturnType()));
         IGrid[] grid = new IGrid[1];
         IGridNode node = (IGridNode) Proxy.newProxyInstance(
                 IGridNode.class.getClassLoader(), new Class<?>[]{IGridNode.class},
-                (proxy, method, args) -> method.getName().equals("getGrid") ? grid[0]
+                (_, method, _) -> method.getName().equals("getGrid") ? grid[0]
                         : defaultValue(method.getReturnType()));
         grid[0] = (IGrid) Proxy.newProxyInstance(
                 IGrid.class.getClassLoader(), new Class<?>[]{IGrid.class},
-                (proxy, method, args) -> method.getName().equals("getEnergyService") ? energy
+                (_, method, _) -> method.getName().equals("getEnergyService") ? energy
                         : defaultValue(method.getReturnType()));
         return IActionSource.ofMachine(() -> node);
     }

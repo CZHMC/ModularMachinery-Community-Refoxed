@@ -39,13 +39,13 @@ public final class StockingInterfaceKind implements IOPortKind {
                         StockingInterfaceBlockEntity host = (StockingInterfaceBlockEntity) context.host();
                         return new ItemBusCapability(host, host.itemStorage(), IOType.INPUT, false);
                     },
-                    (binding, tier) -> true),
+                    (_, _) -> true),
             new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, CapabilityDirections.of(IOType.INPUT),
                     context -> {
                         StockingInterfaceBlockEntity host = (StockingInterfaceBlockEntity) context.host();
                         return new FluidHatchCapability(host, host.fluidStorage(), IOType.INPUT, false);
                     },
-                    (binding, tier) -> true)));
+                    (_, _) -> true)));
 
     private StockingInterfaceKind() {}
 

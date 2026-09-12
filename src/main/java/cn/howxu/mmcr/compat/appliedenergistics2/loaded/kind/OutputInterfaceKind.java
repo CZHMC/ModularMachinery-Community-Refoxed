@@ -39,13 +39,13 @@ public final class OutputInterfaceKind implements IOPortKind {
                         OutputInterfaceBlockEntity host = (OutputInterfaceBlockEntity) context.host();
                         return new ItemBusCapability(host, host.itemStorage(), IOType.OUTPUT, false);
                     },
-                    (binding, tier) -> true),
+                    (_, _) -> true),
             new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, CapabilityDirections.of(IOType.OUTPUT),
                     context -> {
                         OutputInterfaceBlockEntity host = (OutputInterfaceBlockEntity) context.host();
                         return new FluidHatchCapability(host, host.fluidStorage(), IOType.OUTPUT, false);
                     },
-                    (binding, tier) -> true)));
+                    (_, _) -> true)));
 
     private OutputInterfaceKind() {}
 

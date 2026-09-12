@@ -103,7 +103,7 @@ class AE2ResourceStorageTest {
 
     @Test
     void storageRejectsAFilteredKeyWithoutChangingTheSlot() {
-        GenericStackInv inventory = new FilteredInventory((slot, key) -> key instanceof AEFluidKey);
+        GenericStackInv inventory = new FilteredInventory((_, key) -> key instanceof AEFluidKey);
         ItemResourceStorage items = new ItemResourceStorage(inventory);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
 
