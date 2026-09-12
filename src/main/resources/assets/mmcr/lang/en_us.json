@@ -82,6 +82,7 @@
   "config.jade.plugin_mmcr.recipe_output": "Recipe Output",
   "config.jade.plugin_mmcr.ae2_input_interface_grid": "AE2 ME Input Interface",
   "container.mmcr.ae2_me_input_interface": "AE2 ME Input Interface",
+  "container.mmcr.ae2_me_stocking_input_interface": "AE2 ME Stocking Input Interface",
   "container.mmcr.ae2_me_output_interface": "AE2 ME Output Interface",
   "container.mmcr.ae2_me_async_output_interface": "AE2 ME Async Output Interface",
   "container.mmcr.energy_input_hatch": "Normal Energy Input Hatch",
