@@ -196,6 +196,10 @@ public final class GameTestRegistry {
                 helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
         register(event, "task2_ae2_output_lifecycle", 100,
                 helper -> new Task2AE2OutputGameTest().outputWakeUpAndActiveNodeLifecycle(helper));
+        register(event, "ae2_me_output_interface", 200,
+                helper -> new AE2OutputInterfaceGameTest().outputInterfaceDrainsToNetworkAndLocksConfig(helper));
+        register(event, "ae2_me_async_output_interface", 200,
+                helper -> new AE2AsyncOutputInterfaceGameTest().asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
