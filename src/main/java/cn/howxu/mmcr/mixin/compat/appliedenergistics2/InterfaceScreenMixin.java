@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 
+import appeng.client.gui.AEBaseScreen;
 import appeng.client.gui.implementations.InterfaceScreen;
-import appeng.client.gui.style.ScreenStyle;
 import appeng.menu.implementations.InterfaceMenu;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
@@ -9,15 +9,13 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Inventory;
-import org.spongepowered.asm.mixin.Final;
-import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArgs;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
 /**
  * Customizes the title and amount controls on the AE2 screen for MMCR interface hosts.
@@ -26,17 +24,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(value = InterfaceScreen.class, remap = false)
 public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
-    @Shadow(remap = false)
-    @Final
-    @Mutable
-    protected Component title;
-
-    @Inject(method = "<init>", at = @At("TAIL"))
-    private void mmcr$replaceTitle(C menu, Inventory playerInventory, Component originalTitle, ScreenStyle style,
-                                    CallbackInfo ci) {
-        if (menu.getHost() instanceof IOPortBlockEntity host) {
-            this.title = Component.translatable("container.mmcr." + host.kind().id());
+    @ModifyArgs(method = "<init>", at = @At(value = "INVOKE", target =
+            "Lappeng/client/gui/implementations/UpgradeableScreen;<init>(Lappeng/menu/implementations/UpgradeableMenu;"
+                    + "Lnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/network/chat/Component;"
+                    + "Lappeng/client/gui/style/ScreenStyle;)V"))
+    private static void mmcr$replaceTitle(Args args) {
+        InterfaceMenu menu = args.get(0);
+        var host = menu.getHost();
+        if (host instanceof IOPortBlockEntity port) {
+            args.set(2, Component.translatable("container.mmcr." + port.kind().id()));
         }
+    }
+
+    @Inject(method = "updateBeforeRender", at = @At("TAIL"))
+    private void mmcr$replaceStyleTitle(CallbackInfo ci) {
+        InterfaceMenu menu = (InterfaceMenu) ((AbstractContainerScreen<?>) (Object) this).getMenu();
+        var host = menu.getHost();
+        Component displayTitle = host instanceof IOPortBlockEntity port
+                ? Component.translatable("container.mmcr." + port.kind().id())
+                : Component.translatable("gui.ae2.Interface");
+        ((AEBaseScreen<?>) (Object) this).getStyle().getText()
+                .get(AEBaseScreen.TEXT_ID_DIALOG_TITLE)
+                .setText(displayTitle);
     }
 
     @Redirect(method = "updateBeforeRender", at = @At(value = "FIELD",
