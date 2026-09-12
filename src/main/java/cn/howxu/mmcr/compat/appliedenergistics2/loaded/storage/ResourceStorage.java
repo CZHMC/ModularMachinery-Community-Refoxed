@@ -1,9 +1,9 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.helpers.externalstorage.GenericStackInv;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
@@ -15,11 +15,11 @@ import java.util.Objects;
  * @param <R> resource type exposed by the view
  * @author howxu <dev@howxu.cn>
  */
-public abstract class AE2ResourceStorage<R> implements ResourceStorage<R> {
+public abstract class ResourceStorage<R> implements cn.howxu.mmcr.api.capability.storage.ResourceStorage<R> {
     protected final GenericStackInv inventory;
     private final AE2KeyAdapter<R> adapter;
 
-    protected AE2ResourceStorage(GenericStackInv inventory, AE2KeyAdapter<R> adapter) {
+    protected ResourceStorage(GenericStackInv inventory, AE2KeyAdapter<R> adapter) {
         this.inventory = Objects.requireNonNull(inventory, "inventory");
         this.adapter = Objects.requireNonNull(adapter, "adapter");
     }

@@ -13,7 +13,6 @@ import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
 import appeng.core.settings.TickRates;
 import appeng.menu.implementations.InterfaceMenu;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -21,7 +20,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -85,8 +84,8 @@ public class AE2OutputInterfaceGameTest {
         helper.setBlock(fluidChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
-        AE2OutputInterfaceBlockEntity port = helper.getBlockEntity(portPos,
-                AE2OutputInterfaceBlockEntity.class);
+        OutputInterfaceBlockEntity port = helper.getBlockEntity(portPos,
+                OutputInterfaceBlockEntity.class);
         MEChestBlockEntity itemChest = helper.getBlockEntity(itemChestPos, MEChestBlockEntity.class);
         MEChestBlockEntity fluidChest = helper.getBlockEntity(fluidChestPos, MEChestBlockEntity.class);
         CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,
@@ -268,7 +267,7 @@ public class AE2OutputInterfaceGameTest {
         });
     }
 
-    private static MachineCapability capabilityOf(AE2OutputInterfaceBlockEntity port, Identifier familyId) {
+    private static MachineCapability capabilityOf(OutputInterfaceBlockEntity port, Identifier familyId) {
         return port.capabilitySnapshot().capabilities().stream()
                 .filter(capability -> capability.type().id().equals(familyId))
                 .findFirst()

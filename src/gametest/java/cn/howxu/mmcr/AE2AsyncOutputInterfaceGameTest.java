@@ -17,7 +17,7 @@ import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -66,8 +66,8 @@ public class AE2AsyncOutputInterfaceGameTest {
         helper.setBlock(fluidChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
-        AE2AsyncOutputInterfaceBlockEntity port = helper.getBlockEntity(portPos,
-                AE2AsyncOutputInterfaceBlockEntity.class);
+        AsyncOutputInterfaceBlockEntity port = helper.getBlockEntity(portPos,
+                AsyncOutputInterfaceBlockEntity.class);
         MEChestBlockEntity itemChest = helper.getBlockEntity(itemChestPos, MEChestBlockEntity.class);
         MEChestBlockEntity fluidChest = helper.getBlockEntity(fluidChestPos, MEChestBlockEntity.class);
         CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,

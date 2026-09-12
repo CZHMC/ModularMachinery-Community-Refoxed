@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
 
-import appeng.api.config.Actionable;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.energy.IEnergySource;
 import appeng.api.networking.security.IActionHost;
@@ -21,7 +20,7 @@ import java.util.concurrent.ConcurrentMap;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2AsyncOutputService {
+public final class AsyncOutputService {
     private final ConcurrentMap<AEKey, Long> pending = new ConcurrentHashMap<>();
 
     /**
@@ -32,7 +31,7 @@ public final class AE2AsyncOutputService {
      */
     public void submit(AEKey key, long amount) {
         if (key == null || amount <= 0L) return;
-        pending.merge(key, amount, AE2AsyncOutputService::saturatingAdd);
+        pending.merge(key, amount, AsyncOutputService::saturatingAdd);
     }
 
     /**

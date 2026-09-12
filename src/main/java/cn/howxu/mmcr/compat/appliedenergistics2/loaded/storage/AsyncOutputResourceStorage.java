@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
@@ -7,6 +7,8 @@ import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AsyncOutputService;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -27,20 +29,20 @@ import java.util.function.Supplier;
  * @param <R> resource type exposed by the view
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEKey, Long>>
+public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEKey, Long>>
         implements OutputResourceStorage<R> {
     private final Supplier<@Nullable MEStorage> networkSupplier;
     private final AE2KeyAdapter<R> adapter;
-    private final AE2AsyncOutputService service;
+    private final AsyncOutputService service;
     private final IActionSource actionSource;
     private final Runnable wakeCallback;
     private final Map<AEKey, Long> pending = new HashMap<>();
 
-    public AE2AsyncOutputResourceStorage(Supplier<@Nullable MEStorage> networkSupplier,
-                                         AE2KeyAdapter<R> adapter,
-                                         AE2AsyncOutputService service,
-                                         IActionSource actionSource,
-                                         Runnable wakeCallback) {
+    public AsyncOutputResourceStorage(Supplier<@Nullable MEStorage> networkSupplier,
+                                      AE2KeyAdapter<R> adapter,
+                                      AsyncOutputService service,
+                                      IActionSource actionSource,
+                                      Runnable wakeCallback) {
         this.networkSupplier = Objects.requireNonNull(networkSupplier, "networkSupplier");
         this.adapter = Objects.requireNonNull(adapter, "adapter");
         this.service = Objects.requireNonNull(service, "service");
@@ -170,7 +172,7 @@ public final class AE2AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<
         @Override
         public CapabilityResult commit(TransactionContext transaction) {
             updateSnapshots(transaction);
-            pending.merge(key, amount, AE2AsyncOutputResourceStorage::saturatingAdd);
+            pending.merge(key, amount, AsyncOutputResourceStorage::saturatingAdd);
             return CapabilityResult.successful();
         }
     }

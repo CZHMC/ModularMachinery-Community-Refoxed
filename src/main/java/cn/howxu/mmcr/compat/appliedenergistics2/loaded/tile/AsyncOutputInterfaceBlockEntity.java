@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile;
 
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
@@ -8,10 +8,10 @@ import appeng.api.networking.ticking.TickingRequest;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.MEStorage;
 import appeng.core.settings.TickRates;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2AsyncOutputResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2AsyncOutputService;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2FluidResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ItemResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.AsyncOutputResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AsyncOutputService;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -31,19 +31,19 @@ import java.util.function.Supplier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2AsyncOutputInterfaceBlockEntity extends AE2OutputInterfaceBaseBlockEntity {
-    private final AE2AsyncOutputService service = new AE2AsyncOutputService();
-    private final AE2AsyncOutputResourceStorage<ItemResource> itemStorage;
-    private final AE2AsyncOutputResourceStorage<FluidResource> fluidStorage;
+public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEntity {
+    private final AsyncOutputService service = new AsyncOutputService();
+    private final AsyncOutputResourceStorage<ItemResource> itemStorage;
+    private final AsyncOutputResourceStorage<FluidResource> fluidStorage;
     final AsyncOutputTicker asyncTicker;
 
-    AE2AsyncOutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
+    public AsyncOutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         this(pos, state, kind, null, null);
     }
 
-    AE2AsyncOutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind,
-                                       @Nullable Supplier<@Nullable MEStorage> networkSupplier,
-                                       @Nullable IActionSource actionSource) {
+    AsyncOutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind,
+                                    @Nullable Supplier<@Nullable MEStorage> networkSupplier,
+                                    @Nullable IActionSource actionSource) {
         super(pos, state, kind);
         Supplier<@Nullable MEStorage> effectiveNetworkSupplier = networkSupplier == null
                 ? this::networkStorage : networkSupplier;
@@ -51,19 +51,19 @@ public final class AE2AsyncOutputInterfaceBlockEntity extends AE2OutputInterface
                 ? IActionSource.ofMachine(this) : actionSource;
         asyncTicker = new AsyncOutputTicker();
         mainNode.addService(IGridTickable.class, asyncTicker);
-        itemStorage = new AE2AsyncOutputResourceStorage<>(effectiveNetworkSupplier,
-                AE2ItemResourceStorage.adapter(), service, effectiveActionSource, this::wakeAsyncTicker);
-        fluidStorage = new AE2AsyncOutputResourceStorage<>(effectiveNetworkSupplier,
-                AE2FluidResourceStorage.adapter(), service, effectiveActionSource, this::wakeAsyncTicker);
+        itemStorage = new AsyncOutputResourceStorage<>(effectiveNetworkSupplier,
+                ItemResourceStorage.adapter(), service, effectiveActionSource, this::wakeAsyncTicker);
+        fluidStorage = new AsyncOutputResourceStorage<>(effectiveNetworkSupplier,
+                FluidResourceStorage.adapter(), service, effectiveActionSource, this::wakeAsyncTicker);
     }
 
     @Override
-    public AE2AsyncOutputResourceStorage<ItemResource> itemStorage() {
+    public AsyncOutputResourceStorage<ItemResource> itemStorage() {
         return itemStorage;
     }
 
     @Override
-    public AE2AsyncOutputResourceStorage<FluidResource> fluidStorage() {
+    public AsyncOutputResourceStorage<FluidResource> fluidStorage() {
         return fluidStorage;
     }
 
@@ -119,7 +119,7 @@ public final class AE2AsyncOutputInterfaceBlockEntity extends AE2OutputInterface
             MEStorage network = networkStorage();
             boolean drained = false;
             if (network != null) {
-                IActionSource source = IActionSource.ofMachine(AE2AsyncOutputInterfaceBlockEntity.this);
+                IActionSource source = IActionSource.ofMachine(AsyncOutputInterfaceBlockEntity.this);
                 drained = service.drainTo(network, source, DRAIN_BATCH);
             }
             if (service.isEmpty()) return TickRateModulation.SLEEP;

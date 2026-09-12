@@ -7,8 +7,8 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2FluidNetworkResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ItemNetworkResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.FluidNetworkResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.ItemNetworkResourceStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Items;
@@ -42,7 +42,7 @@ class AE2NetworkResourceStorageTest {
         AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(ironKey, 5L);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
-        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+        ItemNetworkResourceStorage storage = new ItemNetworkResourceStorage(
                 network, List.of(ironKey));
         storage.onStackChange(ironKey, 9L);
 
@@ -70,7 +70,7 @@ class AE2NetworkResourceStorageTest {
         AEKey waterKey = AEFluidKey.of(Fluids.WATER);
         FluidResource water = FluidResource.of(Fluids.WATER);
         FakeMEStorage network = new FakeMEStorage(waterKey, 8L);
-        AE2FluidNetworkResourceStorage storage = new AE2FluidNetworkResourceStorage(
+        FluidNetworkResourceStorage storage = new FluidNetworkResourceStorage(
                 network, List.of(waterKey));
 
         assertThat(storage.resource(0)).isEqualTo(water);
@@ -96,7 +96,7 @@ class AE2NetworkResourceStorageTest {
         ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
         FakeMEStorage network = new FakeMEStorage(ironKey, 5L);
         network.setAmount(goldKey, 3L);
-        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+        ItemNetworkResourceStorage storage = new ItemNetworkResourceStorage(
                 network, List.of(ironKey, goldKey));
 
         assertThat(storage.size()).isEqualTo(2);
@@ -121,7 +121,7 @@ class AE2NetworkResourceStorageTest {
         AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FluidResource water = FluidResource.of(Fluids.WATER);
-        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+        ItemNetworkResourceStorage storage = new ItemNetworkResourceStorage(
                 new FakeMEStorage(ironKey, 1L), List.of(ironKey));
 
         assertThatThrownBy(() -> storage.resource(-1)).isInstanceOf(IndexOutOfBoundsException.class);
@@ -167,7 +167,7 @@ class AE2NetworkResourceStorageTest {
         AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(ironKey, 8L);
-        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+        ItemNetworkResourceStorage storage = new ItemNetworkResourceStorage(
                 network, List.of(ironKey));
 
         try (Transaction transaction = Transaction.openRoot()) {
@@ -189,7 +189,7 @@ class AE2NetworkResourceStorageTest {
         AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(ironKey, 8L);
-        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+        ItemNetworkResourceStorage storage = new ItemNetworkResourceStorage(
                 network, List.of(ironKey));
 
         try (Transaction transaction = Transaction.openRoot()) {
@@ -207,7 +207,7 @@ class AE2NetworkResourceStorageTest {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(ironKey, 8L);
         network.setModulationLimit(3L);
-        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+        ItemNetworkResourceStorage storage = new ItemNetworkResourceStorage(
                 network, List.of(ironKey));
 
         assertThatThrownBy(() -> {

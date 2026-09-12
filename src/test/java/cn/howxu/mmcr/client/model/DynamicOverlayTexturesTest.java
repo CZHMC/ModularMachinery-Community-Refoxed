@@ -3,7 +3,7 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2BridgeBootstrap;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
@@ -69,7 +69,7 @@ class DynamicOverlayTexturesTest {
     void ae2InputInterfaceUsesTheNativeInterfaceOverlay() {
         AE2BridgeBootstrap.installForTesting(AE2BridgeBootstrap.selectForTesting(true));
         try {
-            assertThat(DynamicOverlayTextures.portOverlayTexture(AE2InputInterfaceKind.INSTANCE))
+            assertThat(DynamicOverlayTextures.portOverlayTexture(InputInterfaceKind.INSTANCE))
                     .isEqualTo(Identifier.fromNamespaceAndPath("ae2", "block/interface"));
         } finally {
             AE2BridgeBootstrap.resetForTesting();

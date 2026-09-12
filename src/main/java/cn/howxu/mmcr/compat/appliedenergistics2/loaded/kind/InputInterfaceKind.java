@@ -1,9 +1,10 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -22,7 +23,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2InputInterfaceKind implements IOPortKind {
+public final class InputInterfaceKind implements IOPortKind {
     private static final String ID = "ae2_me_input_interface";
     private static final List<PortFamilyDescriptor> FAMILIES = List.of(
             new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, ItemBusSize.values().length,
@@ -30,23 +31,23 @@ public final class AE2InputInterfaceKind implements IOPortKind {
             new PortFamilyDescriptor(PortFamilyIds.FLUID, IOType.INPUT, FluidHatchSize.values().length,
                     List.of("fluid_input_hatch")));
 
-    public static final AE2InputInterfaceKind INSTANCE = new AE2InputInterfaceKind();
+    public static final InputInterfaceKind INSTANCE = new InputInterfaceKind();
 
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
             new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE, CapabilityDirections.of(IOType.INPUT),
                     context -> {
-                        AE2InputInterfaceBlockEntity host = (AE2InputInterfaceBlockEntity) context.host();
+                        InputInterfaceBlockEntity host = (InputInterfaceBlockEntity) context.host();
                         return new ItemBusCapability(host, host.itemStorage(), IOType.INPUT, false);
                     },
                     (binding, tier) -> true),
             new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, CapabilityDirections.of(IOType.INPUT),
                     context -> {
-                        AE2InputInterfaceBlockEntity host = (AE2InputInterfaceBlockEntity) context.host();
+                        InputInterfaceBlockEntity host = (InputInterfaceBlockEntity) context.host();
                         return new FluidHatchCapability(host, host.fluidStorage(), IOType.INPUT, false);
                     },
                     (binding, tier) -> true)));
 
-    private AE2InputInterfaceKind() {}
+    private InputInterfaceKind() {}
 
     @Override
     public String id() {
@@ -64,8 +65,8 @@ public final class AE2InputInterfaceKind implements IOPortKind {
     }
 
     @Override
-    public BlockEntityType.BlockEntitySupplier<AE2InputInterfaceBlockEntity> entityFactory() {
-        return (pos, state) -> new AE2InputInterfaceBlockEntity(pos, state, this);
+    public BlockEntityType.BlockEntitySupplier<InputInterfaceBlockEntity> entityFactory() {
+        return (pos, state) -> new InputInterfaceBlockEntity(pos, state, this);
     }
 
     @Override

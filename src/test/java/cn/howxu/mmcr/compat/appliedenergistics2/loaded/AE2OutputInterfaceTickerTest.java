@@ -15,6 +15,7 @@ import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,9 +62,9 @@ class AE2OutputInterfaceTickerTest {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FluidResource water = FluidResource.of(Fluids.WATER);
         FakeMEStorage network = new FakeMEStorage(Map.of(
-                AEItemKey.of(iron), 64L,
-                AEFluidKey.of(water), 192L));
-        AE2OutputInterfaceBlockEntity host = new AE2OutputInterfaceBlockEntity(
+                Objects.requireNonNull(AEItemKey.of(iron)), 64L,
+                Objects.requireNonNull(AEFluidKey.of(water)), 192L));
+        OutputInterfaceBlockEntity host = new OutputInterfaceBlockEntity(
                 BlockPos.ZERO,
                 outputState(),
                 PortKinds.ITEM_OUTPUT,

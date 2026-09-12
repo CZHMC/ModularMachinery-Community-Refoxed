@@ -2,7 +2,7 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 
 import appeng.helpers.InventoryAction;
 import appeng.menu.AEBaseMenu;
-import cn.howxu.mmcr.compat.appliedenergistics2.AE2InterfaceMenuPolicy;
+import cn.howxu.mmcr.compat.appliedenergistics2.util.InterfaceMenuPolicy;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -47,6 +47,6 @@ public abstract class InterfaceMenuMixin {
     }
 
     private boolean mmcr$isOutputHost() {
-        return AE2InterfaceMenuPolicy.isOutputHost(getTarget());
+        return InterfaceMenuPolicy.isOutputHost(getTarget());
     }
 }

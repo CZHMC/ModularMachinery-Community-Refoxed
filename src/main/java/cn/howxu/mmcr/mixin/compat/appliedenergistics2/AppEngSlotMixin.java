@@ -6,8 +6,8 @@ import appeng.menu.slot.AppEngSlot;
 import appeng.api.inventories.InternalInventory;
 import appeng.api.stacks.GenericStack;
 import appeng.util.ConfigMenuInventory;
-import cn.howxu.mmcr.compat.appliedenergistics2.AE2InterfaceMenuPolicy;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.util.InterfaceMenuPolicy;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -57,7 +57,7 @@ public abstract class AppEngSlotMixin {
 
     private boolean mmcr$syncStockingDisplay(ItemStack stack) {
         if (getMenu() instanceof InterfaceMenu menu
-                && menu.getHost() instanceof AE2StockingInterfaceBlockEntity host) {
+                && menu.getHost() instanceof StockingInterfaceBlockEntity host) {
             GenericStack mirrorStack = GenericStack.unwrapItemStack(stack);
             if (!(getInventory() instanceof ConfigMenuInventory wrapper)) return false;
             if (mirrorStack != null && wrapper.getDelegate() == host.getInterfaceLogic().getStorage()) {
@@ -88,9 +88,9 @@ public abstract class AppEngSlotMixin {
             return false;
         }
         Object host = menu.getHost();
-        if (host instanceof AE2StockingInterfaceBlockEntity stocking) {
+        if (host instanceof StockingInterfaceBlockEntity stocking) {
             return wrapper.getDelegate() == stocking.getInterfaceLogic().getStorage();
         }
-        return AE2InterfaceMenuPolicy.isOutputStorageSlot(host, wrapper);
+        return InterfaceMenuPolicy.isOutputStorageSlot(host, wrapper);
     }
 }

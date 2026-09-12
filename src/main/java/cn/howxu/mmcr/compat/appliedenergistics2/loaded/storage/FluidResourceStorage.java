@@ -1,9 +1,10 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.helpers.externalstorage.GenericStackInv;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 
 import java.util.Optional;
@@ -13,7 +14,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2FluidResourceStorage extends AE2ResourceStorage<FluidResource> {
+public final class FluidResourceStorage extends ResourceStorage<FluidResource> {
     private static final AE2KeyAdapter<FluidResource> ADAPTER = new AE2KeyAdapter<>() {
         @Override
         public AEKeyType keyType() {
@@ -38,7 +39,7 @@ public final class AE2FluidResourceStorage extends AE2ResourceStorage<FluidResou
         }
     };
 
-    public AE2FluidResourceStorage(GenericStackInv inventory) {
+    public FluidResourceStorage(GenericStackInv inventory) {
         super(inventory, adapter());
     }
 

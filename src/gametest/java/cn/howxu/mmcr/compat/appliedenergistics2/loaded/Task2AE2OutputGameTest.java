@@ -9,6 +9,7 @@ import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.BlockPos;
@@ -25,7 +26,7 @@ public final class Task2AE2OutputGameTest {
         BlockPos outputPos = new BlockPos(0, 1, 0);
         BlockPos chestPos = new BlockPos(3, 1, 0);
         BlockPos energyPos = new BlockPos(3, 1, 2);
-        AE2OutputInterfaceBlockEntity output = placeOutput(helper, outputPos);
+        OutputInterfaceBlockEntity output = placeOutput(helper, outputPos);
         helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
         MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
@@ -70,11 +71,11 @@ public final class Task2AE2OutputGameTest {
         });
     }
 
-    private static AE2OutputInterfaceBlockEntity placeOutput(GameTestHelper helper, BlockPos pos) {
+    private static OutputInterfaceBlockEntity placeOutput(GameTestHelper helper, BlockPos pos) {
         BlockState state = ModBlocks.BLOCKS.get(PortKinds.ITEM_OUTPUT.id()).get().defaultBlockState();
         helper.setBlock(pos, state);
         helper.getLevel().removeBlockEntity(helper.absolutePos(pos));
-        AE2OutputInterfaceBlockEntity output = new AE2OutputInterfaceBlockEntity(
+        OutputInterfaceBlockEntity output = new OutputInterfaceBlockEntity(
                 helper.absolutePos(pos), state, PortKinds.ITEM_OUTPUT);
         helper.getLevel().setBlockEntity(output);
         return output;

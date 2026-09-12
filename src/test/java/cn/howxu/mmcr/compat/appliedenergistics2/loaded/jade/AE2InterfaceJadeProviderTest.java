@@ -2,11 +2,11 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 
 import appeng.api.networking.IGridNode;
 import appeng.me.helpers.IGridConnectedBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.*;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -38,12 +38,12 @@ class AE2InterfaceJadeProviderTest {
 
         assertThat(registrations).extracting(Registration::hostType)
                 .containsExactlyInAnyOrder(
-                        AE2InputInterfaceBlockEntity.class,
-                        AE2StockingInterfaceBlockEntity.class,
-                        AE2OutputInterfaceBlockEntity.class,
-                        AE2AsyncOutputInterfaceBlockEntity.class);
+                        InputInterfaceBlockEntity.class,
+                        StockingInterfaceBlockEntity.class,
+                        OutputInterfaceBlockEntity.class,
+                        AsyncOutputInterfaceBlockEntity.class);
         assertThat(registrations).extracting(Registration::provider)
-                .containsOnly(AE2InputInterfaceJadeDataProvider.INSTANCE);
+                .containsOnly(InterfaceJadeDataProvider.INSTANCE);
     }
 
     @Test
@@ -54,17 +54,17 @@ class AE2InterfaceJadeProviderTest {
         new LoadedAE2Bridge().registerJadeClient(registration);
 
         assertThat(registrations).containsExactly(
-                new Registration(AE2InputInterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class));
+                new Registration(InterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class));
     }
 
     @Test
     void componentProviderAcceptsAnyGridConnectedAe2Host() {
         CompoundTag serverData = new CompoundTag();
-        serverData.putByte(AE2InputInterfaceJadeDataProvider.STATE, (byte) 3);
+        serverData.putByte(InterfaceJadeDataProvider.STATE, (byte) 3);
         List<Component> added = new ArrayList<>();
         IGridConnectedBlockEntity host = gridHost();
 
-        AE2InputInterfaceJadeComponentProvider.INSTANCE.appendTooltip(
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
                 tooltip(added), accessor(host, serverData), null);
 
         assertThat(added).hasSize(1);
@@ -75,10 +75,10 @@ class AE2InterfaceJadeProviderTest {
         CompoundTag serverData = new CompoundTag();
         IGridConnectedBlockEntity host = gridHost();
 
-        AE2InputInterfaceJadeDataProvider.INSTANCE.appendServerData(
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(
                 serverData, accessor(host, new CompoundTag()));
 
-        assertThat(serverData.getByteOr(AE2InputInterfaceJadeDataProvider.STATE, (byte) 0))
+        assertThat(serverData.getByteOr(InterfaceJadeDataProvider.STATE, (byte) 0))
                 .isEqualTo((byte) 3);
     }
 

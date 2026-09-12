@@ -10,25 +10,19 @@ import appeng.api.AECapabilities;
 import appeng.api.networking.GridFlags;
 import appeng.api.networking.IManagedGridNode;
 import appeng.me.ManagedGridNode;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.*;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.*;
 import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
-import cn.howxu.mmcr.compat.appliedenergistics2.AE2BridgeBootstrap;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBaseBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -78,7 +72,7 @@ class AE2InputInterfaceKindTest {
         bindTestEntityType();
         AE2BridgeBootstrap.installForTesting(new LoadedAE2Bridge());
         PortKinds.clearForTesting();
-        PortKinds.register(AE2StockingInterfaceKind.INSTANCE);
+        PortKinds.register(StockingInterfaceKind.INSTANCE);
     }
 
     @AfterAll
@@ -89,7 +83,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void ae2KindCountsOneItemAndOneFluidInput() {
-        IOPortKind kind = AE2InputInterfaceKind.INSTANCE;
+        IOPortKind kind = InputInterfaceKind.INSTANCE;
 
         assertThat(kind.id()).isEqualTo("ae2_me_input_interface");
         assertThat(kind.ioType()).isEqualTo(IOType.INPUT);
@@ -101,7 +95,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void stockingKindCountsOneItemAndOneFluidInput() {
-        IOPortKind kind = AE2StockingInterfaceKind.INSTANCE;
+        IOPortKind kind = StockingInterfaceKind.INSTANCE;
 
         assertThat(kind.id()).isEqualTo("ae2_me_stocking_input_interface");
         assertThat(kind.ioType()).isEqualTo(IOType.INPUT);
@@ -113,19 +107,19 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void ae2InputKindsOutrankEveryOrdinaryInputPort() {
-        assertThat(AE2InputInterfaceKind.INSTANCE.families())
+        assertThat(InputInterfaceKind.INSTANCE.families())
                 .extracting(PortFamilyDescriptor::detectionTier)
                 .containsExactlyInAnyOrder(ItemBusSize.values().length, FluidHatchSize.values().length);
-        assertThat(AE2StockingInterfaceKind.INSTANCE.families())
+        assertThat(StockingInterfaceKind.INSTANCE.families())
                 .extracting(PortFamilyDescriptor::detectionTier)
                 .containsExactlyInAnyOrder(ItemBusSize.values().length, FluidHatchSize.values().length);
     }
 
     @Test
     void entityViewsShareStorageIdentityAndDoNotExposeTransferFacet() {
-        AE2InputInterfaceBlockEntity entity = ordinaryEntity();
+        InputInterfaceBlockEntity entity = ordinaryEntity();
 
-        assertThat(entity.kind()).isSameAs(AE2InputInterfaceKind.INSTANCE);
+        assertThat(entity.kind()).isSameAs(InputInterfaceKind.INSTANCE);
         assertThat(entity.ioType()).isEqualTo(IOType.INPUT);
         assertThat(entity.itemStorage().reservationIdentity())
                 .isSameAs(entity.fluidStorage().reservationIdentity());
@@ -145,23 +139,23 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void entityFactoryCreatesOrdinaryInterfaceHost() {
-        var entity = AE2InputInterfaceKind.INSTANCE.entityFactory()
+        var entity = InputInterfaceKind.INSTANCE.entityFactory()
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
 
-        assertThat(entity).isExactlyInstanceOf(AE2InputInterfaceBlockEntity.class);
+        assertThat(entity).isExactlyInstanceOf(InputInterfaceBlockEntity.class);
     }
 
     @Test
     void entityFactoryCreatesStockingInterfaceHost() {
-        var entity = AE2StockingInterfaceKind.INSTANCE.entityFactory()
+        var entity = StockingInterfaceKind.INSTANCE.entityFactory()
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
 
-        assertThat(entity).isExactlyInstanceOf(AE2StockingInterfaceBlockEntity.class);
+        assertThat(entity).isExactlyInstanceOf(StockingInterfaceBlockEntity.class);
     }
 
     @Test
     void outputKindExposesOneItemAndOneFluidOutput() {
-        IOPortKind kind = AE2OutputInterfaceKind.INSTANCE;
+        IOPortKind kind = OutputInterfaceKind.INSTANCE;
 
         assertThat(kind.id()).isEqualTo("ae2_me_output_interface");
         assertThat(kind.ioType()).isEqualTo(IOType.OUTPUT);
@@ -173,7 +167,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void asyncOutputKindExposesOneItemAndOneFluidOutput() {
-        IOPortKind kind = AE2AsyncOutputInterfaceKind.INSTANCE;
+        IOPortKind kind = AsyncOutputInterfaceKind.INSTANCE;
 
         assertThat(kind.id()).isEqualTo("ae2_me_async_output_interface");
         assertThat(kind.ioType()).isEqualTo(IOType.OUTPUT);
@@ -185,7 +179,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void outputKindUsesOutputAliasesAndMaxPlusOneTiers() {
-        AE2OutputInterfaceKind kind = AE2OutputInterfaceKind.INSTANCE;
+        OutputInterfaceKind kind = OutputInterfaceKind.INSTANCE;
 
         assertThat(kind.families())
                 .allSatisfy(family -> {
@@ -200,7 +194,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void asyncOutputKindUsesOutputAliasesAndMaxPlusOneTiers() {
-        AE2AsyncOutputInterfaceKind kind = AE2AsyncOutputInterfaceKind.INSTANCE;
+        AsyncOutputInterfaceKind kind = AsyncOutputInterfaceKind.INSTANCE;
 
         assertThat(kind.families())
                 .allSatisfy(family -> {
@@ -215,8 +209,8 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void existingInputKindsRemainInputOnly() {
-        assertThat(AE2InputInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
-        assertThat(AE2StockingInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
+        assertThat(InputInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
+        assertThat(StockingInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
     }
 
     @Test
@@ -233,23 +227,23 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void entityFactoryCreatesOutputInterfaceHost() {
-        var entity = AE2OutputInterfaceKind.INSTANCE.entityFactory()
+        var entity = OutputInterfaceKind.INSTANCE.entityFactory()
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
 
-        assertThat(entity).isExactlyInstanceOf(AE2OutputInterfaceBlockEntity.class);
+        assertThat(entity).isExactlyInstanceOf(OutputInterfaceBlockEntity.class);
     }
 
     @Test
     void entityFactoryCreatesAsyncOutputInterfaceHost() {
-        var entity = AE2AsyncOutputInterfaceKind.INSTANCE.entityFactory()
+        var entity = AsyncOutputInterfaceKind.INSTANCE.entityFactory()
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
 
-        assertThat(entity).isExactlyInstanceOf(AE2AsyncOutputInterfaceBlockEntity.class);
+        assertThat(entity).isExactlyInstanceOf(AsyncOutputInterfaceBlockEntity.class);
     }
 
     @Test
     void outputEntityCapabilitiesAreOutputOnlyWithoutTransferFacet() {
-        AE2OutputInterfaceBlockEntity entity = newOutputEntity();
+        OutputInterfaceBlockEntity entity = newOutputEntity();
 
         var capabilities = entity.capabilitySnapshot().capabilities();
         assertThat(capabilities).hasSize(2)
@@ -264,32 +258,32 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void outputHostsAreInstancesOfOutputBaseClass() {
-        AE2OutputInterfaceBlockEntity outputEntity = newOutputEntity();
-        AE2AsyncOutputInterfaceBlockEntity asyncEntity = newAsyncOutputEntity();
+        OutputInterfaceBlockEntity outputEntity = newOutputEntity();
+        AsyncOutputInterfaceBlockEntity asyncEntity = newAsyncOutputEntity();
 
-        assertThat(outputEntity).isInstanceOf(AE2OutputInterfaceBaseBlockEntity.class);
-        assertThat(asyncEntity).isInstanceOf(AE2OutputInterfaceBaseBlockEntity.class);
+        assertThat(outputEntity).isInstanceOf(OutputInterfaceBaseBlockEntity.class);
+        assertThat(asyncEntity).isInstanceOf(OutputInterfaceBaseBlockEntity.class);
     }
 
     @Test
     void stockingHostIsNotAnOutputBaseInstance() {
-        AE2StockingInterfaceBlockEntity stockingEntity = newStockingEntity();
+        StockingInterfaceBlockEntity stockingEntity = newStockingEntity();
 
-        assertThat(stockingEntity).isNotInstanceOf(AE2OutputInterfaceBaseBlockEntity.class);
+        assertThat(stockingEntity).isNotInstanceOf(OutputInterfaceBaseBlockEntity.class);
     }
 
     @Test
     void outputHostsAreNotStockingInstances() {
-        AE2OutputInterfaceBlockEntity outputEntity = newOutputEntity();
-        AE2AsyncOutputInterfaceBlockEntity asyncEntity = newAsyncOutputEntity();
+        OutputInterfaceBlockEntity outputEntity = newOutputEntity();
+        AsyncOutputInterfaceBlockEntity asyncEntity = newAsyncOutputEntity();
 
-        assertThat(outputEntity).isNotInstanceOf(AE2StockingInterfaceBlockEntity.class);
-        assertThat(asyncEntity).isNotInstanceOf(AE2StockingInterfaceBlockEntity.class);
+        assertThat(outputEntity).isNotInstanceOf(StockingInterfaceBlockEntity.class);
+        assertThat(asyncEntity).isNotInstanceOf(StockingInterfaceBlockEntity.class);
     }
 
     @Test
     void asyncOutputEntityCapabilitiesAreOutputOnlyWithoutTransferFacet() {
-        AE2AsyncOutputInterfaceBlockEntity entity = newAsyncOutputEntity();
+        AsyncOutputInterfaceBlockEntity entity = newAsyncOutputEntity();
 
         var capabilities = entity.capabilitySnapshot().capabilities();
         assertThat(capabilities).hasSize(2)
@@ -304,7 +298,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void outputCapabilitiesAreNotProjectedToNativeHandlers() {
-        AE2OutputInterfaceBlockEntity entity = newOutputEntity();
+        OutputInterfaceBlockEntity entity = newOutputEntity();
         RegisterCapabilitiesEvent event = capabilityEvent();
         ModCapabilities.register(event);
 
@@ -324,7 +318,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void stockingEntityCapabilitiesUseNetworkStorageWithoutTransferFacet() {
-        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        StockingInterfaceBlockEntity entity = newStockingEntity();
 
         var capabilities = entity.capabilitySnapshot().capabilities();
         assertThat(capabilities).hasSize(2)
@@ -341,7 +335,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void stockingCapabilityIsNotProjectedToNativeHandlers() {
-        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        StockingInterfaceBlockEntity entity = newStockingEntity();
         RegisterCapabilitiesEvent event = capabilityEvent();
         ModCapabilities.register(event);
 
@@ -361,7 +355,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void configMarkersAlwaysUseOneResource() {
-        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        StockingInterfaceBlockEntity entity = newStockingEntity();
 
         entity.getInterfaceLogic().getConfig().setStack(0,
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
@@ -371,7 +365,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void fluidMarkersDefaultToOneBucket() {
-        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        StockingInterfaceBlockEntity entity = newStockingEntity();
 
         entity.getInterfaceLogic().getConfig().setStack(1,
                 new GenericStack(AEFluidKey.of(Fluids.WATER), 1L));
@@ -381,7 +375,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void normalizedConfigMarkerCanStillBeCleared() {
-        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        StockingInterfaceBlockEntity entity = newStockingEntity();
         var config = entity.getInterfaceLogic().getConfig();
 
         config.setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
@@ -394,7 +388,7 @@ class AE2InputInterfaceKindTest {
 
     @Test
     void stockingSaveWithoutGridClearsStorageMirror() {
-        AE2StockingInterfaceBlockEntity entity = newStockingEntity();
+        StockingInterfaceBlockEntity entity = newStockingEntity();
         entity.getInterfaceLogic().getConfig().setStack(0,
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
         entity.getInterfaceLogic().getStorage().setStack(0,
@@ -406,48 +400,48 @@ class AE2InputInterfaceKindTest {
         assertThat(entity.itemStorage().amount(0)).isZero();
     }
 
-    private static AE2InputInterfaceBlockEntity ordinaryEntity() {
-        return AE2InputInterfaceKind.INSTANCE.entityFactory()
+    private static InputInterfaceBlockEntity ordinaryEntity() {
+        return InputInterfaceKind.INSTANCE.entityFactory()
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
     }
 
-    private static AE2StockingInterfaceBlockEntity newStockingEntity() {
+    private static StockingInterfaceBlockEntity newStockingEntity() {
         try {
-            Constructor<AE2StockingInterfaceBlockEntity> constructor =
-                    AE2StockingInterfaceBlockEntity.class.getDeclaredConstructor(
+            Constructor<StockingInterfaceBlockEntity> constructor =
+                    StockingInterfaceBlockEntity.class.getDeclaredConstructor(
                             BlockPos.class, BlockState.class,
                             IOPortKind.class);
             constructor.setAccessible(true);
             return constructor.newInstance(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
-                    AE2StockingInterfaceKind.INSTANCE);
+                    StockingInterfaceKind.INSTANCE);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to construct stocking interface test host", exception);
         }
     }
 
-    private static AE2OutputInterfaceBlockEntity newOutputEntity() {
+    private static OutputInterfaceBlockEntity newOutputEntity() {
         try {
-            Constructor<AE2OutputInterfaceBlockEntity> constructor =
-                    AE2OutputInterfaceBlockEntity.class.getDeclaredConstructor(
+            Constructor<OutputInterfaceBlockEntity> constructor =
+                    OutputInterfaceBlockEntity.class.getDeclaredConstructor(
                             BlockPos.class, BlockState.class,
                             IOPortKind.class);
             constructor.setAccessible(true);
             return constructor.newInstance(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
-                    AE2OutputInterfaceKind.INSTANCE);
+                    OutputInterfaceKind.INSTANCE);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to construct output interface test host", exception);
         }
     }
 
-    private static AE2AsyncOutputInterfaceBlockEntity newAsyncOutputEntity() {
+    private static AsyncOutputInterfaceBlockEntity newAsyncOutputEntity() {
         try {
-            Constructor<AE2AsyncOutputInterfaceBlockEntity> constructor =
-                    AE2AsyncOutputInterfaceBlockEntity.class.getDeclaredConstructor(
+            Constructor<AsyncOutputInterfaceBlockEntity> constructor =
+                    AsyncOutputInterfaceBlockEntity.class.getDeclaredConstructor(
                             BlockPos.class, BlockState.class,
                             IOPortKind.class);
             constructor.setAccessible(true);
             return constructor.newInstance(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(),
-                    AE2AsyncOutputInterfaceKind.INSTANCE);
+                    AsyncOutputInterfaceKind.INSTANCE);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to construct async output interface test host", exception);
         }
@@ -484,10 +478,10 @@ class AE2InputInterfaceKindTest {
     }
 
     private static void bindTestEntityType() {
-        bindTestEntityType(AE2InputInterfaceKind.INSTANCE);
-        bindTestEntityType(AE2StockingInterfaceKind.INSTANCE);
-        bindTestEntityType(AE2OutputInterfaceKind.INSTANCE);
-        bindTestEntityType(AE2AsyncOutputInterfaceKind.INSTANCE);
+        bindTestEntityType(InputInterfaceKind.INSTANCE);
+        bindTestEntityType(StockingInterfaceKind.INSTANCE);
+        bindTestEntityType(OutputInterfaceKind.INSTANCE);
+        bindTestEntityType(AsyncOutputInterfaceKind.INSTANCE);
     }
 
     private static void bindTestEntityType(IOPortKind kind) {

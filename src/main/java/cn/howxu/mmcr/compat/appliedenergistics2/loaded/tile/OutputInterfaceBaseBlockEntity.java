@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile;
 
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGridNode;
@@ -11,72 +11,65 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2FluidResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ItemResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MMCR host for one AE2 interface logic storage.
+ * Shared AE2 Interface host lifecycle for normal output ports.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2InputInterfaceBlockEntity extends IOPortBlockEntity
+public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
         implements InterfaceLogicHost, IGridConnectedBlockEntity {
-    private static final IGridNodeListener<AE2InputInterfaceBlockEntity> NODE_LISTENER =
+    private static final IGridNodeListener<OutputInterfaceBaseBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
-                public void onGridChanged(AE2InputInterfaceBlockEntity nodeOwner, IGridNode node) {
-                    nodeOwner.logic.gridChanged();
+                public void onGridChanged(OutputInterfaceBaseBlockEntity nodeOwner, IGridNode node) {
+                    nodeOwner.onNetworkChanged();
                 }
             };
 
-    private final IOPortKind kind;
-    private final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
+    protected final IOPortKind kind;
+    protected final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
             .setInWorldNode(true);
-    private final InterfaceLogic logic = new InterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
-    private final AE2ItemResourceStorage itemStorage = new AE2ItemResourceStorage(logic.getStorage());
-    private final AE2FluidResourceStorage fluidStorage = new AE2FluidResourceStorage(logic.getStorage());
+    protected final InterfaceLogic logic = new InterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
     private CapabilitySnapshot capabilitySnapshot;
 
-    AE2InputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
+    protected OutputInterfaceBaseBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
     }
 
     @Override
-    public IOType ioType() {
-        return IOType.INPUT;
+    public final IOType ioType() {
+        return IOType.OUTPUT;
     }
 
     @Override
-    public IOPortKind kind() {
+    public final IOPortKind kind() {
         return kind;
     }
 
     @Override
-    public IManagedGridNode getMainNode() {
+    public final IManagedGridNode getMainNode() {
         return mainNode;
     }
 
     @Override
-    public InterfaceLogic getInterfaceLogic() {
+    public final InterfaceLogic getInterfaceLogic() {
         return logic;
     }
 
@@ -94,7 +87,6 @@ public final class AE2InputInterfaceBlockEntity extends IOPortBlockEntity
     public void saveChanges() {
         if (Transaction.getCurrentOpenedTransaction() != null) return;
         notifyStorageChanged();
-        notifyControllerOfInputChange();
     }
 
     @Override
@@ -105,16 +97,6 @@ public final class AE2InputInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void onMainNodeStateChanged(IGridNodeListener.State reason) {
         if (mainNode.hasGridBooted()) logic.notifyNeighbors();
-    }
-
-    @Override
-    public ResourceStorage<ItemResource> itemStorage() {
-        return itemStorage;
-    }
-
-    @Override
-    public ResourceStorage<FluidResource> fluidStorage() {
-        return fluidStorage;
     }
 
     @Override
@@ -176,5 +158,10 @@ public final class AE2InputInterfaceBlockEntity extends IOPortBlockEntity
         for (ItemStack stack : drops) {
             Block.popResource(level, worldPosition, stack);
         }
+    }
+
+    /** Called when the output host's main node changes networks. */
+    protected void onNetworkChanged() {
+        logic.gridChanged();
     }
 }

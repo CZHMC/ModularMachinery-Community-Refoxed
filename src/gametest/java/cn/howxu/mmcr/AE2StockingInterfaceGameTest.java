@@ -22,7 +22,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -68,8 +68,8 @@ public class AE2StockingInterfaceGameTest {
         helper.setBlock(fluidChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
-        AE2StockingInterfaceBlockEntity port = helper.getBlockEntity(portPos,
-                AE2StockingInterfaceBlockEntity.class);
+        StockingInterfaceBlockEntity port = helper.getBlockEntity(portPos,
+                StockingInterfaceBlockEntity.class);
         MEChestBlockEntity itemChest = helper.getBlockEntity(itemChestPos, MEChestBlockEntity.class);
         MEChestBlockEntity fluidChest = helper.getBlockEntity(fluidChestPos, MEChestBlockEntity.class);
         CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,

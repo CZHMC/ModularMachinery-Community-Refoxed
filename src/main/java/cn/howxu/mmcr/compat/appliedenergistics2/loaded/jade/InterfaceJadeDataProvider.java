@@ -13,7 +13,7 @@ import snownee.jade.api.IServerDataProvider;
  *
  * @author howxu <dev@howxu.cn>
  */
-public enum AE2InputInterfaceJadeDataProvider implements IServerDataProvider<BlockAccessor> {
+public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccessor> {
     INSTANCE;
 
     static final Identifier UID = MMCR.id("ae2_input_interface_grid");

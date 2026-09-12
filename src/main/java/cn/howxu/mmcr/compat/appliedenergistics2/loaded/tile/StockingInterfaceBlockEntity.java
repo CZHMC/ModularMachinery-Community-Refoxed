@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile;
 
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.GridFlags;
@@ -23,9 +23,9 @@ import appeng.me.storage.NullInventory;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2FluidNetworkResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ItemNetworkResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NetworkResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.FluidNetworkResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.ItemNetworkResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -51,19 +51,19 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
+public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         implements InterfaceLogicHost, IGridConnectedBlockEntity {
-    private static final IGridNodeListener<AE2StockingInterfaceBlockEntity> NODE_LISTENER =
+    private static final IGridNodeListener<StockingInterfaceBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
-                public void onGridChanged(AE2StockingInterfaceBlockEntity nodeOwner, IGridNode node) {
+                public void onGridChanged(StockingInterfaceBlockEntity nodeOwner, IGridNode node) {
                     nodeOwner.networkChanged();
                 }
             };
-    private static final IGridNodeListener<AE2StockingInterfaceBlockEntity> UI_NODE_LISTENER =
+    private static final IGridNodeListener<StockingInterfaceBlockEntity> UI_NODE_LISTENER =
             new IGridNodeListener<>() {
                 @Override
-                public void onSaveChanges(AE2StockingInterfaceBlockEntity nodeOwner, IGridNode node) {
+                public void onSaveChanges(StockingInterfaceBlockEntity nodeOwner, IGridNode node) {
                 }
             };
 
@@ -92,14 +92,14 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
     private final IManagedGridNode uiNode = GridHelper.createManagedNode(this, UI_NODE_LISTENER);
     private final InterfaceLogic logic = new InterfaceLogic(uiNode, this, AEBlocks.INTERFACE.asItem());
     private final LiveResourceStorage<ItemResource> itemStorage = new LiveResourceStorage<>(
-            new AE2ItemNetworkResourceStorage(NullInventory.of(), List.of()));
+            new ItemNetworkResourceStorage(NullInventory.of(), List.of()));
     private final LiveResourceStorage<FluidResource> fluidStorage = new LiveResourceStorage<>(
-            new AE2FluidNetworkResourceStorage(NullInventory.of(), List.of()));
+            new FluidNetworkResourceStorage(NullInventory.of(), List.of()));
     @Nullable
     private IStackWatcher storageWatcher;
     private CapabilitySnapshot capabilitySnapshot;
 
-    AE2StockingInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
+    public StockingInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
         configureStorageMirrorCapacity();
@@ -258,8 +258,8 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
         IGrid grid = mainNode.getGrid();
         MEStorage storage = grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
         List<AEKey> keys = configuredKeys();
-        itemStorage.rebind(new AE2ItemNetworkResourceStorage(storage, keys));
-        fluidStorage.rebind(new AE2FluidNetworkResourceStorage(storage, keys));
+        itemStorage.rebind(new ItemNetworkResourceStorage(storage, keys));
+        fluidStorage.rebind(new FluidNetworkResourceStorage(storage, keys));
     }
 
     private List<AEKey> configuredKeys() {
@@ -342,13 +342,13 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     private static final class LiveResourceStorage<R> implements ResourceStorage<R> {
-        private AE2NetworkResourceStorage<R> delegate;
+        private NetworkResourceStorage<R> delegate;
 
-        private LiveResourceStorage(AE2NetworkResourceStorage<R> delegate) {
+        private LiveResourceStorage(NetworkResourceStorage<R> delegate) {
             this.delegate = delegate;
         }
 
-        private void rebind(AE2NetworkResourceStorage<R> delegate) {
+        private void rebind(NetworkResourceStorage<R> delegate) {
             this.delegate = delegate;
         }
 

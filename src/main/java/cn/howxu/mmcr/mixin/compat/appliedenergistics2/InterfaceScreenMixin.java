@@ -2,8 +2,8 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 
 import appeng.client.gui.implementations.InterfaceScreen;
 import appeng.menu.implementations.InterfaceMenu;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBaseBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,8 +21,8 @@ public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
             target = "Lnet/minecraft/client/gui/components/Button;visible:Z", opcode = 181))
     private void mmcr$hideLockedAmountButtons(Button button, boolean visible) {
         InterfaceMenu menu = (InterfaceMenu) ((AbstractContainerScreen<?>) (Object) this).getMenu();
-        boolean lockedInterface = menu.getHost() instanceof AE2OutputInterfaceBaseBlockEntity
-                || menu.getHost() instanceof AE2StockingInterfaceBlockEntity;
+        boolean lockedInterface = menu.getHost() instanceof OutputInterfaceBaseBlockEntity
+                || menu.getHost() instanceof StockingInterfaceBlockEntity;
         button.visible = !lockedInterface && visible;
     }
 }

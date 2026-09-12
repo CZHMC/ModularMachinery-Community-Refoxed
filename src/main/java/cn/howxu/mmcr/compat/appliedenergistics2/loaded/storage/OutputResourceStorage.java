@@ -1,7 +1,6 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
 import appeng.api.config.Actionable;
-import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.IActionSource;
@@ -17,7 +16,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
-import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -37,8 +36,8 @@ import java.util.function.Supplier;
  * @param <R> resource type exposed by the view
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2OutputResourceStorage.JournalState>
-        implements OutputResourceStorage<R> {
+public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResourceStorage.JournalState>
+        implements cn.howxu.mmcr.internal.recipe.OutputResourceStorage<R> {
     /** Fixed upper bound for one output cache flush; intentionally not user-configurable. */
     public static final long BOUNDED_FLUSH_OPERATION_LIMIT = 256L;
     private static final String FAILURE_ID = "ae2_output_interface";
@@ -51,11 +50,11 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
     private final Map<MEStorage, Map<AEKey, PendingNetwork>> pendingNetwork = new IdentityHashMap<>();
     private boolean localChanged;
 
-    public AE2OutputResourceStorage(GenericStackInv inventory,
-                                    Supplier<@Nullable MEStorage> networkSupplier,
-                                    AE2KeyAdapter<R> adapter,
-                                    IActionSource actionSource,
-                                    Runnable changeCallback) {
+    public OutputResourceStorage(GenericStackInv inventory,
+                                 Supplier<@Nullable MEStorage> networkSupplier,
+                                 AE2KeyAdapter<R> adapter,
+                                 IActionSource actionSource,
+                                 Runnable changeCallback) {
         this.inventory = Objects.requireNonNull(inventory, "inventory");
         this.networkSupplier = Objects.requireNonNull(networkSupplier, "networkSupplier");
         this.adapter = Objects.requireNonNull(adapter, "adapter");
@@ -383,7 +382,7 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
         if (fallbackSlot == null) {
             anyFallbackAmount = saturatingAdd(anyFallbackAmount, amount);
         } else {
-            fallbackAmounts.merge(fallbackSlot, amount, AE2OutputResourceStorage::saturatingAdd);
+            fallbackAmounts.merge(fallbackSlot, amount, OutputResourceStorage::saturatingAdd);
         }
         byKey.put(key, new PendingNetwork(saturatingAdd(previous.amount(), amount), fallbackAmounts,
                 anyFallbackAmount));

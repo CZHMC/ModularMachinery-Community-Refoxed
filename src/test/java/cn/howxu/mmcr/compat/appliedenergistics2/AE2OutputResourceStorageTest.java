@@ -5,7 +5,6 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.energy.IEnergyService;
-import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
@@ -13,14 +12,12 @@ import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2FluidResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ItemResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2OutputResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
@@ -52,7 +49,7 @@ class AE2OutputResourceStorageTest {
     void insertCommitsToTheNetworkOnlyAfterRootCommit() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(inventory(1), network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(inventory(1), network);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
@@ -68,7 +65,7 @@ class AE2OutputResourceStorageTest {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 3L);
         GenericStackInv cache = inventory(1);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
@@ -87,7 +84,7 @@ class AE2OutputResourceStorageTest {
         GenericStackInv cache = inventory(1);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
         network.setModulationLimit(3L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
@@ -111,7 +108,7 @@ class AE2OutputResourceStorageTest {
         cache.setStack(0, new GenericStack(AEItemKey.of(iron), 63L));
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
         network.setModulationLimit(3L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
 
         assertThatThrownBy(() -> {
             try (Transaction transaction = Transaction.openRoot()) {
@@ -134,7 +131,7 @@ class AE2OutputResourceStorageTest {
         cache.setStack(0, new GenericStack(AEItemKey.of(iron), 64L));
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
         network.setModulationLimit(3L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
 
         assertThatThrownBy(() -> {
             try (Transaction transaction = Transaction.openRoot()) {
@@ -150,7 +147,7 @@ class AE2OutputResourceStorageTest {
     void disconnectedNetworkUsesOnlyTheLocalCache() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         GenericStackInv cache = inventory(1);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, null);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, null);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
@@ -166,7 +163,7 @@ class AE2OutputResourceStorageTest {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         GenericStackInv cache = inventory(1);
         cache.setStack(0, new GenericStack(AEItemKey.of(iron), 64L));
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, null);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, null);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 1L, transaction)).isZero();
@@ -181,7 +178,7 @@ class AE2OutputResourceStorageTest {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 3L);
         GenericStackInv cache = inventory(1);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
@@ -199,8 +196,8 @@ class AE2OutputResourceStorageTest {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
 
         assertThat(itemStorage(cache, network).reservationIdentity())
-                .isSameAs(new AE2OutputResourceStorage<>(cache, () -> network,
-                        AE2FluidResourceStorage.adapter(), IActionSource.empty(), () -> {
+                .isSameAs(new OutputResourceStorage<>(cache, () -> network,
+                        FluidResourceStorage.adapter(), IActionSource.empty(), () -> {
                         }).reservationIdentity());
     }
 
@@ -209,7 +206,7 @@ class AE2OutputResourceStorageTest {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 3L);
         GenericStackInv cache = inventory(1);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
         PlanningReservations reservations = new PlanningReservations();
 
         var plan = storage.planOutput(iron, 8L, reservations, true);
@@ -229,7 +226,7 @@ class AE2OutputResourceStorageTest {
     void outputPlanningRespectsNetworkReservationsAcrossPlans() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 3L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(inventory(1), network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(inventory(1), network);
         PlanningReservations reservations = new PlanningReservations();
 
         assertThat(storage.planOutput(iron, 8L, reservations, false).accepted()).isEqualTo(8L);
@@ -240,7 +237,7 @@ class AE2OutputResourceStorageTest {
     void outputCapacityIncludesNetworkAndCompatibleLocalSlots() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 3L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(inventory(1), network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(inventory(1), network);
 
         assertThat(storage.outputCapacity(iron)).isEqualTo(67L);
     }
@@ -252,7 +249,7 @@ class AE2OutputResourceStorageTest {
         GenericStackInv cache = inventory(1);
         cache.setStack(0, new GenericStack(AEItemKey.of(iron), 4L));
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(gold), 8L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, gold, 8L, transaction)).isEqualTo(8L);
@@ -268,7 +265,7 @@ class AE2OutputResourceStorageTest {
     void outputIgnoresAStorageFilterThatWouldBeUsedForInterfaceConfiguration() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         GenericStackInv cache = new RejectedInventory();
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, null);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, null);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 1L, transaction)).isEqualTo(1L);
@@ -282,7 +279,7 @@ class AE2OutputResourceStorageTest {
     void networkAcceptanceIsAttemptedBeforeTheLocalFilter() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 8L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(new RejectedInventory(), network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(new RejectedInventory(), network);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
@@ -298,7 +295,7 @@ class AE2OutputResourceStorageTest {
         GenericStackInv cache = new GenericStackInv(Set.of(AEKeyType.fluids()), null,
                 GenericStackInv.Mode.STORAGE, 1);
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 8L);
-        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+        OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(storage.insert(0, iron, 8L, transaction)).isEqualTo(8L);
@@ -313,8 +310,8 @@ class AE2OutputResourceStorageTest {
     void localCommitInvokesTheChangeCallbackOnce() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         AtomicInteger changes = new AtomicInteger();
-        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(inventory(1),
-                () -> null, AE2ItemResourceStorage.adapter(), IActionSource.empty(), changes::incrementAndGet);
+        OutputResourceStorage<ItemResource> storage = new OutputResourceStorage<>(inventory(1),
+                () -> null, ItemResourceStorage.adapter(), IActionSource.empty(), changes::incrementAndGet);
 
         try (Transaction transaction = Transaction.openRoot()) {
             storage.insert(0, iron, 1L, transaction);
@@ -333,8 +330,8 @@ class AE2OutputResourceStorageTest {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
         network.setModulationLimit(3L);
         AtomicInteger changes = new AtomicInteger();
-        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
-                AE2ItemResourceStorage.adapter(), source(), changes::incrementAndGet);
+        OutputResourceStorage<ItemResource> storage = new OutputResourceStorage<>(cache, () -> network,
+                ItemResourceStorage.adapter(), source(), changes::incrementAndGet);
 
         assertThat(storage.flushToNetwork(8L)).isEqualTo(3L);
         assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(3L);
@@ -350,8 +347,8 @@ class AE2OutputResourceStorageTest {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
         network.setModulationLimit(0L);
         AtomicInteger changes = new AtomicInteger();
-        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
-                AE2ItemResourceStorage.adapter(), IActionSource.empty(), changes::incrementAndGet);
+        OutputResourceStorage<ItemResource> storage = new OutputResourceStorage<>(cache, () -> network,
+                ItemResourceStorage.adapter(), IActionSource.empty(), changes::incrementAndGet);
 
         assertThat(storage.flushToNetwork(8L)).isZero();
         assertThat(network.amount(AEItemKey.of(iron))).isZero();
@@ -365,8 +362,8 @@ class AE2OutputResourceStorageTest {
         GenericStackInv cache = inventory(1);
         cache.setStack(0, new GenericStack(AEItemKey.of(iron), 8L));
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
-        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
-                AE2ItemResourceStorage.adapter(), source(), () -> {
+        OutputResourceStorage<ItemResource> storage = new OutputResourceStorage<>(cache, () -> network,
+                ItemResourceStorage.adapter(), source(), () -> {
                 });
 
         assertThat(storage.flushToNetwork(3L)).isEqualTo(3L);
@@ -384,8 +381,8 @@ class AE2OutputResourceStorageTest {
             cache.setStack(slot, new GenericStack(AEItemKey.of(iron), 64L));
         }
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 1_024L);
-        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
-                AE2ItemResourceStorage.adapter(), source(), () -> {
+        OutputResourceStorage<ItemResource> storage = new OutputResourceStorage<>(cache, () -> network,
+                ItemResourceStorage.adapter(), source(), () -> {
                 });
 
         assertThat(storage.flushToNetwork(Long.MAX_VALUE)).isEqualTo(256L);
@@ -398,8 +395,8 @@ class AE2OutputResourceStorageTest {
         FlakyExtractInventory cache = new FlakyExtractInventory();
         cache.setStack(0, new GenericStack(AEItemKey.of(iron), 8L));
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
-        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
-                AE2ItemResourceStorage.adapter(), source(), () -> {
+        OutputResourceStorage<ItemResource> storage = new OutputResourceStorage<>(cache, () -> network,
+                ItemResourceStorage.adapter(), source(), () -> {
                 });
 
         assertThat(storage.flushToNetwork(8L)).isZero();
@@ -418,8 +415,8 @@ class AE2OutputResourceStorageTest {
         cache.failRestore = true;
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
         network.setModulationLimit(3L);
-        AE2OutputResourceStorage<ItemResource> storage = new AE2OutputResourceStorage<>(cache, () -> network,
-                AE2ItemResourceStorage.adapter(), source(), () -> {
+        OutputResourceStorage<ItemResource> storage = new OutputResourceStorage<>(cache, () -> network,
+                ItemResourceStorage.adapter(), source(), () -> {
                 });
 
         assertThatThrownBy(() -> storage.flushToNetwork(8L))
@@ -430,10 +427,10 @@ class AE2OutputResourceStorageTest {
         assertThat(storage.amount(0)).isEqualTo(8L);
     }
 
-    private static AE2OutputResourceStorage<ItemResource> itemStorage(GenericStackInv cache,
-                                                                         FakeMEStorage network) {
-        return new AE2OutputResourceStorage<>(cache, () -> network,
-                AE2ItemResourceStorage.adapter(), source(), () -> {
+    private static OutputResourceStorage<ItemResource> itemStorage(GenericStackInv cache,
+                                                                   FakeMEStorage network) {
+        return new OutputResourceStorage<>(cache, () -> network,
+                ItemResourceStorage.adapter(), source(), () -> {
                 });
     }
 

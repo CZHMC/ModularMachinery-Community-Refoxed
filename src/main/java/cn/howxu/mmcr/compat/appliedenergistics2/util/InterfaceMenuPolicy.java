@@ -1,24 +1,24 @@
-package cn.howxu.mmcr.compat.appliedenergistics2;
+package cn.howxu.mmcr.compat.appliedenergistics2.util;
 
 import appeng.api.inventories.InternalInventory;
 import appeng.util.ConfigMenuInventory;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBaseBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 
 /**
  * Identifies the MMCR output hosts and their cache-backed AE2 menu slots.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2InterfaceMenuPolicy {
-    private AE2InterfaceMenuPolicy() {
+public final class InterfaceMenuPolicy {
+    private InterfaceMenuPolicy() {
     }
 
     public static boolean isOutputHost(Object target) {
-        return target instanceof AE2OutputInterfaceBaseBlockEntity;
+        return target instanceof OutputInterfaceBaseBlockEntity;
     }
 
     public static boolean isOutputStorageSlot(Object target, InternalInventory inventory) {
-        if (!(target instanceof AE2OutputInterfaceBaseBlockEntity output)
+        if (!(target instanceof OutputInterfaceBaseBlockEntity output)
                 || !(inventory instanceof ConfigMenuInventory wrapper)) {
             return false;
         }

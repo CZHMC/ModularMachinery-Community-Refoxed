@@ -15,12 +15,12 @@ import snownee.jade.api.TooltipPosition;
  *
  * @author howxu <dev@howxu.cn>
  */
-public enum AE2InputInterfaceJadeComponentProvider implements IComponentProvider<BlockAccessor> {
+public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAccessor> {
     INSTANCE;
 
     @Override
     public Identifier getUid() {
-        return AE2InputInterfaceJadeDataProvider.UID;
+        return InterfaceJadeDataProvider.UID;
     }
 
     @Override
@@ -31,13 +31,14 @@ public enum AE2InputInterfaceJadeComponentProvider implements IComponentProvider
     @Override
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
         if (!(accessor.getTarget() instanceof IGridConnectedBlockEntity)) return;
-        int state = accessor.getServerData().getByteOr(AE2InputInterfaceJadeDataProvider.STATE, (byte) 0);
+        int state = accessor.getServerData().getByteOr(InterfaceJadeDataProvider.STATE, (byte) 0);
         String key = switch (state) {
             case 1 -> "waila.ae2.NetworkBooting";
             case 2 -> "waila.ae2.DeviceMissingChannel";
             case 3 -> "waila.ae2.DeviceOnline";
             default -> "waila.ae2.DeviceOffline";
         };
+        // base AE has no color
         ChatFormatting color = switch (state) {
             case 1, 2 -> ChatFormatting.YELLOW;
             case 3 -> ChatFormatting.GREEN;

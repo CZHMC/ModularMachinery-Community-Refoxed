@@ -1,9 +1,10 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.helpers.externalstorage.GenericStackInv;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.Optional;
@@ -13,7 +14,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2ItemResourceStorage extends AE2ResourceStorage<ItemResource> {
+public final class ItemResourceStorage extends ResourceStorage<ItemResource> {
     private static final AE2KeyAdapter<ItemResource> ADAPTER = new AE2KeyAdapter<>() {
         @Override
         public AEKeyType keyType() {
@@ -38,7 +39,7 @@ public final class AE2ItemResourceStorage extends AE2ResourceStorage<ItemResourc
         }
     };
 
-    public AE2ItemResourceStorage(GenericStackInv inventory) {
+    public ItemResourceStorage(GenericStackInv inventory) {
         super(inventory, adapter());
     }
 

@@ -24,7 +24,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -130,8 +130,8 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(2, () -> {
-            AE2InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
-                    AE2InputInterfaceBlockEntity.class);
+            InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
+                    InputInterfaceBlockEntity.class);
             helper.assertTrue(entity != null,
                     "AE2 input interface resolves to AE2InputInterfaceBlockEntity");
 
@@ -226,8 +226,8 @@ public class AE2InterfaceGameTest {
                 while (!controller.structureSnapshot().formed() && polls++ < 100) {
                     controller.serverTick();
                 }
-                AE2InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
-                        AE2InputInterfaceBlockEntity.class);
+                InputInterfaceBlockEntity entity = helper.getBlockEntity(portPos,
+                        InputInterfaceBlockEntity.class);
                 helper.assertTrue(controller.structureSnapshot().formed(),
                         "MMCR multiblock containing AE2 input interface forms");
                 helper.assertTrue(entity.itemStorage().amount(0) <= INITIAL_ITEM_COUNT - 1L,

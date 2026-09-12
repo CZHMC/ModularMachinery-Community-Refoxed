@@ -7,8 +7,8 @@ import appeng.api.stacks.GenericStack;
 import appeng.api.storage.AEKeySlotFilter;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2FluidResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ItemResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.item.Items;
@@ -37,7 +37,7 @@ class AE2ResourceStorageTest {
     @Test
     void itemAdapterConvertsBothDirectionsAndRejectsFluidKey() {
         ItemResource item = ItemResource.of(Items.IRON_INGOT);
-        AE2KeyAdapter<ItemResource> adapter = AE2ItemResourceStorage.adapter();
+        AE2KeyAdapter<ItemResource> adapter = ItemResourceStorage.adapter();
 
         assertThat(adapter.toResource(adapter.toKey(item))).contains(item);
         assertThat(adapter.toResource(AEFluidKey.of(Fluids.WATER))).isEmpty();
@@ -46,7 +46,7 @@ class AE2ResourceStorageTest {
     @Test
     void committedInsertAndRollbackUseGenericStackSnapshots() {
         GenericStackInv inventory = inventory(1);
-        AE2ItemResourceStorage storage = new AE2ItemResourceStorage(inventory);
+        ItemResourceStorage storage = new ItemResourceStorage(inventory);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
 
         try (Transaction transaction = Transaction.openRoot()) {
@@ -67,15 +67,15 @@ class AE2ResourceStorageTest {
     void itemAndFluidViewsShareTheSameReservationIdentity() {
         GenericStackInv inventory = inventory(1);
 
-        assertThat(new AE2ItemResourceStorage(inventory).reservationIdentity())
-                .isSameAs(new AE2FluidResourceStorage(inventory).reservationIdentity());
+        assertThat(new ItemResourceStorage(inventory).reservationIdentity())
+                .isSameAs(new FluidResourceStorage(inventory).reservationIdentity());
     }
 
     @Test
     void sharedViewsCannotReserveTheSameSlotTwice() {
         GenericStackInv inventory = inventory(1);
-        var item = new AE2ItemResourceStorage(inventory);
-        var fluid = new AE2FluidResourceStorage(inventory);
+        var item = new ItemResourceStorage(inventory);
+        var fluid = new FluidResourceStorage(inventory);
         PlanningReservations reservations = new PlanningReservations();
 
         assertThat(reservations.reserveInsert(item, 0, ItemResource.of(Items.IRON_INGOT), 1L)).isTrue();
@@ -86,7 +86,7 @@ class AE2ResourceStorageTest {
     void storageRespectsKeyCapacityAndSupportedTypeFilter() {
         GenericStackInv inventory = inventory(1);
         inventory.setCapacity(AEKeyType.items(), 2L);
-        AE2ItemResourceStorage items = new AE2ItemResourceStorage(inventory);
+        ItemResourceStorage items = new ItemResourceStorage(inventory);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(items.insert(0, ItemResource.of(Items.IRON_INGOT), 5L, transaction)).isEqualTo(2L);
@@ -95,7 +95,7 @@ class AE2ResourceStorageTest {
 
         GenericStackInv itemOnly = new GenericStackInv(
                 Set.of(AEKeyType.items()), null, GenericStackInv.Mode.STORAGE, 1);
-        AE2FluidResourceStorage fluids = new AE2FluidResourceStorage(itemOnly);
+        FluidResourceStorage fluids = new FluidResourceStorage(itemOnly);
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(fluids.insert(0, FluidResource.of(Fluids.WATER), 1L, transaction)).isZero();
         }
@@ -104,7 +104,7 @@ class AE2ResourceStorageTest {
     @Test
     void storageRejectsAFilteredKeyWithoutChangingTheSlot() {
         GenericStackInv inventory = new FilteredInventory((slot, key) -> key instanceof AEFluidKey);
-        AE2ItemResourceStorage items = new AE2ItemResourceStorage(inventory);
+        ItemResourceStorage items = new ItemResourceStorage(inventory);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
 
         try (Transaction transaction = Transaction.openRoot()) {
@@ -118,7 +118,7 @@ class AE2ResourceStorageTest {
     @Test
     void insertRespectsInventoryCanInsertPermission() {
         GenericStackInv inventory = new DirectionalInventory(false, true);
-        AE2ItemResourceStorage items = new AE2ItemResourceStorage(inventory);
+        ItemResourceStorage items = new ItemResourceStorage(inventory);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(items.insert(0, ItemResource.of(Items.IRON_INGOT), 1L, transaction)).isZero();
@@ -133,7 +133,7 @@ class AE2ResourceStorageTest {
         GenericStackInv inventory = new DirectionalInventory(true, false);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         inventory.setStack(0, new GenericStack(AEItemKey.of(iron), 3L));
-        AE2ItemResourceStorage items = new AE2ItemResourceStorage(inventory);
+        ItemResourceStorage items = new ItemResourceStorage(inventory);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(items.extract(0, iron, 1L, transaction)).isZero();
@@ -148,7 +148,7 @@ class AE2ResourceStorageTest {
         GenericStackInv inventory = inventory(1);
         inventory.setStack(0, new GenericStack(AEFluidKey.of(Fluids.WATER), 1L));
 
-        assertThat(new AE2ItemResourceStorage(inventory).resource(0)).isNull();
+        assertThat(new ItemResourceStorage(inventory).resource(0)).isNull();
     }
 
     private static GenericStackInv inventory(int size) {

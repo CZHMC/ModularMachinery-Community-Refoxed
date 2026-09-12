@@ -1,10 +1,11 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
@@ -20,7 +21,7 @@ import java.util.Objects;
  * @param <R> resource type exposed by the view
  * @author howxu <dev@howxu.cn>
  */
-public abstract class AE2NetworkResourceStorage<R> extends SnapshotJournal<Map<AEKey, Long>>
+public abstract class NetworkResourceStorage<R> extends SnapshotJournal<Map<AEKey, Long>>
         implements ResourceStorage<R> {
     private final MEStorage meStorage;
     private final List<AEKey> keys;
@@ -28,7 +29,7 @@ public abstract class AE2NetworkResourceStorage<R> extends SnapshotJournal<Map<A
     private final long[] amounts;
     private final Map<AEKey, Long> pendingExtracts = new HashMap<>();
 
-    protected AE2NetworkResourceStorage(MEStorage meStorage, List<AEKey> keys, AE2KeyAdapter<R> adapter) {
+    protected NetworkResourceStorage(MEStorage meStorage, List<AEKey> keys, AE2KeyAdapter<R> adapter) {
         this.meStorage = Objects.requireNonNull(meStorage, "meStorage");
         this.keys = List.copyOf(Objects.requireNonNull(keys, "keys"));
         this.adapter = Objects.requireNonNull(adapter, "adapter");

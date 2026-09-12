@@ -11,9 +11,9 @@ import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.storage.MEStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2AsyncOutputResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2AsyncOutputService;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ItemResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.AsyncOutputResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AsyncOutputService;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Lifecycle;
@@ -49,14 +49,14 @@ class AE2AsyncOutputServiceTest {
 
     @Test
     void serviceIsEmptyWhenNothingSubmitted() {
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AsyncOutputService service = new AsyncOutputService();
 
         assertThat(service.isEmpty()).isTrue();
     }
 
     @Test
     void submitAndDrainRemovesAcceptedAmounts() {
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AsyncOutputService service = new AsyncOutputService();
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 64L);
 
         service.submit(AEItemKey.of(Items.IRON_INGOT), 8L);
@@ -69,7 +69,7 @@ class AE2AsyncOutputServiceTest {
 
     @Test
     void partialDrainRetainsUnacceptedAmountsInTheTransientAccumulator() {
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AsyncOutputService service = new AsyncOutputService();
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
         network.capFirstModulation(3L);
 
@@ -88,7 +88,7 @@ class AE2AsyncOutputServiceTest {
     @Test
     void concurrentSubmitIsRetainedWhileDrainUpdatesTheQueue() throws Exception {
         AEKey key = AEItemKey.of(Items.IRON_INGOT);
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AsyncOutputService service = new AsyncOutputService();
         FakeMEStorage network = new FakeMEStorage(key, 64L);
         network.capFirstModulation(3L);
         network.blockNextModulation();
@@ -123,7 +123,7 @@ class AE2AsyncOutputServiceTest {
 
     @Test
     void submitIgnoresNullKeysAndNonPositiveAmounts() {
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AsyncOutputService service = new AsyncOutputService();
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
 
         service.submit(null, 4L);
@@ -136,7 +136,7 @@ class AE2AsyncOutputServiceTest {
 
     @Test
     void clearRemovesAllPendingWork() {
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AsyncOutputService service = new AsyncOutputService();
 
         service.submit(AEItemKey.of(Items.IRON_INGOT), 4L);
         service.submit(AEItemKey.of(Items.GOLD_INGOT), 2L);
@@ -148,8 +148,8 @@ class AE2AsyncOutputServiceTest {
     @Test
     void resourceStorageReportsZeroSizeAndNoSlots() {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> network, AE2ItemResourceStorage.adapter(), new AE2AsyncOutputService(), source(),
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), new AsyncOutputService(), source(),
                 () -> {
                 });
 
@@ -161,8 +161,8 @@ class AE2AsyncOutputServiceTest {
     @Test
     void resourceStorageOutputCapacityUsesNetworkSimulation() {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 12L);
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> network, AE2ItemResourceStorage.adapter(), new AE2AsyncOutputService(), source(),
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), new AsyncOutputService(), source(),
                 () -> {
                 });
 
@@ -172,9 +172,9 @@ class AE2AsyncOutputServiceTest {
     @Test
     void resourceStoragePlansNetworkOutputWithReservationIdentity() {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> network, AE2ItemResourceStorage.adapter(), service, source(), () -> {
+        AsyncOutputService service = new AsyncOutputService();
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), service, source(), () -> {
                 });
         PlanningReservations reservations = new PlanningReservations();
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
@@ -194,9 +194,9 @@ class AE2AsyncOutputServiceTest {
     @Test
     void resourceStorageDoesNotSubmitWhenRootTransactionAborts() {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> network, AE2ItemResourceStorage.adapter(), service, source(), () -> {
+        AsyncOutputService service = new AsyncOutputService();
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), service, source(), () -> {
                 });
         var plan = storage.planOutput(ItemResource.of(Items.IRON_INGOT), 4L,
                 new PlanningReservations(), true);
@@ -212,9 +212,9 @@ class AE2AsyncOutputServiceTest {
     @Test
     void resourceStorageDoesNotSubmitWhenParentTransactionAbortsAfterChildCommit() {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
-        AE2AsyncOutputService service = new AE2AsyncOutputService();
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> network, AE2ItemResourceStorage.adapter(), service, source(), () -> {
+        AsyncOutputService service = new AsyncOutputService();
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), service, source(), () -> {
                 });
         var plan = storage.planOutput(ItemResource.of(Items.IRON_INGOT), 4L,
                 new PlanningReservations(), true);
@@ -232,8 +232,8 @@ class AE2AsyncOutputServiceTest {
 
     @Test
     void resourceStoragePlanReturnsZeroWhenNetworkIsAbsent() {
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> null, AE2ItemResourceStorage.adapter(), new AE2AsyncOutputService(), source(),
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> null, ItemResourceStorage.adapter(), new AsyncOutputService(), source(),
                 () -> {
                 });
 
@@ -247,8 +247,8 @@ class AE2AsyncOutputServiceTest {
     @Test
     void resourceStoragePlanReturnsZeroWhenCapacityIsExhausted() {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 0L);
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> network, AE2ItemResourceStorage.adapter(), new AE2AsyncOutputService(), source(),
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), new AsyncOutputService(), source(),
                 () -> {
                 });
 
@@ -262,8 +262,8 @@ class AE2AsyncOutputServiceTest {
     @Test
     void resourceStorageOrdinaryInsertAndExtractReturnZero() {
         FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
-        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
-                () -> network, AE2ItemResourceStorage.adapter(), new AE2AsyncOutputService(), source(),
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), new AsyncOutputService(), source(),
                 () -> {
                 });
 

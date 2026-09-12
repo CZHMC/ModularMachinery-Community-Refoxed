@@ -5,8 +5,16 @@ import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.AE2InputInterfaceJadeComponentProvider;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.AE2InputInterfaceJadeDataProvider;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeComponentProvider;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeDataProvider;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -43,10 +51,10 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     @Override
     public List<IOPortKind> portKinds() {
         return List.of(
-                AE2InputInterfaceKind.INSTANCE,
-                AE2StockingInterfaceKind.INSTANCE,
-                AE2OutputInterfaceKind.INSTANCE,
-                AE2AsyncOutputInterfaceKind.INSTANCE);
+                InputInterfaceKind.INSTANCE,
+                StockingInterfaceKind.INSTANCE,
+                OutputInterfaceKind.INSTANCE,
+                AsyncOutputInterfaceKind.INSTANCE);
     }
 
     @Override
@@ -59,16 +67,16 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
-        if (level.getBlockEntity(pos) instanceof AE2InputInterfaceBlockEntity host) {
+        if (level.getBlockEntity(pos) instanceof InputInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
-        if (level.getBlockEntity(pos) instanceof AE2StockingInterfaceBlockEntity host) {
+        if (level.getBlockEntity(pos) instanceof StockingInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
-        if (level.getBlockEntity(pos) instanceof AE2OutputInterfaceBlockEntity host) {
+        if (level.getBlockEntity(pos) instanceof OutputInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
-        if (level.getBlockEntity(pos) instanceof AE2AsyncOutputInterfaceBlockEntity host) {
+        if (level.getBlockEntity(pos) instanceof AsyncOutputInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
         return false;
@@ -83,38 +91,38 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     public void registerCapabilities(RegisterCapabilitiesEvent event) {
         BlockEntityType<?> inputInterfaceType = ModBlockEntities.BES.get(INPUT_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, inputInterfaceType,
-                (be, ignored) -> be instanceof AE2InputInterfaceBlockEntity host ? host : null);
+                (be, ignored) -> be instanceof InputInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, inputInterfaceType,
-                (be, side) -> be instanceof AE2InputInterfaceBlockEntity host
+                (be, side) -> be instanceof InputInterfaceBlockEntity host
                         ? host.getInterfaceLogic().getStorage() : null);
         event.registerBlockEntity(AECapabilities.ME_STORAGE, inputInterfaceType,
-                (be, side) -> be instanceof AE2InputInterfaceBlockEntity host
+                (be, side) -> be instanceof InputInterfaceBlockEntity host
                         ? host.getInterfaceLogic().getInventory() : null);
         BlockEntityType<?> stockingInterfaceType = ModBlockEntities.BES.get(STOCKING_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, stockingInterfaceType,
-                (be, ignored) -> be instanceof AE2StockingInterfaceBlockEntity host ? host : null);
+                (be, ignored) -> be instanceof StockingInterfaceBlockEntity host ? host : null);
         BlockEntityType<?> outputInterfaceType = ModBlockEntities.BES.get(OUTPUT_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, outputInterfaceType,
-                (be, ignored) -> be instanceof AE2OutputInterfaceBlockEntity host ? host : null);
+                (be, ignored) -> be instanceof OutputInterfaceBlockEntity host ? host : null);
         BlockEntityType<?> asyncOutputInterfaceType = ModBlockEntities.BES.get(ASYNC_OUTPUT_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, asyncOutputInterfaceType,
-                (be, ignored) -> be instanceof AE2AsyncOutputInterfaceBlockEntity host ? host : null);
+                (be, ignored) -> be instanceof AsyncOutputInterfaceBlockEntity host ? host : null);
     }
 
     @Override
     public void registerJadeCommon(IWailaCommonRegistration registration) {
-        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
-                AE2InputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
-                AE2StockingInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
-                AE2OutputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
-                AE2AsyncOutputInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
+                InputInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
+                StockingInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
+                OutputInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
+                AsyncOutputInterfaceBlockEntity.class);
     }
 
     @Override
     public void registerJadeClient(IWailaClientRegistration registration) {
-        registration.registerBlockComponent(AE2InputInterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class);
+        registration.registerBlockComponent(InterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class);
     }
 }

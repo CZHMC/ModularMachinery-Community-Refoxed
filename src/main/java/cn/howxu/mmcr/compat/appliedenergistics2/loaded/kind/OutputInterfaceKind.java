@@ -1,9 +1,10 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
+package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -18,35 +19,35 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import java.util.List;
 
 /**
- * AE2 interface-backed async output port kind that drains through a transient service.
+ * AE2 interface-backed output port kind with a bounded local cache.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2AsyncOutputInterfaceKind implements IOPortKind {
-    private static final String ID = "ae2_me_async_output_interface";
+public final class OutputInterfaceKind implements IOPortKind {
+    private static final String ID = "ae2_me_output_interface";
     private static final List<PortFamilyDescriptor> FAMILIES = List.of(
             new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.OUTPUT, ItemBusSize.LUDICROUS.ordinal() + 1,
                     List.of("item_output_bus")),
             new PortFamilyDescriptor(PortFamilyIds.FLUID, IOType.OUTPUT, FluidHatchSize.VACUUM.ordinal() + 1,
                     List.of("fluid_output_hatch")));
 
-    public static final AE2AsyncOutputInterfaceKind INSTANCE = new AE2AsyncOutputInterfaceKind();
+    public static final OutputInterfaceKind INSTANCE = new OutputInterfaceKind();
 
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
             new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE, CapabilityDirections.of(IOType.OUTPUT),
                     context -> {
-                        AE2AsyncOutputInterfaceBlockEntity host = (AE2AsyncOutputInterfaceBlockEntity) context.host();
+                        OutputInterfaceBlockEntity host = (OutputInterfaceBlockEntity) context.host();
                         return new ItemBusCapability(host, host.itemStorage(), IOType.OUTPUT, false);
                     },
                     (binding, tier) -> true),
             new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, CapabilityDirections.of(IOType.OUTPUT),
                     context -> {
-                        AE2AsyncOutputInterfaceBlockEntity host = (AE2AsyncOutputInterfaceBlockEntity) context.host();
+                        OutputInterfaceBlockEntity host = (OutputInterfaceBlockEntity) context.host();
                         return new FluidHatchCapability(host, host.fluidStorage(), IOType.OUTPUT, false);
                     },
                     (binding, tier) -> true)));
 
-    private AE2AsyncOutputInterfaceKind() {}
+    private OutputInterfaceKind() {}
 
     @Override
     public String id() {
@@ -64,8 +65,8 @@ public final class AE2AsyncOutputInterfaceKind implements IOPortKind {
     }
 
     @Override
-    public BlockEntityType.BlockEntitySupplier<AE2AsyncOutputInterfaceBlockEntity> entityFactory() {
-        return (pos, state) -> new AE2AsyncOutputInterfaceBlockEntity(pos, state, this);
+    public BlockEntityType.BlockEntitySupplier<OutputInterfaceBlockEntity> entityFactory() {
+        return (pos, state) -> new OutputInterfaceBlockEntity(pos, state, this);
     }
 
     @Override
