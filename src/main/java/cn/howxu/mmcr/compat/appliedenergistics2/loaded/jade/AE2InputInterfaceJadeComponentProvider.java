@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
+import appeng.me.helpers.IGridConnectedBlockEntity;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -30,7 +30,7 @@ public enum AE2InputInterfaceJadeComponentProvider implements IComponentProvider
 
     @Override
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-        if (!(accessor.getTarget() instanceof AE2InputInterfaceBlockEntity)) return;
+        if (!(accessor.getTarget() instanceof IGridConnectedBlockEntity)) return;
         int state = accessor.getServerData().getByteOr(AE2InputInterfaceJadeDataProvider.STATE, (byte) 0);
         String key = switch (state) {
             case 1 -> "waila.ae2.NetworkBooting";

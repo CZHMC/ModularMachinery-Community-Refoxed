@@ -444,43 +444,47 @@ public final class AE2OutputResourceStorage<R> extends SnapshotJournal<AE2Output
 
     @Override
     protected void onRootCommit(JournalState originalState) {
-        for (Map.Entry<MEStorage, Map<AEKey, PendingNetwork>> networkEntry : pendingNetwork.entrySet()) {
-            Map<AEKey, PendingNetwork> originalAmounts = originalState.pendingNetwork()
-                    .getOrDefault(networkEntry.getKey(), Map.of());
-            for (Map.Entry<AEKey, PendingNetwork> entry : networkEntry.getValue().entrySet()) {
-                PendingNetwork previous = originalAmounts.getOrDefault(entry.getKey(), PendingNetwork.empty());
-                long amount = entry.getValue().amount() - previous.amount();
-                if (amount > 0L) {
-                    Map<Integer, Long> fallbackAmounts = new HashMap<>();
-                    entry.getValue().fallbackAmounts().forEach((slot, current) -> {
-                        long original = previous.fallbackAmounts().getOrDefault(slot, 0L);
-                        long added = current - original;
-                        if (added > 0L) fallbackAmounts.put(slot, added);
-                    });
-                    long anyFallbackAmount = entry.getValue().anyFallbackAmount()
-                            - previous.anyFallbackAmount();
-                    long localCapacity = localCompensationCapacity(entry.getKey(), amount, fallbackAmounts,
-                            Math.max(0L, anyFallbackAmount));
-                    long accepted = StorageHelper.poweredInsert(energySource(), networkEntry.getKey(),
-                            entry.getKey(), amount, actionSource);
-                    accepted = Math.min(amount, Math.max(0L, accepted));
-                    long shortfall = amount - accepted;
-                    if (shortfall > 0L) {
-                        if (localCapacity < shortfall
-                                || compensateLocally(entry.getKey(), shortfall, fallbackAmounts,
-                                Math.max(0L, anyFallbackAmount)) != shortfall) {
-                            if (accepted > 0L) {
-                                rollbackNetworkInsert(networkEntry.getKey(), entry.getKey(), accepted);
+        boolean changed = false;
+        try {
+            for (Map.Entry<MEStorage, Map<AEKey, PendingNetwork>> networkEntry : pendingNetwork.entrySet()) {
+                Map<AEKey, PendingNetwork> originalAmounts = originalState.pendingNetwork()
+                        .getOrDefault(networkEntry.getKey(), Map.of());
+                for (Map.Entry<AEKey, PendingNetwork> entry : networkEntry.getValue().entrySet()) {
+                    PendingNetwork previous = originalAmounts.getOrDefault(entry.getKey(), PendingNetwork.empty());
+                    long amount = entry.getValue().amount() - previous.amount();
+                    if (amount > 0L) {
+                        Map<Integer, Long> fallbackAmounts = new HashMap<>();
+                        entry.getValue().fallbackAmounts().forEach((slot, current) -> {
+                            long original = previous.fallbackAmounts().getOrDefault(slot, 0L);
+                            long added = current - original;
+                            if (added > 0L) fallbackAmounts.put(slot, added);
+                        });
+                        long anyFallbackAmount = entry.getValue().anyFallbackAmount()
+                                - previous.anyFallbackAmount();
+                        long localCapacity = localCompensationCapacity(entry.getKey(), amount, fallbackAmounts,
+                                Math.max(0L, anyFallbackAmount));
+                        long accepted = StorageHelper.poweredInsert(energySource(), networkEntry.getKey(),
+                                entry.getKey(), amount, actionSource);
+                        accepted = Math.min(amount, Math.max(0L, accepted));
+                        long shortfall = amount - accepted;
+                        if (shortfall > 0L) {
+                            if (localCapacity < shortfall
+                                    || compensateLocally(entry.getKey(), shortfall, fallbackAmounts,
+                                    Math.max(0L, anyFallbackAmount)) != shortfall) {
+                                if (accepted > 0L) {
+                                    rollbackNetworkInsert(networkEntry.getKey(), entry.getKey(), accepted);
+                                }
+                                throw new IllegalStateException("Unable to retain AE2 output network shortfall");
                             }
-                            throw new IllegalStateException("Unable to retain AE2 output network shortfall");
                         }
                     }
                 }
             }
+            changed = localChanged;
+        } finally {
+            pendingNetwork.clear();
+            localChanged = false;
         }
-        pendingNetwork.clear();
-        boolean changed = localChanged;
-        localChanged = false;
         if (changed) changeCallback.run();
     }
 

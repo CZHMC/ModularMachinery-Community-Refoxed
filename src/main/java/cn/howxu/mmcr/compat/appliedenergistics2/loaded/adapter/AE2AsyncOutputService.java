@@ -45,7 +45,7 @@ public final class AE2AsyncOutputService {
      * @param maxOperations the maximum number of distinct keys to attempt this call
      * @return {@code true} if at least one key was accepted by the network
      */
-    public boolean drainTo(MEStorage storage, IActionSource source, int maxOperations) {
+    public synchronized boolean drainTo(MEStorage storage, IActionSource source, int maxOperations) {
         if (storage == null || pending.isEmpty() || maxOperations <= 0) return false;
         IEnergySource energy = energySource(source);
         int processed = 0;
@@ -61,12 +61,12 @@ public final class AE2AsyncOutputService {
             long accepted = StorageHelper.poweredInsert(energy, storage, key, amount, source);
             accepted = Math.min(amount, Math.max(0L, accepted));
             if (accepted > 0L) {
-                long remaining = amount - accepted;
-                if (remaining <= 0L) {
-                    iterator.remove();
-                } else {
-                    pending.put(key, remaining);
-                }
+                long acceptedAmount = accepted;
+                pending.compute(key, (ignored, queued) -> {
+                    if (queued == null) return null;
+                    long retained = queued - acceptedAmount;
+                    return retained > 0L ? retained : null;
+                });
             }
             processed++;
         }
@@ -77,7 +77,7 @@ public final class AE2AsyncOutputService {
      * Drops all queued work. Called from lifecycle hooks such as
      * {@code onChunkUnloaded()} and {@code setRemoved()}.
      */
-    public void clear() {
+    public synchronized void clear() {
         pending.clear();
     }
 

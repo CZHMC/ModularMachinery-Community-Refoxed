@@ -29,6 +29,9 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -80,6 +83,42 @@ class AE2AsyncOutputServiceTest {
         service.drainTo(network, source(), 4);
         assertThat(service.isEmpty()).isTrue();
         assertThat(network.amount(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(8L);
+    }
+
+    @Test
+    void concurrentSubmitIsRetainedWhileDrainUpdatesTheQueue() throws Exception {
+        AEKey key = AEItemKey.of(Items.IRON_INGOT);
+        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        FakeMEStorage network = new FakeMEStorage(key, 64L);
+        network.capFirstModulation(3L);
+        network.blockNextModulation();
+        service.submit(key, 8L);
+
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread drain = new Thread(() -> {
+            try {
+                service.drainTo(network, source(), 1);
+            } catch (Throwable exception) {
+                failure.set(exception);
+            }
+        });
+        drain.start();
+
+        try {
+            assertThat(network.modulationStarted.await(5L, TimeUnit.SECONDS)).isTrue();
+            service.submit(key, 4L);
+        } finally {
+            network.releaseModulation.countDown();
+        }
+
+        drain.join(5_000L);
+        assertThat(drain.isAlive()).isFalse();
+        assertThat(failure.get()).isNull();
+        assertThat(service.isEmpty()).isFalse();
+
+        service.drainTo(network, source(), 1);
+
+        assertThat(network.amount(key)).isEqualTo(12L);
     }
 
     @Test
@@ -150,6 +189,45 @@ class AE2AsyncOutputServiceTest {
         }
         assertThat(service.isEmpty()).isFalse();
         assertThat(storage.reservationIdentity()).isSameAs(service);
+    }
+
+    @Test
+    void resourceStorageDoesNotSubmitWhenRootTransactionAborts() {
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
+        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
+                () -> network, AE2ItemResourceStorage.adapter(), service, source(), () -> {
+                });
+        var plan = storage.planOutput(ItemResource.of(Items.IRON_INGOT), 4L,
+                new PlanningReservations(), true);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation()).isNotNull();
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+        }
+
+        assertThat(service.isEmpty()).isTrue();
+    }
+
+    @Test
+    void resourceStorageDoesNotSubmitWhenParentTransactionAbortsAfterChildCommit() {
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(Items.IRON_INGOT), 8L);
+        AE2AsyncOutputService service = new AE2AsyncOutputService();
+        AE2AsyncOutputResourceStorage<ItemResource> storage = new AE2AsyncOutputResourceStorage<>(
+                () -> network, AE2ItemResourceStorage.adapter(), service, source(), () -> {
+                });
+        var plan = storage.planOutput(ItemResource.of(Items.IRON_INGOT), 4L,
+                new PlanningReservations(), true);
+
+        try (Transaction root = Transaction.openRoot()) {
+            try (Transaction child = Transaction.open(root)) {
+                assertThat(plan.operation()).isNotNull();
+                assertThat(plan.operation().commit(child).success()).isTrue();
+                child.commit();
+            }
+        }
+
+        assertThat(service.isEmpty()).isTrue();
     }
 
     @Test
@@ -245,7 +323,10 @@ class AE2AsyncOutputServiceTest {
     private static final class FakeMEStorage implements MEStorage {
         private final Map<AEKey, Long> amounts = new HashMap<>();
         private final Map<AEKey, Long> capacities;
+        private final CountDownLatch modulationStarted = new CountDownLatch(1);
+        private final CountDownLatch releaseModulation = new CountDownLatch(1);
         private long firstModulationCap = Long.MAX_VALUE;
+        private boolean blockModulation;
 
         private FakeMEStorage(AEKey key, long capacity) {
             this.capacities = new HashMap<>();
@@ -256,12 +337,28 @@ class AE2AsyncOutputServiceTest {
             firstModulationCap = limit;
         }
 
+        private void blockNextModulation() {
+            blockModulation = true;
+        }
+
         @Override
         public long insert(AEKey key, long amount, Actionable mode, IActionSource source) {
             long current = amounts.getOrDefault(key, 0L);
             long capacity = capacities.getOrDefault(key, 0L);
             long available = Math.max(0L, capacity - current);
             if (mode == Actionable.MODULATE && current == 0L) available = Math.min(available, firstModulationCap);
+            if (mode == Actionable.MODULATE && blockModulation) {
+                blockModulation = false;
+                modulationStarted.countDown();
+                try {
+                    if (!releaseModulation.await(5L, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Timed out waiting for concurrent submit");
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting for concurrent submit", exception);
+                }
+            }
             long inserted = Math.min(amount, available);
             if (mode == Actionable.MODULATE && inserted > 0L) {
                 amounts.put(key, current + inserted);

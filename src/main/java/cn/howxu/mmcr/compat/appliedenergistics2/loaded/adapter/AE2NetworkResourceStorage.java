@@ -116,14 +116,41 @@ public abstract class AE2NetworkResourceStorage<R> extends SnapshotJournal<Map<A
 
     @Override
     protected void onRootCommit(Map<AEKey, Long> originalState) {
-        for (Map.Entry<AEKey, Long> entry : pendingExtracts.entrySet()) {
-            long previous = originalState.getOrDefault(entry.getKey(), 0L);
-            long committed = entry.getValue() - previous;
-            if (committed > 0L) {
-                meStorage.extract(entry.getKey(), committed, Actionable.MODULATE, IActionSource.empty());
+        Map<AEKey, Long> extractedAmounts = new HashMap<>();
+        try {
+            for (Map.Entry<AEKey, Long> entry : pendingExtracts.entrySet()) {
+                long previous = originalState.getOrDefault(entry.getKey(), 0L);
+                long committed = entry.getValue() - previous;
+                if (committed <= 0L) continue;
+
+                long extracted = meStorage.extract(entry.getKey(), committed,
+                        Actionable.MODULATE, IActionSource.empty());
+                if (extracted > 0L) extractedAmounts.put(entry.getKey(), extracted);
+                if (extracted != committed) {
+                    throw new IllegalStateException("Unable to complete AE2 network extraction");
+                }
             }
+        } catch (RuntimeException exception) {
+            try {
+                for (Map.Entry<AEKey, Long> entry : extractedAmounts.entrySet()) {
+                    long restored = meStorage.insert(entry.getKey(), entry.getValue(),
+                            Actionable.MODULATE, IActionSource.empty());
+                    if (restored != entry.getValue()) {
+                        throw new IllegalStateException("Unable to roll back AE2 network extraction");
+                    }
+                }
+            } catch (RuntimeException rollbackException) {
+                if (rollbackException == exception) throw rollbackException;
+                IllegalStateException failure = new IllegalStateException(
+                        "Unable to roll back AE2 network extraction");
+                failure.addSuppressed(exception);
+                failure.addSuppressed(rollbackException);
+                throw failure;
+            }
+            throw exception;
+        } finally {
+            pendingExtracts.clear();
         }
-        pendingExtracts.clear();
     }
 
     private AEKey checkedKey(int slot, R resource, long amount) {

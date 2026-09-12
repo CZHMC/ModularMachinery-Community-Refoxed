@@ -8,9 +8,12 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -24,12 +27,14 @@ import java.util.function.Supplier;
  * @param <R> resource type exposed by the view
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2AsyncOutputResourceStorage<R> implements OutputResourceStorage<R> {
+public final class AE2AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEKey, Long>>
+        implements OutputResourceStorage<R> {
     private final Supplier<@Nullable MEStorage> networkSupplier;
     private final AE2KeyAdapter<R> adapter;
     private final AE2AsyncOutputService service;
     private final IActionSource actionSource;
     private final Runnable wakeCallback;
+    private final Map<AEKey, Long> pending = new HashMap<>();
 
     public AE2AsyncOutputResourceStorage(Supplier<@Nullable MEStorage> networkSupplier,
                                          AE2KeyAdapter<R> adapter,
@@ -124,6 +129,26 @@ public final class AE2AsyncOutputResourceStorage<R> implements OutputResourceSto
         return new OutputPlan(accepted, operation);
     }
 
+    @Override
+    protected Map<AEKey, Long> createSnapshot() {
+        return new HashMap<>(pending);
+    }
+
+    @Override
+    protected void revertToSnapshot(Map<AEKey, Long> snapshot) {
+        pending.clear();
+        pending.putAll(snapshot);
+    }
+
+    @Override
+    protected void onRootCommit(Map<AEKey, Long> originalState) {
+        if (pending.isEmpty()) return;
+        Map<AEKey, Long> committed = new HashMap<>(pending);
+        pending.clear();
+        committed.forEach(service::submit);
+        wakeCallback.run();
+    }
+
     private AEKey keyOf(R resource) {
         if (resource == null || !adapter.resourceType().isInstance(resource)) {
             throw new IllegalArgumentException("Expected resource of type " + adapter.resourceType().getName());
@@ -144,9 +169,13 @@ public final class AE2AsyncOutputResourceStorage<R> implements OutputResourceSto
 
         @Override
         public CapabilityResult commit(TransactionContext transaction) {
-            service.submit(key, amount);
-            wakeCallback.run();
+            updateSnapshots(transaction);
+            pending.merge(key, amount, AE2AsyncOutputResourceStorage::saturatingAdd);
             return CapabilityResult.successful();
         }
+    }
+
+    private static long saturatingAdd(long first, long second) {
+        return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
     }
 }

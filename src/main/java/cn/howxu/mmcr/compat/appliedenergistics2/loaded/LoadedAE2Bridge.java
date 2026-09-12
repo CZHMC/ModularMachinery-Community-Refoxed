@@ -105,6 +105,12 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     public void registerJadeCommon(IWailaCommonRegistration registration) {
         registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
                 AE2InputInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
+                AE2StockingInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
+                AE2OutputInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(AE2InputInterfaceJadeDataProvider.INSTANCE,
+                AE2AsyncOutputInterfaceBlockEntity.class);
     }
 
     @Override

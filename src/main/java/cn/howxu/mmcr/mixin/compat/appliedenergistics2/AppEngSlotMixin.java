@@ -3,10 +3,10 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 import appeng.menu.AEBaseMenu;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.slot.AppEngSlot;
-import appeng.util.ConfigMenuInventory;
 import appeng.api.inventories.InternalInventory;
 import appeng.api.stacks.GenericStack;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBaseBlockEntity;
+import appeng.util.ConfigMenuInventory;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2InterfaceMenuPolicy;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
@@ -41,24 +41,16 @@ public abstract class AppEngSlotMixin {
     }
 
     @Inject(method = "set", at = @At("HEAD"), cancellable = true)
-    private void mmcr$syncOrLockDisplay(ItemStack stack, CallbackInfo callbackInfo) {
+    private void mmcr$syncStockingDisplay(ItemStack stack, CallbackInfo callbackInfo) {
         if (mmcr$syncStockingDisplay(stack)) {
             ((Slot) (Object) this).setChanged();
-            callbackInfo.cancel();
-            return;
-        }
-        if (mmcr$isOutputStorageSlot()) {
             callbackInfo.cancel();
         }
     }
 
     @Inject(method = "initialize", at = @At("HEAD"), cancellable = true)
-    private void mmcr$initializeLockedDisplay(ItemStack stack, CallbackInfo callbackInfo) {
+    private void mmcr$initializeStockingDisplay(ItemStack stack, CallbackInfo callbackInfo) {
         if (mmcr$syncStockingDisplay(stack)) {
-            callbackInfo.cancel();
-            return;
-        }
-        if (mmcr$isOutputStorageSlot()) {
             callbackInfo.cancel();
         }
     }
@@ -99,18 +91,6 @@ public abstract class AppEngSlotMixin {
         if (host instanceof AE2StockingInterfaceBlockEntity stocking) {
             return wrapper.getDelegate() == stocking.getInterfaceLogic().getStorage();
         }
-        if (host instanceof AE2OutputInterfaceBaseBlockEntity output) {
-            return wrapper.getDelegate() == output.getInterfaceLogic().getStorage();
-        }
-        return false;
-    }
-
-    private boolean mmcr$isOutputStorageSlot() {
-        if (!(getMenu() instanceof InterfaceMenu menu)
-                || !(menu.getHost() instanceof AE2OutputInterfaceBaseBlockEntity output)
-                || !(getInventory() instanceof ConfigMenuInventory wrapper)) {
-            return false;
-        }
-        return wrapper.getDelegate() == output.getInterfaceLogic().getStorage();
+        return AE2InterfaceMenuPolicy.isOutputStorageSlot(host, wrapper);
     }
 }

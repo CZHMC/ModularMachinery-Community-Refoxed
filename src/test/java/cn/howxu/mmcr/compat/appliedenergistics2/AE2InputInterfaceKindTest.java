@@ -7,6 +7,9 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.AECapabilities;
+import appeng.api.networking.GridFlags;
+import appeng.api.networking.IManagedGridNode;
+import appeng.me.ManagedGridNode;
 import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
@@ -56,7 +59,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -212,6 +217,18 @@ class AE2InputInterfaceKindTest {
     void existingInputKindsRemainInputOnly() {
         assertThat(AE2InputInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
         assertThat(AE2StockingInterfaceKind.INSTANCE.ioType()).isEqualTo(IOType.INPUT);
+    }
+
+    @Test
+    void everyAe2InterfaceWorldNodeRequiresAChannel() throws Exception {
+        assertThat(initializationFlags(ordinaryEntity().getMainNode()))
+                .contains(GridFlags.REQUIRE_CHANNEL);
+        assertThat(initializationFlags(newStockingEntity().getMainNode()))
+                .contains(GridFlags.REQUIRE_CHANNEL);
+        assertThat(initializationFlags(newOutputEntity().getMainNode()))
+                .contains(GridFlags.REQUIRE_CHANNEL);
+        assertThat(initializationFlags(newAsyncOutputEntity().getMainNode()))
+                .contains(GridFlags.REQUIRE_CHANNEL);
     }
 
     @Test
@@ -444,6 +461,18 @@ class AE2InputInterfaceKindTest {
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to create capability registration event", exception);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<GridFlags> initializationFlags(IManagedGridNode node) throws Exception {
+        Field initDataField = ManagedGridNode.class.getDeclaredField("initData");
+        initDataField.setAccessible(true);
+        Object initData = initDataField.get(node);
+        if (initData == null) throw new AssertionError("AE2 node was initialized before flag inspection");
+
+        Field flagsField = initData.getClass().getDeclaredField("flags");
+        flagsField.setAccessible(true);
+        return Set.copyOf((Set<GridFlags>) flagsField.get(initData));
     }
 
     private static boolean ae2KeyTypesAreInitialized() {

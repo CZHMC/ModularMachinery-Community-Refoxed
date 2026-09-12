@@ -63,6 +63,12 @@ import java.util.UUID;
 public class AE2OutputInterfaceGameTest {
     private static final long ITEM_AMOUNT = 16L;
     private static final long FLUID_AMOUNT = 1_000L;
+    private static final long ITEM_CELL_TOTAL_BYTES = 1_024L;
+    private static final long ITEM_CELL_BYTES_PER_TYPE = 8L;
+    private static final long ITEM_CELL_ITEMS_PER_BYTE = 8L;
+    private static final long ITEM_CELL_SINGLE_TYPE_CAPACITY =
+            (ITEM_CELL_TOTAL_BYTES - ITEM_CELL_BYTES_PER_TYPE) * ITEM_CELL_ITEMS_PER_BYTE;
+    private static final long LOCAL_CACHE_ITEM_CAPACITY = 9L * 64L;
     private static final long OVER_CAPACITY_AMOUNT = 1_024L;
 
     public void outputInterfaceDrainsToNetworkAndLocksConfig(GameTestHelper helper) {
@@ -174,12 +180,14 @@ public class AE2OutputInterfaceGameTest {
         });
 
         helper.runAtTickTime(5, () -> {
+            long fillAmount = ITEM_CELL_SINGLE_TYPE_CAPACITY - ITEM_AMOUNT;
             long previousInserted = itemChest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT),
-                    OVER_CAPACITY_AMOUNT, Actionable.MODULATE, IActionSource.empty());
-            helper.assertTrue(previousInserted > 0L,
-                    "Filling the ME Chest cell absorbs at least one iron");
-                // TODO: this byte caculation is wrong
-                // helper.assertTrue(itemChest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT),OVER_CAPACITY_AMOUNT, Actionable.SIMULATE, IActionSource.empty()) == 0L,"Filled ME Chest reports zero spare capacity for iron");
+                    fillAmount, Actionable.MODULATE, IActionSource.empty());
+            helper.assertTrue(previousInserted == fillAmount,
+                    "Filling the 1K ME Chest cell consumes the remaining 8112 iron capacity");
+            helper.assertTrue(itemChest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT),
+                            OVER_CAPACITY_AMOUNT, Actionable.SIMULATE, IActionSource.empty()) == 0L,
+                    "Filled 1K ME Chest reports zero spare capacity for iron");
         });
 
         helper.runAtTickTime(6, () -> {
@@ -188,16 +196,26 @@ public class AE2OutputInterfaceGameTest {
             OutputResourceStorage.OutputPlan plan = ((OutputResourceStorage) port.itemStorage())
                     .planOutput(ItemResource.of(Items.IRON_INGOT), OVER_CAPACITY_AMOUNT,
                             reservations, true);
-            helper.assertTrue(plan.accepted() > 0L,
-                    "Over-capacity plan still accepts at least one iron");
+            helper.assertTrue(plan.accepted() == LOCAL_CACHE_ITEM_CAPACITY,
+                    "Over-capacity plan accepts the 576 iron units that fit in nine 64-item cache slots");
             try (Transaction transaction = Transaction.openRoot()) {
                 if (plan.operation() != null) {
                     plan.operation().commit(transaction);
                 }
                 transaction.commit();
             }
+            long cacheAmount = 0L;
+            int occupiedSlots = 0;
+            for (int slot = 0; slot < port.getInterfaceLogic().getStorage().size(); slot++) {
+                if (port.getInterfaceLogic().getStorage().getStack(slot) != null) {
+                    occupiedSlots++;
+                    cacheAmount += port.getInterfaceLogic().getStorage().getAmount(slot);
+                }
+            }
             helper.assertTrue(port.getInterfaceLogic().getStorage().size() == 9,
                     "Output interface cache exposes nine slots");
+            helper.assertTrue(occupiedSlots == 9 && cacheAmount == LOCAL_CACHE_ITEM_CAPACITY,
+                    "Local cache absorbs exactly 576 iron units across nine slots");
         });
 
         helper.runAtTickTime(7, () -> {
@@ -210,8 +228,8 @@ public class AE2OutputInterfaceGameTest {
                     cacheAmount += port.getInterfaceLogic().getStorage().getAmount(slot);
                 }
             }
-            // TODO errored assert, waiting for fix
-            // helper.assertTrue(occupiedSlots > 0 && cacheAmount > 0L, "Output cache survives a save/load cycle while still over-capacity");
+            helper.assertTrue(occupiedSlots == 9 && cacheAmount == LOCAL_CACHE_ITEM_CAPACITY,
+                    "Output cache preserves all 576 iron units across a save/load cycle while over-capacity");
         });
 
         helper.runAtTickTime(8, () -> {

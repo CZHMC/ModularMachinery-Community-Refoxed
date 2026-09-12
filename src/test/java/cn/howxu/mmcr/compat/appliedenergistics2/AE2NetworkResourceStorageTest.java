@@ -201,6 +201,26 @@ class AE2NetworkResourceStorageTest {
         assertThat(network.modulateExtractCalls()).isZero();
     }
 
+    @Test
+    void partialCommittedExtractionFailsAndRestoresTheNetwork() {
+        AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        FakeMEStorage network = new FakeMEStorage(ironKey, 8L);
+        network.setModulationLimit(3L);
+        AE2ItemNetworkResourceStorage storage = new AE2ItemNetworkResourceStorage(
+                network, List.of(ironKey));
+
+        assertThatThrownBy(() -> {
+            try (Transaction transaction = Transaction.openRoot()) {
+                assertThat(storage.extract(0, iron, 5L, transaction)).isEqualTo(5L);
+                transaction.commit();
+            }
+        }).hasRootCauseMessage("Unable to complete AE2 network extraction");
+
+        assertThat(network.amount(ironKey)).isEqualTo(8L);
+        assertThat(network.modulateExtractCalls()).isEqualTo(1);
+    }
+
     private static final class FakeMEStorage implements MEStorage {
         private final Map<AEKey, Long> amounts = new HashMap<>();
         private int insertCalls;
@@ -208,6 +228,7 @@ class AE2NetworkResourceStorageTest {
         private int simulateExtractCalls;
         private int modulateExtractCalls;
         private long modulatedAmount;
+        private long modulationLimit = Long.MAX_VALUE;
 
         private FakeMEStorage(AEKey key, long amount) {
             amounts.put(key, amount);
@@ -217,10 +238,16 @@ class AE2NetworkResourceStorageTest {
             amounts.put(key, amount);
         }
 
+        private void setModulationLimit(long limit) {
+            modulationLimit = limit;
+        }
+
         @Override
         public long insert(AEKey key, long amount, Actionable mode, IActionSource source) {
             insertCalls++;
-            return 0L;
+            if (mode != Actionable.MODULATE || amount <= 0L) return 0L;
+            amounts.merge(key, amount, Long::sum);
+            return amount;
         }
 
         @Override
@@ -231,6 +258,7 @@ class AE2NetworkResourceStorageTest {
             if (mode == Actionable.SIMULATE) {
                 simulateExtractCalls++;
             } else if (mode == Actionable.MODULATE && extracted > 0L) {
+                extracted = Math.min(extracted, modulationLimit);
                 modulateExtractCalls++;
                 modulatedAmount += extracted;
                 amounts.put(key, available - extracted);

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
 import appeng.api.networking.GridHelper;
+import appeng.api.networking.GridFlags;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
@@ -69,6 +70,7 @@ public final class AE2StockingInterfaceBlockEntity extends IOPortBlockEntity
     private final IOPortKind kind;
     private final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
             .setInWorldNode(true)
+            .setFlags(GridFlags.REQUIRE_CHANNEL)
             .addService(IStorageWatcherNode.class, new IStorageWatcherNode() {
                 @Override
                 public void updateWatcher(IStackWatcher newWatcher) {

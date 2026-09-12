@@ -1,7 +1,13 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
+import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.AEKeyTypes;
+import appeng.api.stacks.AEKeyTypesInternal;
+import appeng.api.stacks.GenericStack;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBaseBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2InterfaceMenuPolicy;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -13,10 +19,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import appeng.api.stacks.AEKeyType;
-import appeng.api.stacks.AEKeyTypes;
-import appeng.api.stacks.AEKeyTypesInternal;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -55,6 +60,27 @@ class AE2OutputInterfaceHostTest {
 
         assertThat(host.isRemoved()).isTrue();
         assertThat(host.getMainNode().isReady()).isFalse();
+    }
+
+    @Test
+    void outputMenuPolicyLocksOnlyOutputHosts() {
+        assertThat(AE2InterfaceMenuPolicy.isOutputHost(new TestOutputHost())).isTrue();
+        assertThat(AE2InterfaceMenuPolicy.isOutputHost(new Object())).isFalse();
+    }
+
+    @Test
+    void outputMenuPolicyRecognizesTheReadOnlyCacheStorageRow() {
+        TestOutputHost host = new TestOutputHost();
+        host.getInterfaceLogic().getStorage().setStack(0,
+                new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4L));
+
+        var storageWrapper = host.getInterfaceLogic().getStorage().createMenuWrapper();
+        var configWrapper = host.getInterfaceLogic().getConfig().createMenuWrapper();
+
+        assertThat(AE2InterfaceMenuPolicy.isOutputStorageSlot(host, storageWrapper)).isTrue();
+        assertThat(AE2InterfaceMenuPolicy.isOutputStorageSlot(host, configWrapper)).isFalse();
+        assertThat(ItemStack.matches(storageWrapper.getStackInSlot(0),
+                Items.IRON_INGOT.getDefaultInstance().copyWithCount(4))).isTrue();
     }
 
     private static final class TestOutputHost extends AE2OutputInterfaceBaseBlockEntity {

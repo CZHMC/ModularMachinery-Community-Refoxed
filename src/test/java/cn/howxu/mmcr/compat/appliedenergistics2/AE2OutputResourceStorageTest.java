@@ -128,6 +128,25 @@ class AE2OutputResourceStorageTest {
     }
 
     @Test
+    void failedRootCommitClearsTheNetworkPendingState() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        GenericStackInv cache = inventory(1);
+        cache.setStack(0, new GenericStack(AEItemKey.of(iron), 64L));
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 64L);
+        network.setModulationLimit(3L);
+        AE2OutputResourceStorage<ItemResource> storage = itemStorage(cache, network);
+
+        assertThatThrownBy(() -> {
+            try (Transaction transaction = Transaction.openRoot()) {
+                storage.insert(0, iron, 8L, transaction);
+                transaction.commit();
+            }
+        }).hasRootCauseMessage("Unable to retain AE2 output network shortfall");
+
+        assertThat(storage.outputCapacity(iron)).isEqualTo(64L);
+    }
+
+    @Test
     void disconnectedNetworkUsesOnlyTheLocalCache() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         GenericStackInv cache = inventory(1);
