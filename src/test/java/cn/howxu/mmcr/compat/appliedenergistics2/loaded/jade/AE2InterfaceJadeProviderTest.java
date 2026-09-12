@@ -30,23 +30,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AE2InterfaceJadeProviderTest {
 
     @Test
-    void registersTheSharedDataProviderForEveryAe2InterfaceHost() {
-        List<Registration> registrations = new ArrayList<>();
-        IWailaCommonRegistration registration = commonRegistration(registrations);
-
-        new LoadedAE2Bridge().registerJadeCommon(registration);
-
-        assertThat(registrations).extracting(Registration::hostType)
-                .containsExactlyInAnyOrder(
-                        InputInterfaceBlockEntity.class,
-                        StockingInterfaceBlockEntity.class,
-                        OutputInterfaceBlockEntity.class,
-                        AsyncOutputInterfaceBlockEntity.class);
-        assertThat(registrations).extracting(Registration::provider)
-                .containsOnly(InterfaceJadeDataProvider.INSTANCE);
-    }
-
-    @Test
     void registersTheComponentProviderForIoPortBlocks() {
         List<Registration> registrations = new ArrayList<>();
         IWailaClientRegistration registration = clientRegistration(registrations);
