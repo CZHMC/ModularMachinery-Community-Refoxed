@@ -11,7 +11,9 @@ import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
+import appeng.core.settings.TickRates;
 import appeng.menu.implementations.InterfaceMenu;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -20,6 +22,8 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -132,6 +136,15 @@ public class AE2OutputInterfaceGameTest {
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0) == null
                             && port.getInterfaceLogic().getConfig().getKey(1) == null,
                     "Output interface starts with an empty interface config");
+
+            Identifier portBlockId = portState.getBlock().builtInRegistryHolder().key().identifier();
+            helper.assertTrue(portBlockId.equals(MMCR.id("ae2_me_output_interface")),
+                    "Output interface block resolves to mmcr:ae2_me_output_interface");
+            IOPortKind portKind = ((IOPortBlock) portState.getBlock()).kind();
+            Identifier overlay = AE2Bridge.get().portOverlayTexture(portKind);
+            helper.assertTrue(overlay != null
+                            && overlay.equals(Identifier.fromNamespaceAndPath("ae2", "block/interface")),
+                    "Output interface shares the ae2:block/interface overlay texture");
         });
 
         helper.runAtTickTime(4, () -> {
@@ -226,11 +239,14 @@ public class AE2OutputInterfaceGameTest {
         });
 
         helper.runAtTickTime(150, () -> {
+            int slowerRate = TickRates.Interface.getMax();
+            helper.assertTrue(slowerRate > 0,
+                    "AE2 interface SLOWER tick rate is positive; covers the drain boundary");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
                     "Output ticker drains the local cache once the network has spare capacity");
         });
 
-        helper.runAtTickTime(41, () -> {
+        helper.runAtTickTime(151, () -> {
             ServerPlayer menuPlayer = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
                     new GameProfile(UUID.nameUUIDFromBytes(
                             "mmcr-ae2-output-menu-test".getBytes(StandardCharsets.UTF_8)),
