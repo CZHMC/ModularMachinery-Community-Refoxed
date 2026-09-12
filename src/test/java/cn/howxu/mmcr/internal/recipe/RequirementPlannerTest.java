@@ -1767,6 +1767,12 @@ class RequirementPlannerTest {
                 });
     }
 
+    /**
+     * Fake item storage implementing {@link OutputResourceStorage} with configurable network capacity
+     * plus zero or more local slots, used to exercise shared-network planning.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private static final class FakeOutputItemStorage implements OutputResourceStorage<ItemResource> {
         final Object networkIdentity = new Object();
         private final long networkCapacity;
@@ -1894,6 +1900,12 @@ class RequirementPlannerTest {
         }
     }
 
+    /**
+     * Fake item storage implementing the zero-slot async variant of {@link OutputResourceStorage}
+     * where output capacity comes solely from the shared network.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private static final class FakeAsyncOutputItemStorage implements OutputResourceStorage<ItemResource> {
         final Object networkIdentity = new Object();
         private final long networkCapacity;
@@ -1965,6 +1977,12 @@ class RequirementPlannerTest {
         }
     }
 
+    /**
+     * Fake fluid storage implementing {@link OutputResourceStorage} with configurable network capacity
+     * plus zero or more local slots, used to exercise shared-network planning.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private static final class FakeOutputFluidStorage implements OutputResourceStorage<FluidResource> {
         final Object networkIdentity = new Object();
         private final long networkCapacity;

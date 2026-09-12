@@ -74,9 +74,13 @@ public final class AE2OutputInterfaceBlockEntity extends AE2OutputInterfaceBaseB
     }
 
     private void wakeOutputTicker() {
-        if (!getStorage().isEmpty()) {
-            mainNode.ifPresent((grid, node) -> grid.getTickManager().wakeDevice(node));
-        }
+        mainNode.ifPresent((grid, node) -> {
+            if (getStorage().isEmpty()) {
+                grid.getTickManager().sleepDevice(node);
+            } else {
+                grid.getTickManager().alertDevice(node);
+            }
+        });
     }
 
     @Nullable

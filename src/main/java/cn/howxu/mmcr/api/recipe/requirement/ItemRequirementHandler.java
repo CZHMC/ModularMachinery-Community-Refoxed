@@ -249,6 +249,12 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                 materialize, RequirementHandlerSupport.outputSimulation(requestedAmount, amount - remaining));
     }
 
+    /**
+     * Casts a wildcard {@link OutputResourceStorage} to its raw form so the
+     * caller can invoke {@code planOutput} with the runtime resource type.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static OutputResourceStorage.OutputPlan planDynamicOutput(OutputResourceStorage<?> storage,
                                                                        Object resource, long amount,
@@ -257,6 +263,12 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         return ((OutputResourceStorage) storage).planOutput(resource, amount, reservations, materialize);
     }
 
+    /**
+     * Casts a wildcard {@link OutputResourceStorage} to its raw form so the
+     * caller can invoke {@code outputCapacity} with the runtime resource type.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static long outputCapacity(OutputResourceStorage<?> storage, Object resource) {
         return ((OutputResourceStorage) storage).outputCapacity(resource);

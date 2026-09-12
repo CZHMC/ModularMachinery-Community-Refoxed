@@ -86,9 +86,13 @@ public final class AE2AsyncOutputInterfaceBlockEntity extends AE2OutputInterface
     }
 
     private void wakeAsyncTicker() {
-        if (!service.isEmpty()) {
-            mainNode.ifPresent((grid, node) -> grid.getTickManager().wakeDevice(node));
-        }
+        mainNode.ifPresent((grid, node) -> {
+            if (service.isEmpty()) {
+                grid.getTickManager().sleepDevice(node);
+            } else {
+                grid.getTickManager().alertDevice(node);
+            }
+        });
     }
 
     @Nullable

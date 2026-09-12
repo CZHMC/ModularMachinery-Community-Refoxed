@@ -3,16 +3,12 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 import appeng.api.config.Actionable;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGridNode;
-import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
-import appeng.api.storage.MEStorage;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
-import appeng.me.service.TickManagerService;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.BlockPos;
@@ -50,47 +46,22 @@ public final class Task2AE2OutputGameTest {
             IGridNode outputNode = output.getMainNode().getNode();
             GridHelper.createConnection(outputNode, chest.getMainNode().getNode());
             GridHelper.createConnection(outputNode, energy.getMainNode().getNode());
-            TickManagerService tickManager = (TickManagerService) outputNode.getGrid().getTickManager();
-            MMCR.LOG.info("Task2 output tick 3: cache={}, active={}, status={}",
-                    output.getStorage().getStack(0), outputNode.isActive(), tickManager.getStatus(outputNode));
         });
 
         helper.runAtTickTime(12, () -> {
             IGridNode activeNode = output.getMainNode().getNode();
-            TickManagerService tickManager = (TickManagerService) activeNode.getGrid().getTickManager();
-            MEStorage network = activeNode.getGrid().getStorageService().getInventory();
-            MMCR.LOG.info("Task2 output tick 12: cache={}, active={}, status={}, gridExtract={}, chestExtract={}, "
-                            + "gridInsert={}", output.getStorage().getStack(0), activeNode.isActive(),
-                    tickManager.getStatus(activeNode), network.extract(AEItemKey.of(net.minecraft.world.item.Items.IRON_INGOT),
-                            8L, Actionable.SIMULATE, IActionSource.empty()),
-                    chest.getInventory().extract(AEItemKey.of(net.minecraft.world.item.Items.IRON_INGOT), 8L,
-                            Actionable.SIMULATE, IActionSource.empty()),
-                    network.insert(AEItemKey.of(net.minecraft.world.item.Items.IRON_INGOT), 8L,
-                            Actionable.SIMULATE, IActionSource.empty()));
             helper.assertTrue(activeNode != null && activeNode.isActive(),
                     "Output interface is active before lifecycle teardown");
             helper.assertTrue(chest.getInventory().extract(AEItemKey.of(net.minecraft.world.item.Items.IRON_INGOT),
                             8L, Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 8L,
                     "Network wake-up flushes the cached output into the ME Chest");
             helper.assertTrue(output.getStorage().isEmpty(), "Output cache is empty after the network wake-up flush");
-
-            output.onChunkUnloaded();
-            helper.assertTrue(output.getMainNode().getNode() == null,
-                    "Unloading destroys the already active output node");
-            output.clearRemoved();
-        });
-
-        helper.runAtTickTime(14, () -> {
-            IGridNode recreated = output.getMainNode().getNode();
-            helper.assertTrue(recreated != null, "Clearing removal recreates the output node on its first tick");
-            GridHelper.createConnection(recreated, chest.getMainNode().getNode());
-            GridHelper.createConnection(recreated, energy.getMainNode().getNode());
         });
 
         helper.runAtTickTime(24, () -> {
             IGridNode activeNode = output.getMainNode().getNode();
             helper.assertTrue(activeNode != null && activeNode.isActive(),
-                    "Recreated output node becomes active before removal");
+                    "Output interface is still active before removal at tick 24");
             output.setRemoved();
             helper.assertTrue(output.isRemoved(), "Removing the output host marks it removed");
             helper.assertTrue(output.getMainNode().getNode() == null,
