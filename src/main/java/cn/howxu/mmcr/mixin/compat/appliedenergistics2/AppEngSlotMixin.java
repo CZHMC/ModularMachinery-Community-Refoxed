@@ -6,6 +6,7 @@ import appeng.menu.slot.AppEngSlot;
 import appeng.util.ConfigMenuInventory;
 import appeng.api.inventories.InternalInventory;
 import appeng.api.stacks.GenericStack;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
@@ -18,7 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Keeps the stocking interface's network mirror visible while making it read-only in AE2 menus.
+ * Keeps the stocking interface's network mirror visible while making it read-only in AE2 menus,
+ * and extends the same denial to MMCR output interface hosts so neither their storage nor their
+ * config slots can be modified through the AE2 UI.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -31,23 +34,31 @@ public abstract class AppEngSlotMixin {
     public abstract InternalInventory getInventory();
 
     @Inject(method = "mayPlace", at = @At("HEAD"), cancellable = true)
-    private void mmcr$denyStockingDisplayInsert(ItemStack stack, CallbackInfoReturnable<Boolean> callbackInfo) {
-        if (mmcr$isStockingDisplaySlot()) {
+    private void mmcr$denyLockedDisplayInsert(ItemStack stack, CallbackInfoReturnable<Boolean> callbackInfo) {
+        if (mmcr$isLockedDisplaySlot()) {
             callbackInfo.setReturnValue(false);
         }
     }
 
     @Inject(method = "set", at = @At("HEAD"), cancellable = true)
-    private void mmcr$syncStockingDisplay(ItemStack stack, CallbackInfo callbackInfo) {
+    private void mmcr$syncOrLockDisplay(ItemStack stack, CallbackInfo callbackInfo) {
         if (mmcr$syncStockingDisplay(stack)) {
             ((Slot) (Object) this).setChanged();
+            callbackInfo.cancel();
+            return;
+        }
+        if (mmcr$isOutputStorageSlot()) {
             callbackInfo.cancel();
         }
     }
 
     @Inject(method = "initialize", at = @At("HEAD"), cancellable = true)
-    private void mmcr$initializeStockingDisplay(ItemStack stack, CallbackInfo callbackInfo) {
+    private void mmcr$initializeLockedDisplay(ItemStack stack, CallbackInfo callbackInfo) {
         if (mmcr$syncStockingDisplay(stack)) {
+            callbackInfo.cancel();
+            return;
+        }
+        if (mmcr$isOutputStorageSlot()) {
             callbackInfo.cancel();
         }
     }
@@ -66,25 +77,40 @@ public abstract class AppEngSlotMixin {
     }
 
     @Inject(method = "mayPickup", at = @At("HEAD"), cancellable = true)
-    private void mmcr$denyStockingDisplayPickup(Player player, CallbackInfoReturnable<Boolean> callbackInfo) {
-        if (mmcr$isStockingDisplaySlot()) {
+    private void mmcr$denyLockedDisplayPickup(Player player, CallbackInfoReturnable<Boolean> callbackInfo) {
+        if (mmcr$isLockedDisplaySlot()) {
             callbackInfo.setReturnValue(false);
         }
     }
 
     @Inject(method = "remove", at = @At("HEAD"), cancellable = true)
-    private void mmcr$denyStockingDisplayRemove(int amount, CallbackInfoReturnable<ItemStack> callbackInfo) {
-        if (mmcr$isStockingDisplaySlot()) {
+    private void mmcr$denyLockedDisplayRemove(int amount, CallbackInfoReturnable<ItemStack> callbackInfo) {
+        if (mmcr$isLockedDisplaySlot()) {
             callbackInfo.setReturnValue(ItemStack.EMPTY);
         }
     }
 
-    private boolean mmcr$isStockingDisplaySlot() {
+    private boolean mmcr$isLockedDisplaySlot() {
         if (!(getMenu() instanceof InterfaceMenu menu)
-                || !(menu.getHost() instanceof AE2StockingInterfaceBlockEntity host)
                 || !(getInventory() instanceof ConfigMenuInventory wrapper)) {
             return false;
         }
-        return wrapper.getDelegate() == host.getInterfaceLogic().getStorage();
+        Object host = menu.getHost();
+        if (host instanceof AE2StockingInterfaceBlockEntity stocking) {
+            return wrapper.getDelegate() == stocking.getInterfaceLogic().getStorage();
+        }
+        if (host instanceof AE2OutputInterfaceBaseBlockEntity output) {
+            return wrapper.getDelegate() == output.getInterfaceLogic().getStorage();
+        }
+        return false;
+    }
+
+    private boolean mmcr$isOutputStorageSlot() {
+        if (!(getMenu() instanceof InterfaceMenu menu)
+                || !(menu.getHost() instanceof AE2OutputInterfaceBaseBlockEntity output)
+                || !(getInventory() instanceof ConfigMenuInventory wrapper)) {
+            return false;
+        }
+        return wrapper.getDelegate() == output.getInterfaceLogic().getStorage();
     }
 }

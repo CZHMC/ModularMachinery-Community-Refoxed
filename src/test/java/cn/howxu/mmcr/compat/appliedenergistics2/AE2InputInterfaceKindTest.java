@@ -18,6 +18,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceBl
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2AsyncOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.AE2StockingInterfaceBlockEntity;
@@ -242,6 +243,31 @@ class AE2InputInterfaceKindTest {
             assertThat(capability.directions().supports(IOType.INPUT)).isFalse();
             assertThat(capability.facet(TransferFacet.class)).isEmpty();
         });
+    }
+
+    @Test
+    void outputHostsAreInstancesOfOutputBaseClass() {
+        AE2OutputInterfaceBlockEntity outputEntity = newOutputEntity();
+        AE2AsyncOutputInterfaceBlockEntity asyncEntity = newAsyncOutputEntity();
+
+        assertThat(outputEntity).isInstanceOf(AE2OutputInterfaceBaseBlockEntity.class);
+        assertThat(asyncEntity).isInstanceOf(AE2OutputInterfaceBaseBlockEntity.class);
+    }
+
+    @Test
+    void stockingHostIsNotAnOutputBaseInstance() {
+        AE2StockingInterfaceBlockEntity stockingEntity = newStockingEntity();
+
+        assertThat(stockingEntity).isNotInstanceOf(AE2OutputInterfaceBaseBlockEntity.class);
+    }
+
+    @Test
+    void outputHostsAreNotStockingInstances() {
+        AE2OutputInterfaceBlockEntity outputEntity = newOutputEntity();
+        AE2AsyncOutputInterfaceBlockEntity asyncEntity = newAsyncOutputEntity();
+
+        assertThat(outputEntity).isNotInstanceOf(AE2StockingInterfaceBlockEntity.class);
+        assertThat(asyncEntity).isNotInstanceOf(AE2StockingInterfaceBlockEntity.class);
     }
 
     @Test

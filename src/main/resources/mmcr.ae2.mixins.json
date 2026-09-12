@@ -6,7 +6,7 @@
   "mixins": [
     "AppEngSlotMixin",
     "ConfigInventoryAccessor",
-    "InterfaceScreenMixin"
+    "InterfaceMenuMixin"
   ],
   "client": [
     "InterfaceScreenMixin"

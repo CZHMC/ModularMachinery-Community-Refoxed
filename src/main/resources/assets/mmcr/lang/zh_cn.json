@@ -82,6 +82,8 @@
   "config.jade.plugin_mmcr.recipe_output": "配方产物",
   "config.jade.plugin_mmcr.ae2_input_interface_grid": "ME输入接口",
   "container.mmcr.ae2_me_input_interface": "ME输入接口",
+  "container.mmcr.ae2_me_output_interface": "ME输出接口",
+  "container.mmcr.ae2_me_async_output_interface": "ME异步输出接口",
   "container.mmcr.energy_input_hatch": "普通能量输入仓",
   "container.mmcr.energy_input_hatch_big": "大型能量输入仓",
   "container.mmcr.energy_input_hatch_huge": "巨型能量输入仓",
@@ -659,5 +661,9 @@
   "block.mmcr.ae2_me_input_interface": "ME输入接口",
   "item.mmcr.ae2_me_input_interface": "ME输入接口",
   "block.mmcr.ae2_me_stocking_input_interface": "ME库存输入接口",
-  "item.mmcr.ae2_me_stocking_input_interface": "ME库存输入接口"
+  "item.mmcr.ae2_me_stocking_input_interface": "ME库存输入接口",
+  "block.mmcr.ae2_me_output_interface": "ME输出接口",
+  "item.mmcr.ae2_me_output_interface": "ME输出接口",
+  "block.mmcr.ae2_me_async_output_interface": "ME异步输出接口",
+  "item.mmcr.ae2_me_async_output_interface": "ME异步输出接口"
 }
