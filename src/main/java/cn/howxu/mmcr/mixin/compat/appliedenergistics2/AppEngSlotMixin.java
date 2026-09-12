@@ -21,8 +21,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Keeps the stocking interface's network mirror visible while making it read-only in AE2 menus,
- * and extends the same denial to MMCR output interface hosts so neither their storage nor their
- * config slots can be modified through the AE2 UI.
+ * and protects MMCR output interface configuration slots while allowing the normal output cache
+ * to be extracted through the AE2 UI.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -36,7 +36,8 @@ public abstract class AppEngSlotMixin {
 
     @Inject(method = "mayPlace", at = @At("HEAD"), cancellable = true)
     private void mmcr$denyLockedDisplayInsert(ItemStack stack, CallbackInfoReturnable<Boolean> callbackInfo) {
-        if (mmcr$isLockedDisplaySlot()) {
+        if (mmcr$isLockedDisplaySlot()
+                || InterfaceMenuPolicy.isOutputStorageSlot(getMenu().getTarget(), getInventory())) {
             callbackInfo.setReturnValue(false);
         }
     }
@@ -45,6 +46,9 @@ public abstract class AppEngSlotMixin {
     private void mmcr$syncStockingDisplay(ItemStack stack, CallbackInfo callbackInfo) {
         if (mmcr$syncStockingDisplay(stack)) {
             ((Slot) (Object) this).setChanged();
+            callbackInfo.cancel();
+        } else if (InterfaceMenuPolicy.isOutputStorageSlot(getMenu().getTarget(), getInventory())
+                && !mmcr$isOutputCacheRemoval(stack)) {
             callbackInfo.cancel();
         }
     }
@@ -94,6 +98,23 @@ public abstract class AppEngSlotMixin {
         if (host instanceof StockingInterfaceBlockEntity stocking) {
             return wrapper.getDelegate() == stocking.getInterfaceLogic().getStorage();
         }
-        return InterfaceMenuPolicy.isOutputStorageSlot(host, wrapper);
+        return InterfaceMenuPolicy.isOutputStorageSlot(host, wrapper)
+                && !InterfaceMenuPolicy.isExtractableOutputStorageSlot(host, wrapper);
+    }
+
+    @Unique
+    private boolean mmcr$isOutputCacheRemoval(ItemStack replacement) {
+        Object host = getMenu().getTarget();
+        if (!InterfaceMenuPolicy.isExtractableOutputStorageSlot(host, getInventory())
+                || !(getInventory() instanceof ConfigMenuInventory wrapper)) {
+            return false;
+        }
+
+        int slot = ((Slot) (Object) this).getSlotIndex();
+        GenericStack current = wrapper.getDelegate().getStack(slot);
+        GenericStack next = wrapper.convertToSuitableStack(replacement);
+        if (current == null) return next == null;
+        return next != null && current.what().equals(next.what()) && next.amount() <= current.amount()
+                || next == null && replacement.isEmpty();
     }
 }

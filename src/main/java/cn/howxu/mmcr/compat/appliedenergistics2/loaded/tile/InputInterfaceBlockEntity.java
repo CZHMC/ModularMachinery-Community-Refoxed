@@ -4,6 +4,8 @@ import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
+import appeng.api.stacks.AEKey;
+import appeng.api.stacks.GenericStack;
 import appeng.api.util.AECableType;
 import appeng.core.definitions.AEBlocks;
 import appeng.helpers.InterfaceLogic;
@@ -30,6 +32,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -39,6 +42,8 @@ import java.util.List;
  */
 public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         implements InterfaceLogicHost, IGridConnectedBlockEntity {
+    private static final String NETWORK_OWNED_KEY = "network_owned";
+    private static final String NETWORK_OWNED_SLOT_KEY = "slot";
     private static final IGridNodeListener<InputInterfaceBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
@@ -51,9 +56,11 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     private final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
             .setInWorldNode(true);
     private final InterfaceLogic logic = new InterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
+    private final GenericStack[] networkOwned = new GenericStack[logic.getStorage().size()];
     private final ItemResourceStorage itemStorage = new ItemResourceStorage(logic.getStorage());
     private final FluidResourceStorage fluidStorage = new FluidResourceStorage(logic.getStorage());
     private CapabilitySnapshot capabilitySnapshot;
+    private boolean loadingProvenance;
 
     public InputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -92,9 +99,46 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void saveChanges() {
-        if (Transaction.getCurrentOpenedTransaction() != null) return;
+        if (loadingProvenance || Transaction.getCurrentOpenedTransaction() != null) return;
+        reconcileNetworkOwned();
         notifyStorageChanged();
         notifyControllerOfInputChange();
+    }
+
+    /** Records the portion of a storage insertion that was pulled by AE2 from the network. */
+    public void recordNetworkPull(int slot, AEKey what, long amount) {
+        if (slot < 0 || slot >= networkOwned.length || what == null || amount <= 0L) return;
+
+        GenericStack current = logic.getStorage().getStack(slot);
+        if (current == null || !what.equals(current.what())) return;
+
+        GenericStack owned = networkOwned[slot];
+        long ownedAmount = owned != null && what.equals(owned.what()) ? owned.amount() : 0L;
+        networkOwned[slot] = new GenericStack(what,
+                Math.min(current.amount(), saturatingAdd(ownedAmount, amount)));
+    }
+
+    /** Records the portion of a storage extraction that was returned to the AE2 network. */
+    public void recordNetworkReturn(int slot, AEKey what, long amount) {
+        if (slot < 0 || slot >= networkOwned.length || what == null || amount <= 0L) return;
+
+        GenericStack owned = networkOwned[slot];
+        long ownedAmount = owned != null && what.equals(owned.what()) ? owned.amount() : 0L;
+        long remaining = ownedAmount - Math.min(ownedAmount, amount);
+        networkOwned[slot] = remaining > 0L ? new GenericStack(what, remaining) : null;
+    }
+
+    /** Returns the amount in a slot that may be returned to the AE2 network. */
+    public long networkOwnedAmount(int slot, AEKey what) {
+        if (slot < 0 || slot >= networkOwned.length || what == null) return 0L;
+
+        GenericStack current = logic.getStorage().getStack(slot);
+        GenericStack owned = networkOwned[slot];
+        if (current == null || owned == null || !what.equals(current.what()) || !what.equals(owned.what())) {
+            return 0L;
+        }
+        long result = Math.min(current.amount(), owned.amount());
+        return result;
     }
 
     @Override
@@ -132,17 +176,29 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         super.saveAdditional(output);
         mainNode.serialize(output);
         logic.writeToNBT(output);
+        var provenance = output.childrenList(NETWORK_OWNED_KEY);
+        for (int slot = 0; slot < networkOwned.length; slot++) {
+            GenericStack owned = networkOwned[slot];
+            if (owned == null || owned.amount() <= 0L) continue;
+            var entry = provenance.addChild();
+            entry.putInt(NETWORK_OWNED_SLOT_KEY, slot);
+            GenericStack.writeTag(entry, owned);
+        }
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
+        loadingProvenance = true;
         beginLoadingAdditional();
         try {
             super.loadAdditional(input);
             mainNode.deserialize(input);
+            readNetworkOwned(input);
             logic.readFromNBT(input);
+            reconcileNetworkOwned();
         } finally {
             endLoadingAdditional();
+            loadingProvenance = false;
         }
     }
 
@@ -176,5 +232,33 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         for (ItemStack stack : drops) {
             Block.popResource(level, worldPosition, stack);
         }
+    }
+
+    private void readNetworkOwned(ValueInput input) {
+        Arrays.fill(networkOwned, null);
+        for (ValueInput entry : input.childrenListOrEmpty(NETWORK_OWNED_KEY)) {
+            int slot = entry.getIntOr(NETWORK_OWNED_SLOT_KEY, -1);
+            GenericStack owned = GenericStack.readTag(entry);
+            if (slot >= 0 && slot < networkOwned.length && owned != null && owned.amount() > 0L) {
+                networkOwned[slot] = owned;
+            }
+        }
+    }
+
+    private void reconcileNetworkOwned() {
+        for (int slot = 0; slot < networkOwned.length; slot++) {
+            GenericStack owned = networkOwned[slot];
+            GenericStack current = logic.getStorage().getStack(slot);
+            if (owned == null) continue;
+            if (current == null || !owned.what().equals(current.what())) {
+                networkOwned[slot] = null;
+            } else if (owned.amount() > current.amount()) {
+                networkOwned[slot] = new GenericStack(owned.what(), current.amount());
+            }
+        }
+    }
+
+    private static long saturatingAdd(long first, long second) {
+        return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
     }
 }

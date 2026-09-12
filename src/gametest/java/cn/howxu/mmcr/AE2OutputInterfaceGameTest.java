@@ -12,7 +12,9 @@ import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
 import appeng.core.settings.TickRates;
+import appeng.menu.SlotSemantics;
 import appeng.menu.implementations.InterfaceMenu;
+import appeng.menu.slot.AppEngSlot;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -46,6 +48,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -122,11 +125,11 @@ public class AE2OutputInterfaceGameTest {
                             helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
                     "Output interface does not expose ME_STORAGE externally");
             helper.assertTrue(helper.getLevel().getCapability(Capabilities.Item.BLOCK,
-                            helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
-                    "Output interface does not expose an external item handler");
+                            helper.absolutePos(portPos), portState, port, Direction.NORTH) != null,
+                    "Output interface exposes an external item handler");
             helper.assertTrue(helper.getLevel().getCapability(Capabilities.Fluid.BLOCK,
-                            helper.absolutePos(portPos), portState, port, Direction.NORTH) == null,
-                    "Output interface does not expose an external fluid handler");
+                            helper.absolutePos(portPos), portState, port, Direction.NORTH) != null,
+                    "Output interface exposes an external fluid handler");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
             helper.assertTrue(snapshot.capabilities().size() == 2,
@@ -135,8 +138,8 @@ public class AE2OutputInterfaceGameTest {
                 helper.assertTrue(capability.type().id().equals(PortFamilyIds.ITEM)
                                 || capability.type().id().equals(PortFamilyIds.FLUID),
                         "Output capability is bound to the item or fluid family");
-                helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
-                        "Output capability does not expose TransferFacet");
+                helper.assertTrue(capability.facet(TransferFacet.class).isPresent(),
+                        "Output capability exposes TransferFacet for external extraction");
             }
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0) == null
                             && port.getInterfaceLogic().getConfig().getKey(1) == null,
@@ -215,6 +218,7 @@ public class AE2OutputInterfaceGameTest {
                     "Output interface cache exposes nine slots");
             helper.assertTrue(occupiedSlots == 9 && cacheAmount == LOCAL_CACHE_ITEM_CAPACITY,
                     "Local cache absorbs exactly 576 iron units across nine slots");
+
         });
 
         helper.runAtTickTime(7, () -> {
@@ -229,6 +233,34 @@ public class AE2OutputInterfaceGameTest {
             }
             helper.assertTrue(occupiedSlots == 9 && cacheAmount == LOCAL_CACHE_ITEM_CAPACITY,
                     "Output cache preserves all 576 iron units across a save/load cycle while over-capacity");
+
+            ResourceHandler<ItemResource> externalItems = helper.getLevel().getCapability(
+                    Capabilities.Item.BLOCK, helper.absolutePos(portPos),
+                    helper.getLevel().getBlockState(helper.absolutePos(portPos)), port, Direction.NORTH);
+            helper.assertTrue(externalItems != null,
+                    "External item handler is available while the output cache is occupied");
+            try (Transaction transaction = Transaction.openRoot()) {
+                helper.assertTrue(externalItems.extract(0, ItemResource.of(Items.IRON_INGOT), 1,
+                                transaction) == 1,
+                        "External item extraction removes one item from the output cache");
+                transaction.commit();
+            }
+            helper.assertTrue(port.getInterfaceLogic().getStorage().getAmount(0) == 63L,
+                    "External item extraction changes the local output cache");
+
+            ServerPlayer menuPlayer = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                    new GameProfile(UUID.nameUUIDFromBytes(
+                            "mmcr-ae2-output-cache-menu".getBytes(StandardCharsets.UTF_8)),
+                            "mmcr-ae2-output-cache-menu"),
+                    ClientInformation.createDefault());
+            InterfaceMenu menu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
+                    menuPlayer.getInventory(), port);
+            AppEngSlot storageSlot = (AppEngSlot) menu.getSlots(SlotSemantics.STORAGE).get(0);
+            helper.assertTrue(storageSlot.mayPickup(menuPlayer),
+                    "Output cache storage slot can be picked up from the AE2 menu");
+            menu.quickMoveStack(menuPlayer, storageSlot.index);
+            helper.assertTrue(port.getInterfaceLogic().getStorage().getAmount(0) == 0L,
+                    "AE2 menu shift-click extracts the occupied output cache slot");
         });
 
         helper.runAtTickTime(8, () -> {

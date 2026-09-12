@@ -4,10 +4,15 @@ import appeng.api.AECapabilities;
 import appeng.api.behaviors.GenericInternalInventory;
 import appeng.api.config.Actionable;
 import appeng.api.networking.IInWorldGridNodeHost;
+import appeng.api.networking.GridHelper;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
+import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
+import appeng.blockentity.storage.MEChestBlockEntity;
+import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.implementations.InterfaceMenu;
@@ -78,6 +83,9 @@ public class AE2InterfaceGameTest {
     private static final Identifier RECIPE_ID = MMCR.id("ae2_interface_integration_recipe");
     private static final long INITIAL_ITEM_COUNT = 16L;
     private static final long INITIAL_FLUID_AMOUNT = 2_000L;
+    private static final long NETWORK_ITEM_AMOUNT = 16L;
+    private static final long CONFIGURED_ITEM_AMOUNT = 8L;
+    private static final long MANUAL_ITEM_AMOUNT = 4L;
 
     public void interfaceFeedsMmcrInputs(GameTestHelper helper) {
         helper.assertTrue(AE2Bridge.get().available(),
@@ -321,6 +329,66 @@ public class AE2InterfaceGameTest {
                     helper.succeed();
                 });
             });
+        });
+    }
+
+    public void inputInterfaceDoesNotReturnManualCacheItems(GameTestHelper helper) {
+        helper.assertTrue(AE2Bridge.get().available(),
+                "AE2 must be loaded for this integration test");
+
+        BlockPos inputPos = new BlockPos(0, 0, 0);
+        BlockPos chestPos = new BlockPos(3, 0, 0);
+        BlockPos energyPos = new BlockPos(3, 0, 2);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("ae2_me_input_interface").get().defaultBlockState());
+        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+
+        helper.runAtTickTime(2, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
+                    InputInterfaceBlockEntity.class);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,
+                    CreativeEnergyCellBlockEntity.class);
+            helper.assertTrue(input != null && chest != null,
+                    "Input interface and ME chest are available");
+            chest.setCell(AEItems.ITEM_CELL_1K.stack());
+            helper.assertTrue(energy != null && input.getMainNode().getNode() != null
+                            && chest.getMainNode().getNode() != null && energy.getMainNode().getNode() != null,
+                    "Input interface, ME chest, and energy cell have initialized grid nodes");
+            GridHelper.createConnection(input.getMainNode().getNode(), chest.getMainNode().getNode());
+            GridHelper.createConnection(input.getMainNode().getNode(), energy.getMainNode().getNode());
+        });
+
+        helper.runAtTickTime(4, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
+                    InputInterfaceBlockEntity.class);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            MEStorage network = chest.getInventory();
+            helper.assertTrue(network.insert(AEItemKey.of(Items.IRON_INGOT), NETWORK_ITEM_AMOUNT,
+                            Actionable.MODULATE, IActionSource.empty()) == NETWORK_ITEM_AMOUNT,
+                    "ME chest accepts the source items");
+            input.getInterfaceLogic().getConfig().setStack(0,
+                    new GenericStack(AEItemKey.of(Items.IRON_INGOT), CONFIGURED_ITEM_AMOUNT));
+        });
+
+        helper.runAtTickTime(20, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
+                    InputInterfaceBlockEntity.class);
+            GenericStackInv storage = input.getInterfaceLogic().getStorage();
+            helper.assertTrue(storage.getAmount(0) == CONFIGURED_ITEM_AMOUNT,
+                    "Configured items are pulled into the input cache");
+
+            storage.insert(0, AEItemKey.of(Items.IRON_INGOT), MANUAL_ITEM_AMOUNT, Actionable.MODULATE);
+            input.getInterfaceLogic().getConfig().setStack(0, null);
+        });
+
+        helper.runAtTickTime(30, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
+                    InputInterfaceBlockEntity.class);
+            helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(0) == MANUAL_ITEM_AMOUNT,
+                    "Manually inserted items remain in the input cache after config cancellation, actual="
+                            + input.getInterfaceLogic().getStorage().getAmount(0));
+            helper.succeed();
         });
     }
 

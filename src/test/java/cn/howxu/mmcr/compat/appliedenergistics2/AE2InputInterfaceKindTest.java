@@ -73,6 +73,7 @@ class AE2InputInterfaceKindTest {
         AE2BridgeBootstrap.installForTesting(new LoadedAE2Bridge());
         PortKinds.clearForTesting();
         PortKinds.register(StockingInterfaceKind.INSTANCE);
+        PortKinds.register(OutputInterfaceKind.INSTANCE);
     }
 
     @AfterAll
@@ -242,7 +243,7 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
-    void outputEntityCapabilitiesAreOutputOnlyWithoutTransferFacet() {
+    void outputEntityCapabilitiesExposeTransferFacetForCacheExtraction() {
         OutputInterfaceBlockEntity entity = newOutputEntity();
 
         var capabilities = entity.capabilitySnapshot().capabilities();
@@ -252,7 +253,7 @@ class AE2InputInterfaceKindTest {
         assertThat(capabilities).allSatisfy(capability -> {
             assertThat(capability.directions().supports(IOType.OUTPUT)).isTrue();
             assertThat(capability.directions().supports(IOType.INPUT)).isFalse();
-            assertThat(capability.facet(TransferFacet.class)).isEmpty();
+            assertThat(capability.facet(TransferFacet.class)).isPresent();
         });
     }
 
@@ -297,7 +298,7 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
-    void outputCapabilitiesAreNotProjectedToNativeHandlers() {
+    void outputCapabilitiesAreProjectedToNativeHandlersForCacheExtraction() {
         OutputInterfaceBlockEntity entity = newOutputEntity();
         RegisterCapabilitiesEvent event = capabilityEvent();
         ModCapabilities.register(event);
@@ -305,9 +306,9 @@ class AE2InputInterfaceKindTest {
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         var level = LevelStub.create(Blocks.IRON_BLOCK, 1, 1, 1, BlockPos.ZERO);
         assertThat(ModCapabilities.ITEM_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
-                .isNull();
+                .isNotNull();
         assertThat(ModCapabilities.FLUID_BLOCK.getCapability(level, BlockPos.ZERO, state, entity, Direction.NORTH))
-                .isNull();
+                .isNotNull();
         assertThat(AECapabilities.GENERIC_INTERNAL_INV.getCapability(level, BlockPos.ZERO, state, entity,
                 Direction.NORTH)).isNull();
         assertThat(AECapabilities.ME_STORAGE.getCapability(level, BlockPos.ZERO, state, entity,

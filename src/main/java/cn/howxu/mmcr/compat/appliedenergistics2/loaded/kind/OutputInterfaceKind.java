@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -15,6 +16,10 @@ import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.List;
 
@@ -37,15 +42,23 @@ public final class OutputInterfaceKind implements IOPortKind {
             new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE, CapabilityDirections.of(IOType.OUTPUT),
                     context -> {
                         OutputInterfaceBlockEntity host = (OutputInterfaceBlockEntity) context.host();
-                        return new ItemBusCapability(host, host.itemStorage(), IOType.OUTPUT, false);
+                        return new ItemBusCapability(host, host.itemStorage(), IOType.OUTPUT);
                     },
-                    (_, _) -> true),
+                    (_, _) -> true,
+                    new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(),
+                            ResourceHandler.asClass(),
+                            (host, _, _) -> ModCapabilities.resourceStorageHandler(
+                                    ((OutputInterfaceBlockEntity) host).itemStorage(), false, true))),
             new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, CapabilityDirections.of(IOType.OUTPUT),
                     context -> {
                         OutputInterfaceBlockEntity host = (OutputInterfaceBlockEntity) context.host();
-                        return new FluidHatchCapability(host, host.fluidStorage(), IOType.OUTPUT, false);
+                        return new FluidHatchCapability(host, host.fluidStorage(), IOType.OUTPUT);
                     },
-                    (_, _) -> true)));
+                    (_, _) -> true,
+                    new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(),
+                            ResourceHandler.asClass(),
+                            (host, _, _) -> ModCapabilities.resourceStorageHandler(
+                                    ((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))));
 
     private OutputInterfaceKind() {}
 

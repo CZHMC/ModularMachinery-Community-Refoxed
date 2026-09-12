@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.appliedenergistics2.util;
 import appeng.api.inventories.InternalInventory;
 import appeng.util.ConfigMenuInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 
 /**
  * Identifies the MMCR output hosts and their cache-backed AE2 menu slots.
@@ -23,5 +24,9 @@ public final class InterfaceMenuPolicy {
             return false;
         }
         return wrapper.getDelegate() == output.getInterfaceLogic().getStorage();
+    }
+
+    public static boolean isExtractableOutputStorageSlot(Object target, InternalInventory inventory) {
+        return target instanceof OutputInterfaceBlockEntity && isOutputStorageSlot(target, inventory);
     }
 }

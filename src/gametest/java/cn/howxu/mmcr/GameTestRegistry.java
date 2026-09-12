@@ -190,8 +190,10 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().heatPortExchangesHeatWithAdjacentMekHandler(helper));
         register(event, "mekanism_formed_port_reflects_texture_change", 100,
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
-        register(event, "ae2_me_input_interface", 200,
-                helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
+         register(event, "ae2_me_input_interface", 200,
+                 helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
+         register(event, "ae2_me_input_manual_cache", 100,
+                 helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
         register(event, "ae2_me_stocking_input_interface", 100,
                 helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
         register(event, "task2_ae2_output_lifecycle", 100,

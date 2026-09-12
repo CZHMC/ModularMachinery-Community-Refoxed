@@ -213,9 +213,9 @@ public final class ModCapabilities {
         return null;
     }
 
-    private static <R extends Resource> ResourceHandler<R> resourceStorageHandler(ResourceStorage<R> storage,
-                                                                                    boolean canInsert,
-                                                                                    boolean canExtract) {
+    public static <R extends Resource> ResourceHandler<R> resourceStorageHandler(ResourceStorage<R> storage,
+                                                                                 boolean canInsert,
+                                                                                 boolean canExtract) {
         return new ResourceStorageHandler<>(storage, canInsert, canExtract);
     }
 
