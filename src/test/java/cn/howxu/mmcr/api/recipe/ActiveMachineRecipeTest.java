@@ -143,6 +143,33 @@ class ActiveMachineRecipeTest {
         }
     }
 
+    @Test
+    void embedded_definition_requires_membership_in_the_current_pool_catalog() {
+        HolderLookup.Provider lookup = registryProvider();
+        Identifier recipeId = MMCR.id("embedded_catalog_membership");
+        Identifier poolId = MMCR.id("embedded_catalog_pool");
+        RuntimeTestFixtures.registerRecipePool(poolId);
+        MachineRecipe recipe = new MachineRecipe(recipeId, poolId, 20, List.of(), List.of(),
+                List.of(), 0, 1, false, false, List.of(), false, Set.of());
+        TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+
+        try {
+            RecipeRegistry.replaceDynamic(Map.of(recipeId, recipe));
+            new ActiveMachineRecipe(recipe).serialize(serialized, lookup);
+            RecipeRegistry.replaceDynamic(Map.of());
+
+            assertThat(ActiveMachineRecipe.loadForPool(TagValueInput.create(ProblemReporter.DISCARDING, lookup,
+                    serialized.buildResult()), poolId).successful()).isFalse();
+
+            RecipeRegistry.replaceDynamic(Map.of(recipeId, recipe));
+
+            assertThat(ActiveMachineRecipe.loadForPool(TagValueInput.create(ProblemReporter.DISCARDING, lookup,
+                    serialized.buildResult()), poolId).recipe()).isNotNull();
+        } finally {
+            RecipeRegistry.replaceDynamic(Map.of());
+        }
+    }
+
     private static HolderLookup.Provider registryProvider() {
         MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
         VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT).listElements()

@@ -641,7 +641,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void loading_active_embedded_recipe_clears_changed_last_recipe_before_restart_search() {
+    void loading_replaced_embedded_recipe_fails_before_searching_the_current_catalog() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe oldRecipe = RecipeTestSupport.create(MMCR.id("factory_loaded_old"), MMCR.id("test_cube"), 1,
                 List.of(), List.of());
@@ -661,12 +661,9 @@ class FactoryRuntimeTest {
                         output.buildResult()), controller, null, List.of(replacement));
         var snapshot = controller.runtimeSnapshot();
 
-        assertThat(restored.runtime().recipe()).isNotNull();
-        assertThat(restored.runtime().recipe().tickTime()).isEqualTo(1);
-        assertThat(restored.tryRestartLastRecipe(List.of(replacement), 1, snapshot.structure().version(),
-                snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(), null)).isFalse();
-        restored.tick();
         assertThat(restored.runtime().active()).isFalse();
+        assertThat(restored.runtime().failure()).isNotNull();
+        assertThat(restored.runtime().failure().details()).containsEntry("reason", "recipe_load");
         assertThat(restored.searchAndStartRecipe(List.of(replacement), 1,
                 snapshot.structure().version())).isTrue();
         assertThat(restored.runtime().recipe().tickTime()).isEqualTo(20);

@@ -309,7 +309,10 @@ public final class ActiveMachineRecipe {
                     : RecipeRegistry.catalogForPool(recipePoolId).recipes().stream()
                     .filter(candidate -> recipeId.equals(candidate.id())).findFirst().orElse(null);
         }
-        if (recipe == null || recipePoolId != null && !recipePoolId.equals(recipe.recipePoolId())) {
+        if (recipe == null || recipePoolId != null && (!recipePoolId.equals(recipe.recipePoolId())
+                || input.getBooleanOr("has_recipe_definition", false)
+                && RecipeRegistry.catalogForPool(recipePoolId).recipes().stream()
+                .noneMatch(candidate -> sameDefinition(recipe, candidate, registries)))) {
             return new LoadResult(null);
         }
         List<MachineRequirement> effectiveRequirements = null;
