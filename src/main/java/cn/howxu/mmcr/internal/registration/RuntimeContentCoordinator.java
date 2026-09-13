@@ -148,7 +148,15 @@ public final class RuntimeContentCoordinator {
                 RecipeRegistry.effectiveSnapshot(),
                 ControllerSpecSync.createSnapshot(),
                 ControllerSpecSync.createAppearanceSnapshot(),
+                machineRecipePools(),
                 RuntimeContentVersion.current());
+    }
+
+    private static Map<Identifier, Identifier> machineRecipePools() {
+        Map<Identifier, Identifier> pools = new LinkedHashMap<>();
+        MachineDefinitions.allRegistrations().forEach(registration ->
+                pools.put(registration.id(), registration.recipePoolId()));
+        return Map.copyOf(pools);
     }
 
     private static void replaceDataPackLocked(Map<Identifier, MachineRecipe> recipes) {

@@ -42,7 +42,7 @@ public final class ActiveMachineRecipe {
 
     private static final Logger LOG = LoggerFactory.getLogger(ActiveMachineRecipe.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
-    private static final int RECIPE_DEFINITION_VERSION = 2;
+    private static final int RECIPE_DEFINITION_VERSION = 3;
     private static final int EFFECTIVE_EXECUTION_SNAPSHOT_VERSION = 1;
     private static final String EFFECTIVE_DEFINITION_MARKER = "has_effective_definition";
     private static final String EFFECTIVE_DEFINITION_VERSION = "effective_definition_version";

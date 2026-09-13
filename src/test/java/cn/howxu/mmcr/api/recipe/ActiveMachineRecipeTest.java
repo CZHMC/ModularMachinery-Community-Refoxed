@@ -74,6 +74,7 @@ class ActiveMachineRecipeTest {
         assertThat(withoutRegistryContext.buildResult().getBooleanOr("has_recipe_definition", false)).isFalse();
         assertThatCode(() -> active.serialize(serialized, lookup)).doesNotThrowAnyException();
         assertThat(serialized.buildResult().getBooleanOr("has_recipe_definition", false)).isTrue();
+        assertThat(serialized.buildResult().getIntOr("recipe_definition_version", -1)).isEqualTo(3);
         ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.load(
                 TagValueInput.create(ProblemReporter.DISCARDING, lookup, serialized.buildResult()));
         assertThat(loaded.successful()).isTrue();
@@ -83,7 +84,7 @@ class ActiveMachineRecipeTest {
     }
 
     @Test
-    void rejects_a_legacy_recipe_definition_fingerprint() {
+    void rejects_a_previous_recipe_definition_version() {
         HolderLookup.Provider lookup = registryProvider();
         JsonObject root = new JsonObject();
         root.addProperty("id", "mmcr:legacy_recipe_definition");
@@ -95,7 +96,7 @@ class ActiveMachineRecipeTest {
         TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
         new ActiveMachineRecipe(recipe).serialize(serialized, lookup);
         var legacyData = serialized.buildResult();
-        legacyData.putInt("recipe_definition_version", 1);
+        legacyData.putInt("recipe_definition_version", 2);
 
         assertThat(ActiveMachineRecipe.load(TagValueInput.create(ProblemReporter.DISCARDING, lookup,
                 legacyData)).successful()).isFalse();

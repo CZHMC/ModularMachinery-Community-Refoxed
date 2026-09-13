@@ -14,6 +14,7 @@ public final class MachineRegistry {
     private static volatile Map<Identifier, Machine> STRUCTURE_MACHINES = Map.of();
     private static volatile Map<Identifier, List<CompiledMachinePattern>> COMPILED = Map.of();
     private static volatile Map<Identifier, Machine> EFFECTIVE_MACHINES = Map.of();
+    private static volatile Map<Identifier, Identifier> CLIENT_RECIPE_POOLS = Map.of();
 
     private MachineRegistry() {
     }
@@ -42,8 +43,30 @@ public final class MachineRegistry {
 
     public static Identifier recipePoolForMachine(Identifier machineId) {
         if (machineId == null) return null;
+        Identifier clientPool = CLIENT_RECIPE_POOLS.get(machineId);
+        if (clientPool != null) return clientPool;
         MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
         return registration == null ? machineId : registration.recipePoolId();
+    }
+
+    public static void replaceClientRecipePools(Map<Identifier, Identifier> recipePools) {
+        synchronized (RuntimeContentVersion.lock()) {
+            validateClientRecipePools(recipePools);
+            CLIENT_RECIPE_POOLS = Map.copyOf(recipePools);
+        }
+    }
+
+    public static void clearClientRecipePools() {
+        synchronized (RuntimeContentVersion.lock()) {
+            CLIENT_RECIPE_POOLS = Map.of();
+        }
+    }
+
+    public static void validateClientRecipePools(Map<Identifier, Identifier> recipePools) {
+        if (recipePools == null || recipePools.entrySet().stream()
+                .anyMatch(entry -> entry.getKey() == null || entry.getValue() == null)) {
+            throw new IllegalArgumentException("Invalid machine recipe pool mapping");
+        }
     }
 
     public static Map<Identifier, Machine> getAll() {
@@ -143,6 +166,7 @@ public final class MachineRegistry {
             STRUCTURE_MACHINES = Map.of();
             COMPILED = Map.of();
             EFFECTIVE_MACHINES = Map.of();
+            CLIENT_RECIPE_POOLS = Map.of();
             BlockArrayCache.clearForTesting();
         }
     }

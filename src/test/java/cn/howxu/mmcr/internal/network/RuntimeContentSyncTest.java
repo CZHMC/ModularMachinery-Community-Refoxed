@@ -62,6 +62,7 @@ class RuntimeContentSyncTest {
         assertThat(snapshot.recipes()).containsKey(recipeId);
         assertThat(snapshot.controllerSpecs()).containsKey(machineId);
         assertThat(snapshot.appearances()).containsKey(machineId);
+        assertThat(snapshot.machineRecipePools()).containsEntry(machineId, machineId);
         assertThat(snapshot.contentVersion()).isGreaterThan(0L);
     }
 
@@ -84,6 +85,7 @@ class RuntimeContentSyncTest {
 
         assertThat(snapshot.structures()).containsOnlyKeys(machineId);
         assertThat(snapshot.recipes()).containsOnlyKeys(staticRecipeId, dataPackRecipeId, dynamicRecipeId);
+        assertThat(snapshot.machineRecipePools()).containsEntry(machineId, machineId);
         assertThat(snapshot.contentVersion()).isGreaterThan(0L);
     }
 

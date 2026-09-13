@@ -244,7 +244,7 @@ class JeiRuntimeReloaderTest {
                         PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY)),
                 Map.of(recipeId, RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
                         List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)))),
-                Map.of(), Map.of(), 1L);
+                Map.of(), Map.of(), Map.of(machineId, machineId), 1L);
     }
 
     private static IJeiRuntime runtime(FakeRecipeManager manager) {

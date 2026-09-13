@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContextPool;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -21,6 +22,7 @@ public record RuntimeContentSnapshot(
         Map<Identifier, MachineRecipe> recipes,
         Map<Identifier, MachineControllerSpec> controllerSpecs,
         Map<Identifier, MachineAppearanceSpec> appearances,
+        Map<Identifier, Identifier> machineRecipePools,
         long contentVersion) {
 
     public RuntimeContentSnapshot {
@@ -29,10 +31,11 @@ public record RuntimeContentSnapshot(
         recipes = Map.copyOf(recipes == null ? Map.of() : recipes);
         controllerSpecs = Map.copyOf(controllerSpecs == null ? Map.of() : controllerSpecs);
         appearances = Map.copyOf(appearances == null ? Map.of() : appearances);
+        machineRecipePools = Map.copyOf(machineRecipePools == null ? Map.of() : machineRecipePools);
     }
 
     public static RuntimeContentSnapshot empty() {
-        return new RuntimeContentSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), 0L);
+        return new RuntimeContentSnapshot(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0L);
     }
 
     public boolean applyClient() {
@@ -42,6 +45,7 @@ public record RuntimeContentSnapshot(
             ClientRuntimeSnapshotBridge.validate(this);
             if (!ClientRuntimeSnapshotBridge.isIntegratedServer()) {
                 MachineStructureRegistry.replaceClientSnapshot(structures);
+                MachineRegistry.replaceClientRecipePools(machineRecipePools);
                 RecipeRegistry.replaceClientSnapshot(recipes);
             }
             CraftingContextPool.onGlobalReload();
@@ -54,6 +58,13 @@ public record RuntimeContentSnapshot(
     private void validateForClient() {
         MachineStructureRegistry.validateClientSnapshot(structures);
         RecipeRegistry.validateClientSnapshot(recipes);
+        MachineRegistry.validateClientRecipePools(machineRecipePools);
+        if (!machineRecipePools.keySet().containsAll(structures.keySet())) {
+            throw new IllegalArgumentException("Missing machine recipe pool mapping for synced structure");
+        }
+        if (recipes.values().stream().anyMatch(recipe -> !machineRecipePools.containsValue(recipe.recipePoolId()))) {
+            throw new IllegalArgumentException("Synced recipe pool is not mapped to a machine");
+        }
         controllerSpecs.forEach((id, spec) -> {
             if (id == null || spec == null || spec.id() == null
                     || !MachineControllerSpec.defaultsFor(id).id().equals(spec.id())) {
