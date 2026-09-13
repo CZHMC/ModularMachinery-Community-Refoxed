@@ -167,6 +167,43 @@ class MachineRecipeDataDrivenTest {
     }
 
     @Test
+    void generic_codec_rejects_legacy_machine_when_recipe_pool_is_present() {
+        JsonObject json = recipeJson();
+        json.addProperty("machine", "mmcr:legacy_machine");
+
+        var decoded = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .contains("machine");
+    }
+
+    @Test
+    void serializer_rejects_legacy_machine_when_both_fields_are_present() {
+        JsonObject json = recipeJson();
+        json.addProperty("machine", "mmcr:legacy_machine");
+
+        var decoded = MachineRecipeSerializer.INSTANCE.codec().codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .contains("machine");
+    }
+
+    @Test
+    void missing_recipe_pool_keeps_the_required_field_diagnostic() {
+        JsonObject json = recipeJson();
+        json.remove("recipe_pool");
+        json.addProperty("machine", "mmcr:legacy_machine");
+
+        var decoded = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .contains("recipe_pool");
+    }
+
+    @Test
     void removed_machine_outputs_field_is_rejected() {
         JsonObject json = recipeJson();
         JsonObject output = new JsonObject();
@@ -256,7 +293,7 @@ class MachineRecipeDataDrivenTest {
             MachineRecipe base = MachineRecipe.fromCanonical(recipeId, Identifier.parse("mmcr:test_machine_name"),
                     20, List.of(), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
             MachineRecipe recipe = MachineRecipe.withAdditionalOutputs(base, List.of(new TestOutput(23, 0.5F)));
-            MachineRecipe equalRecipe = MachineRecipe.fromCanonical(recipeId, recipe.machineId(), recipe.tickTime(),
+            MachineRecipe equalRecipe = MachineRecipe.fromCanonical(recipeId, recipe.recipePoolId(), recipe.tickTime(),
                     List.of(), List.of(new TestOutput(23, 0.5F)), List.of(), 0, 1, false, false,
                     List.of(), false, Set.of());
 
@@ -347,7 +384,7 @@ class MachineRecipeDataDrivenTest {
     private static JsonObject recipeJson() {
         JsonObject json = new JsonObject();
         json.addProperty("type", "mmcr:machine_recipe");
-        json.addProperty("machine", "mmcr:test_machine_name");
+        json.addProperty("recipe_pool", "mmcr:test_machine_name");
         json.addProperty("tick_time", 20);
         json.add("requirements", new JsonArray());
         return json;

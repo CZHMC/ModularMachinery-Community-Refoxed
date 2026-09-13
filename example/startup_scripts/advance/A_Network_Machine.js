@@ -12,6 +12,7 @@ MMCREvents.startup(event => {
 
     const machine_producer = event
         .createMachine(PRODUCER_ID)
+        .recipePool(PRODUCER_ID)
         .displayNameKey("machine.mmcr_kubejs.kubejs_network_producer_machine")
         .appearance("minecraft:white_wool")
         .networkInterface(1, 1) // allow 1 network port and max 1 connections
@@ -120,6 +121,7 @@ MMCREvents.startup(event => {
 
     const machine_center = event
         .createMachine(CENTER_ID)
+        .recipePool(CENTER_ID)
         .displayNameKey("machine.mmcr_kubejs.kubejs_network_center_machine")
         .appearance("minecraft:black_wool")
         .networkInterface(1, 16) // one interface but 16 connections

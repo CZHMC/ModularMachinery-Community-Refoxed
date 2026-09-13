@@ -24,92 +24,92 @@ public final class RecipeTestSupport {
     private RecipeTestSupport() {
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
-                                       List<MachineRequirement> requirements, List<MachineOutput> outputs,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
+                                        List<MachineRequirement> requirements, List<MachineOutput> outputs,
                                        List<RecipeModifier> modifiers, int priority, int maxThreads,
                                        boolean cancelRecipeOnPerTickFailure, boolean parallelized,
                                        List<LevelRequirement> levelRequirements, boolean allowPartialOutputs,
                                        Set<Identifier> requiredHostIds) {
-        return new MachineRecipe(id, machineId, tickTime, requirements, outputs, modifiers, priority,
+        return new MachineRecipe(id, recipePoolId, tickTime, requirements, outputs, modifiers, priority,
                 maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
                 allowPartialOutputs, requiredHostIds);
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs) {
-        return create(id, machineId, tickTime, inputs, outputs, List.of(), 0, 1, false,
+        return create(id, recipePoolId, tickTime, inputs, outputs, List.of(), 0, 1, false,
                 List.of(), List.of(), false, List.of(), false, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 false, List.of(), List.of(), false, List.of(), false, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, List.of(), List.of(), false, List.of(), false, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure,
                                        List<?> fluidOutputs) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, fluidOutputs, List.of(), false, List.of(), false, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure,
                                        List<?> fluidOutputs, List<?> explicitRequirements) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, fluidOutputs, explicitRequirements, false, List.of(), false, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure,
                                        List<?> fluidOutputs, List<?> explicitRequirements, boolean parallelized) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, fluidOutputs, explicitRequirements, parallelized, List.of(), false, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure,
                                        List<?> fluidOutputs, List<?> explicitRequirements, boolean parallelized,
                                        List<LevelRequirement> levelRequirements) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, fluidOutputs, explicitRequirements, parallelized,
                 levelRequirements, false, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure,
                                        List<?> fluidOutputs, List<?> explicitRequirements, boolean parallelized,
                                        List<LevelRequirement> levelRequirements, boolean allowPartialOutputs) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, fluidOutputs, explicitRequirements, parallelized,
                 levelRequirements, allowPartialOutputs, Set.of());
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure,
                                        List<?> fluidOutputs, List<?> explicitRequirements, boolean parallelized,
                                        List<LevelRequirement> levelRequirements, Set<Identifier> requiredHostIds) {
-        return create(id, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
+        return create(id, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, fluidOutputs, explicitRequirements, parallelized,
                 levelRequirements, false, requiredHostIds);
     }
 
-    public static MachineRecipe create(Identifier id, Identifier machineId, int tickTime,
+    public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                        List<?> inputs, List<?> outputs, List<RecipeModifier> modifiers,
                                        int priority, int maxThreads, boolean cancelRecipeOnPerTickFailure,
                                        List<?> fluidOutputs, List<?> explicitRequirements, boolean parallelized,
@@ -124,7 +124,7 @@ public final class RecipeTestSupport {
                 : new ArrayList<>();
         appendOutputs(machineOutputs, outputs);
         appendOutputs(machineOutputs, fluidOutputs);
-        return MachineRecipe.fromCanonical(id, machineId, tickTime, requirements, machineOutputs, modifiers,
+        return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, machineOutputs, modifiers,
                 priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
                 allowPartialOutputs, requiredHostIds);
     }

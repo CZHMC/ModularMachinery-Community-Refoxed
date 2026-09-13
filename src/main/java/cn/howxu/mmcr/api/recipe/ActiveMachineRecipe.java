@@ -42,7 +42,7 @@ public final class ActiveMachineRecipe {
 
     private static final Logger LOG = LoggerFactory.getLogger(ActiveMachineRecipe.class);
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
-    private static final int RECIPE_DEFINITION_VERSION = 2;
+    private static final int RECIPE_DEFINITION_VERSION = 3;
     private static final int EFFECTIVE_EXECUTION_SNAPSHOT_VERSION = 1;
     private static final String EFFECTIVE_DEFINITION_MARKER = "has_effective_definition";
     private static final String EFFECTIVE_DEFINITION_VERSION = "effective_definition_version";
@@ -260,6 +260,14 @@ public final class ActiveMachineRecipe {
     }
 
     public static LoadResult load(ValueInput input) {
+        return load(input, null);
+    }
+
+    public static LoadResult loadForPool(ValueInput input, Identifier recipePoolId) {
+        return load(input, Objects.requireNonNull(recipePoolId, "recipePoolId"));
+    }
+
+    private static LoadResult load(ValueInput input, @Nullable Identifier recipePoolId) {
         HolderLookup.Provider registries = input.lookup();
         String recipeName = input.getStringOr("recipeName", "");
         Identifier recipeId;
@@ -268,6 +276,7 @@ public final class ActiveMachineRecipe {
         } catch (IllegalArgumentException exception) {
             return new LoadResult(null);
         }
+        if (recipeId == null) return new LoadResult(null);
         MachineRecipe recipe;
         if (input.getBooleanOr("has_recipe_definition", false)) {
             int definitionVersion = input.getIntOr("recipe_definition_version", -1);
@@ -296,9 +305,16 @@ public final class ActiveMachineRecipe {
                 return new LoadResult(null);
             }
         } else {
-            recipe = RecipeRegistry.getRecipe(recipeId);
+            recipe = recipePoolId == null ? RecipeRegistry.getRecipe(recipeId)
+                    : RecipeRegistry.catalogForPool(recipePoolId).recipes().stream()
+                    .filter(candidate -> recipeId.equals(candidate.id())).findFirst().orElse(null);
         }
-        if (recipe == null) return new LoadResult(null);
+        if (recipe == null || recipePoolId != null && (!recipePoolId.equals(recipe.recipePoolId())
+                || input.getBooleanOr("has_recipe_definition", false)
+                && RecipeRegistry.catalogForPool(recipePoolId).recipes().stream()
+                .noneMatch(candidate -> sameDefinition(recipe, candidate, registries)))) {
+            return new LoadResult(null);
+        }
         List<MachineRequirement> effectiveRequirements = null;
         List<MachineOutput> effectiveOutputs = null;
         int effectiveDuration = -1;

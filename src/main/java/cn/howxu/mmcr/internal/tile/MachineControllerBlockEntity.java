@@ -176,14 +176,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable PktMachineStatePayload lastBroadcastState;
     private @Nullable Identifier lockedRecipeId;
     private @Nullable ExecutionStatus lastFailure;
+    private @Nullable Identifier pendingControllerLockId;
     private boolean redstonePaused;
     private @Nullable FactoryRecipeScheduler factoryScheduler;
     private int recipeSearchRetryCounter;
     private long recipeSearchAttemptCounter;
     private long lastRecipeSearchRegistryVersion = Long.MIN_VALUE;
+    private @Nullable Identifier lastRecipeSearchPoolId;
     private @Nullable Identifier cachedCandidatesMachineId;
     private long cachedCandidatesCatalogVersion = Long.MIN_VALUE;
     private List<MachineRecipe> cachedCandidates = List.of();
+    private @Nullable Identifier cachedCandidatesRecipePoolId;
     private @Nullable MachineReference cachedMachineReference;
     private long cachedMachineReferenceStructureVersion = Long.MIN_VALUE;
     private RecipeStartDelay recipeStartDelay = new RecipeStartDelay();
@@ -195,6 +198,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long pendingSharedStartModifierVersion = Long.MIN_VALUE;
     private long pendingSharedStartComponentStateVersion = Long.MIN_VALUE;
     private long pendingSharedStartCatalogVersion = Long.MIN_VALUE;
+    private @Nullable Identifier pendingSharedStartRecipePoolId;
     private long nextSharedStartToken;
     private long pendingSharedStartToken;
     private boolean sharedTickPending;
@@ -214,6 +218,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long resourceAvailabilityEpoch;
     private long lastResourceAvailabilityTick = Long.MIN_VALUE;
     private @Nullable ValueInput pendingFactoryRuntimeInput;
+    private @Nullable ValueInput pendingCraftingRuntimeInput;
     private boolean restoringFactoryRuntime;
     private @Nullable MultiblockAssemblyService.BuildTaskRegistry buildTasks;
     private @Nullable ServerPlayer buildTaskOwner;
@@ -282,12 +287,31 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void ensureFactoryRuntimeLoaded() {
-        if (pendingFactoryRuntimeInput == null) return;
-        ValueInput input = pendingFactoryRuntimeInput;
-        pendingFactoryRuntimeInput = null;
-        runtime.factoryRuntime().load(input, this);
-        restoringFactoryRuntime = true;
-        runtime.publishSnapshot();
+        if (pendingControllerLockId == null && pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null) return;
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
+        if (structure.machine() == null && structure.configuredMachine() == null) return;
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        if (pendingControllerLockId != null) {
+            Identifier restoredLock = pendingControllerLockId;
+            pendingControllerLockId = null;
+            if (RecipeRegistry.catalogForMachine(machine).recipes().stream()
+                    .anyMatch(recipe -> restoredLock.equals(recipe.id()))) {
+                lockedRecipeId = restoredLock;
+            }
+        }
+        if (pendingFactoryRuntimeInput != null) {
+            ValueInput input = pendingFactoryRuntimeInput;
+            pendingFactoryRuntimeInput = null;
+            runtime.factoryRuntime().load(input, this);
+            restoringFactoryRuntime = true;
+            runtime.publishSnapshot();
+        }
+        if (pendingCraftingRuntimeInput != null) {
+            ValueInput input = pendingCraftingRuntimeInput;
+            pendingCraftingRuntimeInput = null;
+            runtime.craftingRuntime().load(input, resourceDomain());
+            runtime.publishSnapshot();
+        }
     }
 
     public StructureSnapshot structureSnapshot() {
@@ -463,7 +487,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void setMachine(Machine m) {
         StructureSnapshot current = runtimeSnapshot().structure();
-        boolean bindingRestoredMachine = restoringFactoryRuntime
+        boolean bindingRestoredMachine = (restoringFactoryRuntime || pendingFactoryRuntimeInput != null)
                 && current.configuredMachine() == null
                 && m != null;
         if (m == null) runtime.clearAllText();
@@ -474,6 +498,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot currentState = runtimeSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(currentState.structure()), currentState.structure().formed(), m,
                 currentState.structure().matchedStage());
+        clearInvalidRecipeLock(m);
         runtime.publishComponentState(runtime.components(), currentState.foundModifiers(), Map.of(),
                 currentState.linkedPortPositions());
         refreshModuleConnectionState();
@@ -2412,6 +2437,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     && previousStructure.configuredMachine().registryName().equals(matchedMachine.registryName());
             boolean structureChanged = runtime.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
                     facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
+            clearInvalidRecipeLock(matchedMachine);
 
             boolean refreshComponents = !previousStructure.formed() || structureChanged
                     || previousWork.componentRefreshRequired();
@@ -3292,6 +3318,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private boolean shouldSearchRecipe() {
         long contentVersion = RuntimeContentVersion.current();
+        Identifier recipePoolId = currentRecipePoolId();
+        if (!Objects.equals(lastRecipeSearchPoolId, recipePoolId)) {
+            lastRecipeSearchPoolId = recipePoolId;
+            lastRecipeSearchRegistryVersion = contentVersion;
+            recipeSearchRetryCounter = 0;
+            return true;
+        }
         if (lastRecipeSearchRegistryVersion != contentVersion) {
             lastRecipeSearchRegistryVersion = contentVersion;
             recipeSearchRetryCounter = 0;
@@ -3312,7 +3345,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean applySearchResult(RecipeSearchResult result) {
-        if (!isSearchResultCurrent(result)) {
+        if (!isSearchResultCurrent(result) || !recipeBelongsToCurrentMachine(result.recipe())) {
             return false;
         }
         MachineRecipe next = result.recipe();
@@ -3407,6 +3440,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void requestSharedStart(MachineRecipe next) {
         if (!(level instanceof ServerLevel serverLevel)) return;
+        if (!recipeBelongsToCurrentMachine(next)) return;
         StructureClaimRegistry.ResourceDomain domain = resourceDomain();
         if (domain == null) return;
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
@@ -3418,6 +3452,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pendingSharedStartModifierVersion = snapshot.modifierVersion();
         pendingSharedStartComponentStateVersion = snapshot.stateVersion();
         pendingSharedStartCatalogVersion = currentCatalogVersion();
+        pendingSharedStartRecipePoolId = currentRecipePoolId();
         long token = ++nextSharedStartToken;
         pendingSharedStartToken = token;
         long runtimeStructureVersion = snapshot.structure().version();
@@ -3476,6 +3511,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
             recipeSearchRetryCounter++;
             return false;
         }
+        if (!recipeBelongsToCurrentMachine(next)) {
+            invalidatePendingSharedStart();
+            recipeSearchRetryCounter = 0;
+            return false;
+        }
+        if (!Objects.equals(pendingSharedStartRecipePoolId, currentRecipePoolId())) {
+            invalidatePendingSharedStart();
+            recipeSearchRetryCounter = 0;
+            return false;
+        }
         if (currentCatalogVersion() != pendingSharedStartCatalogVersion) {
             invalidatePendingSharedStart();
             recipeSearchRetryCounter = 0;
@@ -3500,6 +3545,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pendingSharedStartModifierVersion = Long.MIN_VALUE;
         pendingSharedStartComponentStateVersion = Long.MIN_VALUE;
         pendingSharedStartCatalogVersion = Long.MIN_VALUE;
+        pendingSharedStartRecipePoolId = null;
         pendingSharedStartToken = 0L;
     }
 
@@ -3640,7 +3686,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return RecipeRegistry.catalog(machine == null ? null : machine.registryName()).version();
+        return RecipeRegistry.catalogForMachine(machine).version();
+    }
+
+    private @Nullable Identifier currentRecipePoolId() {
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        Machine machine = snapshot.structure().machine() == null
+                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        return MachineRegistry.recipePoolForMachine(machine);
+    }
+
+    private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        Machine machine = snapshot.structure().machine() == null
+                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 
     private void setActiveState(boolean activeState) {
@@ -3686,15 +3747,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private List<MachineRecipe> recipesForMachine() {
-        Machine configuredMachine = currentRuntimeSnapshot().structure().configuredMachine();
-        Identifier machineId = configuredMachine == null ? null : configuredMachine.registryName();
-        if (machineId == null) return List.of();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(machineId);
+        StructureSnapshot structure = currentRuntimeSnapshot().structure();
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        Identifier machineId = machine == null ? null : machine.registryName();
+        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        if (machineId == null || recipePoolId == null) return List.of();
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         if (machineId.equals(cachedCandidatesMachineId)
+                && recipePoolId.equals(cachedCandidatesRecipePoolId)
                 && cachedCandidatesCatalogVersion == catalog.version()) {
             return cachedCandidates;
         }
         cachedCandidatesMachineId = machineId;
+        cachedCandidatesRecipePoolId = recipePoolId;
         cachedCandidatesCatalogVersion = catalog.version();
         cachedCandidates = catalog.recipes();
         return cachedCandidates;
@@ -3702,8 +3767,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void clearCandidateCache() {
         cachedCandidatesMachineId = null;
+        cachedCandidatesRecipePoolId = null;
         cachedCandidatesCatalogVersion = Long.MIN_VALUE;
         cachedCandidates = List.of();
+    }
+
+    private void clearInvalidRecipeLock(@Nullable Machine machine) {
+        if (lockedRecipeId == null || RecipeRegistry.catalogForMachine(machine).recipes().stream()
+                .anyMatch(recipe -> lockedRecipeId.equals(recipe.id()))) return;
+        lockedRecipeId = null;
     }
 
     @Override
@@ -3717,7 +3789,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             levels.add(foundLevel.id().toString());
         }
         runtime.craftingRuntime().save(output.child("crafting_runtime"));
-        if (lockedRecipeId != null) output.putString("locked_recipe", lockedRecipeId.toString());
+        Identifier lockToSave = lockedRecipeId == null ? pendingControllerLockId : lockedRecipeId;
+        if (lockToSave != null) output.putString("locked_recipe", lockToSave.toString());
         if (hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
             runtime.factoryRuntime().save(output.child("factory_runtime"));
         }
@@ -3734,6 +3807,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.requestStructureCheck();
             redstonePaused = false;
             lockedRecipeId = null;
+            pendingControllerLockId = null;
             runtime.craftingRuntime().invalidate();
             Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
             input.listOrEmpty("found_levels", Codec.STRING).forEach(id -> {
@@ -3746,14 +3820,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
             lastFailure = null;
             String lockedRecipeName = input.getStringOr("locked_recipe", "");
             if (!lockedRecipeName.isEmpty()) {
-                Identifier restoredLock = Identifier.parse(lockedRecipeName);
-                if (RecipeRegistry.getRecipe(restoredLock) != null) lockedRecipeId = restoredLock;
+                pendingControllerLockId = Identifier.parse(lockedRecipeName);
             }
             if (factoryRuntimeInput.getIntOr("lane_count", -1) >= 0) {
                 pendingFactoryRuntimeInput = factoryRuntimeInput;
-                ensureFactoryRuntimeLoaded();
             }
-            runtime.craftingRuntime().load(input.childOrEmpty("crafting_runtime"), resourceDomain());
+            pendingCraftingRuntimeInput = input.childOrEmpty("crafting_runtime");
+            ensureFactoryRuntimeLoaded();
             runtime.requestStructureCheck();
             runtime.restoreStructureVersion(input.getLongOr("structure_runtime_version", 0L));
         } finally {

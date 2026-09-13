@@ -1,7 +1,7 @@
 ServerEvents.recipes(event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_space_reassembler',
+        recipe_pool: 'mmcr_kubejs:kubejs_space_reassembler',
         tick_time: 100,
         parallelized: true,
         required_host_ids: [
@@ -43,7 +43,7 @@ ServerEvents.recipes(event => {
     // Recipes can also run on the host machine.
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_space_elevator',
+        recipe_pool: 'mmcr_kubejs:kubejs_space_elevator',
         tick_time: 1000,
         parallelized: true,
         requirements: [

@@ -7,7 +7,7 @@ MMCREvents.startup(event => {
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_alloy_furnace") // Create the machine definition.
         .displayNameKey("machine.mmcr_kubejs.kubejs_alloy_furnace") // Translation key for the display name.
-        .recipeFamily("mmcr_kubejs:kubejs_alloy_furnace") // Bind the recipe family.
+        .recipePool("mmcr_kubejs:kubejs_alloy_furnace") // Bind the recipe pool.
         .appearance('minecraft:bricks') // Set the controller's base appearance.
         .allowModifiers() // Allow the machine to use modifiers.
 

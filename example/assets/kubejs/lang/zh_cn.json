@@ -13,5 +13,10 @@
 
         "block.mmcr.artificial_star_video_controller": "人造恒星",
         "item.mmcr.artificial_star_video_controller": "人造恒星",
-        "machine.kubejs.artificial_star_video": "人造恒星"
+        "machine.kubejs.artificial_star_video": "人造恒星",
+
+        "recipe_pool.kubejs.server": "算力集群",
+        "recipe_pool.kubejs.center": "网络中心",
+        "recipe_pool.kubejs.hello_world": "高炉",
+        "recipe_pool.kubejs.artificial_star_video": "人造恒星"
 }

@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.google.gson.JsonElement;
@@ -32,12 +31,11 @@ public final class MachineRecipeJson {
     }
 
     public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries) {
-        return parse(id, json, registries, machineId -> MachineRegistry.getMachine(machineId) != null
-                || MachineDefinitions.containsStatic(machineId));
+        return parse(id, json, registries, MachineRegistry::containsRecipePool);
     }
 
     public static MachineRecipe parse(Identifier id, JsonElement json, HolderLookup.Provider registries,
-                                      Predicate<Identifier> machineExists) {
+                                      Predicate<Identifier> recipePoolExists) {
         if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
         if (json == null || !json.isJsonObject()) fail(id, "$", "recipe must be an object", null);
         if (registries == null) fail(id, "$", "registry lookup must not be null", null);
@@ -46,8 +44,10 @@ public final class MachineRecipeJson {
         rejectLegacyFields(id, object);
         if (!object.has("requirements")) fail(id, "requirements", "is required", null);
 
-        Identifier machineId = parseIdentifier(id, object, "machine");
-        if (!machineExists.test(machineId)) fail(id, "machine", "unknown machine " + machineId, null);
+        Identifier recipePoolId = parseIdentifier(id, object, "recipe_pool");
+        if (!recipePoolExists.test(recipePoolId)) {
+            fail(id, "recipe_pool", "unknown recipe pool " + recipePoolId, null);
+        }
         int tickTime = intField(id, object, "tick_time", true, 0);
         if (tickTime < 1) fail(id, "tick_time", "must be >= 1");
 
@@ -79,7 +79,7 @@ public final class MachineRecipeJson {
         } catch (RuntimeException exception) {
             fail(id, "level_requirements", "invalid level requirement", exception);
         }
-        return MachineRecipe.fromCanonical(id, machineId, tickTime, requirements, outputs,
+        return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, outputs,
                 modifiers, intField(id, object, "priority", false, 0), maxThreads,
                 boolField(id, object, "cancelIfPerTickFails", false),
                 boolField(id, object, "parallelized", false), levels,
@@ -87,7 +87,7 @@ public final class MachineRecipeJson {
     }
 
     private static void rejectLegacyFields(Identifier id, JsonObject object) {
-        for (String field : List.of("inputs", "fluid_outputs", "energy_per_tick", "machine_outputs")) {
+        for (String field : List.of("machine", "inputs", "fluid_outputs", "energy_per_tick", "machine_outputs")) {
             if (object.has(field)) fail(id, field, "field is no longer supported", null);
         }
     }

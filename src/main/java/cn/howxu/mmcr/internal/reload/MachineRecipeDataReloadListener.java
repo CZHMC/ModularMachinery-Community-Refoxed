@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.reload;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
@@ -58,15 +57,11 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
     }
 
     void apply(PreparedRecipes candidate, ResourceManager resourceManager) {
-        if (!candidate.errors().isEmpty()) {
-            errors = candidate.errors();
-            candidate.errors().forEach(error -> MMCR.LOG.error("Failed to load machine recipe {}", error.recipeId(), error));
-            return;
-        }
+        logErrors(candidate.errors());
         try {
             RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(candidate.recipes());
-            snapshot = candidate.recipes();
-            errors = List.of();
+            snapshot = RecipeRegistry.dataPackSnapshot();
+            errors = candidate.errors();
         } catch (MachineRecipeJson.RecipeJsonException exception) {
             errors = List.of(exception);
             MMCR.LOG.error("Failed to publish machine recipe data-pack snapshot", exception);
@@ -94,7 +89,7 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
                 if (!object.has("type") || !object.get("type").isJsonPrimitive()
                         || !object.get("type").getAsJsonPrimitive().isString()
                         || !MachineRecipeJson.TYPE.toString().equals(object.get("type").getAsString())) continue;
-                recipes.put(recipeId, MachineRecipeJson.parse(recipeId, object, registries));
+                recipes.put(recipeId, MachineRecipeJson.parse(recipeId, object, registries, ignored -> true));
             } catch (MachineRecipeJson.RecipeJsonException exception) {
                 errors.add(exception);
             } catch (Exception exception) {
@@ -102,21 +97,23 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
                         exception.getMessage() == null ? "invalid recipe" : exception.getMessage(), exception));
             }
         }
-        if (errors.isEmpty()) {
-            try {
-                validateCandidate(recipes);
-                RecipeRegistry.validateDataPackCandidate(recipes);
-            } catch (MachineRecipeJson.RecipeJsonException exception) {
-                errors.add(exception);
-            } catch (RuntimeException exception) {
-                errors.add(validationError(exception));
-            }
-        }
-        return new PreparedRecipes(Map.copyOf(recipes), List.copyOf(errors));
+        Map<Identifier, MachineRecipe> validRecipes = validateAndFilter(recipes, errors);
+        return new PreparedRecipes(Map.copyOf(validRecipes), List.copyOf(errors));
     }
 
     void applySnapshot(Map<Identifier, MachineRecipe> recipes) {
-        publishSnapshot(recipes);
+        PreparedRecipes candidate = prepareCandidate(recipes);
+        logErrors(candidate.errors());
+        try {
+            publishSnapshot(candidate.recipes());
+            errors = candidate.errors();
+        } catch (MachineRecipeJson.RecipeJsonException exception) {
+            errors = List.of(exception);
+            MMCR.LOG.error("Failed to publish machine recipe data-pack snapshot", exception);
+        } catch (RuntimeException exception) {
+            errors = List.of(validationError(exception));
+            MMCR.LOG.error("Failed to publish machine recipe data-pack snapshot", exception);
+        }
     }
 
     /**
@@ -128,10 +125,14 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
 
     void applySnapshotFromServerReloadHook(Map<Identifier, MachineRecipe> recipes,
                                            Consumer<RuntimeContentSnapshot> sync) {
+        PreparedRecipes candidate = prepareCandidate(recipes);
+        logErrors(candidate.errors());
         Map<Identifier, MachineRecipe> previous = RecipeRegistry.dataPackSnapshot();
+        List<MachineRecipeJson.RecipeJsonException> previousErrors = errors;
         boolean published = false;
         try {
-            var committed = publishSnapshot(recipes);
+            var committed = publishSnapshot(candidate.recipes());
+            errors = candidate.errors();
             published = true;
             sync.accept(committed);
         } catch (RuntimeException | Error failure) {
@@ -147,27 +148,75 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
             } else {
                 snapshot = previous;
             }
+            errors = previousErrors;
             throw failure;
         }
     }
 
     private RuntimeContentSnapshot publishSnapshot(Map<Identifier, MachineRecipe> recipes) {
         Map<Identifier, MachineRecipe> replacement = Map.copyOf(recipes);
-        validateCandidate(replacement);
+        RecipeRegistry.validateDataPackCandidate(replacement);
         RuntimeContentSnapshot committed = RuntimeContentCoordinator.replaceDataPackRecipesAndSnapshot(replacement);
-        snapshot = replacement;
+        snapshot = RecipeRegistry.dataPackSnapshot();
         return committed;
     }
 
-    private static void validateCandidate(Map<Identifier, MachineRecipe> recipes) {
+    private static PreparedRecipes prepareCandidate(Map<Identifier, MachineRecipe> recipes) {
+        if (recipes == null) throw new IllegalArgumentException("Machine recipe snapshot must not be null");
+        List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>();
+        Map<Identifier, MachineRecipe> validRecipes = validateAndFilter(recipes, errors);
+        return new PreparedRecipes(validRecipes, errors);
+    }
+
+    private static Map<Identifier, MachineRecipe> validateAndFilter(
+            Map<Identifier, MachineRecipe> recipes,
+            List<MachineRecipeJson.RecipeJsonException> errors) {
+        Map<Identifier, MachineRecipe> validRecipes = new LinkedHashMap<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
-            MachineRecipe recipe = entry.getValue();
-            if (MachineRegistry.getMachine(recipe.machineId()) == null
-                    && !MachineDefinitions.containsStatic(recipe.machineId())) {
-                throw new MachineRecipeJson.RecipeJsonException(entry.getKey(), "machine",
-                        "unknown machine " + recipe.machineId(), null);
+            Identifier recipeId = entry.getKey();
+            try {
+                MachineRecipe recipe = entry.getValue();
+                if (recipeId == null || recipe == null || recipe.id() == null) {
+                    throw new MachineRecipeJson.RecipeJsonException(
+                            recipeId == null ? MMCR.id("machine_recipe_reload") : recipeId, "$",
+                            "Recipe key or recipe id must not be null", null);
+                }
+                if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
+                    throw new MachineRecipeJson.RecipeJsonException(recipeId, "recipe_pool",
+                            "unknown recipe pool " + recipe.recipePoolId(), null);
+                }
+                MachineRecipe normalizedRecipe = recipe.id().equals(recipeId) ? recipe : recipe.withId(recipeId);
+                RecipeRegistry.validateDataPackCandidate(Map.of(recipeId, normalizedRecipe));
+                MachineRecipe conflicting = conflictingLayerRecipe(normalizedRecipe);
+                if (conflicting != null) {
+                    throw new MachineRecipeJson.RecipeJsonException(recipeId, "recipe_pool",
+                            "recipe already belongs to pool " + conflicting.recipePoolId(), null);
+                }
+                validRecipes.put(recipeId, normalizedRecipe);
+            } catch (MachineRecipeJson.RecipeJsonException exception) {
+                errors.add(exception);
+            } catch (RuntimeException exception) {
+                String message = exception.getMessage() == null ? "candidate validation failed" : exception.getMessage();
+                errors.add(new MachineRecipeJson.RecipeJsonException(
+                        recipeId == null ? MMCR.id("machine_recipe_reload") : recipeId, "$", message, exception));
             }
         }
+        return validRecipes;
+    }
+
+    private static MachineRecipe conflictingLayerRecipe(MachineRecipe recipe) {
+        for (Map<Identifier, MachineRecipe> layer : List.of(RecipeRegistry.staticSnapshot(),
+                RecipeRegistry.kubeJSSnapshot(), RecipeRegistry.dynamicSnapshot())) {
+            MachineRecipe existing = layer.get(recipe.id());
+            if (existing != null && !existing.recipePoolId().equals(recipe.recipePoolId())) {
+                return existing;
+            }
+        }
+        return null;
+    }
+
+    private static void logErrors(List<MachineRecipeJson.RecipeJsonException> errors) {
+        errors.forEach(error -> MMCR.LOG.error("Failed to load machine recipe {}", error.recipeId(), error));
     }
 
     private static MachineRecipeJson.RecipeJsonException validationError(RuntimeException exception) {

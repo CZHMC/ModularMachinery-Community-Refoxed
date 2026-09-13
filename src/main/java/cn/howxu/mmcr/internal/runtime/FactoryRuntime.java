@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Owns factory lanes, their execution state, and their published snapshots.
@@ -71,6 +73,7 @@ public final class FactoryRuntime {
     private Set<Item> cachedIndexedInputItems = Set.of();
     private Set<Identifier> cachedIndexedLockedRecipeIds = Set.of();
     private List<MachineRecipe> cachedIndexedCandidates = List.of();
+    private @Nullable Identifier cachedCandidateRecipePoolId;
 
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism) {
         return tick(candidates, maxParallelism, currentGameTime());
@@ -199,12 +202,15 @@ public final class FactoryRuntime {
     public void syncCoreLanes(MachineControllerBlockEntity controller, Machine machine,
                               List<MachineRecipe> candidates) {
         ensureBaseLane(controller);
-        Identifier machineId = machine == null ? null : machine.registryName();
-        long catalogVersion = RecipeRegistry.catalog(machineId).version();
+        long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
+        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
         Map<Identifier, MachineRecipe> byId = new LinkedHashMap<>();
         for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) {
-            byId.putIfAbsent(recipe.id(), recipe);
+            if (recipe != null && recipePoolId != null && recipePoolId.equals(recipe.recipePoolId())) {
+                byId.putIfAbsent(recipe.id(), recipe);
+            }
         }
+        clearInvalidRecipeLocks(machine);
 
         Map<String, List<FactoryRecipeThread>> existingCoreLanes = new LinkedHashMap<>();
         List<FactoryRecipeThread> dynamicLanes = new ArrayList<>();
@@ -311,8 +317,13 @@ public final class FactoryRuntime {
     }
 
     public List<MachineRecipe> availableCandidates(List<MachineRecipe> candidates) {
-        if (candidates == null || candidates.isEmpty()) return List.of();
-        return filterAvailableCandidates(candidates, activeRecipeCounts());
+        if (controller == null || candidates == null || candidates.isEmpty()) return List.of();
+        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        Machine machine = snapshot.structure().machine() == null
+                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        List<MachineRecipe> machineCandidates = candidatesForPool(nonNullCandidates(candidates),
+                MachineRegistry.recipePoolForMachine(machine));
+        return filterAvailableCandidates(machineCandidates, activeRecipeCounts());
     }
 
     public boolean toggleRecipeLock(int index) {
@@ -438,7 +449,20 @@ public final class FactoryRuntime {
         startReservations.clear();
         readyLanes.clear();
         coreCatalogVersion = Long.MIN_VALUE;
+        clearCandidateCaches();
         if (changed && lanes.isEmpty()) markLaneStateChanged();
+    }
+
+    private void clearCandidateCaches() {
+        cachedOrderedCandidateSource = List.of();
+        cachedOrderedCandidateCatalogVersion = Long.MIN_VALUE;
+        cachedOrderedCandidates = List.of();
+        cachedIndexedCandidateSource = List.of();
+        cachedIndexedCandidateCatalogVersion = Long.MIN_VALUE;
+        cachedIndexedInputItems = Set.of();
+        cachedIndexedLockedRecipeIds = Set.of();
+        cachedIndexedCandidates = List.of();
+        cachedCandidateRecipePoolId = null;
     }
 
     public void save(ValueOutput output) {
@@ -468,7 +492,7 @@ public final class FactoryRuntime {
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         Machine machine = current.structure().machine() == null
                 ? current.structure().configuredMachine() : current.structure().machine();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(machine == null ? null : machine.registryName());
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         Map<String, List<MachineRecipe>> coreCandidates = new LinkedHashMap<>();
         if (machine != null) {
             for (FactoryThreadSpec spec : machine.factoryThreads()) {
@@ -494,8 +518,9 @@ public final class FactoryRuntime {
                     fallbackLaneId);
             addLane(lane);
             if (laneInput.getBooleanOr("had_recipe_lock", false)) recipeLockUsed.add(lane);
-            if (!lockedRecipeName.isEmpty()) {
-                if (RecipeRegistry.getRecipe(lockedRecipeId) != null) recipeLocks.put(lane, lockedRecipeId);
+            if (lockedRecipeId != null && candidates.stream()
+                    .anyMatch(candidate -> candidate != null && lockedRecipeId.equals(candidate.id()))) {
+                recipeLocks.put(lane, lockedRecipeId);
             }
             if (lane.laneId().startsWith("factory-")) {
                 try {
@@ -516,6 +541,12 @@ public final class FactoryRuntime {
     }
 
     public void rebindCurrentVersions() {
+        if (controller != null) {
+            ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+            Machine machine = snapshot.structure().machine() == null
+                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+            clearInvalidRecipeLocks(machine);
+        }
         Map<FactoryRecipeThread, LaneObservation> observations = new IdentityHashMap<>();
         for (FactoryRecipeThread lane : lanes) {
             observations.put(lane, observe(lane));
@@ -526,14 +557,30 @@ public final class FactoryRuntime {
         }
     }
 
+    private void clearInvalidRecipeLocks(@Nullable Machine machine) {
+        Set<Identifier> validRecipeIds = RecipeRegistry.catalogForMachine(machine).recipes().stream()
+                .map(MachineRecipe::id).collect(Collectors.toSet());
+        Set<FactoryRecipeThread> invalidLocks = recipeLocks.entrySet().stream()
+                .filter(entry -> !validRecipeIds.contains(entry.getValue()))
+                .map(Map.Entry::getKey).collect(Collectors.toSet());
+        if (invalidLocks.isEmpty()) return;
+        invalidLocks.forEach(recipeLocks::remove);
+        recipeLockUsed.removeAll(invalidLocks);
+        markLaneStateChanged();
+    }
+
     public FactorySearchContext createSearchContext(ControllerRuntimeSnapshot snapshot,
                                                     List<MachineRecipe> candidates,
                                                      long maxParallelism, long gameTime) {
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier machineId = machine == null ? null : machine.registryName();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(machineId);
-        List<MachineRecipe> candidateSnapshot = nonNullCandidates(candidates);
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
+        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        if (!Objects.equals(cachedCandidateRecipePoolId, recipePoolId)) {
+            clearCandidateCaches();
+            cachedCandidateRecipePoolId = recipePoolId;
+        }
+        List<MachineRecipe> candidateSnapshot = candidatesForPool(nonNullCandidates(candidates), recipePoolId);
         List<MachineRecipe> ordered = orderedCandidates(candidateSnapshot, catalog);
         Set<Item> inputItems = currentInputItems();
         if (inputItems != null && candidatesBelongToCatalog(candidateSnapshot, catalog)) {
@@ -551,6 +598,12 @@ public final class FactoryRuntime {
             if (candidate == null) return candidates.stream().filter(Objects::nonNull).toList();
         }
         return candidates;
+    }
+
+    private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates,
+                                                         @Nullable Identifier recipePoolId) {
+        if (candidates == null || candidates.isEmpty() || recipePoolId == null) return List.of();
+        return candidates.stream().filter(recipe -> recipePoolId.equals(recipe.recipePoolId())).toList();
     }
 
     private List<MachineRecipe> orderedCandidates(List<MachineRecipe> candidates, MachineRecipeCatalog catalog) {
@@ -638,9 +691,8 @@ public final class FactoryRuntime {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier machineId = machine == null ? null : machine.registryName();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
-                snapshot.modifierVersion(), snapshot.stateVersion(), RecipeRegistry.catalog(machineId).version(),
+                snapshot.modifierVersion(), snapshot.stateVersion(), RecipeRegistry.catalogForMachine(machine).version(),
                 lane.searchResourceEpoch(controller.resourceAvailabilityEpoch()), lockedRecipeId,
                 lane.coreRecipeSetVersion());
     }

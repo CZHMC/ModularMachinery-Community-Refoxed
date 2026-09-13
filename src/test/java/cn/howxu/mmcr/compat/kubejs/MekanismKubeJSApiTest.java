@@ -54,7 +54,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_input_emits_identifier_resolved_payload_with_public_factory_kind() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:chemical_input");
-        builder.machine(MACHINE.toString())
+        builder.recipePool(MACHINE.toString())
                 .chemicalInput("mekanism:oxygen", 1_000L);
 
         ChemicalIngredient ingredient = ChemicalIngredient.chemical(
@@ -68,7 +68,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_tag_input_emits_tag_kind_payload() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:chemical_tag");
-        builder.machine(MACHINE.toString())
+        builder.recipePool(MACHINE.toString())
                 .chemicalTagInput("mekanism:fuels", 10L);
 
         ChemicalIngredient ingredient = ChemicalIngredient.tag(
@@ -82,7 +82,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_output_emits_output_kind_payload() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:chemical_output");
-        builder.machine(MACHINE.toString())
+        builder.recipePool(MACHINE.toString())
                 .chemicalOutput("mekanism:hydrogen", 200L, 0.5D);
 
         ChemicalOutput output = ChemicalOutput.of(
@@ -100,7 +100,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_heat_temperature_input_emits_minimum_temperature_payload() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:heat_input");
-        builder.machine(MACHINE.toString())
+        builder.recipePool(MACHINE.toString())
                 .heatTemperatureInput(450D);
 
         MachineRequirement expected = MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
@@ -114,7 +114,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_heat_output_emits_output_heat_payload() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:heat_output");
-        builder.machine(MACHINE.toString())
+        builder.recipePool(MACHINE.toString())
                 .heatOutput(1_200D);
 
         HeatRequirement heat = HeatRequirement.outputHeat(1_200D);
@@ -129,11 +129,11 @@ class MekanismKubeJSApiTest {
 
     @Test
     void kubejs_builder_chemical_input_matches_public_builder_typeId() {
-        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_public"), MACHINE)
+        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_public")).recipePool(MACHINE)
                 .inputChemical(Identifier.parse("mekanism:oxygen"), 1_000L)
                 .build();
         MachineRecipeBuilderJS kubeBuilder = new MachineRecipeBuilderJS("mmcr:parity_kubejs");
-        kubeBuilder.machine(MACHINE.toString())
+        kubeBuilder.recipePool(MACHINE.toString())
                 .chemicalInput("mekanism:oxygen", 1_000L);
 
         CustomRecipeIo publicIo = (CustomRecipeIo) publicDef.requirements().get(0);
@@ -143,11 +143,11 @@ class MekanismKubeJSApiTest {
 
     @Test
     void kubejs_builder_chemical_output_matches_public_builder_typeId() {
-        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_public_out"), MACHINE)
+        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_public_out")).recipePool(MACHINE)
                 .outputChemical(Identifier.parse("mekanism:hydrogen"), 200L, 0.5F)
                 .build();
         MachineRecipeBuilderJS kubeBuilder = new MachineRecipeBuilderJS("mmcr:parity_kubejs_out");
-        kubeBuilder.machine(MACHINE.toString())
+        kubeBuilder.recipePool(MACHINE.toString())
                 .chemicalOutput("mekanism:hydrogen", 200L, 0.5D);
 
         CustomRecipeIo publicIo = (CustomRecipeIo) publicDef.customOutputs().get(0);
@@ -157,11 +157,11 @@ class MekanismKubeJSApiTest {
 
     @Test
     void kubejs_builder_heat_temperature_input_matches_public_builder_typeId() {
-        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_heat_in"), MACHINE)
+        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_heat_in")).recipePool(MACHINE)
                 .inputHeatTemperature(450D)
                 .build();
         MachineRecipeBuilderJS kubeBuilder = new MachineRecipeBuilderJS("mmcr:parity_heat_in_kubejs");
-        kubeBuilder.machine(MACHINE.toString())
+        kubeBuilder.recipePool(MACHINE.toString())
                 .heatTemperatureInput(450D);
 
         CustomRecipeIo publicIo = (CustomRecipeIo) publicDef.requirements().stream()
@@ -172,11 +172,11 @@ class MekanismKubeJSApiTest {
 
     @Test
     void kubejs_builder_heat_output_matches_public_builder_typeId() {
-        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_heat_out"), MACHINE)
+        MachineRecipeDefinition publicDef = MachineRecipeBuilder.recipe(MMCR.id("parity_heat_out")).recipePool(MACHINE)
                 .outputHeat(1_200D)
                 .build();
         MachineRecipeBuilderJS kubeBuilder = new MachineRecipeBuilderJS("mmcr:parity_heat_out_kubejs");
-        kubeBuilder.machine(MACHINE.toString())
+        kubeBuilder.recipePool(MACHINE.toString())
                 .heatOutput(1_200D);
 
         CustomRecipeIo publicIo = publicDef.customOutputs().get(0);
@@ -199,7 +199,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_input_rejects_non_positive_amount() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:non_positive")
-                .machine(MACHINE.toString());
+                .recipePool(MACHINE.toString());
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> builder.chemicalInput("mekanism:oxygen", 0L));
@@ -210,7 +210,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_tag_input_rejects_blank_id_and_non_positive_amount() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:tag_invalid")
-                .machine(MACHINE.toString());
+                .recipePool(MACHINE.toString());
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> builder.chemicalTagInput("", 1L));
@@ -221,7 +221,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_output_rejects_invalid_chance() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:chance")
-                .machine(MACHINE.toString());
+                .recipePool(MACHINE.toString());
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> builder.chemicalOutput("mekanism:oxygen", 1_000L, -0.1D));
@@ -234,7 +234,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_output_rejects_non_positive_amount() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:output_amount")
-                .machine(MACHINE.toString());
+                .recipePool(MACHINE.toString());
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> builder.chemicalOutput("mekanism:oxygen", 0L, 1D));
@@ -245,7 +245,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_heat_methods_reject_non_finite_or_negative_value() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:heat_invalid")
-                .machine(MACHINE.toString());
+                .recipePool(MACHINE.toString());
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> builder.heatTemperatureInput(-1D));
@@ -260,7 +260,7 @@ class MekanismKubeJSApiTest {
     @Test
     void kubejs_builder_chemical_input_rejects_malformed_identifier() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:bad_id")
-                .machine(MACHINE.toString());
+                .recipePool(MACHINE.toString());
 
         assertThatThrownBy(() -> builder.chemicalInput("mekanism:bad path", 1_000L))
                 .isInstanceOf(IllegalArgumentException.class);

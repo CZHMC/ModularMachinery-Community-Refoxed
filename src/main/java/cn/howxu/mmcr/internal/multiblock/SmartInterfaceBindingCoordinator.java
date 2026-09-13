@@ -40,7 +40,7 @@ public final class SmartInterfaceBindingCoordinator {
         var ordered = interfaces.stream().sorted(Comparator.comparing(SmartInterfaceBlockEntity::getBlockPos)).toList();
         for (SmartInterfaceBlockEntity smartInterface : ordered) {
             if (smartInterface.machineId().isPresent() && !smartInterface.machineId().orElseThrow().equals(machine.registryName())) {
-                continue;
+                smartInterface.releaseController(controllerPos);
             }
             if (smartInterface.claimController(controllerPos, machine.registryName(), types, shared)) {
                 smartInterface.linkControllerAppearance(controllerPos, controllerAppearance);

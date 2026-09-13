@@ -118,25 +118,85 @@ class PluginBindingTest {
     }
 
     @Test
-    void invalid_kubejs_content_transaction_preserves_previous_dynamic_snapshot() {
+    void kubejs_transaction_discards_orphan_pool_recipe_and_keeps_valid_recipe() {
+        var machineId = MMCR.id("test_machine_name");
+        var validRecipeId = MMCR.id("kubejs_valid_pool_recipe");
+        var orphanRecipeId = MMCR.id("kubejs_orphan_pool_recipe");
+
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerStructure(structure(machineId));
+        transaction.registerRecipe(RecipeTestSupport.create(validRecipeId, machineId, 1, List.of(), List.of()));
+        transaction.registerRecipe(RecipeTestSupport.create(orphanRecipeId,
+                MMCR.id("missing_recipe_pool"), 1, List.of(), List.of()));
+
+        var committed = transaction.commit();
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId).doesNotContainKey(orphanRecipeId);
+        assertThat(committed.result().errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(orphanRecipeId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+        });
+    }
+
+    @Test
+    void kubejs_transaction_keeps_cross_pool_dynamic_recipe_and_publishes_valid_recipes() {
+        var firstPoolId = MMCR.id("test_machine_name");
+        var secondPoolId = MMCR.id("cracker");
+        var samePoolId = MMCR.id("kubejs_transaction_same_pool_recipe");
+        var crossPoolId = MMCR.id("kubejs_transaction_cross_pool_recipe");
+        var validId = MMCR.id("kubejs_transaction_valid_after_cross_pool_conflict");
+        var dynamicSamePool = RecipeTestSupport.create(samePoolId, firstPoolId, 1, List.of(), List.of());
+        var dynamicCrossPool = RecipeTestSupport.create(crossPoolId, firstPoolId, 2, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(samePoolId, dynamicSamePool, crossPoolId, dynamicCrossPool));
+
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerStructure(structure(firstPoolId));
+        transaction.registerStructure(structure(secondPoolId));
+        var kubeJSSamePool = RecipeTestSupport.create(samePoolId, firstPoolId, 3, List.of(), List.of());
+        var kubeJSCrossPool = RecipeTestSupport.create(crossPoolId, secondPoolId, 4, List.of(), List.of());
+        var valid = RecipeTestSupport.create(validId, secondPoolId, 5, List.of(), List.of());
+        transaction.registerRecipe(kubeJSSamePool);
+        transaction.registerRecipe(kubeJSCrossPool);
+        transaction.registerRecipe(valid);
+
+        var committed = transaction.commit();
+
+        assertThat(committed.result().errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(crossPoolId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(firstPoolId.toString());
+        });
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(samePoolId, kubeJSSamePool)
+                .containsEntry(crossPoolId, dynamicCrossPool)
+                .containsEntry(validId, valid);
+        assertThat(RecipeRegistry.getRecipe(samePoolId)).isSameAs(kubeJSSamePool);
+        assertThat(RecipeRegistry.getRecipe(crossPoolId)).isSameAs(dynamicCrossPool);
+    }
+
+    @Test
+    void orphan_pool_transaction_replaces_previous_snapshot_with_valid_recipes_only() {
         var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_transaction_previous_recipe");
+        var validRecipeId = MMCR.id("kubejs_transaction_valid_after_orphan");
 
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
         previous.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         previous.commit();
-        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
-        var previousRecipes = RecipeRegistry.dynamicSnapshot();
         long previousVersion = RuntimeContentVersion.current();
 
         var invalid = new KubeJSContentReloadTransaction();
-        invalid.registerRecipe(RecipeTestSupport.create(MMCR.id("invalid_kubejs_transaction_recipe"), MMCR.id("missing_machine"), 1, List.of(), List.of()));
+        invalid.registerStructure(structure(machineId));
+        invalid.registerRecipe(RecipeTestSupport.create(validRecipeId, machineId, 1, List.of(), List.of()));
+        invalid.registerRecipe(RecipeTestSupport.create(MMCR.id("invalid_kubejs_transaction_recipe"),
+                MMCR.id("missing_machine"), 1, List.of(), List.of()));
 
-        assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class);
-        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
-        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
-        assertThat(RuntimeContentVersion.current()).isEqualTo(previousVersion);
+        invalid.commit();
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId)
+                .doesNotContainKey(recipeId)
+                .doesNotContainKey(MMCR.id("invalid_kubejs_transaction_recipe"));
+        assertThat(RuntimeContentVersion.current()).isGreaterThan(previousVersion);
     }
 
     @Test
@@ -373,7 +433,7 @@ class PluginBindingTest {
     }
 
     @Test
-    void server_script_error_discards_collected_content_and_preserves_previous_snapshot() {
+    void server_script_error_without_collected_content_preserves_previous_snapshot() {
         var machineId = MMCR.id("test_machine_name");
         var previousRecipeId = MMCR.id("kubejs_transaction_error_previous_recipe");
         var previous = new KubeJSContentReloadTransaction();
@@ -385,13 +445,55 @@ class PluginBindingTest {
 
         var reload = new Object();
         Plugin.beginServerReload(reload, 0);
-        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
-                MMCR.id("kubejs_transaction_error_recipe"), machineId, 1, List.of(), List.of()));
         Plugin.completeServerReload(reload, 1);
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+    }
+
+    @Test
+    void recipe_script_error_publishes_valid_collected_content() {
+        var machineId = MMCR.id("test_machine_name");
+        var validRecipeId = MMCR.id("kubejs_valid_recipe_after_script_error");
+        var invalidRecipeId = MMCR.id("kubejs_invalid_recipe_after_script_error");
+        var reload = new Object();
+
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
+                validRecipeId, machineId, 1, List.of(), List.of()));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
+                invalidRecipeId, MMCR.id("missing_recipe_pool"), 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 1);
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId).doesNotContainKey(invalidRecipeId);
+    }
+
+    @Test
+    void invalid_only_recipe_reload_preserves_previous_snapshot() {
+        var machineId = MMCR.id("test_machine_name");
+        var externalMachineId = MMCR.id("cracker");
+        var previousRecipeId = MMCR.id("kubejs_previous_recipe_before_invalid_reload");
+        var invalidRecipeId = MMCR.id("kubejs_invalid_only_recipe");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(RecipeTestSupport.create(previousRecipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId),
+                externalMachineId, structure(externalMachineId)));
+        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
+        var previousRecipes = RecipeRegistry.dynamicSnapshot();
+        long previousVersion = RuntimeContentVersion.current();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
+                invalidRecipeId, MMCR.id("missing_recipe_pool"), 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 1);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+        assertThat(RuntimeContentVersion.current()).isEqualTo(previousVersion);
     }
 
     @Test
@@ -416,7 +518,7 @@ class PluginBindingTest {
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
-        new MachineRecipeBuilderJS("mmcr:kubejs_transaction_direct_recipe").machine("mmcr:test_machine_name").build();
+        new MachineRecipeBuilderJS("mmcr:kubejs_transaction_direct_recipe").recipePool("mmcr:test_machine_name").build();
         assertThat(RecipeRegistry.containsStatic(MMCR.id("kubejs_transaction_direct_recipe"))).isTrue();
     }
 
@@ -427,7 +529,7 @@ class PluginBindingTest {
 
         Plugin.beginServerReload(reload, 0);
         new MachineRecipeBuilderJS(recipeId)
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .build();
 
         assertThat(RecipeRegistry.containsStatic(recipeId)).isFalse();
@@ -697,7 +799,7 @@ class PluginBindingTest {
     void public_recipe_builder_creates_a_component_output_in_recipe_event_context() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:sharp_sword")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         {
                           'minecraft:custom_name': { text: 'Better钻石剑' },
@@ -721,7 +823,7 @@ class PluginBindingTest {
     void outputs_replaces_previously_declared_component_outputs() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:replaced_component_output")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .itemOutput("minecraft:iron_ingot", 1)
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Discarded' } }
@@ -737,7 +839,7 @@ class PluginBindingTest {
     @Test
     void component_output_rejects_negative_count_before_codec_decoding() {
         assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:negative_component_output")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", -1, JsonParser.parseString("{}")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Component item output count must not be negative: -1");
@@ -747,7 +849,7 @@ class PluginBindingTest {
     void component_output_added_after_outputs_list_is_merged_at_the_new_position() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:component_after_outputs")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .outputs(List.of(new ItemStack(Items.DIAMOND)))
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Kept' } }
@@ -763,7 +865,7 @@ class PluginBindingTest {
     @Test
     void public_recipe_builder_creates_chanced_item_output_requirement() {
         new MachineRecipeBuilderJS("mmcr:chanced_diamond")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .chancedItemOutput("minecraft:diamond", 1, 0.5F)
                 .build();
 

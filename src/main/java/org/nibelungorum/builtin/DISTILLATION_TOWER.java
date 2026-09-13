@@ -32,6 +32,7 @@ public class DISTILLATION_TOWER {
         if (!event.definitions().containsKey(DISTILLATION_TOWER)) {
             var machine = MachineBuilder
                     .machine(DISTILLATION_TOWER)
+                    .recipePool(DISTILLATION_TOWER)
                     .displayNameKey("machine.mmcr.distillation_tower")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("polished_blackstone")))
                     .maxParallelism(32)
@@ -120,7 +121,8 @@ public class DISTILLATION_TOWER {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(DISTILLATION_TOWER.withSuffix("_recipe_1"), DISTILLATION_TOWER)
+                .recipe(DISTILLATION_TOWER.withSuffix("_recipe_1"))
+                .recipePool(DISTILLATION_TOWER)
                 .inputItem(ItemTags.LOGS, 1)
                 .outputItem(Items.COAL, 4)
                 .outputItem(Items.GUNPOWDER,3)

@@ -47,6 +47,7 @@ public class NETWORK_PRODUCER_MACHINE {
         if (!event.definitions().containsKey(NETWORK_PRODUCER_MACHINE)) {
             var machine = MachineBuilder
                     .machine(NETWORK_PRODUCER_MACHINE)
+                    .recipePool(NETWORK_PRODUCER_MACHINE)
                     .displayNameKey("machine.mmcr.network_producer_machine")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:white_wool")))
                     .networkInterface(1, 1)

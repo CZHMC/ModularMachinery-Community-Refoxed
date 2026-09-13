@@ -38,6 +38,7 @@ public class DATA_STORAGE_MACHINE {
         if (!event.definitions().containsKey(DATA_STORAGE_MACHINE)) {
             var machine = MachineBuilder
                     .machine(DATA_STORAGE_MACHINE)
+                    .recipePool(DATA_STORAGE_MACHINE)
                     .displayNameKey("machine.mmcr.data_storage_machine")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:crying_obsidian")))
                     .tickBehavior(behavior -> behavior.serverTick(context -> {

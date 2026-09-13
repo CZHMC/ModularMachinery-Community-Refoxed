@@ -1,7 +1,7 @@
 ServerEvents.recipes( event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_distillation_tower',
+        recipe_pool: 'mmcr_kubejs:kubejs_distillation_tower',
         tick_time: 300,
         allow_partial_outputs: true, // Discard outputs when the structure lacks enough output ports.
         requirements: [

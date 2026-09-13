@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.reload;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -10,6 +11,10 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
+import cn.howxu.mmcr.api.recipe.CustomOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -135,6 +140,141 @@ class DynamicContentReloadServiceTest {
     }
 
     @Test
+    void orphan_dynamic_recipe_is_reported_while_valid_recipe_continues_publishing() {
+        Identifier machineId = Identifier.parse("mmcr:dynamic_pool_validation_machine");
+        Identifier validId = Identifier.parse("mmcr:dynamic_pool_validation_valid");
+        Identifier orphanId = Identifier.parse("mmcr:dynamic_pool_validation_orphan");
+        register(machineId.toString());
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(machineId.toString()));
+            candidate.registerRecipe(recipe(validId, machineId));
+            candidate.registerRecipe(recipe(orphanId, MMCR.id("missing_dynamic_recipe_pool")));
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(orphanId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains("missing_dynamic_recipe_pool");
+        });
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(validId, recipe(validId, machineId))
+                .doesNotContainKey(orphanId);
+    }
+
+    @Test
+    void invalid_dynamic_recipe_is_reported_while_valid_recipe_continues_publishing() {
+        Identifier machineId = Identifier.parse("mmcr:dynamic_recipe_validation_machine");
+        Identifier validId = Identifier.parse("mmcr:dynamic_recipe_validation_valid");
+        Identifier invalidId = Identifier.parse("mmcr:dynamic_recipe_validation_invalid");
+        register(machineId.toString());
+        MachineRecipe invalid;
+        try (var scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(INVALID_OUTPUT_TYPE);
+            invalid = RecipeTestSupport.create(invalidId, machineId, 1, List.of(),
+                    List.of(new InvalidOutput(1, 1F)));
+        }
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(machineId.toString()));
+            candidate.registerRecipe(recipe(validId, machineId));
+            candidate.registerRecipe(invalid);
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(invalidId);
+            assertThat(error.path()).isEqualTo("outputs[0]");
+        });
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validId).doesNotContainKey(invalidId);
+    }
+
+    @Test
+    void dynamic_reload_uses_registry_pool_membership_and_counts_only_published_recipes() {
+        Identifier machineId = Identifier.parse("mmcr:dynamic_pool_alias_machine");
+        Identifier registeredPoolId = Identifier.parse("mmcr:dynamic_pool_alias_registered");
+        Identifier validId = Identifier.parse("mmcr:dynamic_pool_alias_valid");
+        Identifier invalidId = Identifier.parse("mmcr:dynamic_pool_alias_invalid");
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .recipePoolId(registeredPoolId).build());
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(machineId.toString()));
+            candidate.registerRecipe(recipe(validId, registeredPoolId));
+            candidate.registerRecipe(recipe(invalidId, machineId));
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(invalidId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(machineId.toString());
+        });
+        assertThat(result.addedRecipes()).isEqualTo(1);
+        assertThat(result.updatedRecipes()).isZero();
+        assertThat(result.removedRecipes()).isZero();
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(validId, recipe(validId, registeredPoolId))
+                .doesNotContainKey(invalidId);
+        assertThat(result.addedRecipes()).isEqualTo(RecipeRegistry.dynamicSnapshot().size());
+    }
+
+    @Test
+    void dynamic_reload_reports_cross_pool_rejection_and_keeps_valid_recipe() {
+        Identifier firstMachineId = Identifier.parse("mmcr:dynamic_cross_pool_machine_a");
+        Identifier secondMachineId = Identifier.parse("mmcr:dynamic_cross_pool_machine_b");
+        Identifier firstPoolId = Identifier.parse("mmcr:dynamic_cross_pool_a");
+        Identifier secondPoolId = Identifier.parse("mmcr:dynamic_cross_pool_b");
+        Identifier conflictingId = Identifier.parse("mmcr:dynamic_cross_pool_recipe");
+        Identifier validId = Identifier.parse("mmcr:dynamic_cross_pool_valid");
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinitions.register(MachineRegistration.builder(firstMachineId)
+                .recipePoolId(firstPoolId).build());
+        MachineDefinitions.register(MachineRegistration.builder(secondMachineId)
+                .recipePoolId(secondPoolId).build());
+        MachineRecipe kubeJSRecipe = recipe(conflictingId, firstPoolId);
+        RecipeRegistry.replaceKubeJS(Map.of(conflictingId, kubeJSRecipe));
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(secondMachineId.toString()));
+            candidate.registerRecipe(recipe(conflictingId, secondPoolId));
+            candidate.registerRecipe(recipe(validId, secondPoolId));
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(conflictingId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(firstPoolId.toString());
+        });
+        assertThat(result.addedRecipes()).isEqualTo(1);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validId).doesNotContainKey(conflictingId);
+        assertThat(result.addedRecipes()).isEqualTo(RecipeRegistry.dynamicSnapshot().size());
+        assertThat(RecipeRegistry.getRecipe(conflictingId)).isSameAs(kubeJSRecipe);
+    }
+
+    @Test
+    void dynamic_reload_uses_registered_pool_for_static_machine_and_rejects_machine_alias() {
+        Identifier machineId = Identifier.parse("mmcr:static_pool_alias_machine");
+        Identifier registeredPoolId = Identifier.parse("mmcr:static_pool_alias_registered");
+        Identifier validId = Identifier.parse("mmcr:static_pool_alias_valid");
+        Identifier invalidId = Identifier.parse("mmcr:static_pool_alias_invalid");
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .recipePoolId(registeredPoolId).build());
+        MachineRegistry.register(new DynamicMachine(machineId, machineId.toString(), new BlockArray(Map.of())));
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerRecipe(recipe(validId, registeredPoolId));
+            candidate.registerRecipe(recipe(invalidId, machineId));
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(invalidId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(machineId.toString());
+        });
+        assertThat(result.addedRecipes()).isEqualTo(1);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validId).doesNotContainKey(invalidId);
+    }
+
+    @Test
     void reloadWithSnapshotReturnsTheCommittedEffectiveContent() {
         String machineId = "mmcr:test_machine_name";
 
@@ -160,6 +300,10 @@ class DynamicContentReloadServiceTest {
         return RecipeTestSupport.create(Identifier.parse(id), Identifier.parse(machineId), 1, List.of(), List.of());
     }
 
+    private static MachineRecipe recipe(Identifier id, Identifier recipePoolId) {
+        return RecipeTestSupport.create(id, recipePoolId, 1, List.of(), List.of());
+    }
+
     private static MachineStructureDefinition structure(String id) {
         Identifier identifier = Identifier.parse(id);
         return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
@@ -172,5 +316,23 @@ class DynamicContentReloadServiceTest {
         var replacement = new SingleBlockModifierReplacement("invalid", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(), ItemStack.EMPTY);
         return new MachineStructureDefinition(identifier, new BlockArray(Map.of()), PortRequirementSpec.none(), List.of(),
                 MachineStructureRequirements.builder().modifier('X', replacement).build());
+    }
+
+    private static final Identifier INVALID_OUTPUT_ID = Identifier.parse("mmcr_test:dynamic_invalid_output");
+    private static final OutputType<InvalidOutput> INVALID_OUTPUT_TYPE = new OutputType.Definition<>(
+            INVALID_OUTPUT_ID, com.mojang.serialization.MapCodec.unit(() -> new InvalidOutput(1, 1F)),
+            (output, chance) -> new InvalidOutput(output.value(), chance),
+            (output, modifiers) -> output,
+            output -> new InvalidOutput(output.value(), output.chance()));
+
+    private record InvalidOutput(int value, float chance) implements CustomOutput {
+        private InvalidOutput {
+            chance = MachineOutput.clampChance(chance);
+        }
+
+        @Override
+        public OutputType<InvalidOutput> outputType() {
+            return INVALID_OUTPUT_TYPE;
+        }
     }
 }

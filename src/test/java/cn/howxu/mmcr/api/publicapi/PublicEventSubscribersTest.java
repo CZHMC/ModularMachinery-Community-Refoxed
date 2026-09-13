@@ -77,11 +77,11 @@ class PublicEventSubscribersTest {
                 .isInstanceOf(IllegalStateException.class);
 
         var recipes = new MMCRMachineRecipesEvent();
-        var recipe = MachineRecipeBuilder.recipe(MMCR.id("frozen_recipe"), machineId).build();
+        var recipe = MachineRecipeBuilder.recipe(MMCR.id("frozen_recipe")).recipePool(machineId).build();
         recipes.registerRecipe(recipe);
         assertThatThrownBy(() -> recipes.registerRecipe(recipe)).isInstanceOf(IllegalStateException.class);
         recipes.freeze();
-        assertThatThrownBy(() -> recipes.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("later_recipe"), machineId).build()))
+        assertThatThrownBy(() -> recipes.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("later_recipe")).recipePool(machineId).build()))
                 .isInstanceOf(IllegalStateException.class);
     }
 

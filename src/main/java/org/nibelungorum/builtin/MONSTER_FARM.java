@@ -25,6 +25,7 @@ public class MONSTER_FARM {
         if (!event.definitions().containsKey(MONSTER_FARM)) {
             var machine = MachineBuilder
                     .machine(MONSTER_FARM)
+                    .recipePool(MONSTER_FARM)
                     .displayNameKey("machine.mmcr.monster_farm")
                     .controller(builder -> builder
                             .id(MONSTER_FARM.withSuffix("_controller"))

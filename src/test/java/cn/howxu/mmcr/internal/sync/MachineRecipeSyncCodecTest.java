@@ -43,7 +43,7 @@ class MachineRecipeSyncCodecTest {
     }
 
     @Test
-    void roundTripsRegisteredCustomRequirementAndOutput() {
+    void roundTripsVersionTwoRegisteredCustomRequirementAndOutput() {
         try (RequirementHandlerRegistry.TestScope requirements = RequirementHandlerRegistry.openTestScope();
              OutputRegistry.TestScope outputs = OutputRegistry.openTestScope()) {
             RequirementHandlerRegistry.register(ScalarRequirement.TYPE);
@@ -55,10 +55,13 @@ class MachineRecipeSyncCodecTest {
             RegistryFriendlyByteBuf buffer = buffer();
 
             MachineRecipeSyncCodec.encode(buffer, original);
+            assertThat(buffer.readVarInt()).isEqualTo(-1);
+            assertThat(buffer.readVarInt()).isEqualTo(2);
+            buffer.readerIndex(0);
             MachineRecipe decoded = MachineRecipeSyncCodec.decode(buffer);
 
             assertThat(decoded.id()).isEqualTo(original.id());
-            assertThat(decoded.machineId()).isEqualTo(original.machineId());
+            assertThat(decoded.recipePoolId()).isEqualTo(original.recipePoolId());
             assertThat(decoded.requirements()).containsExactly(new ScalarRequirement(RecipeModifier.IOType.INPUT,
                     12, List.of("input")));
             assertThat(decoded.machineOutputs()).containsExactly(new ScalarOutput(34, 0.75F));
@@ -78,10 +81,10 @@ class MachineRecipeSyncCodecTest {
     }
 
     @Test
-    void rejectsUnknownOversizedAndResidualNewRequirementPayloads() {
+    void rejectsLegacyVersionUnknownOversizedAndResidualNewRequirementPayloads() {
         RegistryFriendlyByteBuf unsupportedVersion = buffer();
         unsupportedVersion.writeVarInt(-1);
-        unsupportedVersion.writeVarInt(2);
+        unsupportedVersion.writeVarInt(1);
         assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(unsupportedVersion)).isInstanceOf(DecoderException.class)
                 .hasMessageContaining("Unsupported machine recipe sync version");
         assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("unknown"), 0, buffer -> {
@@ -117,9 +120,9 @@ class MachineRecipeSyncCodecTest {
         RegistryFriendlyByteBuf payload = buffer();
         writer.accept(payload);
         buffer.writeVarInt(-1);
-        buffer.writeVarInt(1);
+        buffer.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buffer, MMCR.id("new"));
-        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("machine"));
+        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("recipe_pool"));
         buffer.writeVarInt(20);
         buffer.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buffer, type);

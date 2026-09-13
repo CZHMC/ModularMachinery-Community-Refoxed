@@ -139,6 +139,15 @@ class MachineBehaviorTest {
     }
 
     @Test
+    void convenience_contexts_do_not_claim_the_recipe_pool_as_machine_identity() {
+        MachineRecipe recipe = recipe();
+
+        assertThat(new RecipeStartContext(recipe, 1, 1).machineContext().machineId()).isNull();
+        assertThat(new RecipeTickContext(recipe, 0, 20, 1).machineContext().machineId()).isNull();
+        assertThat(new RecipeFinishContext(recipe, 1, 1, List.of()).machineContext().machineId()).isNull();
+    }
+
+    @Test
     void recipe_behavior_retains_machine_tick_callbacks() {
         AtomicInteger preCalls = new AtomicInteger();
         AtomicInteger postCalls = new AtomicInteger();

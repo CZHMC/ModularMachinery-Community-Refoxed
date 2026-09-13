@@ -35,6 +35,7 @@ public class ALLOY_FURNACE {
         if (!event.definitions().containsKey(ALLOY_FURNACE)) {
             var machine = MachineBuilder
                     .machine(ALLOY_FURNACE)
+                    .recipePool(ALLOY_FURNACE)
                     .allowModifiers()
                     .displayNameKey("machine.mmcr.alloy_furnace")
                     .appearance(appearance -> appearance.machineBasicBlock(Identifier.parse("minecraft:bricks")))
@@ -101,7 +102,8 @@ public class ALLOY_FURNACE {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(ALLOY_FURNACE.withSuffix("_recipe_1"),ALLOY_FURNACE)
+                .recipe(ALLOY_FURNACE.withSuffix("_recipe_1"))
+                .recipePool(ALLOY_FURNACE)
                 .inputItem(Ingredient.of(Items.GOLD_INGOT),1)
                 .outputItem(Items.GOLD_NUGGET,10)
                 .inputEnergy(20)

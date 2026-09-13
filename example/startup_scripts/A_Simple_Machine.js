@@ -8,6 +8,7 @@ MMCREvents.startup(event => {
     // Create the machine definition.
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_blast_furnace") // Global machine identifier.
+        .recipePool("mmcr_kubejs:kubejs_blast_furnace") // Bind the recipe pool.
         .displayNameKey("machine.mmcr_kubejs.kubejs_blast_furnace") // Translation key for the display name.
 
 

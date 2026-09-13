@@ -171,6 +171,19 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void direct_start_rejects_a_recipe_from_a_different_machine_pool() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_foreign_pool"),
+                MMCR.id("foreign_recipe_pool"), 20, List.of(), List.of());
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isFalse();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().details()).containsEntry("reason", "recipe_pool");
+    }
+
+    @Test
     void recipe_tick_callback_is_preserved_when_capability_phases_are_enabled() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         AtomicInteger callbacks = new AtomicInteger();
@@ -599,6 +612,25 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void rebinding_versions_invalidates_an_active_recipe_when_the_machine_pool_changes() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = controllerRuntime(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_pool_rebind"), MMCR.id("test_cube"),
+                20, List.of(), List.of());
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        Identifier foreignMachineId = MMCR.id("runtime_foreign_pool_machine");
+        RuntimeTestFixtures.registerRecipePool(foreignMachineId);
+        controller.setMachine(new DynamicMachine(foreignMachineId, "foreign pool machine", new BlockArray(Map.of())));
+
+        runtime.rebindCurrentVersions();
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+    }
+
+    @Test
     void smart_interface_change_invalidates_an_active_runtime_with_a_dedicated_failure() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
@@ -902,6 +934,7 @@ class CraftingRuntimeTest {
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe recipe = recipe("runtime_persisted_effective_snapshot", 20, List.of(
                 input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1), output(Items.DIAMOND, 1)));
+        RecipeRegistry.registerStatic(recipe);
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
@@ -967,6 +1000,7 @@ class CraftingRuntimeTest {
     void active_runtime_ignores_legacy_effective_snapshot_aliases() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe recipe = recipe("runtime_conflicting_effective_snapshot", 20, List.of());
+        RecipeRegistry.registerStatic(recipe);
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
@@ -1095,7 +1129,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void active_runtime_load_uses_embedded_old_definition_and_does_not_extract_inputs_again() {
+    void active_runtime_rejects_an_embedded_definition_replaced_in_the_current_catalog() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
@@ -1120,17 +1154,11 @@ class CraftingRuntimeTest {
         restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
                 RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), outputTag.buildResult()), null);
 
-        assertThat(restored.recipe()).isNotNull();
-        assertThat(restored.recipe().id()).isEqualTo(oldRecipe.id());
-        assertThat(restored.recipe().machineOutputs()).filteredOn(MachineOutput.ItemOutput.class::isInstance).singleElement()
-                .satisfies(recipeOutput -> assertThat(((MachineOutput.ItemOutput) recipeOutput).stack().is(Items.IRON_NUGGET))
-                        .isTrue());
-        restored.tick();
-        restored.finish();
-
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure()).isNotNull();
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
         assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
-        assertThat(item(output.itemStorage(), 0).is(Items.IRON_NUGGET)).isTrue();
-        assertThat(item(output.itemStorage(), 0).is(Items.DIAMOND)).isFalse();
+        assertThat(item(output.itemStorage(), 0).isEmpty()).isTrue();
     }
 
     @Test
@@ -1170,6 +1198,7 @@ class CraftingRuntimeTest {
             MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_custom_requirement"), MMCR.id("test_cube"), 2,
                     List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                     List.of(new CustomRequirement(RecipeModifier.IOType.INPUT, 7)));
+            RecipeRegistry.registerStatic(recipe);
             CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 
             assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
@@ -1214,6 +1243,7 @@ class CraftingRuntimeTest {
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 2));
         MachineRecipe recipe = recipe("runtime_legacy_modifier_restore", 1,
                 List.of(input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 1)));
+        RecipeRegistry.registerStatic(recipe);
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
 

@@ -640,13 +640,14 @@ class MachineBehaviorRuntimeTest {
                             MMCR.id("recipe_hook_status"), Component.literal("post"));
                 })
                 .build());
+        RuntimeTestFixtures.registerRecipePool(machineId);
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
         RuntimeTestFixtures.formStructureWithComponents(controller, recipeMachine, input, output);
         MachineRecipe lifecycleRecipe = recipe("behavior_recipe_hook_lifecycle", machineId,
                 input(Items.IRON_INGOT), output(Items.GOLD_NUGGET));
         RecipeRegistry.registerStatic(lifecycleRecipe);
         assertThat(controller.structureSnapshot().machine()).isSameAs(recipeMachine);
-        assertThat(RecipeRegistry.byMachineId(machineId)).containsExactly(lifecycleRecipe);
+        assertThat(RecipeRegistry.catalogForMachine(machineId).recipes()).containsExactly(lifecycleRecipe);
         assertThat(controller.componentRuntime().capabilities())
                 .as("components=%s capabilities=%s", controller.componentRuntime().components(),
                         controller.componentRuntime().capabilities())

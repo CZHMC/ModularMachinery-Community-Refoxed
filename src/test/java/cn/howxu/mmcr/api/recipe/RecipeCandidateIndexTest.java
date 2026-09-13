@@ -56,6 +56,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RecipeCandidateIndexTest {
 
@@ -94,7 +95,7 @@ class RecipeCandidateIndexTest {
         MachineRecipe noItemInput = RecipeTestSupport.create(id("no_item"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1);
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(iron, gold, noItemInput));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(iron, gold, noItemInput));
 
         assertThat(index.candidates(List.of(Items.IRON_INGOT))).containsExactly(iron, noItemInput);
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(noItemInput);
@@ -104,7 +105,7 @@ class RecipeCandidateIndexTest {
     void multiItemIngredientFallsBackRatherThanExcludingAValidRecipe() {
         MachineRecipe alternatives = itemRecipe("alternatives", Ingredient.of(Items.IRON_INGOT, Items.GOLD_INGOT));
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(alternatives));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(alternatives));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(alternatives);
     }
@@ -113,7 +114,7 @@ class RecipeCandidateIndexTest {
     void tagIngredientFallsBackWithoutDereferencingDuringIndexBuild() {
         MachineRecipe tagged = itemRecipe("tagged", Ingredient.of(HolderSet.emptyNamed(BuiltInRegistries.ITEM, ItemTags.SWORDS)));
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(tagged));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(tagged));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(tagged);
     }
@@ -122,7 +123,7 @@ class RecipeCandidateIndexTest {
     void single_member_named_tag_falls_back_instead_of_being_indexed_as_exact() {
         MachineRecipe tagged = itemRecipe("single_member_tag", singleMemberTagIngredient());
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(tagged));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(tagged));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(tagged);
     }
@@ -131,7 +132,7 @@ class RecipeCandidateIndexTest {
     void unbound_named_tag_falls_back_without_throwing() {
         MachineRecipe tagged = itemRecipe("unbound_tag", unboundTagIngredient());
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(tagged));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(tagged));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(tagged);
     }
@@ -160,7 +161,7 @@ class RecipeCandidateIndexTest {
             }
         }));
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(custom));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(custom));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(custom);
     }
@@ -173,7 +174,7 @@ class RecipeCandidateIndexTest {
                         ItemStack.EMPTY),
                 new ItemRequirement(RecipeModifier.IOType.INPUT, null, 1, ItemStack.EMPTY)), false);
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(unknown));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(unknown));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(unknown);
     }
@@ -186,7 +187,7 @@ class RecipeCandidateIndexTest {
                         ItemStack.EMPTY),
                 new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)), false);
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(mixed));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(mixed));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(mixed);
     }
@@ -198,7 +199,7 @@ class RecipeCandidateIndexTest {
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                         ItemStack.EMPTY, List.of("north_buses"))), false);
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(tagged));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(tagged));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(tagged);
     }
@@ -211,7 +212,7 @@ class RecipeCandidateIndexTest {
                         ItemStack.EMPTY),
                 new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 1, List.of("energy_hatches"))), false);
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(tagged));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(tagged));
 
         assertThat(index.candidates(List.of(Items.DIAMOND))).containsExactly(tagged);
     }
@@ -220,9 +221,21 @@ class RecipeCandidateIndexTest {
     void unknown_input_types_do_not_filter_exact_item_candidates() {
         MachineRecipe exact = itemRecipe("unknown_input_types", Ingredient.of(Items.IRON_INGOT));
 
-        RecipeCandidateIndex index = RecipeCandidateIndex.build(List.of(exact));
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(exact));
 
         assertThat(index.candidates(null)).containsExactly(exact);
+    }
+
+    @Test
+    void mixed_pool_recipes_cannot_share_a_candidate_index() {
+        MachineRecipe firstPoolRecipe = itemRecipe("first_pool", Ingredient.of(Items.IRON_INGOT));
+        MachineRecipe secondPoolRecipe = RecipeTestSupport.create(id("second_pool"),
+                Identifier.fromNamespaceAndPath("test", "other_pool"), 20,
+                List.of(), List.of(), List.of(), 0, 1);
+
+        assertThatThrownBy(() -> RecipeCandidateIndex.build(MACHINE, List.of(firstPoolRecipe, secondPoolRecipe)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("recipe pool");
     }
 
     @Test
@@ -255,6 +268,19 @@ class RecipeCandidateIndexTest {
                 .isGreaterThan(BuiltinFailureReasons.LEVEL_INSUFFICIENT.priority());
         assertThat(BuiltinFailureReasons.LEVEL_INSUFFICIENT.priority())
                 .isGreaterThan(BuiltinFailureReasons.MISSING_OUTPUT.priority());
+    }
+
+    @Test
+    void search_task_does_not_select_a_candidate_from_another_recipe_pool() {
+        MachineRecipe foreign = RecipeTestSupport.create(id("foreign_pool_search"),
+                Identifier.fromNamespaceAndPath("test", "other_pool"), 20,
+                List.of(), List.of(), List.of(), 0, 1);
+
+        RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
+                List.of(foreign), null, List.of(), List.of()).compute();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.recipe()).isNull();
     }
 
     @Test
@@ -293,7 +319,7 @@ class RecipeCandidateIndexTest {
         List<MachineRecipe> candidates = List.of(missingInput, missingEnergy, lowTemperature,
                 insufficientLevel, missingOutput);
 
-        List<MachineRecipe> indexedCandidates = RecipeCandidateIndex.build(candidates).candidates(null);
+        List<MachineRecipe> indexedCandidates = RecipeCandidateIndex.build(MACHINE, candidates).candidates(null);
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
                 indexedCandidates, null, List.of(), List.of()).compute();
 

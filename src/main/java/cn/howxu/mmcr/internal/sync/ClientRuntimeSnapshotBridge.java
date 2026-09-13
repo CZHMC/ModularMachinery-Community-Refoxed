@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.sync;
 
 import cn.howxu.mmcr.api.recipe.CraftingContextPool;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import java.lang.reflect.Method;
 import java.util.Map;
 
@@ -38,6 +39,7 @@ public final class ClientRuntimeSnapshotBridge {
 
     public static synchronized void resetForConnection() {
         CraftingContextPool.onGlobalReload();
+        MachineRegistry.clearClientRecipePools();
         resetClientCaches();
         lastAppliedVersion = -1L;
     }

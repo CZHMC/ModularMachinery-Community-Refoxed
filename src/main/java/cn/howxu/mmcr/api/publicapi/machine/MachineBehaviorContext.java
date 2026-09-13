@@ -27,7 +27,7 @@ public class MachineBehaviorContext {
     private final MachineControllerBlockEntity controller;
     private final ServerLevel level;
     private final BlockPos controllerPos;
-    private final Identifier machineId;
+    private final @Nullable Identifier machineId;
     private final long gameTime;
     private final ControllerScreenText screenText;
     private final @Nullable DataStorage dataStorage;
@@ -72,7 +72,7 @@ public class MachineBehaviorContext {
         this.controller = controller;
         this.level = level;
         this.controllerPos = Objects.requireNonNull(controllerPos, "controllerPos").immutable();
-        this.machineId = Objects.requireNonNull(machineId, "machineId");
+        this.machineId = machineId;
         this.gameTime = gameTime;
         this.screenText = Objects.requireNonNull(screenText, "screenText");
         this.dataStorage = dataStorage;
@@ -93,7 +93,7 @@ public class MachineBehaviorContext {
         return controllerPos;
     }
 
-    public Identifier machineId() {
+    public @Nullable Identifier machineId() {
         return machineId;
     }
 
@@ -158,8 +158,8 @@ public class MachineBehaviorContext {
         return countStructureBlocks(BuiltInRegistries.BLOCK.getValue(id));
     }
 
-    static MachineBehaviorContext empty(Identifier machineId) {
-        return new MachineBehaviorContext(null, null, BlockPos.ZERO, machineId, 0L, EMPTY_SCREEN_TEXT);
+    static MachineBehaviorContext empty() {
+        return new MachineBehaviorContext(null, null, BlockPos.ZERO, null, 0L, EMPTY_SCREEN_TEXT);
     }
 
     private static MachineIoView emptyIoView() {

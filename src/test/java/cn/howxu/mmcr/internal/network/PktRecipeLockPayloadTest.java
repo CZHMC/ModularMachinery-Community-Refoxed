@@ -158,6 +158,7 @@ class PktRecipeLockPayloadTest {
         DynamicMachine machine = new DynamicMachine(MMCR.id("recipe_lock_success"), "Recipe Lock Success",
                 pattern,
                 MachineControllerSpec.defaultsFor(MMCR.id("recipe_lock_success")));
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
         RuntimeTestFixtures.formStructure(controller, machine);
         TestServerLevel level = serverLevel(controller);
         controller.setLevel(level);

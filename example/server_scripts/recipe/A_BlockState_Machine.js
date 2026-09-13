@@ -1,7 +1,7 @@
 ServerEvents.recipes(event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_reactor',
+        recipe_pool: 'mmcr_kubejs:kubejs_reactor',
         tick_time: 300,
         requirements: [
             {
@@ -44,7 +44,7 @@ ServerEvents.recipes(event => {
     // The requirement and recipe systems are intentionally independent.
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_reactor',
+        recipe_pool: 'mmcr_kubejs:kubejs_reactor',
         tick_time: 200,
         requirements: [
             {

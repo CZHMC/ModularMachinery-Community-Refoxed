@@ -18,6 +18,9 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -111,6 +114,38 @@ class FactoryRuntimeTest {
         assertThat(snapshot.laneLimit()).isEqualTo(3);
         assertThat(snapshot.presentationLanes()).hasSize(3).isUnmodifiable();
         assertThat(snapshot.lanes()).isUnmodifiable();
+    }
+
+    @Test
+    void searchContextUsesTheConfiguredMachineRecipePoolCatalog() {
+        Identifier machineId = MMCR.id("factory_shared_pool_machine");
+        Identifier recipePoolId = MMCR.id("factory_shared_pool");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
+        MachineControllerBlockEntity controller = factoryController(machineId.getPath());
+        MachineRecipe candidate = RecipeTestSupport.create(MMCR.id("factory_shared_pool_recipe"), recipePoolId,
+                20, List.of(), List.of());
+        RecipeRegistry.registerStatic(candidate);
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+
+        FactorySearchContext context = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(candidate), 1, 0L);
+
+        assertThat(context.catalogVersion()).isEqualTo(RecipeRegistry.catalogForPool(recipePoolId).version());
+        assertThat(context.orderedCandidates()).containsExactly(candidate);
+    }
+
+    @Test
+    void search_context_does_not_expose_a_recipe_from_a_different_pool() {
+        MachineControllerBlockEntity controller = factoryController("test_cube");
+        MachineRecipe foreign = RecipeTestSupport.create(MMCR.id("factory_foreign_pool_recipe"),
+                MMCR.id("factory_foreign_pool"), 20, List.of(), List.of());
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+
+        FactorySearchContext context = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(foreign), 1, 0L);
+
+        assertThat(context.orderedCandidates()).isEmpty();
     }
 
     @Test
@@ -493,7 +528,7 @@ class FactoryRuntimeTest {
 
     @Test
     void pending_start_is_discarded_when_the_recipe_catalog_changes_before_resolution() {
-        MachineControllerBlockEntity controller = factoryController("factory_reload_pending");
+        MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
@@ -502,7 +537,7 @@ class FactoryRuntimeTest {
 
         Identifier recipeId = MMCR.id("factory_reload_pending_recipe");
         MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
-        MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, MMCR.id("factory_reload_pending"), 40,
+        MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 40,
                 List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
@@ -519,11 +554,97 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void loading_active_embedded_recipe_clears_changed_last_recipe_before_restart_search() {
+    void loading_a_last_recipe_does_not_use_the_global_registry_fallback() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        Identifier recipeId = MMCR.id("factory_foreign_last_recipe");
+        Identifier foreignPool = MMCR.id("factory_foreign_last_pool");
+        RuntimeTestFixtures.registerRecipePool(foreignPool);
+        MachineRecipe foreign = RecipeTestSupport.create(recipeId, foreignPool, 20, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, foreign));
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        output.putBoolean("has_last", true);
+        output.putString("last_recipe", recipeId.toString());
+
+        FactoryRecipeThread restored = FactoryRecipeThread.load(
+                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()),
+                controller, null, List.of());
+
+        assertThat(restored.lastRecipeId()).isNull();
+    }
+
+    @Test
+    void loading_a_recipe_lock_does_not_use_a_recipe_from_another_pool() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        Identifier recipeId = MMCR.id("factory_foreign_lock_recipe");
+        Identifier foreignPool = MMCR.id("factory_foreign_lock_pool");
+        RuntimeTestFixtures.registerRecipePool(foreignPool);
+        MachineRecipe foreign = RecipeTestSupport.create(recipeId, foreignPool, 20, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, foreign));
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        output.putInt("lane_limit", 1);
+        output.putInt("lane_count", 1);
+        var lane = output.child("lane_0");
+        lane.putBoolean("base", true);
+        lane.putString("lane_id", "base");
+        lane.putString("locked_recipe", recipeId.toString());
+        lane.putBoolean("had_recipe_lock", true);
+
+        FactoryRuntime restored = new FactoryRuntime();
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller);
+
+        assertThat(restored.threadSnapshots().getFirst().locked()).isFalse();
+    }
+
+    @Test
+    void rebinding_versions_clears_a_last_recipe_from_the_previous_machine_pool() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+        MachineRecipe recipe = recipe("factory_pool_rebind", 20);
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        thread.runtime().invalidate();
+        Identifier foreignMachineId = MMCR.id("factory_foreign_pool_machine");
+        RuntimeTestFixtures.registerRecipePool(foreignMachineId);
+        controller.setMachine(new DynamicMachine(foreignMachineId, "foreign pool machine", new BlockArray(Map.of())));
+
+        thread.rebindCurrentVersions();
+
+        assertThat(thread.lastRecipeId()).isNull();
+    }
+
+    @Test
+    void rebinding_and_syncing_a_new_machine_pool_clears_a_recipe_lock_from_the_previous_pool() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        MachineRecipe recipe = recipe("factory_locked_pool_rebind", 20);
+        runtime.ensureBaseLane(controller);
+
+        assertThat(runtime.tick(List.of(recipe), 1, 0L).activeLaneCount()).isEqualTo(1);
+        assertThat(runtime.toggleRecipeLock(0)).isTrue();
+        assertThat(runtime.threadSnapshots().getFirst().locked()).isTrue();
+
+        Identifier foreignMachineId = MMCR.id("factory_locked_foreign_machine");
+        RuntimeTestFixtures.registerRecipePool(foreignMachineId);
+        Machine foreignMachine = new DynamicMachine(foreignMachineId, "foreign machine", new BlockArray(Map.of()));
+        controller.setMachine(foreignMachine);
+        runtime.rebindCurrentVersions();
+
+        assertThat(runtime.threadSnapshots().getFirst().locked()).isFalse();
+
+        runtime.syncCoreLanes(controller, foreignMachine, List.of());
+
+        assertThat(runtime.threadSnapshots().getFirst().locked()).isFalse();
+    }
+
+    @Test
+    void loading_replaced_embedded_recipe_fails_before_searching_the_current_catalog() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe oldRecipe = RecipeTestSupport.create(MMCR.id("factory_loaded_old"), MMCR.id("test_cube"), 1,
                 List.of(), List.of());
-        MachineRecipe replacement = RecipeTestSupport.create(oldRecipe.id(), oldRecipe.machineId(), 20,
+        MachineRecipe replacement = RecipeTestSupport.create(oldRecipe.id(), oldRecipe.recipePoolId(), 20,
                 List.of(), List.of());
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
@@ -539,12 +660,9 @@ class FactoryRuntimeTest {
                         output.buildResult()), controller, null, List.of(replacement));
         var snapshot = controller.runtimeSnapshot();
 
-        assertThat(restored.runtime().recipe()).isNotNull();
-        assertThat(restored.runtime().recipe().tickTime()).isEqualTo(1);
-        assertThat(restored.tryRestartLastRecipe(List.of(replacement), 1, snapshot.structure().version(),
-                snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(), null)).isFalse();
-        restored.tick();
         assertThat(restored.runtime().active()).isFalse();
+        assertThat(restored.runtime().failure()).isNotNull();
+        assertThat(restored.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
         assertThat(restored.searchAndStartRecipe(List.of(replacement), 1,
                 snapshot.structure().version())).isTrue();
         assertThat(restored.runtime().recipe().tickTime()).isEqualTo(20);
@@ -552,7 +670,7 @@ class FactoryRuntimeTest {
 
     @Test
     void async_completion_searches_the_current_catalog_after_recipe_reload() {
-        Identifier machineId = MMCR.id("factory_reload_completion");
+        Identifier machineId = MMCR.id("test_cube");
         Identifier recipeId = MMCR.id("factory_reload_completion_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, machineId, 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
@@ -643,7 +761,7 @@ class FactoryRuntimeTest {
 
     @Test
     void shared_finish_release_wakes_output_capacity_lane_on_the_next_tick() {
-        Identifier machineId = MMCR.id("shared_finish_release");
+        Identifier machineId = MMCR.id("test_cube");
         Identifier activeId = MMCR.id("shared_finish_release_active");
         Identifier blockedId = MMCR.id("shared_finish_release_blocked");
         MachineRecipe active = RecipeTestSupport.create(activeId, machineId, 1,
@@ -816,9 +934,9 @@ class FactoryRuntimeTest {
 
     @Test
     void stale_async_runtime_request_completes_as_a_failed_lane_and_keeps_backoff() {
-        MachineControllerBlockEntity controller = factoryController("factory_async_version_failure");
+        MachineControllerBlockEntity controller = factoryController("test_cube");
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_version_failure_recipe"),
-                MMCR.id("factory_async_version_failure"), 20, List.of(), List.of());
+                MMCR.id("test_cube"), 20, List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
@@ -1142,7 +1260,7 @@ class FactoryRuntimeTest {
         var snapshot = controller.runtimeSnapshot();
         RecipeSearchContextKey key = new RecipeSearchContextKey(snapshot.structure().version(),
                 snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(),
-                RecipeRegistry.catalog(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(), null,
+                RecipeRegistry.catalogForMachine(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(), null,
                 thread.coreRecipeSetVersion());
         thread.recordSearchFailure(key, 0L);
 
@@ -1217,7 +1335,7 @@ class FactoryRuntimeTest {
 
     @Test
     void context_pending_start_is_validated_against_the_context_versions() {
-        MachineControllerBlockEntity controller = factoryController("factory_context_pending_start");
+        MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
@@ -1228,7 +1346,7 @@ class FactoryRuntimeTest {
         ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, live.stateVersion() + 1L);
         FactorySearchContext context = new FactorySearchContext(contextSnapshot, List.of(candidate),
                 controller.componentRuntime().capabilities(), controller.componentRuntime().modifierList(),
-                RecipeRegistry.catalog(machineId).version(),
+                RecipeRegistry.catalogForMachine(machineId).version(),
                 controller.resourceAvailabilityEpoch(), 1, 0L);
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
@@ -1249,7 +1367,7 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
-        List<MachineRecipe> candidates = RecipeRegistry.catalog(MMCR.id("test_cube")).recipes();
+        List<MachineRecipe> candidates = RecipeRegistry.recipesForPool(MMCR.id("test_cube"));
 
         FactorySearchContext firstContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 0L);
         FactorySearchContext secondContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 1L);
@@ -1281,7 +1399,7 @@ class FactoryRuntimeTest {
         RecipeRegistry.registerStaticBatch(List.of(iron, gold));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
-        List<MachineRecipe> candidates = RecipeRegistry.catalog(MMCR.id("test_cube")).recipes();
+        List<MachineRecipe> candidates = RecipeRegistry.recipesForPool(MMCR.id("test_cube"));
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
 
         FactorySearchContext ironContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 0L);
@@ -1501,7 +1619,7 @@ class FactoryRuntimeTest {
         var snapshot = controller.runtimeSnapshot();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
                 snapshot.modifierVersion(), snapshot.stateVersion(),
-                RecipeRegistry.catalog(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(),
+                RecipeRegistry.catalogForMachine(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(),
                 controller.lockedRecipeId(), 0L);
     }
 

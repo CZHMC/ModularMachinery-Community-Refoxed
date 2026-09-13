@@ -4,6 +4,9 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -92,6 +95,14 @@ public final class RuntimeTestFixtures {
         }
         replacement.setLevel(level);
         level.blockEntities.put(replacement.getBlockPos(), replacement);
+    }
+
+    public static void registerRecipePool(Identifier recipePoolId) {
+        if (MachineRegistry.containsRecipePool(recipePoolId)) return;
+        if (!MachineDefinitions.isRegistryPhaseOpen()) MachineDefinitions.beginRegistryPhase();
+        if (MachineDefinitions.getRegistration(recipePoolId) == null) {
+            MachineDefinitions.register(MachineRegistration.builder(recipePoolId).build());
+        }
     }
 
     public static void publishStructure(MachineControllerBlockEntity controller, Machine machine, boolean formed) {

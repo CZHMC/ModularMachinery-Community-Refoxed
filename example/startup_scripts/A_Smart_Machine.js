@@ -5,7 +5,7 @@ MMCREvents.startup(event => {
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_purpur_furnace")
         .displayNameKey("machine.mmcr_kubejs.kubejs_purpur_furnace")
-        .recipeFamily("mmcr_kubejs:kubejs_purpur_furnace")
+        .recipePool("mmcr_kubejs:kubejs_purpur_furnace")
         .allowParallelism()
         .maxParallelAmount(32)
         .appearance('minecraft:end_stone_bricks')

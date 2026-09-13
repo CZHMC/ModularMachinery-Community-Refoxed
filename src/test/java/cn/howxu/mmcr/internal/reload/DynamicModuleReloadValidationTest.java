@@ -90,7 +90,7 @@ class DynamicModuleReloadValidationTest {
     }
 
     @Test
-    void candidate_recipe_cannot_target_machine_removed_from_candidate_structures() {
+    void orphan_recipe_does_not_prevent_replacement_structure_from_committing() {
         Identifier oldMachineId = MMCR.id("old_machine");
         Identifier replacementMachineId = MMCR.id("replacement_machine");
         Identifier oldRecipeId = MMCR.id("old_recipe");
@@ -102,19 +102,20 @@ class DynamicModuleReloadValidationTest {
             candidate.registerRecipe(oldRecipe);
         });
 
-        assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate -> {
+        var result = DynamicContentReloadService.reload(candidate -> {
             candidate.registerStructure(structure(replacementMachineId, 0));
             candidate.registerRecipe(recipe(MMCR.id("replacement_recipe"), oldMachineId));
-        })).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining(oldMachineId.toString());
+        });
+
+        assertThat(result.errors()).singleElement()
+                .satisfies(error -> assertThat(error.getMessage()).contains(oldMachineId.toString()));
         assertThat(MachineStructureRegistry.dynamicSnapshot())
-                .containsOnlyKeys(oldMachineId);
-        assertThat(RecipeRegistry.dynamicSnapshot())
-                .containsEntry(oldRecipeId, oldRecipe);
+                .containsOnlyKeys(replacementMachineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).isEmpty();
     }
 
     @Test
-    void invalid_recipe_does_not_commit_valid_structure_in_same_transaction() {
+    void orphan_recipe_does_not_prevent_valid_structure_in_same_transaction() {
         Identifier oldMachineId = MMCR.id("old_machine");
         Identifier replacementMachineId = MMCR.id("replacement_machine");
         Identifier oldRecipeId = MMCR.id("old_recipe");
@@ -126,14 +127,15 @@ class DynamicModuleReloadValidationTest {
             candidate.registerRecipe(oldRecipe);
         });
 
-        assertThatThrownBy(() -> DynamicContentReloadService.reload(candidate -> {
+        var result = DynamicContentReloadService.reload(candidate -> {
             candidate.registerStructure(structure(replacementMachineId, 0));
             candidate.registerRecipe(recipe(MMCR.id("invalid_recipe"), MMCR.id("missing_machine")));
-        })).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("missing_machine");
+        });
 
-        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(oldMachineId);
-        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(oldRecipeId, oldRecipe);
+        assertThat(result.errors()).singleElement()
+                .satisfies(error -> assertThat(error.getMessage()).contains("missing_machine"));
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsOnlyKeys(replacementMachineId);
+        assertThat(RecipeRegistry.dynamicSnapshot()).isEmpty();
     }
 
     @Test

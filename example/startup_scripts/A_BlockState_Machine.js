@@ -4,7 +4,7 @@ MMCREvents.startup(event => {
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_reactor") // Create the machine definition.
         .displayNameKey("machine.mmcr_kubejs.kubejs_reactor") // Translation key for the display name.
-        .recipeFamily("mmcr_kubejs:kubejs_reactor") // Bind the recipe family.
+        .recipePool("mmcr_kubejs:kubejs_reactor") // Bind the recipe pool.
         .appearance("minecraft:blue_ice") // Set the controller's appearance block.
 
     builder.register()

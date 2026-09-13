@@ -43,6 +43,7 @@ public class NETWORK_CENTER_MACHINE {
         if (!event.definitions().containsKey(NETWORK_CENTER_MACHINE)) {
             var machine = MachineBuilder
                     .machine(NETWORK_CENTER_MACHINE)
+                    .recipePool(NETWORK_CENTER_MACHINE)
                     .displayNameKey("machine.mmcr.network_center_machine")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:black_wool")))
                     .networkInterface(1, 16)

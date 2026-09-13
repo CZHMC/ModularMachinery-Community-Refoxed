@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.reload;
 
+import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -8,6 +9,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -71,19 +73,25 @@ public final class DynamicContentReloadService {
             Set<Identifier> removedStructures,
             int addedRecipes,
             int updatedRecipes,
-            int removedRecipes) {
+            int removedRecipes,
+            List<MachineRecipeJson.RecipeJsonException> errors) {
+        public ReloadResult {
+            errors = List.copyOf(errors == null ? List.of() : errors);
+        }
 
         public static ReloadResult fromSnapshots(Map<Identifier, MachineStructureDefinition> oldStructures,
-                                         Map<Identifier, MachineStructureDefinition> newStructures,
-                                         Map<Identifier, MachineRecipe> oldRecipes,
-                                         Map<Identifier, MachineRecipe> newRecipes) {
+                                                  Map<Identifier, MachineStructureDefinition> newStructures,
+                                                  Map<Identifier, MachineRecipe> oldRecipes,
+                                                  Map<Identifier, MachineRecipe> newRecipes,
+                                                  List<MachineRecipeJson.RecipeJsonException> errors) {
             return new ReloadResult(
                     addedIds(oldStructures, newStructures),
                     updatedIds(oldStructures, newStructures),
                     removedIds(oldStructures, newStructures),
                     addedIds(oldRecipes, newRecipes).size(),
                     updatedIds(oldRecipes, newRecipes).size(),
-                    removedIds(oldRecipes, newRecipes).size());
+                    removedIds(oldRecipes, newRecipes).size(),
+                    errors);
         }
 
         private static <T> Set<Identifier> addedIds(Map<Identifier, T> oldValues, Map<Identifier, T> newValues) {

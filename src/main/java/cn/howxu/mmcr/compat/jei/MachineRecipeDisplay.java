@@ -15,8 +15,6 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import com.mojang.serialization.DynamicOps;
@@ -54,7 +52,7 @@ import java.util.stream.Stream;
 public record MachineRecipeDisplay(
         MachineRecipe recipe,
         Identifier recipeId,
-        Identifier machineId,
+        Identifier recipePoolId,
         int durationTicks,
         List<ItemInputDisplay> itemInputs,
         List<ItemOutputDisplay> itemOutputs,
@@ -89,9 +87,7 @@ public record MachineRecipeDisplay(
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceOutputs = new ArrayList<>();
-        var registration = MachineDefinitions.getRegistration(recipe.machineId());
-        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers = registration == null ? List.of()
-                : registration.smartInterfaceModifiers().stream().map(SmartInterfaceModifierDisplay::from).toList();
+        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers = List.of();
         List<MachineRequirement> requirements = recipe.runtimeRequirements();
         for (var requirement : requirements) {
             if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
@@ -110,8 +106,7 @@ public record MachineRecipeDisplay(
                 else energyOutputs.add(ingredient);
             } else if (requirement instanceof SmartInterfaceRequirement smartInterface
                     && smartInterface.io() == RecipeModifier.IOType.INPUT) {
-                smartInterfaceDisplay(registration == null ? null : registration.smartInterfaceTypes().get(smartInterface.interfaceType()),
-                        smartInterface).ifPresent(smartInterfaceInputs::add);
+                smartInterfaceDisplay(smartInterface).ifPresent(smartInterfaceInputs::add);
             }
         }
 
@@ -129,14 +124,13 @@ public record MachineRecipeDisplay(
                 outputs.add(new MachineOutput.FluidOutput(stack, fluid.chance()));
             } else if (requirement instanceof SmartInterfaceRequirement smartInterface
                     && smartInterface.io() == RecipeModifier.IOType.OUTPUT) {
-                smartInterfaceDisplay(registration == null ? null : registration.smartInterfaceTypes().get(smartInterface.interfaceType()),
-                        smartInterface).ifPresent(smartInterfaceOutputs::add);
+                smartInterfaceDisplay(smartInterface).ifPresent(smartInterfaceOutputs::add);
             }
         }
         return new MachineRecipeDisplay(
                 recipe,
                 recipe.id(),
-                recipe.machineId(),
+                recipe.recipePoolId(),
                 recipe.tickTime(),
                 List.copyOf(itemInputs),
                 List.copyOf(itemOutputs),
@@ -252,11 +246,9 @@ public record MachineRecipeDisplay(
         return 1F;
     }
 
-    private static Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceType type,
-            SmartInterfaceRequirement requirement) {
-        if (type == null) return Optional.empty();
-        Component displayType = Component.translatable(type.translationKey());
-        String value = valueText(type.valueType(), requirement.minValue(), requirement.maxValue());
+    private static Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceRequirement requirement) {
+        Component displayType = Component.translatable("mmcr.smart_interface.type." + requirement.interfaceType());
+        String value = valueText(requirement.minValue(), requirement.maxValue());
         boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
         Component tooltip = Component.translatable(input
                 ? "jei.mmcr.smart_interface.requirement.input"
@@ -264,16 +256,14 @@ public record MachineRecipeDisplay(
         return Optional.of(new SmartInterfaceDisplay(displayType, value, input, tooltip));
     }
 
-    private static String valueText(SmartInterfaceType.ValueType valueType, float minValue, float maxValue) {
-        String min = formatValue(valueType, minValue);
+    private static String valueText(float minValue, float maxValue) {
+        String min = formatValue(minValue);
         if (Float.compare(minValue, maxValue) == 0) return min;
-        return "[" + min + ", " + formatValue(valueType, maxValue) + "]";
+        return "[" + min + ", " + formatValue(maxValue) + "]";
     }
 
-    private static String formatValue(SmartInterfaceType.ValueType valueType, float value) {
-        return valueType == SmartInterfaceType.ValueType.INTEGER && value == Math.rint(value)
-                ? Integer.toString((int) value)
-                : Float.toString(value);
+    private static String formatValue(float value) {
+        return Float.toString(value);
     }
 
     public record SmartInterfaceDisplay(Component type, String value, boolean input, Component tooltip) {

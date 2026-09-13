@@ -1,7 +1,7 @@
 ServerEvents.recipes( event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_purpur_furnace',
+        recipe_pool: 'mmcr_kubejs:kubejs_purpur_furnace',
         tick_time: 100,
         parallelized: true,
         requirements: [
@@ -36,7 +36,7 @@ ServerEvents.recipes( event => {
 
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_purpur_furnace',
+        recipe_pool: 'mmcr_kubejs:kubejs_purpur_furnace',
         tick_time: 100,
         parallelized: true,
         requirements: [
@@ -71,7 +71,7 @@ ServerEvents.recipes( event => {
 
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_purpur_furnace',
+        recipe_pool: 'mmcr_kubejs:kubejs_purpur_furnace',
         tick_time: 100,
         parallelized: true,
         requirements: [

@@ -66,5 +66,23 @@
 
     "block.mmcr.kubejs_sps_controller": "SPS Controller",
     "item.mmcr.kubejs_sps_controller": "SPS Controller",
-    "machine.mmcr_kubejs.kubejs_sps": "SPS"
+    "machine.mmcr_kubejs.kubejs_sps": "SPS",
+
+    "recipe_pool.mmcr_kubejs.kubejs_alloy_furnace": "Alloy Furnace",
+    "recipe_pool.mmcr_kubejs.kubejs_blast_furnace": "Blast Furnace",
+    "recipe_pool.mmcr_kubejs.kubejs_cracker": "Cracker",
+    "recipe_pool.mmcr_kubejs.kubejs_distillation_tower": "Distillation Tower",
+    "recipe_pool.mmcr_kubejs.kubejs_purpur_furnace": "Purpur Furnace",
+    "recipe_pool.mmcr_kubejs.kubejs_reactor": "Reactor",
+    "recipe_pool.mmcr_kubejs.kubejs_thermal_smelting_furnace": "Thermal Smelting Furnace",
+    "recipe_pool.mmcr_kubejs.kubejs_space_elevator": "Space Elevator",
+    "recipe_pool.mmcr_kubejs.kubejs_space_reassembler": "Space Reassembler",
+    "recipe_pool.mmcr_kubejs.kubejs_monster_farm": "Monster Farm",
+    "recipe_pool.mmcr_kubejs.gzr": "Four Mete Regret Building Site",
+    "recipe_pool.mmcr_kubejs.kubejs_recipe_ticker": "Recipe Tick Test",
+    "recipe_pool.mmcr_kubejs.kubejs_pure_tick_machine": "Pure Tick Test",
+    "recipe_pool.mmcr_kubejs.kubejs_data_storage_machine": "Data Storage Test",
+    "recipe_pool.mmcr_kubejs.kubejs_network_producer_machine": "Network Producer",
+    "recipe_pool.mmcr_kubejs.kubejs_network_center_machine": "Network Center",
+    "recipe_pool.mmcr_kubejs.kubejs_sps": "SPS"
 }

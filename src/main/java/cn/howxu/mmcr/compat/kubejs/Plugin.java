@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.internal.network.RuntimeContentServerBridge;
 import cn.howxu.mmcr.internal.network.RuntimeContentSync;
@@ -116,8 +117,11 @@ public class Plugin implements KubeJSPlugin {
                                               Consumer<RuntimeContentSnapshot> afterCommit) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
-            if (reload != null && errorCount == reload.errorCount()) {
-                afterCommit.accept(reload.transaction().commit().snapshot());
+            if (reload != null && (errorCount == reload.errorCount() || reload.transaction().hasPublishableContent())) {
+                var committed = reload.transaction().commit();
+                committed.result().errors().forEach(error -> MMCR.LOG.warn(
+                        "Skipping KubeJS recipe {} at {}: {}", error.recipeId(), error.path(), error.getMessage()));
+                afterCommit.accept(committed.snapshot());
             }
         } finally {
             KubeJSContentReloadTransaction.deactivate();

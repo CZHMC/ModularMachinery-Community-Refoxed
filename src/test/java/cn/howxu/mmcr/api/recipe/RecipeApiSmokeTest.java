@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.helper.CraftCheck;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
@@ -34,7 +35,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -83,7 +86,7 @@ class RecipeApiSmokeTest {
         assertThat(back.maxThreads()).isEqualTo(4);
         assertThat(back.getRecipeTotalTickTime()).isEqualTo(100);
         assertThat(back.getRegistryName()).isEqualTo(id);
-        assertThat(back.getOwningMachineIdentifier()).isEqualTo(machineId);
+        assertThat(back.recipePoolId()).isEqualTo(machineId);
         assertThat(back.doesCancelRecipeOnPerTickFailure()).isTrue();
     }
 
@@ -125,7 +128,7 @@ class RecipeApiSmokeTest {
             assertThat(output.stack().getAmount()).isEqualTo(250);
         });
         assertThat(oneBack.id()).isEqualTo(oneRecipe.id());
-        assertThat(oneBack.machineId()).isEqualTo(oneRecipe.machineId());
+        assertThat(oneBack.recipePoolId()).isEqualTo(oneRecipe.recipePoolId());
         assertThat(oneBack.tickTime()).isEqualTo(oneRecipe.tickTime());
     }
 
@@ -279,8 +282,8 @@ class RecipeApiSmokeTest {
 
     @Test
     void registry_groups_recipes_by_machine_and_priority() {
-        var machineA = Identifier.fromNamespaceAndPath("mmcr", "machine_a");
-        var machineB = Identifier.fromNamespaceAndPath("mmcr", "machine_b");
+        var machineA = MMCR.id("test_machine_name");
+        var machineB = MMCR.id("controller_tick");
 
         var recipe1 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r1"), machineA, 10, List.of(), List.of(), List.of(), 0, 1);
         var recipe2 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
@@ -292,16 +295,16 @@ class RecipeApiSmokeTest {
 
         assertThat(RecipeRegistry.getRecipe(recipe1.id())).isEqualTo(recipe1);
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(3);
-        assertThat(RecipeRegistry.byMachineId(machineA)).containsExactly(recipe1, recipe2);
-        assertThat(RecipeRegistry.byMachineId(machineB)).containsExactly(recipe3);
-        assertThat(RecipeRegistry.byMachineId(Identifier.fromNamespaceAndPath("mmcr", "unknown"))).isEmpty();
+        assertThat(RecipeRegistry.recipesForPool(machineA)).containsExactly(recipe1, recipe2);
+        assertThat(RecipeRegistry.recipesForPool(machineB)).containsExactly(recipe3);
+        assertThat(RecipeRegistry.recipesForPool(Identifier.fromNamespaceAndPath("mmcr", "unknown"))).isEmpty();
     }
 
     @Test
     void active_recipe_nbt_roundtrip() {
         var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "active_test"),
-                Identifier.fromNamespaceAndPath("mmcr", "active_test_machine"),
+                MMCR.id("test_machine_name"),
                 100, List.of(), List.of()
         );
         RecipeRegistry.registerStatic(recipe);
@@ -370,7 +373,10 @@ class RecipeApiSmokeTest {
         );
         var recipe = prepared.toMachineRecipe();
         assertThat(recipe.id().toString()).isEqualTo("mmcr:from_prepared");
-        assertThat(recipe.machineId().toString()).isEqualTo("mmcr:prep_machine");
+        assertThat(recipe.recipePoolId().toString()).isEqualTo("mmcr:prep_machine");
+        assertThat(Arrays.stream(PreparedRecipe.class.getMethods()).map(Method::getName))
+                .contains("getRecipePoolId")
+                .doesNotContain("getMachineId");
         assertThat(recipe.tickTime()).isEqualTo(50);
         assertThat(recipe.priority()).isEqualTo(3);
         assertThat(recipe.maxThreads()).isEqualTo(2);

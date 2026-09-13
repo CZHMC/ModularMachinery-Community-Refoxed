@@ -22,6 +22,7 @@ public class ARTIFICIAL_STAR {
         if (!event.definitions().containsKey(ARTIFICIAL_STAR)) {
             var machine = MachineBuilder
                     .machine(ARTIFICIAL_STAR)
+                    .recipePool(ARTIFICIAL_STAR)
                     .displayNameKey("machine.mmcr.artificial_star")
                     .build();
             event.registerMachine(machine);

@@ -2,7 +2,7 @@ MMCREvents.startup(event => {
     const machine = event
         .createMachine("mmcr_kubejs:kubejs_pure_tick_machine")
         .displayNameKey("machine.mmcr_kubejs.kubejs_pure_tick_machine")
-        .recipeFamily("mmcr_kubejs:kubejs_pure_tick_machine") // This will set the JEI recipe page type
+        .recipePool("mmcr_kubejs:kubejs_pure_tick_machine") // This will set the JEI recipe page type
         .appearance("minecraft:green_terracotta");
 
     const api = MMCR.getAPI()

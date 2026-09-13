@@ -90,7 +90,7 @@ class ContentRegistrationCoordinatorTest {
                 .requirements(requirements -> requirements.levelSlot('F', typeId).modifier('F', modifierId))));
         structures.freeze();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("coordinated_recipe"), machineId)
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("coordinated_recipe")).recipePool(machineId)
                 .duration(1).build();
         recipes.registerRecipe(recipe);
         recipes.freeze();
@@ -128,21 +128,32 @@ class ContentRegistrationCoordinatorTest {
     }
 
     @Test
-    void rejectsRecipeWithoutMachine() {
+    void dropsOrphanRecipeWithoutBlockingValidStartupRecipe() {
         Identifier machineId = id("missing_recipe_machine");
+        Identifier validRecipeId = id("valid_startup_recipe");
+        Identifier orphanRecipeId = id("orphan_startup_recipe");
+        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        definitions.registerMachine(MachineBuilder.machine(machineId).build());
+        definitions.freeze();
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        structures.freeze();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("orphan_recipe"), machineId)
+        MachineRecipeDefinition validRecipe = MachineRecipeBuilder.recipe(validRecipeId).recipePool(machineId)
                 .duration(1).build();
-        recipes.registerRecipe(recipe);
+        MachineRecipeDefinition orphanRecipe = MachineRecipeBuilder.recipe(orphanRecipeId).recipePool(id("missing_recipe_pool"))
+                .duration(1).build();
+        recipes.registerRecipe(validRecipe);
+        recipes.registerRecipe(orphanRecipe);
         recipes.freeze();
 
         ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.collectMachines(definitions);
+        ContentRegistrationCoordinator.collectStructures(structures);
         ContentRegistrationCoordinator.collectRecipes(recipes);
+        ContentRegistrationCoordinator.commitStartup();
 
-        assertThatThrownBy(ContentRegistrationCoordinator::commitStartup)
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining(machineId.toString());
-        assertThat(RecipeRegistry.getRecipe(recipe.id())).isNull();
+        assertThat(RecipeRegistry.getRecipe(validRecipeId)).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(orphanRecipeId)).isNull();
     }
 
     @Test
@@ -227,7 +238,7 @@ class ContentRegistrationCoordinatorTest {
         MachineDefinitions.register(MachineDefinitionConverter.toStartupRegistration(
                 existingMachine, null));
         RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(
-                MachineRecipeBuilder.recipe(existingRecipeId, existingMachineId).duration(1).build(),
+                MachineRecipeBuilder.recipe(existingRecipeId).recipePool(existingMachineId).duration(1).build(),
                 new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(),
                         Map.of(), Map.of())));
         ContentRegistrationCoordinator.beginStartup();
@@ -244,11 +255,11 @@ class ContentRegistrationCoordinatorTest {
         ContentRegistrationCoordinator.collectMachines(newDefinitions);
         ContentRegistrationCoordinator.collectStructures(structures);
         ContentRegistrationCoordinator.collectRecipes(recipeEvent(
-                MachineRecipeBuilder.recipe(existingRecipeId, newMachineId).duration(1).build()));
+                MachineRecipeBuilder.recipe(existingRecipeId).recipePool(newMachineId).duration(1).build()));
 
         assertThatThrownBy(ContentRegistrationCoordinator::commitRecipes)
                 .isInstanceOf(RuntimeException.class);
-        assertThat(RecipeRegistry.getRecipe(existingRecipeId).machineId()).isEqualTo(existingMachineId);
+        assertThat(RecipeRegistry.getRecipe(existingRecipeId).recipePoolId()).isEqualTo(existingMachineId);
     }
 
     private static MMCRMachineRecipesEvent recipeEvent(MachineRecipeDefinition recipe) {

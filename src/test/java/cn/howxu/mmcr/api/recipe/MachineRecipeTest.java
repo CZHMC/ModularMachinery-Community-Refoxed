@@ -121,7 +121,7 @@ class MachineRecipeTest {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:better_diamond_sword");
-        root.addProperty("machine", "mmcr:test_machine_name");
+        root.addProperty("recipe_pool", "mmcr:test_machine_name");
         root.addProperty("tick_time", 40);
         var output = new JsonObject();
         output.addProperty("id", "minecraft:diamond_sword");
@@ -150,7 +150,7 @@ class MachineRecipeTest {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:tooltip_safe_enchanted_output");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         var output = new JsonObject();
         output.addProperty("id", "minecraft:diamond_sword");
@@ -181,7 +181,7 @@ class MachineRecipeTest {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:component_input");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         var input = itemRequirement("input", itemId(Items.DIAMOND_SWORD), 1);
         var components = new JsonObject();
@@ -209,7 +209,7 @@ class MachineRecipeTest {
         bindItemComponents(Items.DIAMOND_SWORD);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:component_output");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         var output = itemOutputRequirement(itemId(Items.DIAMOND_SWORD), 1);
         var stack = output.getAsJsonObject("stack");
@@ -312,7 +312,7 @@ class MachineRecipeTest {
     void recipe_codec_prefers_requirements_and_encodes_stable_shape() {
         var root = new JsonObject();
         root.addProperty("id", "mmcr:mixed");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         root.add("outputs", itemOutputs(itemId(Items.IRON_NUGGET), 3));
         root.add("requirements", requirements(
@@ -342,18 +342,18 @@ class MachineRecipeTest {
 
     @Test
     void registry_filters_recipes_by_machine_and_rejects_null_id() {
-        var machineId = Identifier.fromNamespaceAndPath("mmcr", "compressor");
+        var machineId = MMCR.id("test_machine_name");
         var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "iron"), machineId, 20, List.of(), List.of());
         var other = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "gold"),
-                Identifier.fromNamespaceAndPath("mmcr", "other"), 20, List.of(), List.of());
+                MMCR.id("controller_tick"), 20, List.of(), List.of());
 
         var machine = new DynamicMachine(machineId, "Compressor", new BlockArray(Map.of()));
         RecipeRegistry.registerStatic(recipe);
         RecipeRegistry.registerStatic(other);
 
-        assertThat(RecipeRegistry.byMachine(machine)).containsExactly(recipe);
+        assertThat(RecipeRegistry.recipesForMachine(machine)).containsExactly(recipe);
         assertThatThrownBy(() -> RecipeRegistry.registerStatic(
                 RecipeTestSupport.create(null, machineId, 1, List.of(), List.of())))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -362,7 +362,7 @@ class MachineRecipeTest {
     @Test
     void registryReloadVersionOnlyChangesWhenRegistryClears() {
         long before = RecipeRegistry.reloadVersion();
-        var machineId = Identifier.fromNamespaceAndPath("mmcr", "versioned_machine");
+        var machineId = MMCR.id("test_machine_name");
 
         RecipeRegistry.registerStatic(RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "versioned_recipe"),
@@ -401,7 +401,7 @@ class MachineRecipeTest {
     void recipeRequirementTagsRoundTripAndDefaultEmpty() {
         var root = new JsonObject();
         root.addProperty("id", "mmcr:tagged");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         var input = itemRequirement("input", itemId(Items.IRON_INGOT), 1);
         var tags = new JsonArray();
@@ -424,7 +424,7 @@ class MachineRecipeTest {
     void requirementsWithoutTagsDecodeToEmptyList() {
         var root = new JsonObject();
         root.addProperty("id", "mmcr:untagged");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         var input = itemRequirement("input", itemId(Items.IRON_INGOT), 1);
         var requirements = new JsonArray();
@@ -442,7 +442,7 @@ class MachineRecipeTest {
         bindFluidComponents(Fluids.WATER);
         var root = new JsonObject();
         root.addProperty("id", "mmcr:chance_outputs");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         root.add("requirements", requirements(
                 itemOutputRequirement(itemId(Items.IRON_NUGGET), 3, 0.25F),
@@ -620,7 +620,7 @@ class MachineRecipeTest {
     private static JsonObject baseRecipeJson() {
         var root = new JsonObject();
         root.addProperty("id", "mmcr:partial_outputs");
-        root.addProperty("machine", "mmcr:machine");
+        root.addProperty("recipe_pool", "mmcr:machine");
         root.addProperty("tick_time", 20);
         root.add("requirements", new JsonArray());
         return root;

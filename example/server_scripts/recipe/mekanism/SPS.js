@@ -3,7 +3,7 @@ ServerEvents.recipes(event => {
     // raditional
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_sps',
+        recipe_pool: 'mmcr_kubejs:kubejs_sps',
         tick_time: 300,
         requirements: [
             {
@@ -26,7 +26,7 @@ ServerEvents.recipes(event => {
     // normal
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_sps',
+        recipe_pool: 'mmcr_kubejs:kubejs_sps',
         tick_time: 300,
         requirements: [
             {
@@ -49,7 +49,7 @@ ServerEvents.recipes(event => {
     // normal plus 2
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_sps',
+        recipe_pool: 'mmcr_kubejs:kubejs_sps',
         tick_time: 300,
         requirements: [
             {
@@ -79,7 +79,7 @@ ServerEvents.recipes(event => {
     // heat
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_sps',
+        recipe_pool: 'mmcr_kubejs:kubejs_sps',
         tick_time: 300,
         requirements: [
             {

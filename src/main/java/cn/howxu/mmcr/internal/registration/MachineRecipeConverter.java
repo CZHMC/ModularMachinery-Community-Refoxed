@@ -76,7 +76,7 @@ public final class MachineRecipeConverter {
             if (!levels.containsKey(level.levelId())) throw new ApiRegistrationException("Recipe " + definition.id()
                     + " refers to unknown machine level " + level.levelId());
         });
-        return MachineRecipe.fromCanonical(definition.id(), definition.machineId(), definition.tickTime(), requirements,
+        return MachineRecipe.fromCanonical(definition.id(), definition.recipePoolId(), definition.tickTime(), requirements,
                 outputs, recipeModifiers, definition.priority(), definition.maxThreads(),
                 definition.cancelRecipeOnPerTickFailure(), definition.parallelized(), definition.levelRequirements().stream()
                          .map(MachineRecipeConverter::toInternalLevel).toList(), definition.allowPartialOutputs(),

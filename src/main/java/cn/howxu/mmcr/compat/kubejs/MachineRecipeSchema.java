@@ -49,8 +49,8 @@ import java.util.Optional;
 public final class MachineRecipeSchema {
     public static final RecipeComponent<JsonElement> JSON_ELEMENT = new JsonElementComponent();
 
-    public static final RecipeKey<String> MACHINE =
-            new RecipeKey<>(StringComponent.ID, "machine", ComponentRole.OTHER).noFunctions();
+    public static final RecipeKey<String> RECIPE_POOL =
+            new RecipeKey<>(StringComponent.ID, "recipe_pool", ComponentRole.OTHER).noFunctions();
 
     public static final RecipeKey<Integer> TICK_TIME =
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "tick_time", ComponentRole.OTHER);
@@ -82,7 +82,7 @@ public final class MachineRecipeSchema {
     public static final RecipeKey<Boolean> ALLOW_PARTIAL_OUTPUTS =
             new RecipeKey<>(BooleanComponent.BOOLEAN, "allow_partial_outputs", ComponentRole.OTHER).optional(false);
 
-    public static final RecipeSchema SCHEMA = new RecipeSchema(MACHINE, TICK_TIME, REQUIREMENTS, OUTPUTS, MODIFIERS,
+    public static final RecipeSchema SCHEMA = new RecipeSchema(RECIPE_POOL, TICK_TIME, REQUIREMENTS, OUTPUTS, MODIFIERS,
             LEVEL_REQUIREMENTS, MAX_THREADS, PARALLELIZED,
             CANCEL_IF_PER_TICK_FAILS, ALLOW_PARTIAL_OUTPUTS)
             .factory(MachineRecipeFactory.INSTANCE)

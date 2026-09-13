@@ -13,7 +13,7 @@ MMCREvents.startup(event => {
     const machine = event
         .createMachine("mmcr_kubejs:kubejs_recipe_ticker")
         .displayNameKey("machine.mmcr_kubejs.kubejs_recipe_ticker")
-        .recipeFamily("mmcr_kubejs:kubejs_recipe_ticker")
+        .recipePool("mmcr_kubejs:kubejs_recipe_ticker")
         .appearance("minecraft:green_terracotta")
         // Here you can set some recipe tick hook
         .recipeBehavior(behavior => behavior

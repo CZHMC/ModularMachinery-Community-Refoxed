@@ -28,6 +28,7 @@ import java.util.function.UnaryOperator;
  */
 public final class MachineBuilder {
     private final Identifier id;
+    private Identifier recipePoolId;
     private String displayNameKey;
     private ControllerSpec controller = ControllerSpec.builder().build();
     private AppearanceSpec appearance = AppearanceSpec.builder().build();
@@ -62,6 +63,11 @@ public final class MachineBuilder {
 
     public MachineBuilder displayNameKey(String displayNameKey) {
         this.displayNameKey = displayNameKey;
+        return this;
+    }
+
+    public MachineBuilder recipePool(Identifier recipePoolId) {
+        this.recipePoolId = Objects.requireNonNull(recipePoolId, "recipePoolId");
         return this;
     }
 
@@ -252,7 +258,7 @@ public final class MachineBuilder {
                     .postServerTick(postServerTick == null ? recipe.postServerTick() : postServerTick)
                     .build();
         }
-        return new MachineDefinition(id, displayNameKey, controller, appearance, factory, role,
+        return new MachineDefinition(id, recipePoolId, displayNameKey, controller, appearance, factory, role,
                 acceptedModuleIds, networkInterface, maxParallelism, parallelizable, failureAction, allowModifiers,
                 allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
                 shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, resolvedBehavior,

@@ -21,8 +21,7 @@ import java.util.stream.Collectors;
 public final class MachineRecipeDisplays {
 
     private static final Comparator<MachineRecipeDisplay> ORDER = Comparator
-            .comparing(MachineRecipeDisplay::machineId)
-            .thenComparing(Comparator.comparingInt((MachineRecipeDisplay display) -> display.recipe().priority()).reversed())
+            .comparingInt((MachineRecipeDisplay display) -> display.recipe().priority()).reversed()
             .thenComparing(MachineRecipeDisplay::recipeId);
 
     private MachineRecipeDisplays() {
@@ -40,20 +39,20 @@ public final class MachineRecipeDisplays {
                 .toList();
     }
 
-    public static Map<Identifier, List<MachineRecipeDisplay>> byMachine() {
+    public static Map<Identifier, List<MachineRecipeDisplay>> byPool() {
         return all().stream().collect(Collectors.groupingBy(
-                MachineRecipeDisplay::machineId,
+                MachineRecipeDisplay::recipePoolId,
                 LinkedHashMap::new,
                 Collectors.toList()));
     }
 
-    public static Map<Identifier, List<MachineRecipeDisplay>> byMachine(RuntimeContentSnapshot snapshot) {
+    public static Map<Identifier, List<MachineRecipeDisplay>> byPool(RuntimeContentSnapshot snapshot) {
         RegistryAccess registryAccess = registryAccess();
         return snapshot.recipes().values().stream()
                 .map(recipe -> MachineRecipeDisplay.from(recipe, registryAccess))
                 .sorted(ORDER)
                 .collect(Collectors.groupingBy(
-                        MachineRecipeDisplay::machineId,
+                        MachineRecipeDisplay::recipePoolId,
                         LinkedHashMap::new,
                         Collectors.toList()));
     }

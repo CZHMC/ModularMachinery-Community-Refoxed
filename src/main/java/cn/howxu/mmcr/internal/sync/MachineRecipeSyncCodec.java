@@ -52,7 +52,7 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_REQUIRED_HOSTS = 1024;
     private static final int MAX_TAGS = 1024;
     private static final int FORMAT_MARKER = -1;
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
 
     private MachineRecipeSyncCodec() {
     }
@@ -61,7 +61,7 @@ public final class MachineRecipeSyncCodec {
         buf.writeVarInt(FORMAT_MARKER);
         buf.writeVarInt(FORMAT_VERSION);
         Identifier.STREAM_CODEC.encode(buf, value.id());
-        Identifier.STREAM_CODEC.encode(buf, value.machineId());
+        Identifier.STREAM_CODEC.encode(buf, value.recipePoolId());
         buf.writeVarInt(value.tickTime());
         writeRequirements(buf, value.requirements());
         writeOutputs(buf, value.outputsWithoutDerivedRequirements());
@@ -87,7 +87,7 @@ public final class MachineRecipeSyncCodec {
 
     private static MachineRecipe decodeCurrent(RegistryFriendlyByteBuf buf) {
         Identifier id = Identifier.STREAM_CODEC.decode(buf);
-        Identifier machineId = Identifier.STREAM_CODEC.decode(buf);
+        Identifier recipePoolId = Identifier.STREAM_CODEC.decode(buf);
         int tickTime = buf.readVarInt();
         List<MachineRequirement> requirements = readRequirements(buf);
         List<MachineOutput> outputs = readOutputs(buf);
@@ -99,7 +99,7 @@ public final class MachineRecipeSyncCodec {
         List<LevelRequirement> levels = readLevelRequirements(buf);
         boolean allowPartialOutputs = buf.readBoolean();
         Set<Identifier> hosts = readRequiredHosts(buf);
-        MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime, requirements, outputs, modifiers,
+        MachineRecipe recipe = MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
                 priority, maxThreads, cancelIfPerTickFails, parallelized, levels, allowPartialOutputs, hosts);
         RecipeRegistry.validateClientSnapshot(Map.of(id, recipe));
         return recipe;

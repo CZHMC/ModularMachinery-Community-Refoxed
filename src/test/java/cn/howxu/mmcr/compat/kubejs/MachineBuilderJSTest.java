@@ -170,6 +170,18 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void recipe_pool_is_the_only_machine_recipe_ownership_builder_api() {
+        assertThat(new MachineBuilderJS("mmcr:pooled_machine")
+                .recipePool("mmcr:shared_pool")
+                .createObject().recipePoolId()).isEqualTo(Identifier.parse("mmcr:shared_pool"));
+        assertThat(new MachineBuilderJS("mmcr:default_pool_machine")
+                .createObject().recipePoolId()).isEqualTo(Identifier.parse("mmcr:default_pool_machine"));
+        assertThat(List.of(MachineBuilderJS.class.getMethods()))
+                .extracting(Method::getName)
+                .doesNotContain("recipeFamily");
+    }
+
+    @Test
     void startup_builder_sets_controller_tooltip_lines() {
         var registration = new MachineBuilderJS(MMCR.id("arc_furnace"))
                 .controllerTooltip("tooltip.mmcr.arc_furnace.0", "tooltip.mmcr.arc_furnace.1")
@@ -280,6 +292,17 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void registered_machine_retains_explicit_shared_recipe_pool() {
+        Identifier machineId = MMCR.id("shared_pool_machine");
+        Identifier recipePoolId = MMCR.id("shared_recipe_pool");
+
+        new MachineBuilderJS(machineId).recipePool(recipePoolId.toString()).register();
+        Plugin.freezeStartupRegistryPhaseForTesting();
+
+        assertThat(MachineDefinitions.getRegistration(machineId).recipePoolId()).isEqualTo(recipePoolId);
+    }
+
+    @Test
     void registered_machine_preserves_all_recipe_behavior_callbacks() {
         Identifier id = MMCR.id("registered_recipe_callbacks");
         AtomicInteger calls = new AtomicInteger();
@@ -323,7 +346,7 @@ class MachineBuilderJSTest {
                 Identifier.parse("mmcr_kubejs:block/port"));
 
         var registration = new MachineBuilderJS("mmcr_kubejs:kubejs_test")
-                .recipeFamily("mmcr_kubejs:kubejs_family")
+                .recipePool("mmcr_kubejs:kubejs_family")
                 .expandableStructure(true)
                 .factoryThreads(4)
                 .maxParallelism(4)
@@ -334,7 +357,7 @@ class MachineBuilderJSTest {
                 .role("MoDuLe")
                 .createObject();
 
-        assertThat(registration.recipeFamilyId()).isEqualTo(Identifier.parse("mmcr_kubejs:kubejs_family"));
+        assertThat(registration.recipePoolId()).isEqualTo(Identifier.parse("mmcr_kubejs:kubejs_family"));
         assertThat(registration.expandableStructure()).isTrue();
         assertThat(registration.maxParallelAmount()).isEqualTo(4);
         assertThat(registration.controllerSpec()).isSameAs(controllerSpec);
@@ -530,7 +553,7 @@ class MachineBuilderJSTest {
         var registration = new MachineBuilderJS("mmcr:canonical_sound").createObject();
 
         assertThatThrownBy(() -> new MachineRegistration(registration.id(), registration.displayNameKey(),
-                registration.controllerSpec(), registration.appearance(), registration.recipeFamilyId(),
+                registration.controllerSpec(), registration.appearance(), registration.recipePoolId(),
                 registration.allowModifiers(), registration.allowMultithreading(), registration.allowParallelism(),
                 registration.maxParallelAmount(), registration.expandableStructure(), registration.smartInterfaceTypes(),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers(),

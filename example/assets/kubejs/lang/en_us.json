@@ -1,0 +1,6 @@
+{
+        "recipe_pool.kubejs.server": "Server Cluster",
+        "recipe_pool.kubejs.center": "Network Center",
+        "recipe_pool.kubejs.hello_world": "Blast Furnace",
+        "recipe_pool.kubejs.artificial_star_video": "Artificial Star"
+}

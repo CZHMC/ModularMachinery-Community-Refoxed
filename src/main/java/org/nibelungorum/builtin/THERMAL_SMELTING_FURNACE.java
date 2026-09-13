@@ -43,6 +43,7 @@ public class THERMAL_SMELTING_FURNACE {
         if (!event.definitions().containsKey(THERMAL_SMELTING_FURNACE)) {
             var machine = MachineBuilder
                     .machine(THERMAL_SMELTING_FURNACE)
+                    .recipePool(THERMAL_SMELTING_FURNACE)
                     .displayNameKey("machine.mmcr.thermal_smelting_furnace")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:smooth_basalt")))
                     .parallelizable(true)
@@ -125,7 +126,8 @@ public class THERMAL_SMELTING_FURNACE {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_1"),THERMAL_SMELTING_FURNACE)
+                .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_1"))
+                .recipePool(THERMAL_SMELTING_FURNACE)
                 .inputItem(Items.RAW_IRON,8)
                 .inputItem(Items.COAL,1)
                 .outputItem(Items.IRON_INGOT,9)
@@ -138,7 +140,8 @@ public class THERMAL_SMELTING_FURNACE {
         event.registerRecipe(recipe);
 
         recipe = MachineRecipeBuilder
-                .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_2"),THERMAL_SMELTING_FURNACE)
+                .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_2"))
+                .recipePool(THERMAL_SMELTING_FURNACE)
                 .inputItem(Items.RAW_GOLD,8)
                 .inputItem(Items.COAL,1)
                 .outputItem(Items.GOLD_INGOT,9)
@@ -159,7 +162,8 @@ public class THERMAL_SMELTING_FURNACE {
         DataComponentPredicateSet data_extra = new DataComponentPredicateSet(Map.of(Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments_data)));
 
         recipe = MachineRecipeBuilder
-                .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_3"),THERMAL_SMELTING_FURNACE)
+                .recipe(THERMAL_SMELTING_FURNACE.withSuffix("_recipe_3"))
+                .recipePool(THERMAL_SMELTING_FURNACE)
                 .inputItem(Items.GOLD_INGOT,8)
                 .inputItem(Items.COAL,1)
                 .outputItem(output,data_extra)

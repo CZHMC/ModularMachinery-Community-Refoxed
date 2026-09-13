@@ -54,7 +54,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier formedPortBaseTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
-    private Identifier recipeFamilyId;
+    private Identifier recipePoolId;
     private boolean expandableStructure;
     private MachineControllerSpec explicitControllerSpec;
     private MachineAppearanceSpec explicitAppearance;
@@ -137,7 +137,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .displayNameKey(displayNameKey)
                 .controllerSpec(explicitControllerSpec != null ? explicitControllerSpec : controllerSpec())
                 .appearance(explicitAppearance != null ? explicitAppearance : appearanceSpec())
-                .recipeFamilyId(recipeFamilyId != null ? recipeFamilyId : id)
+                .recipePoolId(recipePoolId != null ? recipePoolId : id)
                 .allowModifiers(allowModifiers)
                 .allowMultithreading(allowMultithreading)
                 .allowParallelism(allowParallelism)
@@ -207,8 +207,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .build();
     }
 
-    public MachineBuilderJS recipeFamily(String recipeFamilyId) {
-        this.recipeFamilyId = Identifier.parse(recipeFamilyId);
+    public MachineBuilderJS recipePool(String recipePoolId) {
+        this.recipePoolId = Identifier.parse(recipePoolId);
         return this;
     }
 
@@ -604,6 +604,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         MachineRegistration registration = createObject();
         MachineBuilder builder = MachineBuilder.machine(id)
                 .displayNameKey(registration.displayNameKey())
+                .recipePool(registration.recipePoolId())
                 .controller(controller -> controller
                         .id(registration.controllerSpec().id())
                         .frontTexture(registration.controllerSpec().frontTexture())
@@ -644,7 +645,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
             builder.role(cn.howxu.mmcr.api.publicapi.machine.MachineRole.MODULE);
         }
         MachineDefinition base = builder.build();
-        MachineDefinition definition = new MachineDefinition(base.id(), base.displayNameKey(), base.controller(), base.appearance(),
+        MachineDefinition definition = new MachineDefinition(base.id(), base.recipePoolId(), base.displayNameKey(), base.controller(), base.appearance(),
                 base.factory(), base.role(), base.acceptedModuleIds(), base.networkInterface(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
                 registration.allowModifiers(), registration.allowMultithreading(), factoryThreadLimit,
                 registration.expandableStructure(), registration.smartInterfaceTypes().entrySet().stream()

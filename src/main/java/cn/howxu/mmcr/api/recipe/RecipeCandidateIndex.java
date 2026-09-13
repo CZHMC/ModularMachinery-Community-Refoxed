@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import net.minecraft.core.HolderSet;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 
@@ -42,7 +43,7 @@ public final class RecipeCandidateIndex {
         return EMPTY;
     }
 
-    public static RecipeCandidateIndex build(List<MachineRecipe> recipes) {
+    public static RecipeCandidateIndex build(Identifier recipePoolId, List<MachineRecipe> recipes) {
         BUILD_COUNT_FOR_TESTING.incrementAndGet();
         if (recipes == null || recipes.isEmpty()) return EMPTY;
 
@@ -50,6 +51,9 @@ public final class RecipeCandidateIndex {
         Set<MachineRecipe> fallbackCandidates = new LinkedHashSet<>();
         List<MachineRecipe> allCandidates = List.copyOf(recipes);
         for (MachineRecipe recipe : allCandidates) {
+            if (recipe == null || recipePoolId == null || !recipePoolId.equals(recipe.recipePoolId())) {
+                throw new IllegalArgumentException("All recipes in a candidate index must use one recipe pool");
+            }
             Set<Item> requiredItems;
             try {
                 requiredItems = exactInputItems(recipe);

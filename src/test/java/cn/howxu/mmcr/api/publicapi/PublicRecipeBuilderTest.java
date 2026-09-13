@@ -102,7 +102,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void builds_item_fluid_energy_recipe_with_scalar_options_and_immutable_values() {
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("recipe"), id("machine"))
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("recipe")).recipePool(id("machine"))
                 .duration(20).priority(3).maxThreads(4).cancelIfPerTickFails(true)
                 .parallelized(true).allowPartialOutputs(true)
                 .inputItem(Items.IRON_INGOT, 2)
@@ -120,11 +120,20 @@ class PublicRecipeBuilderTest {
         assertThat(recipe.requirements()).allSatisfy(requirement -> assertThat(requirement).isNotNull());
         assertThat(recipe.requirements()).isUnmodifiable();
         assertThat(recipe.modifierIds()).isUnmodifiable();
+        assertThat(recipe.recipePoolId()).isEqualTo(id("machine"));
+    }
+
+    @Test
+    void recipe_builder_requires_a_pool_before_building() {
+        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("missing_pool")).build())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("missing_pool")
+                .hasMessageContaining("recipe pool");
     }
 
     @Test
     void preservesMaximumLongEnergyRatesDuringInternalConversion() {
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("maximum_energy"), id("machine"))
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("maximum_energy")).recipePool(id("machine"))
                 .inputEnergy(Long.MAX_VALUE)
                 .outputEnergy(Long.MAX_VALUE)
                 .build();
@@ -143,7 +152,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void preserves_item_tag_component_and_consume_chance_and_output_chance() {
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("predicates"), id("machine"))
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("predicates")).recipePool(id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2)
                 .inputItemTag(ItemTags.create(Identifier.parse("c:ingots/iron")), 3)
                 .inputItem(Ingredient.of(Items.GOLD_INGOT), 1, DataComponentPredicateSet.EMPTY, 0.25F)
@@ -162,7 +171,7 @@ class PublicRecipeBuilderTest {
     void retains_explicit_requirements_smart_interface_level_host_and_modifier_without_deriving_duplicates() {
         var explicit = new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(RecipeIo.INPUT, 12);
         SmartInterfaceRequirement smart = SmartInterfaceRequirement.input("Mode", 1F);
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("explicit"), id("machine"))
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("explicit")).recipePool(id("machine"))
                 .inputItem(Items.IRON_INGOT, 1)
                 .requirement(explicit).requirement(smart)
                 .modifier(id("snapshot_modifier"))
@@ -178,7 +187,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void smart_interface_requirement_is_added_to_derived_io_requirements() {
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("smart_interface"), id("machine"))
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("smart_interface")).recipePool(id("machine"))
                 .inputItem(Items.IRON_INGOT, 1)
                 .inputEnergy(20)
                 .outputItem(Items.GOLD_NUGGET, 1)
@@ -194,7 +203,7 @@ class PublicRecipeBuilderTest {
     void adapts_public_recipe_values_to_internal_recipe_semantics() {
         ItemStack itemOutput = new ItemStack(Items.GOLD_INGOT, 2);
         FluidStack fluidOutput = new FluidStack(Fluids.WATER, 250);
-        var definition = MachineRecipeBuilder.recipe(id("adapter"), id("machine"))
+        var definition = MachineRecipeBuilder.recipe(id("adapter")).recipePool(id("machine"))
                 .inputItem(Ingredient.of(Items.IRON_INGOT), 2, components(), 0.25F)
                 .inputFluid(Fluids.WATER, 1000)
                 .inputEnergy(40)
@@ -222,7 +231,7 @@ class PublicRecipeBuilderTest {
             assertThat(item.consumeChance()).isEqualTo(0.25F);
             assertThat(item.components().values()).containsKey(DataComponents.REPAIR_COST);
         });
-        var smartRecipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("adapter_smart"), id("machine"))
+        var smartRecipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("adapter_smart")).recipePool(id("machine"))
                 .requirement(SmartInterfaceRequirement.input("Mode", 1F, 2F)).build(),
                 new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
         assertThat(smartRecipe.requirements()).singleElement().satisfies(requirement -> {
@@ -252,7 +261,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void preserves_output_component_predicates_during_internal_adaptation() {
-        var definition = MachineRecipeBuilder.recipe(id("component_output"), id("machine"))
+        var definition = MachineRecipeBuilder.recipe(id("component_output")).recipePool(id("machine"))
                 .outputItem(new ItemStack(Items.IRON_SWORD), components())
                 .build();
 
@@ -277,7 +286,7 @@ class PublicRecipeBuilderTest {
         DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
                 Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
 
-        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_output"), id("machine"))
+        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_output")).recipePool(id("machine"))
                         .outputItem(output, components).build(),
                 new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
 
@@ -296,7 +305,7 @@ class PublicRecipeBuilderTest {
         DataComponentPredicateSet components = new DataComponentPredicateSet(Map.of(
                 Identifier.parse("minecraft:enchantments"), ComponentPredicate.exact(enchantments)));
 
-        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_network_output"), id("machine"))
+        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_network_output")).recipePool(id("machine"))
                         .outputItem(output, components).build(),
                 new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
@@ -328,7 +337,7 @@ class PublicRecipeBuilderTest {
                 BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(DataComponents.REPAIR_COST),
                 new ComponentPredicate.Range(1, 2)));
 
-        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("non_exact_output"), id("machine"))
+        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("non_exact_output")).recipePool(id("machine"))
                 .outputItem(new ItemStack(Items.IRON_SWORD), nonExactComponents))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -337,7 +346,7 @@ class PublicRecipeBuilderTest {
     void defensively_copies_item_and_fluid_stacks_at_input_and_accessor_boundaries() {
         ItemStack item = new ItemStack(Items.IRON_INGOT, 2);
         FluidStack fluid = new FluidStack(Fluids.WATER, 1000);
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("copies"), id("machine"))
+        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("copies")).recipePool(id("machine"))
                 .outputItem(item).outputFluid(Fluids.WATER, 1000).build();
         var fluidOutput = new FluidOutput(fluid);
         item.setCount(1);
@@ -359,7 +368,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void input_fluid_supports_consume_chance() {
-        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_chance"), id("machine"))
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_chance")).recipePool(id("machine"))
                 .inputFluid(Fluids.WATER, 1000, 0.25F)
                 .build();
 
@@ -369,7 +378,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void internal_fluid_requirement_preserves_consume_chance_after_conversion() {
-        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_chance_conversion"), id("machine"))
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_chance_conversion")).recipePool(id("machine"))
                 .inputFluid(Fluids.WATER, 1000, 0.25F)
                 .build();
 
@@ -385,7 +394,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void input_fluid_consume_chance_zero_emits_not_consumed_payload() {
-        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_zero"), id("machine"))
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("fluid_consume_zero")).recipePool(id("machine"))
                 .inputFluid(Fluids.WATER, 1000, 0F)
                 .build();
 
@@ -395,7 +404,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void input_chemical_supports_consume_chance() {
-        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("chemical_consume_chance"), id("machine"))
+        MachineRecipeDefinition def = MachineRecipeBuilder.recipe(id("chemical_consume_chance")).recipePool(id("machine"))
                 .inputChemical(Identifier.parse("mekanism:oxygen"), 1_000L, 0.25F)
                 .build();
 
@@ -405,7 +414,7 @@ class PublicRecipeBuilderTest {
 
     @Test
     void rejects_invalid_ranges() {
-        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad"), id("machine")).duration(0))
+        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad")).recipePool(id("machine")).duration(0))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> SmartInterfaceRequirement.input(" ", 1F))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -413,9 +422,9 @@ class PublicRecipeBuilderTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> SmartInterfaceRequirement.input("Mode", 2F, 1F))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad"), id("machine")).inputItem(Items.STICK, 0))
+         assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad")).recipePool(id("machine")).inputItem(Items.STICK, 0))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad"), id("machine"))
+         assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("bad")).recipePool(id("machine"))
                 .outputChance(new ItemStack(Items.STICK), 2F))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -428,7 +437,7 @@ class PublicRecipeBuilderTest {
         var inputPayload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
         var outputPayload = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
 
-        var definition = MachineRecipeBuilder.recipe(id("custom"), id("machine"))
+        var definition = MachineRecipeBuilder.recipe(id("custom")).recipePool(id("machine"))
                 .custom(new CustomRecipeIo(input.type().id(), RecipeIo.INPUT, inputPayload))
                 .custom(new CustomRecipeIo(output.outputType().id(), RecipeIo.OUTPUT, outputPayload))
                 .build();
@@ -454,7 +463,7 @@ class PublicRecipeBuilderTest {
         assertThat(custom.payload().getAsJsonObject().get("fe_per_tick").getAsInt()).isEqualTo(12);
         assertThatThrownBy(() -> new CustomRecipeIo(id("energy"), RecipeIo.INPUT,
                 JsonOps.INSTANCE.createInt(1))).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("unknown_custom"), id("machine"))
+        assertThatThrownBy(() -> MachineRecipeBuilder.recipe(id("unknown_custom")).recipePool(id("machine"))
                 .custom(new CustomRecipeIo(id("unknown"), RecipeIo.INPUT, custom.payload())))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -472,7 +481,7 @@ class PublicRecipeBuilderTest {
             var customOutput = new CustomRecipeIo(TestOutput.TYPE.id(), RecipeIo.OUTPUT, outputPayload);
             customOutput.payload().getAsJsonObject().addProperty("value", 1);
 
-        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("custom_extension"), id("machine"))
+        var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("custom_extension")).recipePool(id("machine"))
                     .custom(new CustomRecipeIo(TestRequirement.TYPE.id(), RecipeIo.INPUT, requirementPayload))
                     .custom(customOutput).build(),
                     new MMCRMachineStructuresEvent.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));

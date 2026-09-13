@@ -32,6 +32,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
     private static final int MAX_RECIPES = 16384;
     private static final int MAX_SPECS = 4096;
     private static final int MAX_TOOLTIP_LINES = 1024;
+    private static final int FORMAT_VERSION = 1;
 
     private static final StreamCodec<RegistryFriendlyByteBuf, List<String>> TOOLTIP_CODEC = StreamCodec.of(
             PktRuntimeContentPayload::writeTooltip,
@@ -80,6 +81,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
 
     private static void encode(RegistryFriendlyByteBuf buf, PktRuntimeContentPayload payload) {
         RuntimeContentSnapshot snapshot = payload.snapshot();
+        buf.writeVarInt(FORMAT_VERSION);
         int maxStructureBlocks = MachineStructureSyncCodec.maximumBlockPatternCount();
         buf.writeVarInt(maxStructureBlocks);
         writeMap(buf, snapshot.structures(), MAX_STRUCTURES,
@@ -87,10 +89,15 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         writeMap(buf, snapshot.recipes(), MAX_RECIPES, MachineRecipeSyncCodec::encode);
         writeMap(buf, snapshot.controllerSpecs(), MAX_SPECS, CONTROLLER_SPEC_CODEC::encode);
         writeMap(buf, snapshot.appearances(), MAX_SPECS, APPEARANCE_SPEC_CODEC::encode);
+        writeMap(buf, snapshot.machineRecipePools(), MAX_STRUCTURES, Identifier.STREAM_CODEC::encode);
         buf.writeVarLong(snapshot.contentVersion());
     }
 
     private static PktRuntimeContentPayload decode(RegistryFriendlyByteBuf buf) {
+        int formatVersion = buf.readVarInt();
+        if (formatVersion != FORMAT_VERSION) {
+            throw new IllegalArgumentException("Unsupported runtime content payload version: " + formatVersion);
+        }
         int maxStructureBlocks = buf.readVarInt();
         if (maxStructureBlocks <= 0) throw new IllegalArgumentException("Invalid maximum block pattern count: " + maxStructureBlocks);
         Map<Identifier, MachineStructureDefinition> structures = readMap(buf, MAX_STRUCTURES,
@@ -98,6 +105,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         Map<Identifier, MachineRecipe> recipes = readMap(buf, MAX_RECIPES, MachineRecipeSyncCodec::decode);
         Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, MAX_SPECS, CONTROLLER_SPEC_CODEC::decode);
         Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, MAX_SPECS, APPEARANCE_SPEC_CODEC::decode);
+        Map<Identifier, Identifier> machineRecipePools = readMap(buf, MAX_STRUCTURES, Identifier.STREAM_CODEC::decode);
         validateMap(structures, (id, value) -> {
             if (!id.equals(value.machineId())) throw new IllegalArgumentException("Structure key does not match machine id: " + id);
         });
@@ -109,10 +117,16 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
                 throw new IllegalArgumentException("Controller spec key does not match spec id: " + id);
             }
         });
+        if (!machineRecipePools.keySet().containsAll(structures.keySet())) {
+            throw new IllegalArgumentException("Missing machine recipe pool mapping for synced structure");
+        }
+        if (recipes.values().stream().anyMatch(recipe -> !machineRecipePools.containsValue(recipe.recipePoolId()))) {
+            throw new IllegalArgumentException("Synced recipe pool is not mapped to a machine");
+        }
         long contentVersion = buf.readVarLong();
         if (contentVersion < 0) throw new IllegalArgumentException("Invalid runtime content version: " + contentVersion);
         return new PktRuntimeContentPayload(new RuntimeContentSnapshot(
-                structures, recipes, controllerSpecs, appearances, contentVersion));
+                structures, recipes, controllerSpecs, appearances, machineRecipePools, contentVersion));
     }
 
     private static <T> void writeMap(RegistryFriendlyByteBuf buf, Map<Identifier, T> values, int max,
