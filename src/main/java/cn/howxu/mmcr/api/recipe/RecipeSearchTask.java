@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;

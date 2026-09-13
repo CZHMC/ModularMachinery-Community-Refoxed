@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonArray;
@@ -55,7 +56,7 @@ public final class MachineRecipeJson {
         List<MachineOutput> outputs = parseList(id, object, "outputs", MachineOutput.CODEC, ops);
         List<RecipeModifier> modifiers = parseList(id, object, "modifiers", RecipeModifier.CODEC, ops);
         List<MachineRequirement> requirements = parseList(id, object, "requirements", MachineRequirement.CODEC, ops);
-        List<LevelRequirement> levels = parseList(id, object, "level_requirements", LevelRequirement.CODEC, ops);
+        List<LevelRequirement> levels = parseList(id, object, "level_requirements", LevelRequirement.CODEC.codec(), ops);
         Set<Identifier> hosts = new LinkedHashSet<>(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
         int maxThreads = intField(id, object, "max_threads", false, 1);
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");

@@ -5,11 +5,11 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
@@ -446,7 +446,7 @@ public class MachineRecipeBuilderJS {
         if (!level.typeId().equals(type)) {
             throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
         }
-        levelRequirements.add(new LevelRequirement(type, level.id()));
+        levelRequirements.add(LevelRequirement.input(type, level.id()));
         return this;
     }
 

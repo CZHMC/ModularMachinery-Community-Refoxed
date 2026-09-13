@@ -21,7 +21,6 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -29,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -941,7 +941,7 @@ class MachineRecipeDisplayTest {
         registerLevel(goldId, typeId, 2, Blocks.GOLD_BLOCK);
         registerLevel(diamondId, typeId, 3, Blocks.DIAMOND_BLOCK);
         TestBootstrap.freezeRegistration();
-        LevelRequirement requirement = new LevelRequirement(typeId, ironId);
+        LevelRequirement requirement = LevelRequirement.input(typeId, ironId);
 
         assertThat(MachineRecipeCategory.levelLabel(requirement).getString()).isEqualTo("Coils: ");
         assertThat(MachineRecipeCategory.levelCandidates(requirement))

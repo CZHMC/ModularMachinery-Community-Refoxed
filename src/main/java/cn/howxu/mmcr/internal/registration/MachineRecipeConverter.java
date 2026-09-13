@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.registration;
 
-import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
@@ -24,6 +23,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
@@ -224,7 +224,7 @@ public final class MachineRecipeConverter {
         return output;
     }
 
-    private static cn.howxu.mmcr.api.recipe.LevelRequirement toInternalLevel(LevelRequirement level) {
-        return new cn.howxu.mmcr.api.recipe.LevelRequirement(level.typeId(), level.levelId());
+    private static LevelRequirement toInternalLevel(cn.howxu.mmcr.api.publicapi.machine.LevelRequirement level) {
+        return LevelRequirement.input(level.typeId(), level.levelId());
     }
 }

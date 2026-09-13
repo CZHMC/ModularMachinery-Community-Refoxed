@@ -6,11 +6,11 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.RecipeIngredientRole;
@@ -255,7 +255,7 @@ class MachineRecipeLayoutTest {
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_level_slot_layout"), MMCR.id("layout_test_machine"), 100,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(new LevelRequirement(coilType, coilLevel), new LevelRequirement(casingType, casingLevel)),
+                List.of(LevelRequirement.input(coilType, coilLevel), LevelRequirement.input(casingType, casingLevel)),
                 false, Set.of(MMCR.id("layout_host")));
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);

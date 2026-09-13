@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
@@ -287,7 +288,7 @@ class RecipeCandidateIndexTest {
     void search_prefers_missing_input_over_energy_and_level_requirements() {
         MachineRecipe levelLimited = RecipeTestSupport.create(id("level_limited"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)), false, Set.of());
+                List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, Set.of());
         MachineRecipe energyLimited = RecipeTestSupport.create(id("energy_limited"), MACHINE, 20,
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)), List.of(), List.of(), 0, 1);
         MachineRecipe inputLimited = itemRecipe("input_limited", Ingredient.of(Items.IRON_INGOT));
@@ -313,7 +314,7 @@ class RecipeCandidateIndexTest {
         MachineRecipe lowTemperature = recipeWithRequirements("search_low_temperature",
                 List.of(LoadedHeatRequirement.minimumTemperature(450D)), List.of());
         MachineRecipe insufficientLevel = recipeWithRequirements("search_insufficient_level", List.of(),
-                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)));
+                List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)));
         MachineRecipe missingOutput = recipeWithRequirements("search_missing_output",
                 List.of(MachineRequirement.itemOutput(new ItemStack(Items.DIAMOND))), List.of());
         List<MachineRecipe> candidates = List.of(missingInput, missingEnergy, lowTemperature,
@@ -341,7 +342,7 @@ class RecipeCandidateIndexTest {
     void search_level_failure_is_typed_with_recipe_trace_and_level_details() {
         MachineRecipe levelLimited = RecipeTestSupport.create(id("level_only"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)), false, Set.of());
+                List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, Set.of());
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
                 List.of(levelLimited), null, List.of(), List.of()).compute();

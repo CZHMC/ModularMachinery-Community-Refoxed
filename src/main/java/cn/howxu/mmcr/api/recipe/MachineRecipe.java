@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
@@ -52,7 +53,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             Codec.BOOL.optionalFieldOf("cancelIfPerTickFails", false).forGetter(MachineRecipe::doesCancelRecipeOnPerTickFailure),
             boundedList(MachineRequirement.CODEC, "requirements").fieldOf("requirements").forGetter(MachineRecipe::requirements),
             Codec.BOOL.optionalFieldOf("parallelized", false).forGetter(MachineRecipe::isParallelized),
-            boundedList(LevelRequirement.CODEC, "level_requirements").optionalFieldOf("level_requirements", Collections.emptyList()).forGetter(MachineRecipe::levelRequirements),
+            boundedList(LevelRequirement.CODEC.codec(), "level_requirements").optionalFieldOf("level_requirements", Collections.emptyList()).forGetter(MachineRecipe::levelRequirements),
             Codec.BOOL.optionalFieldOf("allow_partial_outputs", false).forGetter(MachineRecipe::allowPartialOutputs),
             boundedList(Identifier.CODEC, "required_host_ids").xmap(MachineRecipe::copyHostIds, List::copyOf)
             .optionalFieldOf("required_host_ids", Set.of()).forGetter(MachineRecipe::requiredHostIds)

@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.sync;
 
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
@@ -12,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
@@ -255,7 +255,7 @@ public final class MachineRecipeSyncCodec {
         checkSize(values.size(), MAX_LEVEL_REQUIREMENTS, "level requirement");
         buf.writeVarInt(values.size());
         for (LevelRequirement value : values) {
-            writeJsonWithRegistryCodec(buf, LevelRequirement.CODEC, value);
+            writeJsonWithRegistryCodec(buf, LevelRequirement.CODEC.codec(), value);
         }
     }
 
@@ -264,7 +264,7 @@ public final class MachineRecipeSyncCodec {
         checkSize(count, MAX_LEVEL_REQUIREMENTS, "level requirement");
         List<LevelRequirement> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            values.add(readJsonWithRegistryCodec(buf, LevelRequirement.CODEC));
+            values.add(readJsonWithRegistryCodec(buf, LevelRequirement.CODEC.codec()));
         }
         return List.copyOf(values);
     }

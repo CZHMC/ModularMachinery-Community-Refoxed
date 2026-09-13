@@ -10,6 +10,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -40,7 +41,8 @@ class MachineRequirementCodecTest {
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
                 new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 250, FluidStack.EMPTY),
                 new EnergyRequirement(RecipeModifier.IOType.INPUT, 40),
-                SmartInterfaceRequirement.input("mode", 1F, 2F));
+                SmartInterfaceRequirement.input("mode", 1F, 2F),
+                LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal")));
         DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE,
                 RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
@@ -49,6 +51,12 @@ class MachineRequirementCodecTest {
             assertThat(MachineRequirement.CODEC.parse(ops, encoded).getOrThrow()).isEqualTo(requirement);
             assertThat(RequirementHandlerRegistry.handlerFor(requirement.type())).isNotNull();
         }
+
+        LevelRequirement level = LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal"));
+        JsonElement encoded = MachineRequirement.CODEC.encodeStart(ops, level).getOrThrow();
+        assertThat(encoded.getAsJsonObject().get("type").getAsString()).isEqualTo("mmcr:level");
+        assertThat(encoded.getAsJsonObject().get("level_type").getAsString()).isEqualTo("test:coil");
+        assertThat(encoded.getAsJsonObject().get("level").getAsString()).isEqualTo("test:kanthal");
     }
 
     @Test

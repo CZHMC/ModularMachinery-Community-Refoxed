@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -249,7 +250,7 @@ class MachineRecipeTest {
                 List.of(),
                 List.of(),
                 false,
-                List.of(new LevelRequirement(coilType, kanthal)));
+                List.of(LevelRequirement.input(coilType, kanthal)));
 
         var decoded = MachineRecipe.CODEC.codec().parse(jsonOps(),
                 MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow()).getOrThrow();
@@ -270,8 +271,8 @@ class MachineRecipeTest {
         assertThatThrownBy(() -> RecipeTestSupport.create(
                 Identifier.parse("test:duplicate_levels"), Identifier.parse("test:machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(new LevelRequirement(coilType, Identifier.parse("test:kanthal")),
-                        new LevelRequirement(coilType, Identifier.parse("test:nichrome")))))
+                List.of(LevelRequirement.input(coilType, Identifier.parse("test:kanthal")),
+                        LevelRequirement.input(coilType, Identifier.parse("test:nichrome")))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

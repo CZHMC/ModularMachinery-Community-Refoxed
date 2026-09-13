@@ -430,7 +430,8 @@ class MachineRecipeJsonTest {
 
     private static JsonObject levelRequirement() {
         var level = new JsonObject();
-        level.addProperty("type", "mmcr:test_level_type");
+        level.addProperty("type", "mmcr:level");
+        level.addProperty("level_type", "mmcr:test_level_type");
         level.addProperty("level", "mmcr:test_level");
         return level;
     }

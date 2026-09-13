@@ -7,10 +7,10 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -160,7 +160,7 @@ class MachineRecipeCategoryTransferTest {
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Coils")));
         registerLevel(copperId, typeId, 0, Blocks.COPPER_BLOCK);
         registerLevel(ironId, typeId, 1, Blocks.IRON_BLOCK);
-        LevelRequirement requirement = new LevelRequirement(typeId, ironId);
+        LevelRequirement requirement = LevelRequirement.input(typeId, ironId);
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_level_slot"), MMCR.id("level_slot_test_machine"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
