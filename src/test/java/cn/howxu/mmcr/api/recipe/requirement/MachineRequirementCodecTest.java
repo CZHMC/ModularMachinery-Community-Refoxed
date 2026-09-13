@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
@@ -21,9 +22,11 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -67,6 +70,31 @@ class MachineRequirementCodecTest {
         var result = MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encoded);
 
         assertThat(result.error()).isPresent();
+    }
+
+    @Test
+    void codec_rejects_an_output_level_requirement() {
+        JsonObject encoded = new JsonObject();
+        encoded.addProperty("type", "mmcr:level");
+        encoded.addProperty("io", "output");
+        encoded.addProperty("level_type", "test:coil");
+        encoded.addProperty("level", "test:kanthal");
+
+        assertThatThrownBy(() -> MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encoded))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Level requirements must use input direction");
+    }
+
+    @Test
+    void level_handler_ignores_capabilities_and_preserves_requested_parallelism() {
+        var plan = new LevelRequirementHandler().plan(
+                LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal")),
+                Collections.singletonList(null), new PlanningContext(4, 2));
+
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.requirementIndex()).isEqualTo(2);
+        assertThat(plan.maxParallelism()).isEqualTo(4);
+        assertThat(plan.operations()).isEmpty();
     }
 
     @Test
