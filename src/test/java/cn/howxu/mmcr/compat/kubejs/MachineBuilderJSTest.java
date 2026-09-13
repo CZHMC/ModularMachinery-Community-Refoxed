@@ -323,7 +323,7 @@ class MachineBuilderJSTest {
                 Identifier.parse("mmcr_kubejs:block/port"));
 
         var registration = new MachineBuilderJS("mmcr_kubejs:kubejs_test")
-                .recipeFamily("mmcr_kubejs:kubejs_family")
+                .recipePool("mmcr_kubejs:kubejs_family")
                 .expandableStructure(true)
                 .factoryThreads(4)
                 .maxParallelism(4)
@@ -334,7 +334,7 @@ class MachineBuilderJSTest {
                 .role("MoDuLe")
                 .createObject();
 
-        assertThat(registration.recipeFamilyId()).isEqualTo(Identifier.parse("mmcr_kubejs:kubejs_family"));
+        assertThat(registration.recipePoolId()).isEqualTo(Identifier.parse("mmcr_kubejs:kubejs_family"));
         assertThat(registration.expandableStructure()).isTrue();
         assertThat(registration.maxParallelAmount()).isEqualTo(4);
         assertThat(registration.controllerSpec()).isSameAs(controllerSpec);
@@ -530,7 +530,7 @@ class MachineBuilderJSTest {
         var registration = new MachineBuilderJS("mmcr:canonical_sound").createObject();
 
         assertThatThrownBy(() -> new MachineRegistration(registration.id(), registration.displayNameKey(),
-                registration.controllerSpec(), registration.appearance(), registration.recipeFamilyId(),
+                registration.controllerSpec(), registration.appearance(), registration.recipePoolId(),
                 registration.allowModifiers(), registration.allowMultithreading(), registration.allowParallelism(),
                 registration.maxParallelAmount(), registration.expandableStructure(), registration.smartInterfaceTypes(),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers(),

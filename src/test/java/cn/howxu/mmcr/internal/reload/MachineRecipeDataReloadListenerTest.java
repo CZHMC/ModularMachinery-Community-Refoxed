@@ -97,7 +97,7 @@ class MachineRecipeDataReloadListenerTest {
 
         String invalid = "{"
                 + "\"type\":\"mmcr:machine_recipe\","
-                + "\"machine\":\"mmcr:test_machine_name\","
+                + "\"recipe_pool\":\"mmcr:test_machine_name\","
                 + "\"tick_time\":20,"
                 + "\"requirements\":[{\"type\":\"mmcr_test:missing\"}]}";
         var resourceManager = resources(Map.of(
@@ -261,11 +261,11 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     private static String recipeJson() {
-        return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\",\"tick_time\":20,\"requirements\":[]}";
+        return "{\"type\":\"mmcr:machine_recipe\",\"recipe_pool\":\"mmcr:test_machine_name\",\"tick_time\":20,\"requirements\":[]}";
     }
 
     private static String invalidOutputRecipeJson() {
-        return "{\"type\":\"mmcr:machine_recipe\",\"machine\":\"mmcr:test_machine_name\","
+        return "{\"type\":\"mmcr:machine_recipe\",\"recipe_pool\":\"mmcr:test_machine_name\","
                 + "\"tick_time\":20,\"requirements\":[],\"outputs\":[{\"type\":\"" + INVALID_OUTPUT_ID + "\"}]}";
     }
 

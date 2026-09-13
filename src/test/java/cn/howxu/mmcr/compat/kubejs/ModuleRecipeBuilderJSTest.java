@@ -82,7 +82,7 @@ class ModuleRecipeBuilderJSTest {
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         new MachineRecipeBuilderJS(recipeId)
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .requiredHosts("mmcr:first", "mmcr:second", "mmcr:first", "mmcr:third")
                 .build();
 
@@ -96,7 +96,7 @@ class ModuleRecipeBuilderJSTest {
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         var recipe = new MachineRecipeBuilderJS("mmcr:event_recipe")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .tickTime(1)
                 .createObject();
 
@@ -116,7 +116,7 @@ class ModuleRecipeBuilderJSTest {
         MachineRequirement smartRequirement = SmartInterfaceRequirement.input("temperature", 25F);
 
         MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:kubejs_full_recipe")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .inputs(List.of(itemInput, fluidInput, energyOutput))
                 .outputs(List.of(new ItemStack(Items.DIAMOND)))
                 .fluidOutputs(List.of(fluidOutput))
@@ -152,7 +152,7 @@ class ModuleRecipeBuilderJSTest {
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:energy_io_shortcuts")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .iFEt(40)
                 .oFEt(20)
                 .createObject();
@@ -170,7 +170,7 @@ class ModuleRecipeBuilderJSTest {
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         MachineRecipe recipe = new MachineRecipeBuilderJS("mmcr:energy_output_alone")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .oFEt(75)
                 .createObject();
 
@@ -189,7 +189,7 @@ class ModuleRecipeBuilderJSTest {
         var input = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2, null, 0.5F);
         var output = new ItemStack(Items.DIAMOND, 1);
         var builder = new MachineRecipeBuilderJS(recipeId)
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .tickTime(20)
                 .inputs(List.of(input))
                 .outputs(List.of(output))
@@ -206,7 +206,7 @@ class ModuleRecipeBuilderJSTest {
         MachineRecipe built = builder.createObject();
         JsonObject json = new JsonObject();
         json.addProperty("type", "mmcr:machine_recipe");
-        json.addProperty("machine", machineId.toString());
+        json.addProperty("recipe_pool", machineId.toString());
         json.addProperty("tick_time", 20);
         json.add("outputs", MachineOutput.CODEC.listOf().encodeStart(JsonOps.INSTANCE,
                 List.of(new MachineOutput.ItemOutput(output, 1F))).getOrThrow());
@@ -230,7 +230,7 @@ class ModuleRecipeBuilderJSTest {
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:negative_input")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .addInput(new MachineIngredient.EnergyIngredient(-1))
                 .createObject())
                 .isInstanceOf(IllegalArgumentException.class)
@@ -250,13 +250,13 @@ class ModuleRecipeBuilderJSTest {
         assertThat(itemOutput.getCount()).isZero();
         assertThat(fluidOutput.getAmount()).isZero();
         assertThat(new MachineRecipeBuilderJS("mmcr:negative_item_output")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .outputs(List.of(itemOutput))
                 .createObject()
                 .machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
                         output -> assertThat(output.stack().isEmpty()).isTrue());
         assertThat(new MachineRecipeBuilderJS("mmcr:negative_fluid_output")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .fluidOutputs(List.of(fluidOutput))
                 .createObject()
                 .machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.FluidOutput.class,
@@ -271,7 +271,7 @@ class ModuleRecipeBuilderJSTest {
         Fluids.LAVA.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
 
         var recipe = new MachineRecipeBuilderJS("mmcr:component_tag_recipe")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .tagInputWithComponents("minecraft:planks", 2, JsonParser.parseString("""
                         {"minecraft:custom_name":{"text":"Validated"}}
                         """), 0.5F)
@@ -306,11 +306,11 @@ class ModuleRecipeBuilderJSTest {
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         assertThat(new MachineRecipeBuilderJS("mmcr:serial")
-                .machine(machineId.toString()).createObject().isParallelized()).isFalse();
+                .recipePool(machineId.toString()).createObject().isParallelized()).isFalse();
         assertThat(new MachineRecipeBuilderJS("mmcr:parallel")
-                .machine(machineId.toString()).parallelized().createObject().isParallelized()).isTrue();
+                .recipePool(machineId.toString()).parallelized().createObject().isParallelized()).isTrue();
         assertThat(new MachineRecipeBuilderJS("mmcr:explicit_serial")
-                .machine(machineId.toString()).parallelized(false).createObject().isParallelized()).isFalse();
+                .recipePool(machineId.toString()).parallelized(false).createObject().isParallelized()).isFalse();
     }
 
     @Test
@@ -321,7 +321,7 @@ class ModuleRecipeBuilderJSTest {
         var apple = new MachineIngredient.ItemIngredient(Ingredient.of(Items.APPLE), 1);
 
         var recipe = new MachineRecipeBuilderJS("mmcr:legacy_input_explicit_requirements")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .inputs(List.of(iron))
                 .requirements(List.of(MachineRequirement.fromInput(apple)))
                 .deriveRequirements(false)
@@ -338,7 +338,7 @@ class ModuleRecipeBuilderJSTest {
         var iron = new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1);
 
         var recipe = new MachineRecipeBuilderJS("mmcr:legacy_input_no_requirements")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .inputs(List.of(iron))
                 .deriveRequirements(false)
                 .createObject();
@@ -352,7 +352,7 @@ class ModuleRecipeBuilderJSTest {
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());
 
         assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:zero_tick")
-                .machine(machineId.toString())
+                .recipePool(machineId.toString())
                 .tickTime(0)
                 .createObject())
                 .isInstanceOf(IllegalArgumentException.class)

@@ -24,7 +24,7 @@ public final class RecipeFinishContext {
 
     public RecipeFinishContext(MachineRecipe recipe, long requestedParallelism, long effectiveParallelism,
                                List<MachineOutput> outputs) {
-        this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
+        this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").recipePoolId()), recipe,
                 requestedParallelism, effectiveParallelism, outputs);
     }
 

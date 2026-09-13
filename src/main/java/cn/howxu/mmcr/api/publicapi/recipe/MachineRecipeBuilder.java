@@ -28,7 +28,7 @@ import java.util.Set;
  */
 public final class MachineRecipeBuilder {
     private final Identifier id;
-    private final Identifier machineId;
+    private Identifier recipePoolId;
     private int tickTime = 1;
     private int priority;
     private int maxThreads = 1;
@@ -41,14 +41,18 @@ public final class MachineRecipeBuilder {
     private final List<LevelRequirement> levelRequirements = new ArrayList<>();
     private final List<RequiredHost> requiredHosts = new ArrayList<>();
 
-    private MachineRecipeBuilder(Identifier id, Identifier machineId) {
+    private MachineRecipeBuilder(Identifier id) {
         this.id = id;
-        this.machineId = machineId;
     }
 
-    public static MachineRecipeBuilder recipe(Identifier id, Identifier machineId) {
-        if (id == null || machineId == null) throw new IllegalArgumentException("Recipe ids must not be null");
-        return new MachineRecipeBuilder(id, machineId);
+    public static MachineRecipeBuilder recipe(Identifier id) {
+        if (id == null) throw new IllegalArgumentException("Recipe id must not be null");
+        return new MachineRecipeBuilder(id);
+    }
+
+    public MachineRecipeBuilder recipePool(Identifier recipePoolId) {
+        this.recipePoolId = recipePoolId;
+        return this;
     }
 
     public MachineRecipeBuilder duration(int duration) { if (duration < 1) throw new IllegalArgumentException("duration must be positive"); tickTime = duration; return this; }
@@ -145,6 +149,9 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder modifier(Identifier modifierId) { if (modifierId == null) throw new IllegalArgumentException("modifier id null"); modifierIds.add(modifierId); return this; }
 
     public MachineRecipeDefinition build() {
+        if (recipePoolId == null) {
+            throw new IllegalStateException("Recipe " + id + " must specify a recipe pool");
+        }
         List<RecipeRequirement> recipeRequirements = List.copyOf(requirements);
         List<ItemInput> itemInputs = recipeRequirements.stream().filter(ItemRequirement.class::isInstance)
                 .map(ItemRequirement.class::cast).filter(requirement -> requirement.io().isInput())
@@ -165,7 +172,7 @@ public final class MachineRecipeBuilder {
         List<EnergyInput> energyOutputs = recipeRequirements.stream().filter(EnergyRequirement.class::isInstance)
                 .map(EnergyRequirement.class::cast).filter(requirement -> !requirement.io().isInput())
                 .map(requirement -> new EnergyInput(requirement.fePerTick())).toList();
-        return new MachineRecipeDefinition(id, machineId, tickTime, priority, maxThreads,
+        return new MachineRecipeDefinition(id, recipePoolId, tickTime, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, itemInputs, fluidInputs,
                 energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, customOutputs, modifierIds,
                 levelRequirements, Set.copyOf(requiredHosts));

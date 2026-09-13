@@ -64,6 +64,13 @@ public final class MachineRegistry {
         return STATIC_MACHINES.containsKey(id);
     }
 
+    public static boolean containsRecipePool(Identifier recipePoolId) {
+        if (recipePoolId == null) return false;
+        if (getMachine(recipePoolId) != null) return true;
+        return MachineDefinitions.allRegistrations().stream()
+                .anyMatch(registration -> recipePoolId.equals(registration.recipePoolId()));
+    }
+
     public static void installStructures(Map<Identifier, MachineStructureDefinition> structures) {
         synchronized (RuntimeContentVersion.lock()) {
             Map<Identifier, Machine> structureMachines = new LinkedHashMap<>();

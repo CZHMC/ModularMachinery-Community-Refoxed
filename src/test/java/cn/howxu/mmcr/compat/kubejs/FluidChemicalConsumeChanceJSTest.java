@@ -48,7 +48,7 @@ class FluidChemicalConsumeChanceJSTest {
     @Test
     void kubejs_fluid_input_with_consume_chance_emits_matching_payload() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:fk");
-        builder.machine(MACHINE.toString()).fluidInput("minecraft:water", 1000, 0.25D);
+        builder.recipePool(MACHINE.toString()).fluidInput("minecraft:water", 1000, 0.25D);
 
         var req = (FluidRequirement) builder.createObject().requirements().get(0);
         assertThat(req.consumeChance()).isEqualTo(0.25F);
@@ -57,7 +57,7 @@ class FluidChemicalConsumeChanceJSTest {
     @Test
     void kubejs_chemical_input_with_consume_chance_emits_payload() {
         MachineRecipeBuilderJS builder = new MachineRecipeBuilderJS("mmcr:ck");
-        builder.machine(MACHINE.toString()).chemicalInput("mekanism:oxygen", 1_000L, 0.5D);
+        builder.recipePool(MACHINE.toString()).chemicalInput("mekanism:oxygen", 1_000L, 0.5D);
 
         var expected = MachineRequirement.CODEC.parse(JsonOps.INSTANCE,
                 MachineRecipeBuilder.chemicalInputPayload(

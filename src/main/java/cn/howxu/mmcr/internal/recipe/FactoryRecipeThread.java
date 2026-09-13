@@ -236,14 +236,14 @@ public final class FactoryRecipeThread extends RecipeThread {
             lastRecipeCapabilityVersion = snapshot.capabilityVersion();
             lastRecipeModifierVersion = snapshot.modifierVersion();
             lastRecipeComponentStateVersion = snapshot.stateVersion();
-            lastRecipeCatalogVersion = RecipeRegistry.catalog(recipe.machineId()).version();
+            lastRecipeCatalogVersion = RecipeRegistry.catalog(recipe.recipePoolId()).version();
         }
     }
     @Override
     protected void onFinished() {
         idleTicks = 0;
         if (lastRecipe != null && lastRecipeCatalogVersion != Long.MIN_VALUE) {
-            MachineRecipeCatalog catalog = RecipeRegistry.catalog(lastRecipe.machineId());
+            MachineRecipeCatalog catalog = RecipeRegistry.catalog(lastRecipe.recipePoolId());
             MachineRecipe current = catalog.recipes().stream()
                     .filter(candidate -> lastRecipe.id().equals(candidate.id()))
                     .findFirst().orElse(null);
@@ -579,7 +579,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 thread.lastRecipeModifierVersion = input.getLongOr("last_modifier_version", Long.MIN_VALUE);
                 thread.lastRecipeComponentStateVersion = input.getLongOr("last_component_state_version", Long.MIN_VALUE);
                 thread.lastRecipeCatalogVersion = input.getLongOr("last_catalog_version",
-                        RecipeRegistry.catalog(thread.lastRecipe.machineId()).version());
+                        RecipeRegistry.catalog(thread.lastRecipe.recipePoolId()).version());
             }
         }
         thread.runtime.load(input.childOrEmpty("runtime"), controller.resourceDomain());

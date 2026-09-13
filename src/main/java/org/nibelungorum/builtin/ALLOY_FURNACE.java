@@ -101,7 +101,8 @@ public class ALLOY_FURNACE {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(ALLOY_FURNACE.withSuffix("_recipe_1"),ALLOY_FURNACE)
+                .recipe(ALLOY_FURNACE.withSuffix("_recipe_1"))
+                .recipePool(ALLOY_FURNACE)
                 .inputItem(Ingredient.of(Items.GOLD_INGOT),1)
                 .outputItem(Items.GOLD_NUGGET,10)
                 .inputEnergy(20)

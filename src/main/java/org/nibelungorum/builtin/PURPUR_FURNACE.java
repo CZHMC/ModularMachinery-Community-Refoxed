@@ -106,7 +106,8 @@ public class PURPUR_FURNACE {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(PURPUR_FURNACE.withSuffix("_recipe_1"),PURPUR_FURNACE)
+                .recipe(PURPUR_FURNACE.withSuffix("_recipe_1"))
+                .recipePool(PURPUR_FURNACE)
                 .inputItem(Ingredient.of(Items.IRON_INGOT),1)
                 .outputItem(Items.IRON_NUGGET,10)
                 .inputEnergy(20)
@@ -116,7 +117,8 @@ public class PURPUR_FURNACE {
         event.registerRecipe(recipe);
 
         recipe = MachineRecipeBuilder
-                .recipe(PURPUR_FURNACE.withSuffix("_recipe_2"),PURPUR_FURNACE)
+                .recipe(PURPUR_FURNACE.withSuffix("_recipe_2"))
+                .recipePool(PURPUR_FURNACE)
                 .inputItem(Ingredient.of(Items.IRON_INGOT),1)
                 .outputItem(Items.GOLD_NUGGET,10)
                 .inputEnergy(20)
@@ -126,7 +128,8 @@ public class PURPUR_FURNACE {
         event.registerRecipe(recipe);
 
         recipe = MachineRecipeBuilder
-                .recipe(PURPUR_FURNACE.withSuffix("_recipe_3"),PURPUR_FURNACE)
+                .recipe(PURPUR_FURNACE.withSuffix("_recipe_3"))
+                .recipePool(PURPUR_FURNACE)
                 .inputItem(Ingredient.of(Items.APPLE),1)
                 .outputItem(Items.DIAMOND,2)
                 .inputEnergy(40)

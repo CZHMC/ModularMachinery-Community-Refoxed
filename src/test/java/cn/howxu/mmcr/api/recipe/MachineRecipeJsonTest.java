@@ -66,7 +66,7 @@ class MachineRecipeJsonTest {
         var recipe = MachineRecipeJson.parse(id("basic"), json, registries);
 
         assertThat(recipe.id()).isEqualTo(id("basic"));
-        assertThat(recipe.machineId()).isEqualTo(id("test_cube"));
+        assertThat(recipe.recipePoolId()).isEqualTo(id("test_cube"));
         assertThat(recipe.tickTime()).isEqualTo(20);
         assertThat(recipe.requirements()).singleElement().isInstanceOfSatisfying(ItemRequirement.class,
                 input -> assertThat(input.count()).isEqualTo(2));
@@ -231,7 +231,7 @@ class MachineRecipeJsonTest {
         assertThat(encoded.getAsJsonObject().has("outputs")).isFalse();
         assertThat(encoded.getAsJsonObject().has("fluid_outputs")).isFalse();
         assertThat(decoded.id()).isEqualTo(recipe.id());
-        assertThat(decoded.machineId()).isEqualTo(recipe.machineId());
+        assertThat(decoded.recipePoolId()).isEqualTo(recipe.recipePoolId());
         assertThat(decoded.tickTime()).isEqualTo(recipe.tickTime());
         assertThat(decoded.requirements()).hasSize(5);
         assertThat(decoded.requirements()).anyMatch(requirement -> requirement instanceof ItemRequirement item
@@ -277,12 +277,48 @@ class MachineRecipeJsonTest {
                     assertThat(error.getCause()).isNotNull();
                 });
 
-        var invalidMachine = recipeJson();
-        invalidMachine.addProperty("machine", "mmcr:missing_machine");
-        assertThatThrownBy(() -> MachineRecipeJson.parse(id("wrong_machine"), invalidMachine, registries))
+        var invalidPool = recipeJson();
+        invalidPool.addProperty("recipe_pool", "mmcr:missing_pool");
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("wrong_pool"), invalidPool, registries))
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
-                    assertThat(error.recipeId()).isEqualTo(id("wrong_machine"));
+                    assertThat(error.recipeId()).isEqualTo(id("wrong_pool"));
+                    assertThat(error.path()).isEqualTo("recipe_pool");
+                });
+    }
+
+    @Test
+    void rejects_missing_recipe_pool_with_recipe_id_and_field_path() {
+        var json = recipeJson();
+        json.remove("recipe_pool");
+
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("missing_pool"), json, registries))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
+                    assertThat(error.recipeId()).isEqualTo(id("missing_pool"));
+                    assertThat(error.path()).isEqualTo("recipe_pool");
+                });
+    }
+
+    @Test
+    void rejects_legacy_machine_field_without_converting_it() {
+        var json = recipeJson();
+        json.addProperty("machine", "mmcr:test_cube");
+
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("legacy_machine"), json, registries))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
+                    assertThat(error.recipeId()).isEqualTo(id("legacy_machine"));
                     assertThat(error.path()).isEqualTo("machine");
+                });
+    }
+
+    @Test
+    void rejects_orphan_recipe_pool_with_recipe_id_and_field_path() {
+        var json = recipeJson();
+        json.addProperty("recipe_pool", "mmcr:orphan_pool");
+
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("orphan_pool"), json, registries))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
+                    assertThat(error.recipeId()).isEqualTo(id("orphan_pool"));
+                    assertThat(error.path()).isEqualTo("recipe_pool");
                 });
     }
 
@@ -325,7 +361,7 @@ class MachineRecipeJsonTest {
 
         var primitive = new JsonObject();
         primitive.addProperty("type", "mmcr:machine_recipe");
-        primitive.addProperty("machine", "mmcr:test_cube");
+        primitive.addProperty("recipe_pool", "mmcr:test_cube");
         primitive.addProperty("tick_time", 20);
         primitive.addProperty("requirements", "not-an-array");
         assertThatThrownBy(() -> MachineRecipeJson.parse(id("primitive"), primitive, registries))
@@ -345,7 +381,7 @@ class MachineRecipeJsonTest {
     private static JsonObject recipeJson() {
         var json = new JsonObject();
         json.addProperty("type", "mmcr:machine_recipe");
-        json.addProperty("machine", "mmcr:test_cube");
+        json.addProperty("recipe_pool", "mmcr:test_cube");
         json.addProperty("tick_time", 20);
         json.add("requirements", new JsonArray());
         return json;

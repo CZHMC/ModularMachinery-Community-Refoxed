@@ -23,6 +23,7 @@ import java.util.Set;
  */
 public record MachineDefinition(
         Identifier id,
+        Identifier recipePoolId,
         String displayNameKey,
         ControllerSpec controller,
         AppearanceSpec appearance,
@@ -47,7 +48,7 @@ public record MachineDefinition(
         Map<Identifier, RequestProcess> requestProcessors,
         Map<Identifier, RequestFailed> requestFailures) {
 
-    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+    public MachineDefinition(Identifier id, Identifier recipePoolId, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role, Set<Identifier> acceptedModuleIds,
             NetworkInterfaceSpec networkInterface, long maxParallelism, boolean parallelizable,
             RecipeFailureActions failureAction, boolean allowModifiers, boolean allowMultithreading,
@@ -55,23 +56,23 @@ public record MachineDefinition(
             Map<String, SmartInterfaceType> smartInterfaceTypes, boolean shareSmartInterfaces,
             List<SmartInterfaceModifier> smartInterfaceModifiers, Identifier runningSoundId, Identifier finishSoundId,
             BlockArray pattern, MachineBehavior behavior) {
-        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds, networkInterface,
+        this(id, recipePoolId, displayNameKey, controller, appearance, factory, role, acceptedModuleIds, networkInterface,
                 maxParallelism, parallelizable, failureAction, allowModifiers, allowMultithreading, maxParallelAmount,
                 expandableStructure, smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
                 finishSoundId, pattern, behavior, Map.of(), Map.of());
     }
 
-    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+    public MachineDefinition(Identifier id, Identifier recipePoolId, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
             Set<Identifier> acceptedModuleIds, long maxParallelism, boolean parallelizable,
             RecipeFailureActions failureAction) {
-        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
+        this(id, recipePoolId, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
                 maxParallelism, parallelizable, failureAction, false, false, 1, false,
                 Map.of(), false, List.of(), null, null, new BlockArray(Map.of()),
                 RecipeBehavior.defaults());
     }
 
-    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+    public MachineDefinition(Identifier id, Identifier recipePoolId, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
             Set<Identifier> acceptedModuleIds, long maxParallelism, boolean parallelizable,
             RecipeFailureActions failureAction, boolean allowModifiers, boolean allowMultithreading,
@@ -80,14 +81,14 @@ public record MachineDefinition(
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
             Identifier runningSoundId, Identifier finishSoundId, BlockArray pattern,
             MachineBehavior behavior) {
-        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
+        this(id, recipePoolId, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
                 NetworkInterfaceSpec.disabled(), maxParallelism, parallelizable, failureAction,
                 allowModifiers, allowMultithreading, maxParallelAmount, expandableStructure,
                 smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
                 finishSoundId, pattern, behavior);
     }
 
-    public MachineDefinition(Identifier id, String displayNameKey, ControllerSpec controller,
+    public MachineDefinition(Identifier id, Identifier recipePoolId, String displayNameKey, ControllerSpec controller,
             AppearanceSpec appearance, FactorySpec factory, MachineRole role,
             Set<Identifier> acceptedModuleIds, long maxParallelism, boolean parallelizable,
             RecipeFailureActions failureAction, boolean allowModifiers, boolean allowMultithreading,
@@ -95,7 +96,7 @@ public record MachineDefinition(
             Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
             Identifier runningSoundId, Identifier finishSoundId, BlockArray pattern) {
-        this(id, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
+        this(id, recipePoolId, displayNameKey, controller, appearance, factory, role, acceptedModuleIds,
                 maxParallelism, parallelizable, failureAction, allowModifiers, allowMultithreading,
                 maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                 smartInterfaceModifiers, runningSoundId, finishSoundId, pattern, RecipeBehavior.defaults());
@@ -103,6 +104,7 @@ public record MachineDefinition(
 
     public MachineDefinition {
         if (id == null) throw new IllegalArgumentException("id null");
+        recipePoolId = recipePoolId == null ? id : recipePoolId;
         if (displayNameKey != null && displayNameKey.isBlank()) {
             throw new IllegalArgumentException("displayNameKey blank");
         }

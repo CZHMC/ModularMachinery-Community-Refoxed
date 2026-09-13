@@ -524,7 +524,7 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipe oldRecipe = RecipeTestSupport.create(MMCR.id("factory_loaded_old"), MMCR.id("test_cube"), 1,
                 List.of(), List.of());
-        MachineRecipe replacement = RecipeTestSupport.create(oldRecipe.id(), oldRecipe.machineId(), 20,
+        MachineRecipe replacement = RecipeTestSupport.create(oldRecipe.id(), oldRecipe.recipePoolId(), 20,
                 List.of(), List.of());
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 

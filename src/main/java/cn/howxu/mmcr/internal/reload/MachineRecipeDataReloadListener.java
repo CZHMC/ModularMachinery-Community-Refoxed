@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.reload;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
@@ -162,10 +161,9 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
     private static void validateCandidate(Map<Identifier, MachineRecipe> recipes) {
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             MachineRecipe recipe = entry.getValue();
-            if (MachineRegistry.getMachine(recipe.machineId()) == null
-                    && !MachineDefinitions.containsStatic(recipe.machineId())) {
-                throw new MachineRecipeJson.RecipeJsonException(entry.getKey(), "machine",
-                        "unknown machine " + recipe.machineId(), null);
+            if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
+                throw new MachineRecipeJson.RecipeJsonException(entry.getKey(), "recipe_pool",
+                        "unknown recipe pool " + recipe.recipePoolId(), null);
             }
         }
     }

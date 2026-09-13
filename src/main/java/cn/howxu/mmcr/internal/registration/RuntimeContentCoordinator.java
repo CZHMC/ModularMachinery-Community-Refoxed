@@ -188,16 +188,26 @@ public final class RuntimeContentCoordinator {
             if (RecipeRegistry.dataPackSnapshot().containsKey(recipe.id())) {
                 throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + recipe.id());
             }
-            if (MachineDefinitions.getRegistration(recipe.machineId()) == null
-                    && !MachineRegistry.containsStatic(recipe.machineId())) {
-                throw new IllegalStateException("No startup machine registration for recipe: " + recipe.machineId());
+            if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
+                throw new IllegalStateException("Recipe pool not found for dynamic recipe: " + recipe.recipePoolId());
             }
-            if (!structures.containsKey(recipe.machineId())
-                    && !MachineStructureRegistry.startupSnapshot().containsKey(recipe.machineId())
-                    && !MachineRegistry.containsStatic(recipe.machineId())) {
-                throw new IllegalStateException("Machine not found for dynamic recipe: " + recipe.machineId());
+            if (!recipePoolAvailable(recipe.recipePoolId(), structures)) {
+                throw new IllegalStateException("Recipe pool is not available for dynamic recipe: "
+                        + recipe.recipePoolId());
             }
         }
+    }
+
+    private static boolean recipePoolAvailable(Identifier recipePoolId,
+                                               Map<Identifier, MachineStructureDefinition> structures) {
+        if (MachineRegistry.containsStatic(recipePoolId)) return true;
+        if (structures.containsKey(recipePoolId)
+                || MachineStructureRegistry.startupSnapshot().containsKey(recipePoolId)) return true;
+        return MachineDefinitions.allRegistrations().stream()
+                .filter(registration -> recipePoolId.equals(registration.recipePoolId()))
+                .anyMatch(registration -> structures.containsKey(registration.id())
+                        || MachineStructureRegistry.startupSnapshot().containsKey(registration.id())
+                        || MachineRegistry.containsStatic(registration.id()));
     }
 
     public record CommitResult(DynamicContentReloadService.ReloadResult result,

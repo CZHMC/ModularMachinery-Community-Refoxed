@@ -329,7 +329,7 @@ public final class RecipeRegistry {
         }
         Map<Identifier, List<MachineRecipe>> byMachine = new LinkedHashMap<>();
         for (MachineRecipe recipe : recipes.values()) {
-            byMachine.computeIfAbsent(recipe.machineId(), ignored -> new ArrayList<>()).add(recipe);
+            byMachine.computeIfAbsent(recipe.recipePoolId(), ignored -> new ArrayList<>()).add(recipe);
         }
         Map<Identifier, MachineRecipeCatalog> catalogs = new LinkedHashMap<>();
         Set<Identifier> machineIds = new LinkedHashSet<>(STATE.catalogs().keySet());

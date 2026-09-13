@@ -389,7 +389,7 @@ public final class TestBootstrap {
 
     public static void registerTestRecipes(MMCRMachineRecipesEvent event) {
         event.registerRecipe(MachineRecipeBuilder.recipe(
-                Identifier.parse("mmcr_test:datapack_static_override"), id("iron_compressor"))
+                Identifier.parse("mmcr_test:datapack_static_override")).recipePool(id("iron_compressor"))
                 .duration(20).inputItem(Items.COAL, 1).outputItem(Items.CHARCOAL, 1).build());
     }
 

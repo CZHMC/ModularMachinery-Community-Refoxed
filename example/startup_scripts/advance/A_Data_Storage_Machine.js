@@ -2,7 +2,7 @@ MMCREvents.startup(event => {
     const machine = event
         .createMachine("mmcr_kubejs:kubejs_data_storage_machine")
         .displayNameKey("machine.mmcr_kubejs.kubejs_data_storage_machine")
-        .recipeFamily("mmcr_kubejs:kubejs_data_storage_machine")
+        .recipePool("mmcr_kubejs:kubejs_data_storage_machine")
         .appearance("minecraft:crying_obsidian");
 
     // Some lib we will use

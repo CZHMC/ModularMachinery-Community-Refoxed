@@ -92,7 +92,7 @@ class CustomRecipeContractTest {
             assertThat(decodedOutput).isEqualTo(output);
             assertThat(RequirementHandlerRegistry.handlerFor(TEST_REQUIREMENT_TYPE)).isSameAs(TEST_HANDLER);
 
-            var definition = MachineRecipeBuilder.recipe(id("custom_contract"), id("machine"))
+            var definition = MachineRecipeBuilder.recipe(id("custom_contract")).recipePool(id("machine"))
                     .custom(customInput)
                     .custom(customOutput)
                     .build();

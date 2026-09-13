@@ -101,7 +101,8 @@ public class REACTOR {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(REACTOR.withSuffix("_recipe_1"), REACTOR)
+                .recipe(REACTOR.withSuffix("_recipe_1"))
+                .recipePool(REACTOR)
                 .inputItem(Items.APPLE, 3)
                 .inputFluid(Fluids.WATER, 1)
                 .outputItem(Items.DIAMOND, 10)
@@ -112,7 +113,8 @@ public class REACTOR {
         event.registerRecipe(recipe);
 
         recipe = MachineRecipeBuilder
-                .recipe(REACTOR.withSuffix("_recipe_2"), REACTOR)
+                .recipe(REACTOR.withSuffix("_recipe_2"))
+                .recipePool(REACTOR)
                 .inputItem(Items.GOLDEN_APPLE, 2)
                 .inputFluid(Fluids.WATER, 800)
                 .outputItem(Items.GOLD_INGOT, 2)

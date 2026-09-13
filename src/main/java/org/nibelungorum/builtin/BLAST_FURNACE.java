@@ -82,7 +82,8 @@ public class BLAST_FURNACE {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(BLAST_FURNACE.withSuffix("_recipe_1"),BLAST_FURNACE)
+                .recipe(BLAST_FURNACE.withSuffix("_recipe_1"))
+                .recipePool(BLAST_FURNACE)
                 .inputItem(Ingredient.of(Items.IRON_INGOT),9)
                 .outputItem(Items.IRON_NUGGET,10)
                 .inputEnergy(20)

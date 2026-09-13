@@ -89,7 +89,7 @@ public record MachineRecipeDisplay(
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceOutputs = new ArrayList<>();
-        var registration = MachineDefinitions.getRegistration(recipe.machineId());
+        var registration = MachineDefinitions.getRegistration(recipe.recipePoolId());
         List<SmartInterfaceModifierDisplay> smartInterfaceModifiers = registration == null ? List.of()
                 : registration.smartInterfaceModifiers().stream().map(SmartInterfaceModifierDisplay::from).toList();
         List<MachineRequirement> requirements = recipe.runtimeRequirements();
@@ -136,7 +136,7 @@ public record MachineRecipeDisplay(
         return new MachineRecipeDisplay(
                 recipe,
                 recipe.id(),
-                recipe.machineId(),
+                recipe.recipePoolId(),
                 recipe.tickTime(),
                 List.copyOf(itemInputs),
                 List.copyOf(itemOutputs),

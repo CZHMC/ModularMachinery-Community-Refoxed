@@ -121,7 +121,7 @@ class PublicApiLifecycleTest {
         installMachines(machine);
         assertThat(MachineDefinitions.getRegistration(machine.id())).isNotNull();
         assertThat(RecipeRegistry.getRecipe(recipe.id())).isNotNull();
-        assertThat(RecipeRegistry.getRecipe(recipe.id()).machineId()).isEqualTo(machine.id());
+        assertThat(RecipeRegistry.getRecipe(recipe.id()).recipePoolId()).isEqualTo(machine.id());
         assertThat(MachineApi.isRegistrationOpen()).isFalse();
         assertThat(RecipeApi.isRegistrationOpen()).isFalse();
     }
@@ -446,7 +446,7 @@ class PublicApiLifecycleTest {
     }
 
     private static MachineRecipeDefinition recipe(String path, Identifier machineId) {
-        return MachineRecipeBuilder.recipe(id(path), machineId).duration(1).build();
+        return MachineRecipeBuilder.recipe(id(path)).recipePool(machineId).duration(1).build();
     }
 
     private static Identifier id(String path) {

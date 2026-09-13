@@ -79,7 +79,7 @@ class RecipeApiSmokeTest {
         assertThat(back.maxThreads()).isEqualTo(4);
         assertThat(back.getRecipeTotalTickTime()).isEqualTo(100);
         assertThat(back.getRegistryName()).isEqualTo(id);
-        assertThat(back.getOwningMachineIdentifier()).isEqualTo(machineId);
+        assertThat(back.recipePoolId()).isEqualTo(machineId);
         assertThat(back.doesCancelRecipeOnPerTickFailure()).isTrue();
     }
 
@@ -121,7 +121,7 @@ class RecipeApiSmokeTest {
             assertThat(output.stack().getAmount()).isEqualTo(250);
         });
         assertThat(oneBack.id()).isEqualTo(oneRecipe.id());
-        assertThat(oneBack.machineId()).isEqualTo(oneRecipe.machineId());
+        assertThat(oneBack.recipePoolId()).isEqualTo(oneRecipe.recipePoolId());
         assertThat(oneBack.tickTime()).isEqualTo(oneRecipe.tickTime());
     }
 
@@ -366,7 +366,7 @@ class RecipeApiSmokeTest {
         );
         var recipe = prepared.toMachineRecipe();
         assertThat(recipe.id().toString()).isEqualTo("mmcr:from_prepared");
-        assertThat(recipe.machineId().toString()).isEqualTo("mmcr:prep_machine");
+        assertThat(recipe.recipePoolId().toString()).isEqualTo("mmcr:prep_machine");
         assertThat(recipe.tickTime()).isEqualTo(50);
         assertThat(recipe.priority()).isEqualTo(3);
         assertThat(recipe.maxThreads()).isEqualTo(2);

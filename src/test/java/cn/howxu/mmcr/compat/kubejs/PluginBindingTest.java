@@ -416,7 +416,7 @@ class PluginBindingTest {
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
-        new MachineRecipeBuilderJS("mmcr:kubejs_transaction_direct_recipe").machine("mmcr:test_machine_name").build();
+        new MachineRecipeBuilderJS("mmcr:kubejs_transaction_direct_recipe").recipePool("mmcr:test_machine_name").build();
         assertThat(RecipeRegistry.containsStatic(MMCR.id("kubejs_transaction_direct_recipe"))).isTrue();
     }
 
@@ -427,7 +427,7 @@ class PluginBindingTest {
 
         Plugin.beginServerReload(reload, 0);
         new MachineRecipeBuilderJS(recipeId)
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .build();
 
         assertThat(RecipeRegistry.containsStatic(recipeId)).isFalse();
@@ -697,7 +697,7 @@ class PluginBindingTest {
     void public_recipe_builder_creates_a_component_output_in_recipe_event_context() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:sharp_sword")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         {
                           'minecraft:custom_name': { text: 'Better钻石剑' },
@@ -721,7 +721,7 @@ class PluginBindingTest {
     void outputs_replaces_previously_declared_component_outputs() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:replaced_component_output")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .itemOutput("minecraft:iron_ingot", 1)
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Discarded' } }
@@ -737,7 +737,7 @@ class PluginBindingTest {
     @Test
     void component_output_rejects_negative_count_before_codec_decoding() {
         assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:negative_component_output")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", -1, JsonParser.parseString("{}")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Component item output count must not be negative: -1");
@@ -747,7 +747,7 @@ class PluginBindingTest {
     void component_output_added_after_outputs_list_is_merged_at_the_new_position() {
         Items.DIAMOND_SWORD.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
         var builder = new MachineRecipeBuilderJS("mmcr:component_after_outputs")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .outputs(List.of(new ItemStack(Items.DIAMOND)))
                 .itemOutputWithComponents("minecraft:diamond_sword", 1, JsonParser.parseString("""
                         { 'minecraft:custom_name': { text: 'Kept' } }
@@ -763,7 +763,7 @@ class PluginBindingTest {
     @Test
     void public_recipe_builder_creates_chanced_item_output_requirement() {
         new MachineRecipeBuilderJS("mmcr:chanced_diamond")
-                .machine("mmcr:test_machine_name")
+                .recipePool("mmcr:test_machine_name")
                 .chancedItemOutput("minecraft:diamond", 1, 0.5F)
                 .build();
 

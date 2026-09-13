@@ -153,7 +153,7 @@ class MachineRecipeSchemaTest {
         var builder = new MachineRecipeBuilderJS(MMCR.id("partial_output_recipe"));
 
         assertThat(builder.allowPartialOutputs()).isSameAs(builder);
-        builder.machine(machineId.toString()).build();
+        builder.recipePool(machineId.toString()).build();
 
         assertThat(RecipeRegistry.getRecipe(MMCR.id("partial_output_recipe")).allowPartialOutputs()).isTrue();
     }

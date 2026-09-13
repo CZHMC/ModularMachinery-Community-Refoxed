@@ -34,7 +34,7 @@ public final class RecipeStartContext {
     private boolean cancelled;
 
     public RecipeStartContext(MachineRecipe recipe, long requestedParallelism, long effectiveParallelism) {
-        this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
+        this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").recipePoolId()), recipe,
                 requestedParallelism, effectiveParallelism,
                 Math.max(1, IntegrationTypeHelper.asInt(IntegrationTypeHelper.applyDuration(
                         recipe.modifiers(), recipe.tickTime()))),

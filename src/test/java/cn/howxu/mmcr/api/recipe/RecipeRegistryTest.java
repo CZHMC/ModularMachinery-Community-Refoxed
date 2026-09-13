@@ -37,8 +37,8 @@ class RecipeRegistryTest {
 
         RecipeRegistry.replaceDynamic(Map.of(dynamicRecipe.id(), dynamicRecipe));
 
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.machineId())).containsExactly(staticRecipe);
-        assertThat(RecipeRegistry.byMachineId(dynamicRecipe.machineId())).containsExactly(dynamicRecipe);
+        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).containsExactly(staticRecipe);
+        assertThat(RecipeRegistry.byMachineId(dynamicRecipe.recipePoolId())).containsExactly(dynamicRecipe);
 
         RecipeRegistry.replaceDynamic(Map.of());
 
@@ -73,8 +73,8 @@ class RecipeRegistryTest {
         assertThat(RecipeRegistry.getRecipe(id)).isSameAs(dataPackRecipe);
         assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(id, dataPackRecipe);
         assertThat(RecipeRegistry.staticSnapshot()).containsEntry(id, staticRecipe);
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.machineId())).isEmpty();
-        assertThat(RecipeRegistry.byMachineId(dataPackRecipe.machineId())).containsExactly(dataPackRecipe);
+        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).isEmpty();
+        assertThat(RecipeRegistry.byMachineId(dataPackRecipe.recipePoolId())).containsExactly(dataPackRecipe);
         assertThat(RecipeRegistry.lastDataPackWarnings()).containsExactly(
                 "data-pack layer recipe mmcr:layered_recipe overrides static layer recipe mmcr:layered_recipe");
     }
@@ -88,7 +88,7 @@ class RecipeRegistryTest {
 
         assertThat(RecipeRegistry.getRecipe(holderId).id()).isEqualTo(holderId);
         assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:generated_recipe"))).isNull();
-        assertThat(RecipeRegistry.byMachineId(generated.machineId())).extracting(MachineRecipe::id)
+        assertThat(RecipeRegistry.byMachineId(generated.recipePoolId())).extracting(MachineRecipe::id)
                 .containsExactly(holderId);
     }
 
@@ -107,7 +107,7 @@ class RecipeRegistryTest {
     @Test
     void effectiveByMachineIndexMatchesEffectiveSnapshot() {
         var staticRecipe = recipe("mmcr:static_layered", "mmcr:layered_machine");
-        var dataPackRecipe = RecipeTestSupport.create(staticRecipe.id(), staticRecipe.machineId(), 1,
+        var dataPackRecipe = RecipeTestSupport.create(staticRecipe.id(), staticRecipe.recipePoolId(), 1,
                 List.of(), List.of(), List.of(), 5, 1, false, List.of(), List.of(), false, List.of(), false, Set.of());
         var dynamicRecipe = recipe("mmcr:kjs_layered", "mmcr:layered_machine");
         RecipeRegistry.registerStatic(staticRecipe);
@@ -117,13 +117,13 @@ class RecipeRegistryTest {
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
         assertThat(RecipeRegistry.effectiveSnapshot().values()).containsExactly(dataPackRecipe, dynamicRecipe);
         assertThat(RecipeRegistry.recipes()).containsExactly(dataPackRecipe, dynamicRecipe);
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.machineId())).containsExactly(dynamicRecipe, dataPackRecipe);
+        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).containsExactly(dynamicRecipe, dataPackRecipe);
 
         RecipeRegistry.replaceDataPack(Map.of());
 
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
         assertThat(RecipeRegistry.getRecipe(staticRecipe.id())).isSameAs(staticRecipe);
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.machineId())).containsExactly(dynamicRecipe, staticRecipe);
+        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).containsExactly(dynamicRecipe, staticRecipe);
     }
 
     @Test

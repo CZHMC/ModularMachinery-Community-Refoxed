@@ -424,8 +424,8 @@ public class MekanismPortGameTest {
                     "Installed unavailable bridge reports the documented failure reason");
 
             MachineRecipeBuilder builder = MachineRecipeBuilder.recipe(
-                            Identifier.fromNamespaceAndPath("mmcr_test", "unavailable_chemical_e2e"),
-                            Identifier.fromNamespaceAndPath("mmcr_test", "test_cube"))
+                            Identifier.fromNamespaceAndPath("mmcr_test", "unavailable_chemical_e2e"))
+                    .recipePool(Identifier.fromNamespaceAndPath("mmcr_test", "test_cube"))
                     .duration(20)
                     .inputChemical(Identifier.fromNamespaceAndPath("mekanism", "oxygen"), 1_000L)
                     .outputChemical(Identifier.fromNamespaceAndPath("mekanism", "hydrogen"), 200L, 0.5F)

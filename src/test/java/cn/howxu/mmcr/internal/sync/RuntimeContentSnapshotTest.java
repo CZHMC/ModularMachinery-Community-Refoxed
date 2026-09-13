@@ -181,7 +181,7 @@ class RuntimeContentSnapshotTest {
         MachineRecipe decoded = MachineRecipeSyncCodec.decode(buf);
 
         assertThat(decoded.id()).isEqualTo(original.id());
-        assertThat(decoded.machineId()).isEqualTo(original.machineId());
+        assertThat(decoded.recipePoolId()).isEqualTo(original.recipePoolId());
         assertThat(decoded.tickTime()).isEqualTo(40);
         assertThat(decoded.priority()).isEqualTo(5);
         assertThat(decoded.maxThreads()).isEqualTo(3);

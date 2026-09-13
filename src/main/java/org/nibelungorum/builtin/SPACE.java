@@ -134,7 +134,8 @@ public class SPACE {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(SPACE_REASSEMBLER.withSuffix("_space_reassembler_1"), SPACE_REASSEMBLER)
+                .recipe(SPACE_REASSEMBLER.withSuffix("_space_reassembler_1"))
+                .recipePool(SPACE_REASSEMBLER)
                 .inputItem(Ingredient.of(Items.POTION), 1, potion("minecraft:water"), 1F)
                 .outputItem(new ItemStack(Items.POTION), potion("minecraft:healing"))
                 .inputEnergy(100)
@@ -146,7 +147,8 @@ public class SPACE {
         event.registerRecipe(recipe);
 
         recipe = MachineRecipeBuilder
-                .recipe(SPACE_ELEVATOR.withSuffix("_recipe_1"), SPACE_ELEVATOR)
+                .recipe(SPACE_ELEVATOR.withSuffix("_recipe_1"))
+                .recipePool(SPACE_ELEVATOR)
                 .inputItem(Items.APPLE, 1)
                 .outputItem(Items.GOLDEN_APPLE, 3)
                 .inputEnergy(100)

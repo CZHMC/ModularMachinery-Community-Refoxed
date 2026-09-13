@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -44,7 +43,7 @@ import java.util.List;
 import java.util.Set;
 
 public class MachineRecipeBuilderJS {
-    public Identifier machineId;
+    public Identifier recipePoolId;
     public int tickTime = 40;
     public final List<MachineIngredient> inputs = new ArrayList<>();
     public final List<ItemStack> outputs = new ArrayList<>();
@@ -79,14 +78,14 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    public MachineRecipeBuilderJS machine(String id) {
+    public MachineRecipeBuilderJS recipePool(String id) {
         var parsed = Identifier.parse(id);
 
-        if (MachineRegistry.getMachine(parsed) == null && MachineDefinitions.getRegistration(parsed) == null) {
-            throw new IllegalArgumentException("Machine not found: " + id);
+        if (!MachineRegistry.containsRecipePool(parsed)) {
+            throw new IllegalArgumentException("Recipe pool not found: " + id);
         }
 
-        this.machineId = parsed;
+        this.recipePoolId = parsed;
 
         return this;
     }
@@ -483,8 +482,8 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipe createObject() {
-        if (machineId == null) {
-            throw new IllegalStateException("machine() not called");
+        if (recipePoolId == null) {
+            throw new IllegalStateException("recipePool() not called");
         }
         if (tickTime < 1 || energyPerTick < 0 || maxThreads < 0) {
             throw new IllegalArgumentException("Recipe tick time must be >= 1 and counts must not be negative");
@@ -544,7 +543,7 @@ public class MachineRecipeBuilderJS {
         for (FluidStack fluidOutput : fluidOutputs) {
             canonicalOutputs.add(new MachineOutput.FluidOutput(fluidOutput, 1F));
         }
-        MachineRecipe recipe = MachineRecipe.fromCanonical(id, machineId, tickTime,
+        MachineRecipe recipe = MachineRecipe.fromCanonical(id, recipePoolId, tickTime,
                 recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), canonicalOutputs,
                 List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, parallelized,
                 List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));

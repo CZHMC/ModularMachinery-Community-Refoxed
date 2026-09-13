@@ -25,7 +25,7 @@ public final class RecipeTickContext {
     private final CapabilitySnapshot capabilitySnapshot;
 
     public RecipeTickContext(MachineRecipe recipe, int currentTick, int totalTick, long parallelism) {
-        this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").machineId()), recipe,
+        this(MachineBehaviorContext.empty(Objects.requireNonNull(recipe, "recipe").recipePoolId()), recipe,
                 currentTick, totalTick, parallelism,
                 MachineRecipeConverter.toPublicRequirements(recipe.runtimeRequirements()), recipe.runtimeMachineOutputs(),
                 new CapabilitySnapshot(List.of()));

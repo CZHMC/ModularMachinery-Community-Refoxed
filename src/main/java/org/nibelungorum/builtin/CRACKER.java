@@ -83,7 +83,8 @@ public class CRACKER {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(CRACKER.withSuffix("_recipe_1"),CRACKER)
+                .recipe(CRACKER.withSuffix("_recipe_1"))
+                .recipePool(CRACKER)
                 .inputItem(Ingredient.of(Items.LAPIS_LAZULI),8)
                 .inputItem(Items.COAL,1)
                 .outputFluid(Fluids.WATER,500)

@@ -120,7 +120,8 @@ public class DISTILLATION_TOWER {
     @SubscribeEvent
     public static void register(MMCRMachineRecipesEvent event) {
         var recipe = MachineRecipeBuilder
-                .recipe(DISTILLATION_TOWER.withSuffix("_recipe_1"), DISTILLATION_TOWER)
+                .recipe(DISTILLATION_TOWER.withSuffix("_recipe_1"))
+                .recipePool(DISTILLATION_TOWER)
                 .inputItem(ItemTags.LOGS, 1)
                 .outputItem(Items.COAL, 4)
                 .outputItem(Items.GUNPOWDER,3)

@@ -6,7 +6,7 @@ MMCREvents.startup(event => {
     const builder = event
         .createMachine("mmcr_kubejs:kubejs_thermal_smelting_furnace")
         .displayNameKey("machine.mmcr_kubejs.kubejs_thermal_smelting_furnace")
-        .recipeFamily("mmcr_kubejs:kubejs_thermal_smelting_furnace")
+        .recipePool("mmcr_kubejs:kubejs_thermal_smelting_furnace")
         .allowParallelism()
         .allowMultithreading() // Allow use multi threading process
         .maxParallelAmount(32)

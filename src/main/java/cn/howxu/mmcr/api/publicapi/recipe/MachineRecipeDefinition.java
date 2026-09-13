@@ -12,7 +12,7 @@ import java.util.Set;
  */
 public record MachineRecipeDefinition(
         Identifier id,
-        Identifier machineId,
+        Identifier recipePoolId,
         int tickTime,
         int priority,
         int maxThreads,
@@ -31,7 +31,7 @@ public record MachineRecipeDefinition(
         List<LevelRequirement> levelRequirements,
         Set<RequiredHost> requiredHosts) {
     public MachineRecipeDefinition {
-        if (id == null || machineId == null) throw new IllegalArgumentException("Recipe ids must not be null");
+        if (id == null || recipePoolId == null) throw new IllegalArgumentException("Recipe ids must not be null");
         if (tickTime < 1) throw new IllegalArgumentException("Recipe tick time must be >= 1");
         if (priority < 0) throw new IllegalArgumentException("Recipe priority must be non-negative");
         if (maxThreads < 1) throw new IllegalArgumentException("Recipe max threads must be positive");

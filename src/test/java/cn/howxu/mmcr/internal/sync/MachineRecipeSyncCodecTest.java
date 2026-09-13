@@ -58,7 +58,7 @@ class MachineRecipeSyncCodecTest {
             MachineRecipe decoded = MachineRecipeSyncCodec.decode(buffer);
 
             assertThat(decoded.id()).isEqualTo(original.id());
-            assertThat(decoded.machineId()).isEqualTo(original.machineId());
+            assertThat(decoded.recipePoolId()).isEqualTo(original.recipePoolId());
             assertThat(decoded.requirements()).containsExactly(new ScalarRequirement(RecipeModifier.IOType.INPUT,
                     12, List.of("input")));
             assertThat(decoded.machineOutputs()).containsExactly(new ScalarOutput(34, 0.75F));

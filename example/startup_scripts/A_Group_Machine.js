@@ -5,7 +5,7 @@ MMCREvents.startup(event => {
     const distillation_tower = event
         .createMachine("mmcr_kubejs:kubejs_distillation_tower")
         .displayNameKey("machine.mmcr_kubejs.kubejs_distillation_tower")
-        .recipeFamily("mmcr_kubejs:kubejs_distillation_tower")
+        .recipePool("mmcr_kubejs:kubejs_distillation_tower")
         .appearance("minecraft:polished_blackstone")
         .expandableStructure(true) // Enable the expandable structure.
 

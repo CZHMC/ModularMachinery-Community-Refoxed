@@ -256,7 +256,7 @@ class MachineRecipeDataDrivenTest {
             MachineRecipe base = MachineRecipe.fromCanonical(recipeId, Identifier.parse("mmcr:test_machine_name"),
                     20, List.of(), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
             MachineRecipe recipe = MachineRecipe.withAdditionalOutputs(base, List.of(new TestOutput(23, 0.5F)));
-            MachineRecipe equalRecipe = MachineRecipe.fromCanonical(recipeId, recipe.machineId(), recipe.tickTime(),
+            MachineRecipe equalRecipe = MachineRecipe.fromCanonical(recipeId, recipe.recipePoolId(), recipe.tickTime(),
                     List.of(), List.of(new TestOutput(23, 0.5F)), List.of(), 0, 1, false, false,
                     List.of(), false, Set.of());
 
@@ -347,7 +347,7 @@ class MachineRecipeDataDrivenTest {
     private static JsonObject recipeJson() {
         JsonObject json = new JsonObject();
         json.addProperty("type", "mmcr:machine_recipe");
-        json.addProperty("machine", "mmcr:test_machine_name");
+        json.addProperty("recipe_pool", "mmcr:test_machine_name");
         json.addProperty("tick_time", 20);
         json.add("requirements", new JsonArray());
         return json;

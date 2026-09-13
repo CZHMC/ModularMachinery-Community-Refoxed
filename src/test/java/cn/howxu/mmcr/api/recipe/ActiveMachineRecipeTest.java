@@ -43,7 +43,7 @@ class ActiveMachineRecipeTest {
         HolderLookup.Provider lookup = registryProvider();
         JsonObject root = new JsonObject();
         root.addProperty("id", "mmcr:enchanted_output_persistence");
-        root.addProperty("machine", "mmcr:test_cube");
+        root.addProperty("recipe_pool", "mmcr:test_cube");
         root.addProperty("tick_time", 20);
         JsonObject requirement = new JsonObject();
         requirement.addProperty("type", "minecraft:item");
@@ -81,7 +81,7 @@ class ActiveMachineRecipeTest {
         HolderLookup.Provider lookup = registryProvider();
         JsonObject root = new JsonObject();
         root.addProperty("id", "mmcr:legacy_recipe_definition");
-        root.addProperty("machine", "mmcr:test_cube");
+        root.addProperty("recipe_pool", "mmcr:test_cube");
         root.addProperty("tick_time", 20);
         root.add("requirements", new JsonArray());
         MachineRecipe recipe = MachineRecipe.CODEC.codec().parse(

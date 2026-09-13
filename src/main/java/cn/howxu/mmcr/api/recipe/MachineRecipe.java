@@ -40,7 +40,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public static final MapCodec<MachineRecipe> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Identifier.CODEC.optionalFieldOf("id", MMCR.id("generated_recipe")).forGetter(MachineRecipe::id),
-            Identifier.CODEC.fieldOf("machine").forGetter(MachineRecipe::machineId),
+            Identifier.CODEC.fieldOf("recipe_pool").forGetter(MachineRecipe::recipePoolId),
             Codec.INT.fieldOf("tick_time").forGetter(MachineRecipe::tickTime),
             boundedList(MachineOutput.CODEC, "outputs").optionalFieldOf("outputs", List.of()).forGetter(MachineRecipe::outputsWithoutDerivedRequirements),
             boundedList(RecipeModifier.CODEC, "modifiers").optionalFieldOf("modifiers", Collections.emptyList()).forGetter(MachineRecipe::modifiers),
@@ -56,7 +56,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     ).apply(instance, MachineRecipe::create));
 
     private final Identifier id;
-    private final Identifier machineId;
+    private final Identifier recipePoolId;
     private final int tickTime;
     private final List<MachineRequirement> requirements;
     private final List<MachineOutput> outputs;
@@ -70,7 +70,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final Set<Identifier> requiredHostIds;
 
     public MachineRecipe(Identifier id,
-                           Identifier machineId,
+                           Identifier recipePoolId,
                            int tickTime,
                            List<MachineRequirement> requirements,
                           List<MachineOutput> outputs,
@@ -85,14 +85,14 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
         }
-        if (machineId == null) {
-            throw new IllegalArgumentException("Recipe machineId must not be null");
+        if (recipePoolId == null) {
+            throw new IllegalArgumentException("Recipe recipePoolId must not be null");
         }
         if (tickTime < 1) {
             throw new IllegalArgumentException("Recipe tick time must be >= 1");
         }
         this.id = id;
-        this.machineId = machineId;
+        this.recipePoolId = recipePoolId;
         this.tickTime = tickTime;
         this.requirements = MachineRequirement.copyList(requirements == null ? List.of() : requirements);
         this.outputs = MachineOutput.copyList(outputs == null ? List.of() : outputs);
@@ -108,7 +108,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     private MachineRecipe(MachineRecipe recipe, List<MachineOutput> additionalOutputs) {
         this.id = recipe.id;
-        this.machineId = recipe.machineId;
+        this.recipePoolId = recipe.recipePoolId;
         this.tickTime = recipe.tickTime;
         this.modifiers = recipe.modifiers;
         this.priority = recipe.priority;
@@ -136,7 +136,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     private MachineRecipe(Identifier id, MachineRecipe recipe) {
         this.id = Objects.requireNonNull(id, "id");
-        this.machineId = recipe.machineId;
+        this.recipePoolId = recipe.recipePoolId;
         this.tickTime = recipe.tickTime;
         this.requirements = recipe.requirements;
         this.outputs = recipe.outputs;
@@ -158,7 +158,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     public static MachineRecipe fromCanonical(Identifier id,
-                                        Identifier machineId,
+                                         Identifier recipePoolId,
                                         int tickTime,
                                        List<MachineRequirement> requirements,
                                        List<MachineOutput> outputs,
@@ -171,7 +171,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                         boolean allowPartialOutputs,
                                         Set<Identifier> requiredHostIds) {
         List<MachineOutput> effectiveOutputs = appendOutputs(outputs, outputsFromRequirements(requirements));
-        return new MachineRecipe(id, machineId, tickTime, requirements, effectiveOutputs, modifiers, priority, maxThreads,
+        return new MachineRecipe(id, recipePoolId, tickTime, requirements, effectiveOutputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, levelRequirements, allowPartialOutputs, requiredHostIds);
     }
 
@@ -184,7 +184,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     private static MachineRecipe create(Identifier id,
-                                         Identifier machineId,
+                                         Identifier recipePoolId,
                                          int tickTime,
                                          List<MachineOutput> outputs,
                                          List<RecipeModifier> modifiers,
@@ -196,7 +196,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                          List<LevelRequirement> levelRequirements,
                                          boolean allowPartialOutputs,
                                          Set<Identifier> requiredHostIds) {
-         return fromCanonical(id, machineId, tickTime, requirements, outputs, modifiers,
+         return fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
                  priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
                  allowPartialOutputs, requiredHostIds);
     }
@@ -272,8 +272,8 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return id;
     }
 
-    public Identifier machineId() {
-        return machineId;
+    public Identifier recipePoolId() {
+        return recipePoolId;
     }
 
     public int tickTime() {
@@ -435,10 +435,6 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return id;
     }
 
-    public Identifier getOwningMachineIdentifier() {
-        return machineId;
-    }
-
     public int getRecipeTotalTickTime() {
         return tickTime;
     }
@@ -501,7 +497,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 && priority == that.priority
                 && maxThreads == that.maxThreads
                 && id.equals(that.id)
-                && machineId.equals(that.machineId)
+                && recipePoolId.equals(that.recipePoolId)
                 && requirements.equals(that.requirements)
                 && outputs.equals(that.outputs)
                 && levelRequirements.equals(that.levelRequirements)
@@ -514,7 +510,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, machineId, tickTime, requirements, outputs, modifiers, priority, maxThreads,
+        return Objects.hash(id, recipePoolId, tickTime, requirements, outputs, modifiers, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, levelRequirements, allowPartialOutputs, requiredHostIds);
     }
 

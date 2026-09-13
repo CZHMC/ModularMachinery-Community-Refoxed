@@ -236,7 +236,7 @@ public final class GameTestRegistry {
             MachineDefinition definition = builder.build();
             if (name.equals("distillation_tower_test") || name.equals("expandable_structure_stages")
                     || name.equals("expandable_structure_vertical_roll")) {
-                definition = new MachineDefinition(definition.id(), definition.displayNameKey(), definition.controller(),
+                definition = new MachineDefinition(definition.id(), definition.recipePoolId(), definition.displayNameKey(), definition.controller(),
                         definition.appearance(), definition.factory(), definition.role(), definition.acceptedModuleIds(),
                         definition.maxParallelism(), definition.parallelizable(), definition.failureAction(),
                         definition.allowModifiers(), definition.allowMultithreading(), definition.maxParallelAmount(), true,
@@ -387,8 +387,8 @@ public final class GameTestRegistry {
     }
 
     public static void registerRecipes(MMCRMachineRecipesEvent event) {
-        event.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("distillation_test_recipe"),
-                        MMCR.id("distillation_tower_test"))
+        event.registerRecipe(MachineRecipeBuilder.recipe(MMCR.id("distillation_test_recipe"))
+                        .recipePool(MMCR.id("distillation_tower_test"))
                 .duration(20).inputItem(Items.COAL, 1).outputFluid(Fluids.WATER, 1).build());
     }
 
