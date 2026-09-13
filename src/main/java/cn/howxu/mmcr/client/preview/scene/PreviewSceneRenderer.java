@@ -273,16 +273,46 @@ public final class PreviewSceneRenderer {
 
     private void drawOutlines(PreviewSceneRenderContext context, BlockHitResult hoverHit, BlockHitResult selectedHit) {
         if (context == null) return;
-        if (hoverHit != null) drawOutline(context, hoverHit, 0xFFFFFF00);
-        if (selectedHit != null && !selectedHit.equals(hoverHit)) drawOutline(context, selectedHit, 0xFF00FFFF);
+        if (selectedHit != null) {
+            drawHighlight(context, selectedHit, 0xFF00FFFF);
+        } else if (hoverHit != null) {
+            drawHighlight(context, hoverHit, 0xFFFFFF00);
+        }
     }
 
-    private static void drawOutline(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
+    private static void drawHighlight(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
         AABB box = new AABB(hit.getBlockPos()).inflate(0.002D);
-        VertexConsumer vertices = context.bufferSource().getBuffer(RenderTypes.lines());
-        PoseStack poseStack = new PoseStack();
-        PoseStack.Pose pose = poseStack.last();
-        float width = Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth;
+        PoseStack.Pose pose = new PoseStack().last();
+        VertexConsumer fill = context.bufferSource().getBuffer(RenderTypes.debugFilledBox());
+        drawFilledBox(fill, pose, box, (color & 0x00FFFFFF) | 0x44000000);
+        context.bufferSource().endBatch(RenderTypes.debugFilledBox());
+
+        VertexConsumer lines = context.bufferSource().getBuffer(RenderTypes.lines());
+        float width = Minecraft.getInstance().gameRenderer.getGameRenderState().windowRenderState.appropriateLineWidth * 2.0F;
+        drawOutline(lines, pose, box, color, width);
+        context.bufferSource().endBatch(RenderTypes.lines());
+    }
+
+    private static void drawFilledBox(VertexConsumer vertices, PoseStack.Pose pose, AABB box, int color) {
+        double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
+        quad(vertices, pose, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, color);
+        quad(vertices, pose, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, color);
+        quad(vertices, pose, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0, color);
+        quad(vertices, pose, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1, color);
+        quad(vertices, pose, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, color);
+        quad(vertices, pose, x1, y0, z0, x1, y0, z1, x1, y1, z1, x1, y1, z0, color);
+    }
+
+    private static void quad(VertexConsumer vertices, PoseStack.Pose pose,
+                             double ax, double ay, double az, double bx, double by, double bz,
+                             double cx, double cy, double cz, double dx, double dy, double dz, int color) {
+        vertices.addVertex(pose, (float) ax, (float) ay, (float) az).setColor(color);
+        vertices.addVertex(pose, (float) bx, (float) by, (float) bz).setColor(color);
+        vertices.addVertex(pose, (float) cx, (float) cy, (float) cz).setColor(color);
+        vertices.addVertex(pose, (float) dx, (float) dy, (float) dz).setColor(color);
+    }
+
+    private static void drawOutline(VertexConsumer vertices, PoseStack.Pose pose, AABB box, int color, float width) {
         double x0 = box.minX, y0 = box.minY, z0 = box.minZ, x1 = box.maxX, y1 = box.maxY, z1 = box.maxZ;
         line(vertices, pose, x0, y0, z0, x1, y0, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y0, z1, color, width);
         line(vertices, pose, x1, y0, z1, x0, y0, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y0, z0, color, width);
@@ -290,7 +320,6 @@ public final class PreviewSceneRenderer {
         line(vertices, pose, x1, y1, z1, x0, y1, z1, color, width); line(vertices, pose, x0, y1, z1, x0, y1, z0, color, width);
         line(vertices, pose, x0, y0, z0, x0, y1, z0, color, width); line(vertices, pose, x1, y0, z0, x1, y1, z0, color, width);
         line(vertices, pose, x1, y0, z1, x1, y1, z1, color, width); line(vertices, pose, x0, y0, z1, x0, y1, z1, color, width);
-        context.bufferSource().endLastBatch();
     }
 
     private static void line(VertexConsumer vertices, PoseStack.Pose pose, double x0, double y0, double z0,
