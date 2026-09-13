@@ -189,6 +189,7 @@ class MachineRecipeJsonTest {
         assertThat(recipe.allowPartialOutputs()).isTrue();
         assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:factory_controller"));
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
+            assertThat(level.io()).isEqualTo(RecipeModifier.IOType.INPUT);
             assertThat(level.typeId()).isEqualTo(Identifier.parse("mmcr:test_level_type"));
             assertThat(level.levelId()).isEqualTo(Identifier.parse("mmcr:test_level"));
         });
@@ -445,6 +446,7 @@ class MachineRecipeJsonTest {
     private static JsonObject levelRequirement() {
         var level = new JsonObject();
         level.addProperty("type", "mmcr:level");
+        level.addProperty("io", "input");
         level.addProperty("level_type", "mmcr:test_level_type");
         level.addProperty("level", "mmcr:test_level");
         return level;

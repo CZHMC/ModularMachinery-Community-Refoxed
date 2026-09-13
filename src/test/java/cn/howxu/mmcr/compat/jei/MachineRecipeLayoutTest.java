@@ -254,9 +254,9 @@ class MachineRecipeLayoutTest {
 
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_level_slot_layout"), MMCR.id("layout_test_machine"), 100,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(LevelRequirement.input(coilType, coilLevel), LevelRequirement.input(casingType, casingLevel)),
-                false, Set.of(MMCR.id("layout_host")));
+                false, List.of(), false, Set.of(MMCR.id("layout_host")));
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
 

@@ -31,7 +31,7 @@ public final class RecipeTestSupport {
                                         List<LevelRequirement> levelRequirements, boolean allowPartialOutputs,
                                         Set<Identifier> requiredHostIds) {
         List<MachineRequirement> canonicalRequirements = new ArrayList<>(requirements == null ? List.of() : requirements);
-        if (levelRequirements != null) canonicalRequirements.addAll(levelRequirements);
+        canonicalRequirements.addAll(levelRequirements == null ? List.of() : levelRequirements);
         return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, canonicalRequirements, outputs, modifiers, priority,
                 maxThreads, cancelRecipeOnPerTickFailure, parallelized,
                 allowPartialOutputs, requiredHostIds);
@@ -121,7 +121,7 @@ public final class RecipeTestSupport {
         List<MachineRequirement> requirements = hasExplicitRequirements
                 ? new ArrayList<>(castRequirements(explicitRequirements))
                 : new ArrayList<>(deriveRequirements(inputs, outputs, fluidOutputs));
-        if (levelRequirements != null) requirements.addAll(levelRequirements);
+        requirements.addAll(levelRequirements == null ? List.of() : levelRequirements);
         List<MachineOutput> machineOutputs = hasExplicitRequirements
                 ? deriveOutputs(requirements)
                 : new ArrayList<>();

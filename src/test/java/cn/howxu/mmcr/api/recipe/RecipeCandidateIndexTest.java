@@ -287,8 +287,8 @@ class RecipeCandidateIndexTest {
     @Test
     void search_prefers_missing_input_over_energy_and_level_requirements() {
         MachineRecipe levelLimited = RecipeTestSupport.create(id("level_limited"), MACHINE, 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, Set.of());
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, List.of(), false, Set.of());
         MachineRecipe energyLimited = RecipeTestSupport.create(id("energy_limited"), MACHINE, 20,
                 List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)), List.of(), List.of(), 0, 1);
         MachineRecipe inputLimited = itemRecipe("input_limited", Ingredient.of(Items.IRON_INGOT));
@@ -308,15 +308,15 @@ class RecipeCandidateIndexTest {
     void search_selects_the_highest_priority_failure_and_keeps_search_and_source_trace_frames() {
         MachineRecipe missingInput = recipeWithRequirements("search_missing_input",
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
-                        ItemStack.EMPTY)), List.of());
+                        ItemStack.EMPTY)));
         MachineRecipe missingEnergy = recipeWithRequirements("search_missing_energy",
-                List.of(new EnergyRequirement(1)), List.of());
+                List.of(new EnergyRequirement(1)));
         MachineRecipe lowTemperature = recipeWithRequirements("search_low_temperature",
-                List.of(LoadedHeatRequirement.minimumTemperature(450D)), List.of());
-        MachineRecipe insufficientLevel = recipeWithRequirements("search_insufficient_level", List.of(),
+                List.of(LoadedHeatRequirement.minimumTemperature(450D)));
+        MachineRecipe insufficientLevel = recipeWithRequirements("search_insufficient_level",
                 List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)));
         MachineRecipe missingOutput = recipeWithRequirements("search_missing_output",
-                List.of(MachineRequirement.itemOutput(new ItemStack(Items.DIAMOND))), List.of());
+                List.of(MachineRequirement.itemOutput(new ItemStack(Items.DIAMOND))));
         List<MachineRecipe> candidates = List.of(missingInput, missingEnergy, lowTemperature,
                 insufficientLevel, missingOutput);
 
@@ -341,8 +341,8 @@ class RecipeCandidateIndexTest {
     @Test
     void search_level_failure_is_typed_with_recipe_trace_and_level_details() {
         MachineRecipe levelLimited = RecipeTestSupport.create(id("level_only"), MACHINE, 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, Set.of());
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, List.of(), false, Set.of());
 
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
                 List.of(levelLimited), null, List.of(), List.of()).compute();
@@ -399,10 +399,9 @@ class RecipeCandidateIndexTest {
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ingredient, 1, ItemStack.EMPTY)), false);
     }
 
-    private static MachineRecipe recipeWithRequirements(String path, List<MachineRequirement> requirements,
-                                                        List<LevelRequirement> levels) {
+    private static MachineRecipe recipeWithRequirements(String path, List<MachineRequirement> requirements) {
         return RecipeTestSupport.create(id(path), MACHINE, 20, List.of(), List.of(), List.of(), 0, 1,
-                false, List.of(), requirements, false, levels, false, Set.of());
+                false, List.of(), requirements, false, List.of(), false, Set.of());
     }
 
     private static Ingredient singleMemberTagIngredient() {
