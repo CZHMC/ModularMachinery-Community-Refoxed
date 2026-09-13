@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.api.capability;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
@@ -21,15 +24,22 @@ class ExecutionStatusTest {
         Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "blocked");
         Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "machine");
         Map<String, String> details = new HashMap<>();
-        details.put("reason", "busy");
+        details.put("available", "0");
+        FailureReason reason = new FailureReason(Identifier.fromNamespaceAndPath("mmcr_test", "busy"),
+                "gui.mmcr.failure.busy", 10);
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, source, FailurePhase.CAPABILITY_COMMIT,
+                null, 1, details);
 
-        ExecutionStatus status = new ExecutionStatus(id, StatusSeverity.BLOCKED, source, details);
-        details.put("reason", "changed");
+        ExecutionStatus status = ExecutionStatus.blocked(id, source, occurrence);
+        details.put("available", "changed");
 
         assertThat(status.id()).isEqualTo(id);
         assertThat(status.severity()).isEqualTo(StatusSeverity.BLOCKED);
         assertThat(status.source()).isEqualTo(source);
-        assertThat(status.details()).containsEntry("reason", "busy");
+        assertThat(status.failure()).isSameAs(occurrence);
+        assertThat(status.reason()).isSameAs(reason);
+        assertThat(status.details()).containsEntry("available", "0");
+        assertThat(status.details()).doesNotContainKey("reason");
         assertThatThrownBy(() -> status.details().put("other", "value"))
                 .isInstanceOf(UnsupportedOperationException.class);
     }

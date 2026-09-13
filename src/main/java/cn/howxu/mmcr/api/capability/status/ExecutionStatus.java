@@ -1,9 +1,11 @@
 package cn.howxu.mmcr.api.capability.status;
 
-import cn.howxu.mmcr.MMCR;
 import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Describes the status of a capability operation.
@@ -11,31 +13,54 @@ import java.util.Map;
  * @param id the status identifier
  * @param severity the status severity
  * @param source the source that produced the status
- * @param details additional immutable status details
+ * @param failure structured failure details, or {@code null} for a non-failure status
  * @author howxu <dev@howxu.cn>
  */
 public record ExecutionStatus(
         Identifier id,
         StatusSeverity severity,
         Identifier source,
-        Map<String, String> details) {
-    public ExecutionStatus {
-        details = Map.copyOf(details);
-    }
+        @Nullable FailureOccurrence failure) {
 
     /**
-     * Resolves the optional reason detail through the registered failure reasons.
-     *
-     * @return the registered reason, or {@code null} when the detail is absent or unknown
+     * Compatibility boundary for existing serialized and producer status data.
      */
+    public <T extends Map<String, String>> ExecutionStatus(Identifier id, StatusSeverity severity,
+                                                            Identifier source, T details) {
+        this(id, severity, source, legacyFailure(source, details));
+    }
+
     public FailureReason reason() {
-        String value = details.get("reason");
-        if (value == null || value.isBlank()) return null;
-        try {
-            Identifier id = value.contains(":") ? Identifier.parse(value) : MMCR.id(value);
-            return FailureReasonRegistry.find(id);
-        } catch (IllegalArgumentException ignored) {
-            return null;
+        return failure == null ? null : failure.reason();
+    }
+
+    public Map<String, String> details() {
+        return failure == null ? Map.of() : failure.details();
+    }
+
+    public static ExecutionStatus blocked(Identifier id, Identifier source, FailureOccurrence failure) {
+        return new ExecutionStatus(id, StatusSeverity.BLOCKED, source, failure);
+    }
+
+    private static @Nullable FailureOccurrence legacyFailure(Identifier source, Map<String, String> details) {
+        Objects.requireNonNull(details, "details");
+        Map<String, String> copied = new HashMap<>(details);
+        if (copied.isEmpty()) return null;
+
+        String rawReason = copied.get("reason");
+        if (rawReason == null || rawReason.isBlank()) {
+            return FailureOccurrence.at(null, source, FailurePhase.UNKNOWN, null, null, copied);
         }
+
+        FailureReason reason;
+        try {
+            Identifier reasonId = rawReason.contains(":")
+                    ? Identifier.parse(rawReason)
+                    : Identifier.fromNamespaceAndPath("mmcr", rawReason);
+            reason = FailureReasonRegistry.find(reasonId);
+        } catch (IllegalArgumentException exception) {
+            reason = null;
+        }
+        return FailureOccurrence.at(reason, source, FailurePhase.UNKNOWN, null, null, copied);
     }
 }

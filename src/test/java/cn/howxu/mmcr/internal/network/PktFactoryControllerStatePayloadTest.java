@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 
@@ -204,10 +205,11 @@ class PktFactoryControllerStatePayloadTest {
     }
 
     private static ExecutionStatus failure(int detailCount) {
+        Map<String, String> details = IntStream.range(0, detailCount)
+                .boxed().collect(Collectors.toMap(String::valueOf, String::valueOf,
+                        (left, right) -> left, LinkedHashMap::new));
         return new ExecutionStatus(MMCR.id("payload_failure"), StatusSeverity.BLOCKED,
-                MMCR.id("payload_source"), IntStream.range(0, detailCount)
-                        .boxed().collect(Collectors.toMap(String::valueOf, String::valueOf,
-                                (left, right) -> left, LinkedHashMap::new)));
+                MMCR.id("payload_source"), details);
     }
 
     private static RegistryFriendlyByteBuf buffer() {
