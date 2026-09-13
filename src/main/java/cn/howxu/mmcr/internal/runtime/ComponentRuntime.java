@@ -56,7 +56,7 @@ public final class ComponentRuntime {
     private static final ExecutionStatus UNSPECIFIED_TICK_OPERATION_FAILURE = new ExecutionStatus(
             Identifier.fromNamespaceAndPath("mmcr", "capability_tick_operation_failure"), StatusSeverity.FAILURE,
             Identifier.fromNamespaceAndPath("mmcr", "capability_tick"),
-            FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
+            FailureOccurrence.at(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS,
                     Identifier.fromNamespaceAndPath("mmcr", "capability_tick"),
                     FailurePhase.CAPABILITY_COMMIT, null, null,
                     Map.of("raw_reason_id", "operation_failed_without_status")));

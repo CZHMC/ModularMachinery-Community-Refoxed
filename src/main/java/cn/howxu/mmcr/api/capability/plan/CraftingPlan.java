@@ -28,7 +28,7 @@ public final class CraftingPlan {
             Identifier.fromNamespaceAndPath("mmcr", "crafting_plan_operation_failure"),
             StatusSeverity.FAILURE,
             Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
-            FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
+            FailureOccurrence.at(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS,
                     Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
                     FailurePhase.CAPABILITY_COMMIT, null, null,
                     Map.of("raw_reason_id", "operation_failed_without_status")));

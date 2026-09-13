@@ -93,8 +93,7 @@ class CraftingPlanTest {
         assertThat(plan.commit()).isFalse();
         assertThat(plan.failure()).isNotNull();
         assertThat(plan.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
-        assertThat(plan.failure().reason()).isEqualTo(BuiltinFailureReasons.UNKNOWN);
-        assertThat(plan.failure().details()).containsEntry("raw_reason_id", "operation_failed_without_status");
+        assertThat(plan.failure().reason()).isEqualTo(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS);
     }
 
     @Test
@@ -104,8 +103,7 @@ class CraftingPlanTest {
         assertThat(plan.commit()).isFalse();
         assertThat(plan.failure()).isNotNull();
         assertThat(plan.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
-        assertThat(plan.failure().reason()).isEqualTo(BuiltinFailureReasons.UNKNOWN);
-        assertThat(plan.failure().details()).containsEntry("raw_reason_id", "operation_failed_without_status");
+        assertThat(plan.failure().reason()).isEqualTo(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS);
     }
 
     @Test

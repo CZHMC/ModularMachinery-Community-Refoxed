@@ -91,6 +91,20 @@ class CapabilityTickContractTest {
     }
 
     @Test
+    void operation_without_status_uses_the_typed_failure_reason() {
+        TickCapability capability = new TickCapability(context -> new CapabilityTickResult(
+                List.of(transaction -> null), null, false));
+        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
+        CapabilityTickContext context = new CapabilityTickContext(0L, CapabilityTickPhase.BEFORE_RECIPE, null, 1L,
+                new CapabilitySnapshot(List.of(capability)), controller.behaviorContext());
+
+        CapabilityTickResult result = new ComponentRuntime().executeTickPhase(context);
+
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.OPERATION_FAILED_WITHOUT_STATUS);
+    }
+
+    @Test
     void tick_facets_plan_in_capability_snapshot_order_and_idle_has_no_operations() {
         List<CapabilityTickPhase> phases = new ArrayList<>();
         TickCapability first = new TickCapability(context -> {
