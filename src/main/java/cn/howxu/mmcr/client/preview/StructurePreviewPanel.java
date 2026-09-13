@@ -215,6 +215,7 @@ public final class StructurePreviewPanel implements AutoCloseable {
 
     static int candidateIndex(int slot, long timeMillis, int candidateCount, int visibleSlotCount) {
         if (slot < 0 || slot >= visibleSlotCount || visibleSlotCount <= 0 || candidateCount <= 0) return -1;
+        if (slot >= candidateCount) return -1;
         int offset = (int) (Math.floorDiv(timeMillis, 1_000L) % candidateCount);
         return Math.floorMod(slot + offset, candidateCount);
     }

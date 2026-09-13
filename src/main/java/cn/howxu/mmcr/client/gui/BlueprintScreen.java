@@ -15,6 +15,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.minecraft.world.item.ItemStack;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -78,14 +79,16 @@ public final class BlueprintScreen extends Screen {
             nextStageButton = addRenderableWidget(textButton(
                     "gui.mmcr.blueprint.next_level", currentLayout.nextStageButton(),
                     "jei.mmcr.structure_preview.next_level", this::selectNextStage));
-            previousStageButton = addRenderableWidget(textButton(
-                    "gui.mmcr.blueprint.previous_level", currentLayout.previousStageButton(),
-                    "jei.mmcr.structure_preview.previous_level", this::selectPreviousStage));
+            if (currentLayout.previousStageButton() != null) {
+                previousStageButton = addRenderableWidget(textButton(
+                        "gui.mmcr.blueprint.previous_level", currentLayout.previousStageButton(),
+                        "jei.mmcr.structure_preview.previous_level", this::selectPreviousStage));
+            }
         }
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         BlueprintLayout currentLayout = layout;
         if (currentLayout == null) return;
 
@@ -106,7 +109,7 @@ public final class BlueprintScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubleClick) {
         BlueprintLayout currentLayout = layout;
         if (currentLayout != null && itemRowAt(currentLayout, event.x(), event.y())) return true;
         if (currentLayout != null && currentLayout.preview().contains(event.x(), event.y())) {
@@ -116,7 +119,7 @@ public final class BlueprintScreen extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
+    public boolean mouseReleased(@NonNull MouseButtonEvent event) {
         BlueprintLayout currentLayout = layout;
         if (currentLayout != null && itemRowAt(currentLayout, event.x(), event.y())) return true;
         if (currentLayout != null && currentLayout.preview().contains(event.x(), event.y())) {
@@ -126,7 +129,7 @@ public final class BlueprintScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+    public boolean mouseDragged(@NonNull MouseButtonEvent event, double dragX, double dragY) {
         BlueprintLayout currentLayout = layout;
         if (currentLayout != null && itemRowAt(currentLayout, event.x(), event.y())) return true;
         if (currentLayout != null && currentLayout.preview().contains(event.x(), event.y())) {
