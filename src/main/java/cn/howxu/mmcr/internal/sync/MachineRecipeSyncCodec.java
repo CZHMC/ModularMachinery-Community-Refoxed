@@ -52,7 +52,7 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_REQUIRED_HOSTS = 1024;
     private static final int MAX_TAGS = 1024;
     private static final int FORMAT_MARKER = -1;
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
 
     private MachineRecipeSyncCodec() {
     }
