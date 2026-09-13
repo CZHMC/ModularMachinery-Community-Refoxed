@@ -13,7 +13,10 @@ import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -95,7 +98,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         @Override
         default CapabilityOperation prepare(CapabilityRequest request) {
             if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
-                return transaction -> capabilityFailure(this, MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
+                return transaction -> capabilityFailure(this, BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
             if (!view().directions().supports(resourceRequest.ioType())) {
                 FailureReason reason = resourceRequest.ioType() == IOType.OUTPUT
@@ -441,7 +444,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
             if (matcher == null) {
                 return RequirementHandlerSupport.blockedPlan(requirement, context,
-                        MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH.id().toString());
+                        MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
             }
 
             boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
@@ -458,11 +461,11 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             if (output) {
                 if (matcher.exactHolder() == null) {
                     return RequirementHandlerSupport.blockedPlan(requirement, context,
-                            MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH.id().toString());
+                            MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
                 }
                 if (matchingPorts.isEmpty()) {
                     return RequirementHandlerSupport.blockedOutputPlan(requirement, context,
-                            "no_output_capacity",
+                            BuiltinFailureReasons.MISSING_OUTPUT,
                             RequirementHandlerSupport.scaled(requirement.ingredient().amount(), requestedParallelism));
                 }
                 OutputCapacity capacity = outputCapacity(matcher.exactHolder(), matchingPorts);
@@ -477,7 +480,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                 }
             } else {
                 if (matchingPorts.isEmpty()) {
-                    return RequirementHandlerSupport.blockedPlan(requirement, context, "insufficient_resource");
+                    return RequirementHandlerSupport.blockedPlan(requirement, context,
+                            BuiltinFailureReasons.MISSING_INPUT);
                 }
                 maximum = inputMaximum(matcher, matchingPorts, requirement.ingredient().amount(), requestedParallelism);
                 if (maximum <= 0L) failureReason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
@@ -486,9 +490,9 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             if (failureReason != null) {
                 return output
                         ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
-                        failureReason.id().toString(),
+                        failureReason,
                         RequirementHandlerSupport.scaled(requirement.ingredient().amount(), requestedParallelism))
-                        : RequirementHandlerSupport.blockedPlan(requirement, context, failureReason.id().toString());
+                        : RequirementHandlerSupport.blockedPlan(requirement, context, failureReason);
             }
             if (!output && requirement.consumeChance() <= 0F) {
                 return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
@@ -560,15 +564,15 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             if (remaining > 0L && !(allowPartialOutput && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
                 return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
                         requirement.io() == RecipeModifier.IOType.OUTPUT
-                                ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED.id().toString()
-                                : MekanismFailureReasons.CHEMICAL_INPUT_MISSING.id().toString()),
+                                ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
+                                : MekanismFailureReasons.CHEMICAL_INPUT_MISSING),
                         RequirementHandlerSupport.outputSimulation(requested, amount - remaining));
             }
             if (actions.isEmpty()) {
                 return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
                         requirement.io() == RecipeModifier.IOType.OUTPUT
-                                ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED.id().toString()
-                                : MekanismFailureReasons.CHEMICAL_INPUT_MISSING.id().toString()),
+                                ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
+                                : MekanismFailureReasons.CHEMICAL_INPUT_MISSING),
                         RequirementHandlerSupport.outputSimulation(requested, 0L));
             }
             return RequirementHandlerSupport.resourceOperations(actions, direction, parallelism, materialize,
@@ -631,15 +635,22 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             if (requirement.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE) {
                 boolean sufficient = ports.stream().anyMatch(port ->
                         port.heatHandler().getTemperature() >= requirement.heat().value());
+                double availableTemperature = ports.stream()
+                        .mapToDouble(port -> port.heatHandler().getTemperature())
+                        .max().orElse(0D);
                 return sufficient
                         ? new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null)
                         : RequirementHandlerSupport.blockedPlan(requirement, context,
-                        MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.id().toString());
+                        MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT,
+                        Map.of("required_temperature", Double.toString(requirement.heat().value()),
+                                "available_temperature", Double.toString(availableTemperature)));
             }
             if (ports.isEmpty()) {
                 return RequirementHandlerSupport.blockedOutputPlan(requirement, context,
-                        MekanismFailureReasons.HEAT_OUTPUT_BLOCKED.id().toString(),
-                        requestedHeat(requirement.heat().value(), context.requestedParallelism()));
+                        MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
+                        requestedHeat(requirement.heat().value(), context.requestedParallelism()),
+                        Map.of("requested_heat", Long.toString(
+                                requestedHeat(requirement.heat().value(), context.requestedParallelism()))));
             }
             return RequirementHandlerSupport.deferredPlan(context, context.requestedParallelism(),
                     (parallelism, ignored) -> heatPlan(requirement, ports, parallelism));
@@ -650,7 +661,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             double amount = requirement.heat().value() * parallelism;
             if (!Double.isFinite(amount) || amount < 0D) {
                 return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
-                        MekanismFailureReasons.HEAT_OUTPUT_BLOCKED.id().toString()));
+                        MekanismFailureReasons.HEAT_OUTPUT_BLOCKED));
             }
             if (amount == 0D) return new RequirementPlan.OperationPlan(List.of(), null);
             HeatPort port = ports.getFirst();
@@ -658,9 +669,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                 try {
                     port.heatHandler().handleHeat(amount, transaction);
                 } catch (RuntimeException exception) {
-                    return CapabilityResult.failure(new ExecutionStatus(requirement.type().id(),
-                            StatusSeverity.BLOCKED, requirement.type().id(), Map.of("reason",
-                            MekanismFailureReasons.HEAT_OUTPUT_BLOCKED.id().toString())));
+                    return capabilityFailure(requirement.type().id(), MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
+                            Map.of("requested_heat", Long.toString(requestedHeat(requirement.heat().value(), parallelism))));
                 }
                 return CapabilityResult.successful();
             };
@@ -745,8 +755,14 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     private static CapabilityResult capabilityFailure(MachineCapability capability, FailureReason reason) {
-        return CapabilityResult.failure(new ExecutionStatus(capability.type().id(), StatusSeverity.BLOCKED,
-                capability.type().id(), Map.of("reason", reason.id().toString())));
+        return capabilityFailure(capability.type().id(), reason, Map.of());
+    }
+
+    private static CapabilityResult capabilityFailure(Identifier source, FailureReason reason,
+                                                      Map<String, String> details) {
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, source, FailurePhase.CAPABILITY_COMMIT,
+                null, null, details);
+        return CapabilityResult.failure(ExecutionStatus.blocked(source, source, occurrence));
     }
 
     private static long transfer(IChemicalTank tank, ChemicalResource resource, long amount,

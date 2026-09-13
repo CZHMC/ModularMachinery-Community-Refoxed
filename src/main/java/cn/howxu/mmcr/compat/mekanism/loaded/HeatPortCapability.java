@@ -12,8 +12,12 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.util.IOType;
@@ -79,12 +83,23 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
-            return ignored -> failure("unsupported_request");
+            return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         return transaction -> {
             double amount = valueRequest.amount();
-            if (!valueRequest.insert() && heatCapacitor.getHeat() < amount) return failure("insufficient_heat");
-            heatCapacitor.handleHeat(valueRequest.insert() ? amount : -amount, transaction);
+            if (!valueRequest.insert() && heatCapacitor.getHeat() < amount) {
+                double available = Math.max(0D, heatCapacitor.getHeat());
+                return failure(MekanismFailureReasons.HEAT_INPUT_MISSING,
+                        Map.of("required_heat", Long.toString(valueRequest.amount()),
+                                "available_heat", Double.toString(available),
+                                "shortfall", Double.toString(Math.max(0D, amount - available))));
+            }
+            try {
+                heatCapacitor.handleHeat(valueRequest.insert() ? amount : -amount, transaction);
+            } catch (RuntimeException exception) {
+                return failure(MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
+                        Map.of("requested_heat", Long.toString(valueRequest.amount())));
+            }
             return CapabilityResult.successful();
         };
     }
@@ -114,8 +129,13 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
         heatCapacitor.setHeat(heat, null);
     }
 
-    private CapabilityResult failure(String reason) {
-        return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.BLOCKED,
-                type().id(), Map.of("reason", reason)));
+    private CapabilityResult failure(FailureReason reason) {
+        return failure(reason, Map.of());
+    }
+
+    private CapabilityResult failure(FailureReason reason, Map<String, String> details) {
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, type().id(), FailurePhase.CAPABILITY_COMMIT,
+                null, null, details);
+        return CapabilityResult.failure(ExecutionStatus.blocked(type().id(), type().id(), occurrence));
     }
 }

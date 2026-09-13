@@ -5,13 +5,15 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
-import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
@@ -26,6 +28,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -39,6 +42,7 @@ import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import mekanism.api.datamaps.chemical.attribute.IChemicalAttribute;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.api.resource.LargeResourceStack;
+import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
@@ -71,10 +75,9 @@ class MekanismRecipeHandlerTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        TestBootstrap.bootstrap();
-        if (FailureReasonRegistry.find(MekanismFailureReasons.MEKANISM_UNAVAILABLE.id()) == null) {
-            MekanismBridgeBootstrap.bootstrap();
-        }
+        TestBootstrap.bootstrapCapabilities();
+        BuiltinFailureReasons.register();
+        MekanismBridgeBootstrap.bootstrap();
     }
 
     @BeforeEach
@@ -107,8 +110,7 @@ class MekanismRecipeHandlerTest {
         RequirementPlan result = chemicalHandler().plan(requirement, List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason"))
-                .isEqualTo(MekanismFailureReasons.MEKANISM_UNAVAILABLE.id().toString());
+        assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.MEKANISM_UNAVAILABLE);
     }
 
     @Test
@@ -178,8 +180,7 @@ class MekanismRecipeHandlerTest {
         RequirementPlan result = handler.plan(requirement, List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason"))
-                .isEqualTo(MekanismFailureReasons.MEKANISM_UNAVAILABLE.id().toString());
+        assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.MEKANISM_UNAVAILABLE);
         assertThat(OutputRegistry.fromRequirement(requirement)).isNull();
     }
 
@@ -303,7 +304,7 @@ class MekanismRecipeHandlerTest {
                 List.of(), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Test
@@ -318,7 +319,7 @@ class MekanismRecipeHandlerTest {
                 List.of(new FakeChemicalPort(tank, IOType.OUTPUT)), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Test
@@ -367,7 +368,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("no_output_capacity");
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
     }
 
     @Test
@@ -382,7 +383,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("no_output_capacity");
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
     }
 
     @Test
@@ -397,7 +398,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Test
@@ -412,7 +413,7 @@ class MekanismRecipeHandlerTest {
                 List.of(port), testContext());
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details().get("reason")).isEqualTo("insufficient_resource");
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Test
@@ -424,6 +425,9 @@ class MekanismRecipeHandlerTest {
 
         assertThat(result.successful()).isFalse();
         assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT);
+        assertThat(result.failure().details())
+                .containsEntry("required_temperature", "350.0")
+                .containsEntry("available_temperature", "300.0");
     }
 
     @Test
@@ -458,6 +462,25 @@ class MekanismRecipeHandlerTest {
 
         assertThat(result.successful()).isFalse();
         assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.HEAT_OUTPUT_BLOCKED);
+        assertThat(result.failure().details()).containsEntry("requested_heat", "5");
+    }
+
+    @Test
+    void heat_capability_extraction_shortfall_reports_typed_commit_failure() {
+        BasicHeatCapacitor capacitor = BasicHeatCapacitor.create(300D, () -> 300D, () -> {
+        });
+        HeatPortCapability capability = new HeatPortCapability(capacitor, IOType.INPUT);
+        CapabilityRequests.ValueRequest request = new CapabilityRequests.ValueRequest(
+                new CapabilityType(MekanismRecipeTypes.HEAT), IOType.INPUT, 1L, Long.MAX_VALUE, false);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            CapabilityResult result = capability.prepare(request).commit(transaction);
+
+            assertThat(result.success()).isFalse();
+            assertThat(result.status().reason()).isSameAs(MekanismFailureReasons.HEAT_INPUT_MISSING);
+            assertThat(result.status().failure().trace().frames().getFirst().phase())
+                    .isEqualTo(FailurePhase.CAPABILITY_COMMIT);
+        }
     }
 
     @Test

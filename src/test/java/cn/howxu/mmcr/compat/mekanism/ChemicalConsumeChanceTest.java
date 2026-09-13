@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
-import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -90,10 +90,9 @@ class ChemicalConsumeChanceTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        TestBootstrap.bootstrap();
-        if (FailureReasonRegistry.find(MekanismFailureReasons.MEKANISM_UNAVAILABLE.id()) == null) {
-            MekanismBridgeBootstrap.bootstrap();
-        }
+        TestBootstrap.bootstrapCapabilities();
+        BuiltinFailureReasons.register();
+        MekanismBridgeBootstrap.bootstrap();
     }
 
     /**

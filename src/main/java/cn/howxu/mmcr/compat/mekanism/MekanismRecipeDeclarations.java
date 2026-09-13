@@ -2,8 +2,6 @@ package cn.howxu.mmcr.compat.mekanism;
 
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
-import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
@@ -15,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
@@ -23,7 +22,6 @@ import net.minecraft.resources.Identifier;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 
 /** Mekanism-free declarations used while the optional integration is unavailable.
@@ -159,9 +157,8 @@ public final class MekanismRecipeDeclarations {
     }
 
     private static RequirementPlan unavailable(MachineRequirement requirement, PlanningContext context) {
-        return new RequirementPlan(context.requirementIndex(), 0, List.of(), new ExecutionStatus(
-                requirement.type().id(), StatusSeverity.BLOCKED, requirement.type().id(),
-                Map.of("reason", MekanismFailureReasons.MEKANISM_UNAVAILABLE.id().toString())));
+        return RequirementHandlerSupport.blockedPlan(requirement, context,
+                MekanismFailureReasons.MEKANISM_UNAVAILABLE);
     }
 
     record UnavailableChemicalRequirement(RecipeModifier.IOType io, ChemicalIngredient ingredient,
