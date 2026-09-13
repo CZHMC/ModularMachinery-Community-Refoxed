@@ -45,8 +45,13 @@ public final class RequirementHandlerSupport {
     }
 
     public static ExecutionStatus blocked(MachineRequirement requirement, FailureReason reason) {
+        return blocked(requirement, reason, Map.of());
+    }
+
+    public static ExecutionStatus blocked(MachineRequirement requirement, FailureReason reason,
+                                         Map<String, String> details) {
         FailureOccurrence occurrence = FailureOccurrence.at(reason, requirement.type().id(),
-                FailurePhase.REQUIREMENT_PLAN, null, null, Map.of());
+                FailurePhase.REQUIREMENT_PLAN, null, null, details);
         return ExecutionStatus.blocked(requirement.type().id(), requirement.type().id(), occurrence);
     }
 

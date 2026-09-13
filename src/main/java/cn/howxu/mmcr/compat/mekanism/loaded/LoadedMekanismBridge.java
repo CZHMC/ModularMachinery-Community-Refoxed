@@ -18,7 +18,6 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
@@ -34,6 +33,8 @@ import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.WakeupReason;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
@@ -79,14 +80,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Predicate;
 
 /** Mekanism-present bridge implementation and loaded recipe handlers.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class LoadedMekanismBridge implements MekanismBridge {
-    private static volatile boolean transferPoliciesRegistered;
-
     /** Machine capability seam supplied by a loaded Mekanism chemical port. */
     public interface ChemicalPort extends MachineCapability {
         IChemicalTank chemicalTank();
@@ -313,10 +314,10 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
     @Override
     public synchronized void registerTransferPolicies() {
-        if (transferPoliciesRegistered) return;
-        TransferStrategyRegistry.register(new CapabilityType(MekanismRecipeTypes.CHEMICAL),
-                new ChemicalTransferPolicy());
-        transferPoliciesRegistered = true;
+        CapabilityType type = new CapabilityType(MekanismRecipeTypes.CHEMICAL);
+        if (TransferStrategyRegistry.policyFor(type).isEmpty()) {
+            TransferStrategyRegistry.register(type, new ChemicalTransferPolicy());
+        }
     }
 
     private static boolean exposes(IOPortBlockEntity port, Identifier type, Direction side) {
@@ -366,12 +367,14 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         public TransferResult transfer(TransferContext context) {
             ChemicalPort port = chemicalPort(context.capability());
             TransferFacet transfer = transferFacet(context.capability());
-            if (port == null || transfer == null) return transferBlocked("unsupported_capability");
+            if (port == null || transfer == null) {
+                return transferBlocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+            }
             if (context.eject() ? port.chemicalTank().amountAsLong() <= 0L : !hasWork(port)) {
-                return transferBlocked("no_work");
+                return transferBlocked(BuiltinFailureReasons.NO_WORK);
             }
             ResourceHandler<ChemicalResource> adjacent = adjacentChemical(context.capability(), context.side());
-            if (adjacent == null) return transferBlocked("no_target");
+            if (adjacent == null) return transferBlocked(BuiltinFailureReasons.NO_TARGET);
             ResourceHandler<ChemicalResource> internal = ChemicalPortCapability.resourceHandler(port.chemicalTank());
             int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
             long moved = context.eject()
@@ -416,9 +419,11 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return capability instanceof ChemicalPort port ? port : null;
     }
 
-    private static TransferResult transferBlocked(String reason) {
-        return TransferResult.blocked(new ExecutionStatus(MMCR.id("auto_io"), StatusSeverity.BLOCKED,
-                MMCR.id("auto_io"), Map.of("reason", reason)));
+    private static TransferResult transferBlocked(FailureReason reason) {
+        Identifier source = MMCR.id("auto_io");
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, source, FailurePhase.CAPABILITY_COMMIT,
+                null, null, Map.of());
+        return TransferResult.blocked(ExecutionStatus.blocked(source, source, occurrence));
     }
 
     public static RequirementHandler<LoadedChemicalRequirement> chemicalHandler() {
@@ -506,6 +511,26 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     (parallelism, reservations) -> planOperations(requirement, matcher, ports, parallelism,
                             consumed, reservations, direction, allowPartialOutput, false));
             return RequirementHandlerSupport.deferredPlan(context, maximum, operationFactory, reservationFactory);
+        }
+
+        @Override
+        public List<ResourceWakeup> resourceWakeups(LoadedChemicalRequirement requirement) {
+            ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
+            if (matcher == null) return List.of();
+            Predicate<Object> resourceMatcher = chemicalMatcher(matcher);
+            if (requirement.io() == RecipeModifier.IOType.INPUT) {
+                return List.of(new ResourceWakeup(Set.of(
+                        BuiltinFailureReasons.MISSING_INPUT.id(),
+                        BuiltinFailureReasons.PER_TICK.id(),
+                        MekanismFailureReasons.CHEMICAL_INPUT_MISSING.id()),
+                        WakeupReason.INPUT_AVAILABLE, resourceMatcher));
+            }
+            return List.of(new ResourceWakeup(Set.of(
+                    BuiltinFailureReasons.MISSING_OUTPUT.id(),
+                    BuiltinFailureReasons.FINISH.id(),
+                    MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED.id(),
+                    MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED.id()),
+                    WakeupReason.OUTPUT_CAPACITY, resourceMatcher));
         }
 
         @Override
@@ -621,6 +646,11 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     .map(ChemicalPort.class::cast)
                     .filter(port -> port.view().directions().supports(direction)).toList();
         }
+
+        private static Predicate<Object> chemicalMatcher(ChemicalMatcher matcher) {
+            return resource -> resource instanceof ChemicalResource chemical
+                    && !chemical.isEmpty() && matcher.matches(chemical.typeHolder());
+        }
     }
 
     private static final class HeatHandler implements RequirementHandler<LoadedHeatRequirement> {
@@ -656,12 +686,30 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     (parallelism, ignored) -> heatPlan(requirement, ports, parallelism));
         }
 
+        @Override
+        public List<ResourceWakeup> resourceWakeups(LoadedHeatRequirement requirement) {
+            CapabilityType heatType = new CapabilityType(MekanismRecipeTypes.HEAT);
+            if (requirement.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE) {
+                return List.of(new ResourceWakeup(Set.of(
+                        MekanismFailureReasons.HEAT_INPUT_MISSING.id(),
+                        MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.id()),
+                        WakeupReason.INPUT_AVAILABLE, heatType::equals));
+            }
+            return List.of(new ResourceWakeup(Set.of(
+                    BuiltinFailureReasons.MISSING_OUTPUT.id(),
+                    BuiltinFailureReasons.FINISH.id(),
+                    MekanismFailureReasons.HEAT_OUTPUT_BLOCKED.id()),
+                    WakeupReason.OUTPUT_CAPACITY, heatType::equals));
+        }
+
         private static RequirementPlan.OperationPlan heatPlan(LoadedHeatRequirement requirement,
                                                                List<HeatPort> ports, long parallelism) {
             double amount = requirement.heat().value() * parallelism;
             if (!Double.isFinite(amount) || amount < 0D) {
                 return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
-                        MekanismFailureReasons.HEAT_OUTPUT_BLOCKED));
+                        MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
+                        Map.of("requested_heat", Long.toString(
+                                requestedHeat(requirement.heat().value(), parallelism)))));
             }
             if (amount == 0D) return new RequirementPlan.OperationPlan(List.of(), null);
             HeatPort port = ports.getFirst();

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -9,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -31,8 +33,18 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
     private static final RequirementHandler<LoadedChemicalRequirement> UNAVAILABLE =
             (requirement, capabilities, context) -> unavailable(requirement, context);
     private static volatile RequirementHandler<LoadedChemicalRequirement> delegate = UNAVAILABLE;
-    private static final RequirementHandler<LoadedChemicalRequirement> DELEGATING_HANDLER =
-            (requirement, capabilities, context) -> delegate.plan(requirement, capabilities, context);
+    private static final RequirementHandler<LoadedChemicalRequirement> DELEGATING_HANDLER = new RequirementHandler<>() {
+        @Override
+        public RequirementPlan plan(LoadedChemicalRequirement requirement, List<MachineCapability> capabilities,
+                                    PlanningContext context) {
+            return delegate.plan(requirement, capabilities, context);
+        }
+
+        @Override
+        public List<ResourceWakeup> resourceWakeups(LoadedChemicalRequirement requirement) {
+            return delegate.resourceWakeups(requirement);
+        }
+    };
 
     public static final MapCodec<LoadedChemicalRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(ignored -> MekanismRecipeTypes.CHEMICAL.toString()),

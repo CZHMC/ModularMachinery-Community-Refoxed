@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -8,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -29,8 +31,18 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
     private static final RequirementHandler<LoadedHeatRequirement> UNAVAILABLE =
             (requirement, capabilities, context) -> unavailable(requirement, context);
     private static volatile RequirementHandler<LoadedHeatRequirement> delegate = UNAVAILABLE;
-    private static final RequirementHandler<LoadedHeatRequirement> DELEGATING_HANDLER =
-            (requirement, capabilities, context) -> delegate.plan(requirement, capabilities, context);
+    private static final RequirementHandler<LoadedHeatRequirement> DELEGATING_HANDLER = new RequirementHandler<>() {
+        @Override
+        public RequirementPlan plan(LoadedHeatRequirement requirement, List<MachineCapability> capabilities,
+                                    PlanningContext context) {
+            return delegate.plan(requirement, capabilities, context);
+        }
+
+        @Override
+        public List<ResourceWakeup> resourceWakeups(LoadedHeatRequirement requirement) {
+            return delegate.resourceWakeups(requirement);
+        }
+    };
 
     public static final RequirementType<LoadedHeatRequirement> TEMPERATURE_TYPE = type(
             MekanismRecipeTypes.HEAT_TEMPERATURE, HeatRequirement.Kind.MINIMUM_TEMPERATURE);

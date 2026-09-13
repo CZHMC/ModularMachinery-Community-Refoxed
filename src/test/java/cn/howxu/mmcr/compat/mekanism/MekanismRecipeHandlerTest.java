@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -13,6 +14,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -21,6 +23,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
@@ -28,7 +31,12 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
+import cn.howxu.mmcr.api.capability.transfer.TransferContext;
+import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
+import cn.howxu.mmcr.api.capability.transfer.TransferResult;
+import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -45,6 +53,7 @@ import mekanism.api.resource.LargeResourceStack;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -484,6 +493,90 @@ class MekanismRecipeHandlerTest {
     }
 
     @Test
+    void chemical_capability_extraction_shortfall_reports_typed_commit_failure() {
+        Holder.Reference<Chemical> chemical = registerChemical("chemical_commit_shortfall");
+        ChemicalResource resource = ChemicalResource.of(chemical);
+        FakeChemicalTank tank = new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        tank.setContents(resource, 1L, null);
+        ChemicalPortCapability capability = new ChemicalPortCapability(tank, IOType.INPUT);
+        CapabilityRequests.ResourceRequest<ChemicalResource> request = new CapabilityRequests.ResourceRequest<>(
+                new CapabilityType(MekanismRecipeTypes.CHEMICAL), IOType.INPUT, 1L,
+                List.of(new CapabilityRequests.ResourceAction<>(0, resource, 2L, false)));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            CapabilityResult result = capability.prepare(request).commit(transaction);
+
+            assertThat(result.success()).isFalse();
+            assertThat(result.status().reason()).isSameAs(MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
+            assertThat(result.status().failure().trace().frames().getFirst().phase())
+                    .isEqualTo(FailurePhase.CAPABILITY_COMMIT);
+        }
+    }
+
+    @Test
+    void chemical_automatic_io_failures_use_typed_capability_commit_reasons() {
+        try (TransferStrategyRegistry.TestScope ignored = TransferStrategyRegistry.openTestScope()) {
+            new LoadedMekanismBridge().registerTransferPolicies();
+            TransferPolicy policy = TransferStrategyRegistry.policyFor(
+                    new CapabilityType(MekanismRecipeTypes.CHEMICAL)).orElseThrow();
+
+            TransferResult unsupported = policy.transfer(TransferContext.simulate(
+                    new FakeChemicalPort(new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT),
+                    IOType.INPUT, Direction.NORTH, 1L));
+            assertAutomaticIoFailure(unsupported, BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+
+            ChemicalPortCapability capability = new ChemicalPortCapability(
+                    new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW), IOType.INPUT);
+            TransferContext context = TransferContext.simulate(capability, IOType.INPUT, Direction.NORTH, 1L);
+            assertAutomaticIoFailure(policy.eject(context), BuiltinFailureReasons.NO_WORK);
+            assertAutomaticIoFailure(policy.transfer(context), BuiltinFailureReasons.NO_TARGET);
+        }
+    }
+
+    @Test
+    void mekanism_requirement_wakeups_use_typed_failure_ids_and_matchers() {
+        LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+        LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+        Holder.Reference<Chemical> chemical = registerChemical("wakeup");
+        ChemicalResource resource = ChemicalResource.of(chemical);
+
+        ResourceWakeup chemicalInput = chemicalHandler().resourceWakeups(
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical.key().identifier(), 1L))).getFirst();
+        assertThat(chemicalInput.failureReasonIds()).contains(
+                BuiltinFailureReasons.MISSING_INPUT.id(), BuiltinFailureReasons.PER_TICK.id(),
+                MekanismFailureReasons.CHEMICAL_INPUT_MISSING.id());
+        assertThat(chemicalInput.reason()).isEqualTo(RequirementHandler.WakeupReason.INPUT_AVAILABLE);
+        assertThat(chemicalInput.matcher().test(resource)).isTrue();
+        assertThat(chemicalInput.matcher().test(ChemicalResource.EMPTY)).isFalse();
+
+        ResourceWakeup chemicalOutput = chemicalHandler().resourceWakeups(
+                LoadedChemicalRequirement.output(chemical.key().identifier(), 1L, 1F)).getFirst();
+        assertThat(chemicalOutput.failureReasonIds()).contains(
+                BuiltinFailureReasons.MISSING_OUTPUT.id(), BuiltinFailureReasons.FINISH.id(),
+                MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED.id(),
+                MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED.id());
+        assertThat(chemicalOutput.reason()).isEqualTo(RequirementHandler.WakeupReason.OUTPUT_CAPACITY);
+        assertThat(chemicalOutput.matcher().test(resource)).isTrue();
+
+        ResourceWakeup heatInput = heatHandler().resourceWakeups(
+                LoadedHeatRequirement.minimumTemperature(350D)).getFirst();
+        assertThat(heatInput.failureReasonIds()).contains(
+                MekanismFailureReasons.HEAT_INPUT_MISSING.id(),
+                MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.id());
+        assertThat(heatInput.reason()).isEqualTo(RequirementHandler.WakeupReason.INPUT_AVAILABLE);
+        assertThat(heatInput.matcher().test(new CapabilityType(MekanismRecipeTypes.HEAT))).isTrue();
+        assertThat(heatInput.matcher().test(new CapabilityType(MekanismRecipeTypes.HEAT_TEMPERATURE))).isFalse();
+
+        ResourceWakeup heatOutput = heatHandler().resourceWakeups(
+                LoadedHeatRequirement.outputHeat(5D)).getFirst();
+        assertThat(heatOutput.failureReasonIds()).contains(
+                BuiltinFailureReasons.MISSING_OUTPUT.id(), BuiltinFailureReasons.FINISH.id(),
+                MekanismFailureReasons.HEAT_OUTPUT_BLOCKED.id());
+        assertThat(heatOutput.reason()).isEqualTo(RequirementHandler.WakeupReason.OUTPUT_CAPACITY);
+        assertThat(heatOutput.matcher().test(new CapabilityType(MekanismRecipeTypes.HEAT))).isTrue();
+    }
+
+    @Test
     void heat_output_uses_transactional_handle_heat() {
         LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
         FakeHeatPort port = new FakeHeatPort(360D, IOType.OUTPUT);
@@ -513,6 +606,16 @@ class MekanismRecipeHandlerTest {
 
     private static cn.howxu.mmcr.api.capability.plan.PlanningContext testContext() {
         return new PlanningContext(1, 0);
+    }
+
+    private static void assertAutomaticIoFailure(TransferResult result, FailureReason reason) {
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure().id()).isEqualTo(MMCR.id("auto_io"));
+        assertThat(result.failure().source()).isEqualTo(MMCR.id("auto_io"));
+        assertThat(result.failure().reason()).isSameAs(reason);
+        assertThat(result.failure().failure().trace().frames().getFirst().phase())
+                .isEqualTo(FailurePhase.CAPABILITY_COMMIT);
     }
 
     private static Holder.Reference<Chemical> registerChemical(String path) {
@@ -575,6 +678,11 @@ class MekanismRecipeHandlerTest {
         @Override
         public CapabilityType type() {
             return view.type();
+        }
+
+        @Override
+        public CapabilityDirections directions() {
+            return view.directions();
         }
 
         @Override
