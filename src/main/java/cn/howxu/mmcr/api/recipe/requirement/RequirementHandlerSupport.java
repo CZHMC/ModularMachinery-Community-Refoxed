@@ -10,11 +10,16 @@ import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.util.SaturatingLong;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,19 +35,67 @@ public final class RequirementHandlerSupport {
     private RequirementHandlerSupport() {
     }
 
-    public static ExecutionStatus blocked(MachineRequirement requirement, String reason) {
-        return new ExecutionStatus(requirement.type().id(), StatusSeverity.BLOCKED,
-                requirement.type().id(), Map.of("reason", reason));
+    public static ExecutionStatus blocked(MachineRequirement requirement, PlanningContext context,
+                                          FailureReason reason) {
+        return blocked(requirement, context, reason, Map.of());
     }
 
-    public static RequirementPlan blockedPlan(MachineRequirement requirement, PlanningContext context, String reason) {
-        return new RequirementPlan(context.requirementIndex(), 0, List.of(), blocked(requirement, reason));
+    public static ExecutionStatus blocked(MachineRequirement requirement, PlanningContext context,
+                                          FailureReason reason, Map<String, String> details) {
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, requirement.type().id(),
+                FailurePhase.REQUIREMENT_PLAN, null, context.requirementIndex(), details);
+        return ExecutionStatus.blocked(requirement.type().id(), requirement.type().id(), occurrence);
+    }
+
+    /**
+     * Preserves the optional integration boundary until its producers migrate to typed reasons.
+     */
+    @Deprecated
+    public static ExecutionStatus blocked(MachineRequirement requirement, Object legacyReason) {
+        LegacyFailure failure = legacyFailure(legacyReason);
+        FailureOccurrence occurrence = FailureOccurrence.at(failure.reason(), requirement.type().id(),
+                FailurePhase.REQUIREMENT_PLAN, null, null, failure.details());
+        return ExecutionStatus.blocked(requirement.type().id(), requirement.type().id(), occurrence);
+    }
+
+    public static RequirementPlan blockedPlan(MachineRequirement requirement, PlanningContext context,
+                                              FailureReason reason) {
+        return blockedPlan(requirement, context, reason, Map.of());
+    }
+
+    public static RequirementPlan blockedPlan(MachineRequirement requirement, PlanningContext context,
+                                              FailureReason reason, Map<String, String> details) {
+        return new RequirementPlan(context.requirementIndex(), 0L, List.of(),
+                blocked(requirement, context, reason, details));
+    }
+
+    @Deprecated
+    public static RequirementPlan blockedPlan(MachineRequirement requirement, PlanningContext context,
+                                              Object legacyReason) {
+        LegacyFailure failure = legacyFailure(legacyReason);
+        return new RequirementPlan(context.requirementIndex(), 0L, List.of(),
+                blocked(requirement, context, failure.reason(), failure.details()));
     }
 
     public static RequirementPlan blockedOutputPlan(MachineRequirement requirement, PlanningContext context,
-                                                    String reason, long requested) {
+                                                    FailureReason reason, long requested) {
+        return blockedOutputPlan(requirement, context, reason, requested, Map.of());
+    }
+
+    public static RequirementPlan blockedOutputPlan(MachineRequirement requirement, PlanningContext context,
+                                                    FailureReason reason, long requested,
+                                                    Map<String, String> details) {
         return RequirementPlan.withOutputSimulation(context.requirementIndex(), 0, List.of(),
-                blocked(requirement, reason), new OutputSimulation(requested, 0L, OutputFit.NONE));
+                blocked(requirement, context, reason, details), new OutputSimulation(requested, 0L, OutputFit.NONE));
+    }
+
+    @Deprecated
+    public static RequirementPlan blockedOutputPlan(MachineRequirement requirement, PlanningContext context,
+                                                    Object legacyReason, long requested) {
+        LegacyFailure failure = legacyFailure(legacyReason);
+        return RequirementPlan.withOutputSimulation(context.requirementIndex(), 0, List.of(),
+                blocked(requirement, context, failure.reason(), failure.details()),
+                new OutputSimulation(requested, 0L, OutputFit.NONE));
     }
 
     public static RequirementPlan deferredPlan(PlanningContext context, long maxParallelism,
@@ -150,5 +203,35 @@ public final class RequirementHandlerSupport {
             }
             return consumed;
         }
+    }
+
+    private static LegacyFailure legacyFailure(Object rawReason) {
+        if (rawReason instanceof FailureReason reason) return new LegacyFailure(reason, Map.of());
+        if (!(rawReason instanceof String value)) {
+            throw new IllegalArgumentException("legacy failure reason must be a string or FailureReason");
+        }
+        FailureReason reason = switch (value) {
+            case "insufficient_resource" -> BuiltinFailureReasons.MISSING_INPUT;
+            case "insufficient_energy" -> BuiltinFailureReasons.MISSING_ENERGY;
+            case "no_output_capacity" -> BuiltinFailureReasons.MISSING_OUTPUT;
+            default -> findLegacyReason(value);
+        };
+        return reason == BuiltinFailureReasons.UNKNOWN
+                ? new LegacyFailure(reason, Map.of("raw_reason_id", value))
+                : new LegacyFailure(reason, Map.of());
+    }
+
+    private static FailureReason findLegacyReason(String value) {
+        try {
+            Identifier id = value.contains(":") ? Identifier.parse(value)
+                    : Identifier.fromNamespaceAndPath("mmcr", value);
+            FailureReason reason = FailureReasonRegistry.find(id);
+            return reason == null ? BuiltinFailureReasons.UNKNOWN : reason;
+        } catch (IllegalArgumentException exception) {
+            return BuiltinFailureReasons.UNKNOWN;
+        }
+    }
+
+    private record LegacyFailure(FailureReason reason, Map<String, String> details) {
     }
 }

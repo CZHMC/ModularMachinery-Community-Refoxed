@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.Set;
@@ -25,7 +28,10 @@ public final class CraftingPlan {
             Identifier.fromNamespaceAndPath("mmcr", "crafting_plan_operation_failure"),
             StatusSeverity.FAILURE,
             Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
-            Map.of("reason", "operation_failed_without_status"));
+            FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
+                    Identifier.fromNamespaceAndPath("mmcr", "crafting_plan"),
+                    FailurePhase.CAPABILITY_COMMIT, null, null,
+                    Map.of("raw_reason_id", "operation_failed_without_status")));
     private final List<RequirementPlan> requirements;
     private final long parallelism;
     private final Map<Integer, RecipeModifier.IOType> directions;

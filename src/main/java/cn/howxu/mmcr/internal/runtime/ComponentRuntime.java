@@ -8,7 +8,10 @@ import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
@@ -53,7 +56,10 @@ public final class ComponentRuntime {
     private static final ExecutionStatus UNSPECIFIED_TICK_OPERATION_FAILURE = new ExecutionStatus(
             Identifier.fromNamespaceAndPath("mmcr", "capability_tick_operation_failure"), StatusSeverity.FAILURE,
             Identifier.fromNamespaceAndPath("mmcr", "capability_tick"),
-            Map.of("reason", "operation_failed_without_status"));
+            FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
+                    Identifier.fromNamespaceAndPath("mmcr", "capability_tick"),
+                    FailurePhase.CAPABILITY_COMMIT, null, null,
+                    Map.of("raw_reason_id", "operation_failed_without_status")));
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();

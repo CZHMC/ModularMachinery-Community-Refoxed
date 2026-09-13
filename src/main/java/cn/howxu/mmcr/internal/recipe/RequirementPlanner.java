@@ -8,8 +8,11 @@ import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -72,7 +75,7 @@ public final class RequirementPlanner {
                 return failed(requirementPlan.failure(), requirementIndexes.get(index), plans, requirementPlan);
             }
             if (parallelismFailure == null && requirementPlan.maxParallelism() <= 0) {
-                parallelismFailure = failure(requirement);
+                parallelismFailure = failure(requirement, requirementIndexes.get(index));
                 parallelismFailureIndex = requirementIndexes.get(index);
             }
             parallelism = Math.min(parallelism, requirementPlan.maxParallelism());
@@ -109,7 +112,8 @@ public final class RequirementPlanner {
         for (int index = 0; index < plans.size(); index++) {
             RequirementPlan plan = plans.get(index);
             RequirementPlan resolved = plan.materialize(selectedParallelism, materializationReservations,
-                    failure(requirements.get(index), "unsafe_operation_parallelism"));
+                    failure(requirements.get(index), requirementIndexes.get(index),
+                            BuiltinFailureReasons.UNSAFE_OPERATION_PARALLELISM));
             if (!resolved.successful()) {
                 return failed(resolved.failure(), requirementIndexes.get(index), materialized, resolved);
             }
@@ -179,18 +183,20 @@ public final class RequirementPlanner {
         return (RequirementHandler<MachineRequirement>) handler;
     }
 
-    private static @Nullable ExecutionStatus failure(MachineRequirement requirement) {
+    private static @Nullable ExecutionStatus failure(MachineRequirement requirement, int requirementIndex) {
         if (requirement == null) return null;
-        String reason = requirement.io() == RecipeModifier.IOType.OUTPUT
-                ? "no_output_capacity"
-                : requirement instanceof EnergyRequirement ? "insufficient_energy" : "insufficient_resource";
-        return failure(requirement, reason);
+        FailureReason reason = requirement.io() == RecipeModifier.IOType.OUTPUT
+                ? BuiltinFailureReasons.MISSING_OUTPUT
+                : requirement instanceof EnergyRequirement
+                ? BuiltinFailureReasons.MISSING_ENERGY : BuiltinFailureReasons.MISSING_INPUT;
+        return failure(requirement, requirementIndex, reason);
     }
 
-    private static @Nullable ExecutionStatus failure(MachineRequirement requirement, String reason) {
+    private static @Nullable ExecutionStatus failure(MachineRequirement requirement, int requirementIndex,
+                                                     FailureReason reason) {
         if (requirement == null) return null;
-        return new ExecutionStatus(requirement.type().id(),
-                StatusSeverity.BLOCKED,
-                requirement.type().id(), reason == null ? Map.of() : Map.of("reason", reason));
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, requirement.type().id(),
+                FailurePhase.REQUIREMENT_PLAN, null, requirementIndex, Map.of());
+        return ExecutionStatus.blocked(requirement.type().id(), requirement.type().id(), occurrence);
     }
 }

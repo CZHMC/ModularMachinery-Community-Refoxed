@@ -13,8 +13,11 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.util.IOType;
 
@@ -69,7 +72,7 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
         if (!(request instanceof CapabilityRequests.SmartValueRequest)
                 || !TYPE.equals(request.type())
                 || !directions().supports(request.ioType())) {
-            return ignored -> failure("unsupported_request");
+            return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         return CapabilityFactories.operation(this, request);
     }
@@ -84,15 +87,16 @@ public final class SmartInterfaceCapability implements MachineCapability, ValueF
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (!(request instanceof CapabilityRequests.SmartValueRequest smart)) {
-            return ignored -> failure("unsupported_request");
+            return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         return transaction -> storage.set(smart.interfaceType(), smart.value(), transaction)
                 ? CapabilityResult.successful()
-                : failure("smart_value");
+                : failure(BuiltinFailureReasons.SMART_VALUE);
     }
 
-    private CapabilityResult failure(String reason) {
-        return CapabilityResult.failure(new ExecutionStatus(TYPE.id(), StatusSeverity.BLOCKED,
-                TYPE.id(), Map.of("reason", reason)));
+    private CapabilityResult failure(FailureReason reason) {
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, TYPE.id(), FailurePhase.CAPABILITY_COMMIT,
+                null, null, Map.of());
+        return CapabilityResult.failure(ExecutionStatus.blocked(TYPE.id(), TYPE.id(), occurrence));
     }
 }

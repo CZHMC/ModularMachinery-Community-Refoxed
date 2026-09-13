@@ -15,8 +15,11 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -108,14 +111,18 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     @Override
     public CapabilityOperation prepareOperation(CapabilityRequest request) {
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
-            return ignored -> failure("unsupported_request");
+            return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         return transaction -> {
             long moved = valueRequest.insert()
                     ? storage.insert(valueRequest.amount(), transaction)
                     : storage.extract(valueRequest.amount(), transaction);
             return moved == valueRequest.amount()
-                    ? CapabilityResult.successful() : failure("insufficient_value");
+                    ? CapabilityResult.successful() : failure(
+                    valueRequest.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                    Map.of("required", Long.toString(valueRequest.amount()),
+                            "available", Long.toString(Math.max(0L, moved)),
+                            "shortfall", Long.toString(Math.max(0L, valueRequest.amount() - moved))));
         };
     }
 
@@ -124,9 +131,14 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         return prepareOperation(request);
     }
 
-    private CapabilityResult failure(String reason) {
-        return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.BLOCKED,
-                type().id(), Map.of("reason", reason)));
+    private CapabilityResult failure(FailureReason reason) {
+        return failure(reason, Map.of());
+    }
+
+    private CapabilityResult failure(FailureReason reason, Map<String, String> details) {
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, type().id(), FailurePhase.CAPABILITY_COMMIT,
+                null, null, details);
+        return CapabilityResult.failure(ExecutionStatus.blocked(type().id(), type().id(), occurrence));
     }
 
     @Override

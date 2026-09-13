@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
@@ -40,7 +41,7 @@ class FactoryRecipeThreadTest {
 
                 @Override
                 public List<ResourceWakeup> resourceWakeups(TestRequirement requirement) {
-                    return List.of(new ResourceWakeup(Set.of("insufficient_resource"), WakeupReason.INPUT_AVAILABLE,
+                    return List.of(new ResourceWakeup(Set.of(BuiltinFailureReasons.MISSING_INPUT.id()), WakeupReason.INPUT_AVAILABLE,
                             resource -> resource.equals("virtual-resource")));
                 }
             };

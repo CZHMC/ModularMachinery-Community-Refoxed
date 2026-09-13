@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -76,9 +77,16 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         long maximum = fluidMaximum(requirement, capabilities, parallelism, allowPartialOutput);
         if (maximum <= 0) {
             return requirement.io() == RecipeModifier.IOType.OUTPUT
-                    ? RequirementHandlerSupport.blockedOutputPlan(requirement, context, "no_output_capacity",
-                    requestedAmount(requirement, context.requestedParallelism()))
-                    : RequirementHandlerSupport.blockedPlan(requirement, context, "insufficient_resource");
+                    ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
+                    BuiltinFailureReasons.MISSING_OUTPUT,
+                    requestedAmount(requirement, context.requestedParallelism()),
+                    Map.of("required", Long.toString(requestedAmount(requirement, context.requestedParallelism())),
+                            "available", "0", "shortfall",
+                            Long.toString(requestedAmount(requirement, context.requestedParallelism()))))
+                    : RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT,
+                    Map.of("required", Long.toString(RequirementHandlerSupport.scaled(
+                                    requirement.amount(), context.requestedParallelism())),
+                            "available", Long.toString(matchingFluidAmount(requirement, capabilities))));
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
@@ -90,9 +98,9 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                 ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), parallelism) : null;
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, capabilities, finalParallelism,
-                        consumed, reservations, direction, allowPartialOutput, true),
+                        context, consumed, reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
-                        requirement, capabilities, finalParallelism, consumed, reservations,
+                        requirement, capabilities, finalParallelism, context, consumed, reservations,
                         direction, allowPartialOutput, false)));
     }
 
@@ -101,11 +109,12 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             Predicate<Object> matcher = fluidMatcher(requirement);
             return matcher == null ? List.of() : List.of(new ResourceWakeup(
-                    Set.of("insufficient_resource", "per_tick"), WakeupReason.INPUT_AVAILABLE, matcher));
+                    Set.of(BuiltinFailureReasons.MISSING_INPUT.id(), BuiltinFailureReasons.PER_TICK.id()),
+                    WakeupReason.INPUT_AVAILABLE, matcher));
         }
         Predicate<Object> matcher = outputFluidMatcher(requirement);
         return matcher == null ? List.of() : List.of(new ResourceWakeup(
-                Set.of("insufficient_resource", "no_output_capacity", "finish"),
+                Set.of(BuiltinFailureReasons.MISSING_OUTPUT.id(), BuiltinFailureReasons.FINISH.id()),
                 WakeupReason.OUTPUT_CAPACITY, matcher));
     }
 
@@ -113,17 +122,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                                      long requested, boolean allowPartialOutputs) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             if (requirement.fluid() == null || requirement.amount() <= 0) return 0;
-            long available = 0L;
-            for (MachineCapability capability : capabilities) {
-                ResourceStorage<?> storage = RequirementHandlerSupport.resourceStorage(capability, FluidResource.class);
-                if (storage == null) continue;
-                for (int slot = 0; slot < storage.size(); slot++) {
-                    if (!(storage.resource(slot) instanceof FluidResource resource) || storage.amount(slot) <= 0L) continue;
-                    if (requirement.fluid().test(resource.toStack((int) Math.min(storage.amount(slot), Integer.MAX_VALUE)))) {
-                        available = RequirementHandlerSupport.saturatingAdd(available, storage.amount(slot));
-                    }
-                }
-            }
+            long available = matchingFluidAmount(requirement, capabilities);
             return Math.min(requested, available / requirement.amount());
         }
         FluidStack stack = requirement.stack();
@@ -155,6 +154,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
     private static RequirementPlan.OperationPlan planOperations(FluidRequirement requirement,
                                                                  List<MachineCapability> capabilities,
                                                                  long parallelism,
+                                                                 PlanningContext context,
                                                                  RequirementHandlerSupport.ConsumeProfile consumed,
                                                                  PlanningReservations reservations,
                                                                  IOType direction,
@@ -217,16 +217,18 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
             if (remaining == 0L) break;
         }
         if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
-            String reason = requirement.io() == RecipeModifier.IOType.OUTPUT
-                    && amount - remaining == 0L
-                    ? "no_output_capacity" : "insufficient_resource";
-            return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
-                    reason), RequirementHandlerSupport.outputSimulation(
+            boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
+            return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement, context,
+                    output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                    Map.of("required", Long.toString(amount), "available", Long.toString(amount - remaining),
+                            "shortfall", Long.toString(remaining))), RequirementHandlerSupport.outputSimulation(
                     requestedAmount, amount - remaining));
         }
         if (amount - remaining == 0L) {
             return new RequirementPlan.OperationPlan(List.of(),
-                    RequirementHandlerSupport.blocked(requirement, "no_output_capacity"),
+                    RequirementHandlerSupport.blocked(requirement, context, BuiltinFailureReasons.MISSING_OUTPUT,
+                            Map.of("required", Long.toString(amount), "available", "0", "shortfall",
+                                    Long.toString(amount))),
                     RequirementHandlerSupport.outputSimulation(requestedAmount, 0L));
         }
         return RequirementHandlerSupport.resourceOperations(actionMap, dynamicOperations, direction, parallelism,
@@ -260,6 +262,23 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
 
     private static long requestedAmount(FluidRequirement requirement, long parallelism) {
         return RequirementHandlerSupport.scaled(requirement.stack().getAmount(), parallelism);
+    }
+
+    private static long matchingFluidAmount(FluidRequirement requirement, List<MachineCapability> capabilities) {
+        if (requirement.fluid() == null) return 0L;
+        long available = 0L;
+        for (MachineCapability capability : capabilities) {
+            ResourceStorage<?> storage = RequirementHandlerSupport.resourceStorage(capability, FluidResource.class);
+            if (storage == null) continue;
+            for (int slot = 0; slot < storage.size(); slot++) {
+                if (!(storage.resource(slot) instanceof FluidResource resource) || storage.amount(slot) <= 0L) continue;
+                if (requirement.fluid().test(resource.toStack(
+                        (int) Math.min(storage.amount(slot), Integer.MAX_VALUE)))) {
+                    available = RequirementHandlerSupport.saturatingAdd(available, storage.amount(slot));
+                }
+            }
+        }
+        return available;
     }
 
     private static Predicate<Object> fluidMatcher(FluidRequirement requirement) {

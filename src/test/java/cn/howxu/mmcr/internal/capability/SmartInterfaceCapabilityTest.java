@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.capability;
 
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -58,8 +59,8 @@ class SmartInterfaceCapabilityTest {
                 capability.type(), IOType.OUTPUT, 1, 1L, true);
 
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(capability.prepare(wrongRequest).commit(transaction).status().details())
-                    .containsEntry("reason", "unsupported_request");
+            assertThat(capability.prepare(wrongRequest).commit(transaction).status().reason())
+                    .isEqualTo(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         assertThatThrownBy(() -> storage.set("mode", Float.NaN)).isInstanceOf(IllegalArgumentException.class);
         assertThat(storage.values()).isEqualTo(Map.of("mode", 1F));

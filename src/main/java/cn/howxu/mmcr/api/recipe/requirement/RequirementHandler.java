@@ -3,7 +3,11 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
@@ -50,20 +54,44 @@ public interface RequirementHandler<R extends MachineRequirement> {
     /**
      * Describes when a resource change can make a failed requirement eligible for another search.
      *
-     * @param failureReasons failure reasons this matcher can resolve
+     * @param failureReasonIds failure reason IDs this matcher can resolve
      * @param reason generic resource notification category
      * @param matcher predicate for the changed resource
      */
-    record ResourceWakeup(Set<String> failureReasons, WakeupReason reason, Predicate<Object> matcher) {
+    record ResourceWakeup(Set<Identifier> failureReasonIds, WakeupReason reason, Predicate<Object> matcher) {
         public ResourceWakeup {
-            failureReasons = Set.copyOf(Objects.requireNonNull(failureReasons, "failureReasons"));
-            if (failureReasons.isEmpty()) throw new IllegalArgumentException("failureReasons must not be empty");
+            failureReasonIds = Set.copyOf(Objects.requireNonNull(failureReasonIds, "failureReasonIds"));
+            if (failureReasonIds.isEmpty()) throw new IllegalArgumentException("failureReasonIds must not be empty");
             Objects.requireNonNull(reason, "reason");
             Objects.requireNonNull(matcher, "matcher");
         }
 
-        public boolean matches(String failureReason) {
-            return failureReasons.contains(failureReason);
+        public boolean matches(@Nullable FailureReason failureReason) {
+            return failureReason != null && failureReasonIds.contains(failureReason.id());
+        }
+
+        /**
+         * Keeps the legacy recipe-search boundary working while its persisted failure is still a string.
+         */
+        public boolean matches(@Nullable String failureReason) {
+            if (failureReason == null) return false;
+            Identifier id;
+            try {
+                id = failureReason.contains(":") ? Identifier.parse(failureReason)
+                        : Identifier.fromNamespaceAndPath("mmcr", failureReason);
+            } catch (IllegalArgumentException exception) {
+                return false;
+            }
+            if (failureReasonIds.contains(id)) return true;
+            return switch (failureReason) {
+                case "insufficient_resource" -> failureReasonIds.contains(BuiltinFailureReasons.MISSING_INPUT.id())
+                        || failureReasonIds.contains(BuiltinFailureReasons.MISSING_OUTPUT.id());
+                case "insufficient_energy" -> failureReasonIds.contains(BuiltinFailureReasons.MISSING_ENERGY.id());
+                case "no_output_capacity" -> failureReasonIds.contains(BuiltinFailureReasons.MISSING_OUTPUT.id());
+                case "per_tick" -> failureReasonIds.contains(BuiltinFailureReasons.PER_TICK.id());
+                case "finish" -> failureReasonIds.contains(BuiltinFailureReasons.FINISH.id());
+                default -> false;
+            };
         }
     }
 }

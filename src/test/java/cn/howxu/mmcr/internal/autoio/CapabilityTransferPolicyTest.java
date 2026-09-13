@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
@@ -123,8 +124,8 @@ class CapabilityTransferPolicyTest {
 
         assertThat(noTarget.successful()).isFalse();
         assertThat(noTarget.amount()).isZero();
-        assertThat(noTarget.failure().details()).containsEntry("reason", "no_target");
-        assertThat(noWork.failure().details()).containsEntry("reason", "no_work");
+        assertThat(noTarget.failure().reason()).isEqualTo(BuiltinFailureReasons.NO_TARGET);
+        assertThat(noWork.failure().reason()).isEqualTo(BuiltinFailureReasons.NO_WORK);
     }
 
     @Test
@@ -214,7 +215,7 @@ class CapabilityTransferPolicyTest {
                 Direction.WEST);
 
         assertThat(blocked.successful()).isFalse();
-        assertThat(blocked.failure().details()).containsEntry("reason", "no_target");
+        assertThat(blocked.failure().reason()).isEqualTo(BuiltinFailureReasons.NO_TARGET);
         assertThat(ports.itemInput.itemStorage().amount(0)).isZero();
         assertThat(ports.itemOutput.itemStorage().amount(0)).isEqualTo(2L);
     }

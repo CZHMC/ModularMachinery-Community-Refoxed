@@ -7,6 +7,7 @@ import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
 import java.util.List;
@@ -39,6 +40,8 @@ public final class SmartInterfaceRequirementHandler implements RequirementHandle
                                         requirement.interfaceType(), requirement.minValue()))), null));
             }
         }
-        return RequirementHandlerSupport.blockedPlan(requirement, context, "missing_smart_interface");
+        return RequirementHandlerSupport.blockedPlan(requirement, context,
+                requirement.io() == RecipeModifier.IOType.INPUT
+                        ? BuiltinFailureReasons.MISSING_INPUT : BuiltinFailureReasons.MISSING_OUTPUT);
     }
 }

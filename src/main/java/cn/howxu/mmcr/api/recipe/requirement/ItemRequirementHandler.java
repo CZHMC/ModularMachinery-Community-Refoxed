@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -85,16 +86,23 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.item() == null) {
-            return RequirementHandlerSupport.blockedPlan(requirement, context, "missing_item_ingredient");
+            return RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT);
         }
         boolean allowPartialOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                 && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         long maximum = itemMaximum(requirement, capabilities, parallelism, allowPartialOutput);
         if (maximum <= 0) {
             return requirement.io() == RecipeModifier.IOType.OUTPUT
-                    ? RequirementHandlerSupport.blockedOutputPlan(requirement, context, "no_output_capacity",
-                    requestedAmount(requirement, context.requestedParallelism()))
-                    : RequirementHandlerSupport.blockedPlan(requirement, context, "insufficient_resource");
+                    ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
+                    BuiltinFailureReasons.MISSING_OUTPUT,
+                    requestedAmount(requirement, context.requestedParallelism()),
+                    Map.of("required", Long.toString(requestedAmount(requirement, context.requestedParallelism())),
+                            "available", "0", "shortfall",
+                            Long.toString(requestedAmount(requirement, context.requestedParallelism()))))
+                    : RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT,
+                    Map.of("required", Long.toString(RequirementHandlerSupport.scaled(
+                                    requirement.count(), context.requestedParallelism())),
+                            "available", Long.toString(matchingItemAmount(requirement, capabilities))));
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
@@ -107,21 +115,22 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         IOType direction = IOType.valueOf(requirement.io().name());
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, capabilities, finalParallelism,
-                        consumed, reservations, direction, allowPartialOutput, true),
+                        context, consumed, reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
-                        requirement, capabilities, finalParallelism, consumed, reservations,
+                        requirement, capabilities, finalParallelism, context, consumed, reservations,
                         direction, allowPartialOutput, false)));
     }
 
     @Override
     public List<ResourceWakeup> resourceWakeups(ItemRequirement requirement) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
-            return List.of(new ResourceWakeup(Set.of("insufficient_resource", "per_tick"),
+            return List.of(new ResourceWakeup(Set.of(BuiltinFailureReasons.MISSING_INPUT.id(),
+                            BuiltinFailureReasons.PER_TICK.id()),
                     WakeupReason.INPUT_AVAILABLE, itemMatcher(requirement)));
         }
         Predicate<Object> matcher = outputItemMatcher(requirement);
         return matcher == null ? List.of() : List.of(new ResourceWakeup(
-                Set.of("insufficient_resource", "no_output_capacity", "finish"),
+                Set.of(BuiltinFailureReasons.MISSING_OUTPUT.id(), BuiltinFailureReasons.FINISH.id()),
                 WakeupReason.OUTPUT_CAPACITY, matcher));
     }
 
@@ -164,9 +173,10 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
     }
 
     private static RequirementPlan.OperationPlan planOperations(ItemRequirement requirement,
-                                                                List<MachineCapability> capabilities,
-                                                                long parallelism,
-                                                                RequirementHandlerSupport.ConsumeProfile consumed,
+                                                                 List<MachineCapability> capabilities,
+                                                                 long parallelism,
+                                                                 PlanningContext context,
+                                                                  RequirementHandlerSupport.ConsumeProfile consumed,
                                                                 PlanningReservations reservations,
                                                                 IOType direction,
                                                                 boolean allowPartialOutputs,
@@ -233,16 +243,18 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
             if (remaining == 0L) break;
         }
         if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
-            String reason = requirement.io() == RecipeModifier.IOType.OUTPUT
-                    && amount - remaining == 0L
-                    ? "no_output_capacity" : "insufficient_resource";
-            return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
-                    reason), RequirementHandlerSupport.outputSimulation(
+            boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
+            return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement, context,
+                    output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                    Map.of("required", Long.toString(amount), "available", Long.toString(amount - remaining),
+                            "shortfall", Long.toString(remaining))), RequirementHandlerSupport.outputSimulation(
                     requestedAmount, amount - remaining));
         }
         if (amount - remaining == 0L) {
             return new RequirementPlan.OperationPlan(List.of(),
-                    RequirementHandlerSupport.blocked(requirement, "no_output_capacity"),
+                    RequirementHandlerSupport.blocked(requirement, context, BuiltinFailureReasons.MISSING_OUTPUT,
+                            Map.of("required", Long.toString(amount), "available", "0", "shortfall",
+                                    Long.toString(amount))),
                     RequirementHandlerSupport.outputSimulation(requestedAmount, 0L));
         }
         return RequirementHandlerSupport.resourceOperations(actionMap, dynamicOperations, direction, parallelism,

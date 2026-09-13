@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -216,7 +217,7 @@ class RequirementPlannerTest {
                 new PlanningContext(4, 0));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details()).containsEntry("reason", "unsafe_operation_parallelism");
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.UNSAFE_OPERATION_PARALLELISM);
     }
 
     @Test
@@ -467,7 +468,7 @@ class RequirementPlannerTest {
 
         assertThat(result.successful()).isFalse();
         assertThat(result.failure()).satisfies(failure -> {
-            assertThat(failure.details()).containsEntry("reason", "no_output_capacity");
+            assertThat(failure.reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
             assertThat(failure.id()).isEqualTo(ItemRequirement.TYPE.id());
             assertThat(failure.source()).isEqualTo(ItemRequirement.TYPE.id());
         });
@@ -769,7 +770,7 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details()).containsEntry("reason", "insufficient_resource");
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(result.outputSimulations()).singleElement()
                 .satisfies(simulation -> {
                     assertThat(simulation.accepted()).isEqualTo(1L);
@@ -791,7 +792,7 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(result.outputSimulations()).singleElement()
                 .satisfies(simulation -> {
                     assertThat(simulation.accepted()).isZero();
@@ -876,7 +877,7 @@ class RequirementPlannerTest {
                         new LongFluidStorage(0, null))), new PlanningContext(1, 0, true));
 
         assertThat(itemResult.successful()).isFalse();
-        assertThat(itemResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(itemResult.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(itemResult.outputSimulations()).singleElement()
                 .satisfies(simulation -> {
                     assertThat(simulation.requested()).isEqualTo(1L);
@@ -884,7 +885,7 @@ class RequirementPlannerTest {
                     assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
                 });
         assertThat(fluidResult.successful()).isFalse();
-        assertThat(fluidResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(fluidResult.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(fluidResult.outputSimulations()).singleElement()
                 .satisfies(simulation -> {
                     assertThat(simulation.requested()).isEqualTo(1_000L);
@@ -903,7 +904,7 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0));
 
         assertThat(itemResult.successful()).isFalse();
-        assertThat(itemResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(itemResult.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(itemResult.outputSimulations()).singleElement()
                 .extracting(simulation -> simulation.fit()).isEqualTo(OutputFit.NONE);
         assertThat(itemStorage.amount(0)).isZero();
@@ -916,7 +917,7 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0));
 
         assertThat(fluidResult.successful()).isFalse();
-        assertThat(fluidResult.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(fluidResult.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(fluidResult.outputSimulations()).singleElement()
                 .extracting(simulation -> simulation.fit()).isEqualTo(OutputFit.NONE);
         assertThat(fluidStorage.amount(0)).isZero();
@@ -933,7 +934,7 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(result.outputSimulations()).singleElement()
                 .satisfies(simulation -> {
                     assertThat(simulation.requested()).isEqualTo(4L);
@@ -1151,7 +1152,7 @@ class RequirementPlannerTest {
                 new PlanningContext(2, 0, true));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(result.failureRequirementIndex()).isEqualTo(1);
         assertThat(result.outputSimulations()).satisfiesExactly(
                 first -> {
@@ -1391,6 +1392,31 @@ class RequirementPlannerTest {
     }
 
     @Test
+    void built_in_requirement_failures_expose_typed_reasons() {
+        var itemInputFailure = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1, ItemStack.EMPTY)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(),
+                        new BulkItemStorage(1, null))), new PlanningContext(1, 0));
+        var energyInputFailure = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)),
+                List.of(new StorageCapability(EnergyRequirement.TYPE.id(), CapabilityDirections.input(),
+                        new LongValueStorage(1, 1, null))), new PlanningContext(1, 0));
+        var itemOutputFailure = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(1))),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(),
+                        new BulkItemStorage(0, null))), new PlanningContext(1, 0));
+        var smartInputFailure = new RequirementPlanner().plan(
+                List.of(SmartInterfaceRequirement.input("missing", 1F)),
+                List.of(new StorageCapability(SmartInterfaceRequirement.TYPE.id(), CapabilityDirections.input(),
+                        new FloatValueStorage())), new PlanningContext(1, 0));
+
+        assertThat(itemInputFailure.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(energyInputFailure.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(itemOutputFailure.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(smartInputFailure.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+    }
+
+    @Test
     void built_in_chance_decision_prepares_the_operation_once() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
         StorageCapability capability = new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage);
@@ -1503,7 +1529,7 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details()).containsEntry("reason", "missing_smart_interface");
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
     }
 
     @Test
@@ -1731,7 +1757,7 @@ class RequirementPlannerTest {
                 new PlanningContext(1, 0));
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().details()).containsEntry("reason", "no_output_capacity");
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(result.outputSimulations()).singleElement()
                 .satisfies(simulation -> {
                     assertThat(simulation.requested()).isEqualTo(1L);

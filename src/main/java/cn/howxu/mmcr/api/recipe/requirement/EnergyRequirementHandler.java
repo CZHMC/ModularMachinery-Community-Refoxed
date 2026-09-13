@@ -11,11 +11,14 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -57,45 +60,57 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                 context.requestedParallelism(), allowPartialOutput);
         if (maximum <= 0) {
             return insert
-                    ? RequirementHandlerSupport.blockedOutputPlan(requirement, context, "no_output_capacity",
-                    requestedAmount(requirement, context.requestedParallelism()))
-                    : RequirementHandlerSupport.blockedPlan(requirement, context, "insufficient_energy");
+                    ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
+                    BuiltinFailureReasons.MISSING_OUTPUT,
+                    requestedAmount(requirement, context.requestedParallelism()),
+                    Map.of("required", Long.toString(requestedAmount(requirement, context.requestedParallelism())),
+                            "available", "0", "shortfall",
+                            Long.toString(requestedAmount(requirement, context.requestedParallelism()))))
+                    : RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_ENERGY,
+                    Map.of("required", Long.toString(RequirementHandlerSupport.scaled(
+                            requirement.fePerTick(), context.requestedParallelism())), "available", "0"));
         }
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (parallelism, reservations) -> planOperations(requirement, capabilities, parallelism,
-                        reservations, insert, direction, allowPartialOutput, true),
+                        context, reservations, insert, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> planOperations(
-                        requirement, capabilities, parallelism, reservations, insert, direction, allowPartialOutput, false)));
+                        requirement, capabilities, parallelism, context, reservations, insert, direction,
+                        allowPartialOutput, false)));
     }
 
     @Override
     public List<ResourceWakeup> resourceWakeups(EnergyRequirement requirement) {
         CapabilityType type = new CapabilityType(requirement.type().id());
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
-            return List.of(new ResourceWakeup(Set.of("insufficient_energy"), WakeupReason.ENERGY_AVAILABLE,
+            return List.of(new ResourceWakeup(Set.of(BuiltinFailureReasons.MISSING_ENERGY.id()),
+                    WakeupReason.ENERGY_AVAILABLE,
                     type::equals));
         }
-        return List.of(new ResourceWakeup(Set.of("no_output_capacity"), WakeupReason.OUTPUT_CAPACITY,
+        return List.of(new ResourceWakeup(Set.of(BuiltinFailureReasons.MISSING_OUTPUT.id()),
+                WakeupReason.OUTPUT_CAPACITY,
                 type::equals));
     }
 
     private static RequirementPlan.OperationPlan planOperations(EnergyRequirement requirement,
-                                                                List<MachineCapability> capabilities,
+                                                                 List<MachineCapability> capabilities,
                                                                  long parallelism,
+                                                                 PlanningContext context,
                                                                  PlanningReservations reservations,
                                                                  boolean insert,
                                                                  IOType direction,
-                                                                 boolean allowPartialOutput,
-                                                                boolean materialize) {
+                                                                  boolean allowPartialOutput,
+                                                                  boolean materialize) {
         List<CapabilityOperation> operations = new ArrayList<>();
         long requested = insert ? requestedAmount(requirement, parallelism) : 0L;
         long required = RequirementHandlerSupport.scaled(requirement.fePerTick(), parallelism);
         List<EnergyAction> actions = reserveEnergy(required, parallelism, insert, capabilities, reservations);
         long accepted = energyAmount(actions);
         if (accepted < required && (!allowPartialOutput || !insert)) {
+            FailureReason reason = insert ? BuiltinFailureReasons.MISSING_OUTPUT
+                    : BuiltinFailureReasons.MISSING_ENERGY;
             return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
-                    accepted == 0L && insert ? "no_output_capacity" :
-                            insert ? "insufficient_resource" : "insufficient_energy"),
+                    context, reason, Map.of("required", Long.toString(required),
+                            "available", Long.toString(accepted), "shortfall", Long.toString(required - accepted))),
                     RequirementHandlerSupport.outputSimulation(requested, accepted));
         }
         if (materialize) {
@@ -107,7 +122,9 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         }
         if (insert && accepted == 0L) {
             return new RequirementPlan.OperationPlan(List.of(),
-                    RequirementHandlerSupport.blocked(requirement, "no_output_capacity"),
+                    RequirementHandlerSupport.blocked(requirement, context, BuiltinFailureReasons.MISSING_OUTPUT,
+                            Map.of("required", Long.toString(required), "available", "0", "shortfall",
+                                    Long.toString(required))),
                     RequirementHandlerSupport.outputSimulation(requested, accepted));
         }
         return new RequirementPlan.OperationPlan(operations, null,

@@ -14,8 +14,11 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -492,9 +495,10 @@ public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResour
         if (reverted != amount) throw new IllegalStateException("Unable to roll back AE2 output network insert");
     }
 
-    private CapabilityResult failure(String reason) {
-        return CapabilityResult.failure(new ExecutionStatus(MMCR.id(FAILURE_ID), StatusSeverity.BLOCKED,
-                MMCR.id(FAILURE_ID), Map.of("reason", reason)));
+    private CapabilityResult failure(FailureReason reason) {
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, MMCR.id(FAILURE_ID),
+                FailurePhase.CAPABILITY_COMMIT, null, null, Map.of());
+        return CapabilityResult.failure(ExecutionStatus.blocked(MMCR.id(FAILURE_ID), MMCR.id(FAILURE_ID), occurrence));
     }
 
     private record LocalPortion(int slot, long amount) {
@@ -538,7 +542,7 @@ public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResour
             if (networkAmount > 0L) stageNetwork(network, key, networkAmount, transaction);
             for (LocalPortion portion : localPortions) {
                 if (insertLocal(portion.slot(), key, portion.amount(), transaction) != portion.amount()) {
-                    return failure("local_capacity_changed");
+                    return failure(BuiltinFailureReasons.LOCAL_CAPACITY_CHANGED);
                 }
             }
             return CapabilityResult.successful();

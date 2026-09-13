@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import java.util.Map;
@@ -87,6 +88,8 @@ class CraftingPlanTest {
         assertThat(plan.commit()).isFalse();
         assertThat(plan.failure()).isNotNull();
         assertThat(plan.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
+        assertThat(plan.failure().reason()).isEqualTo(BuiltinFailureReasons.UNKNOWN);
+        assertThat(plan.failure().details()).containsEntry("raw_reason_id", "operation_failed_without_status");
     }
 
     @Test
@@ -96,6 +99,8 @@ class CraftingPlanTest {
         assertThat(plan.commit()).isFalse();
         assertThat(plan.failure()).isNotNull();
         assertThat(plan.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
+        assertThat(plan.failure().reason()).isEqualTo(BuiltinFailureReasons.UNKNOWN);
+        assertThat(plan.failure().details()).containsEntry("raw_reason_id", "operation_failed_without_status");
     }
 
     @Test

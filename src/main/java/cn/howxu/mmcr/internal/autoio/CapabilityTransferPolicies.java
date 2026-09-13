@@ -5,8 +5,11 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
 import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
@@ -61,10 +64,15 @@ public final class CapabilityTransferPolicies {
         return TransferStrategyRegistry.policyFor(capability.type());
     }
 
-    private static TransferResult blocked(String reason) {
+    private static TransferResult blocked(FailureReason reason) {
+        return blocked(reason, Map.of());
+    }
+
+    private static TransferResult blocked(FailureReason reason, Map<String, String> details) {
+        FailureOccurrence occurrence = FailureOccurrence.at(reason, MMCR.id("auto_io"),
+                FailurePhase.CAPABILITY_COMMIT, null, null, details);
         return TransferResult.blocked(
-                new ExecutionStatus(MMCR.id("auto_io"), StatusSeverity.BLOCKED,
-                        MMCR.id("auto_io"), Map.of("reason", reason)));
+                ExecutionStatus.blocked(MMCR.id("auto_io"), MMCR.id("auto_io"), occurrence));
     }
 
     private static boolean canWork(Level level, Direction side) {
@@ -103,10 +111,15 @@ public final class CapabilityTransferPolicies {
             MachineCapability capability = context.capability();
             ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
             TransferFacet transfer = transferFacet(capability);
-            if (storage == null || transfer == null) return blocked("unsupported_capability");
-            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) return blocked("no_work");
+            if (storage == null || transfer == null) {
+                return blocked(BuiltinFailureReasons.UNKNOWN,
+                        Map.of("raw_reason_id", "unsupported_capability"));
+            }
+            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) {
+                return blocked(BuiltinFailureReasons.NO_WORK);
+            }
             ResourceHandler<ItemResource> adjacent = adjacentItem(capability, context.side());
-            if (adjacent == null) return blocked("no_target");
+            if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
             ResourceHandler<ItemResource> internal = resourceHandler(storage);
             int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
             long moved = context.eject()
@@ -155,10 +168,15 @@ public final class CapabilityTransferPolicies {
             MachineCapability capability = context.capability();
             ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
             TransferFacet transfer = transferFacet(capability);
-            if (storage == null || transfer == null) return blocked("unsupported_capability");
-            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) return blocked("no_work");
+            if (storage == null || transfer == null) {
+                return blocked(BuiltinFailureReasons.UNKNOWN,
+                        Map.of("raw_reason_id", "unsupported_capability"));
+            }
+            if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) {
+                return blocked(BuiltinFailureReasons.NO_WORK);
+            }
             ResourceHandler<FluidResource> adjacent = adjacentFluid(capability, context.side());
-            if (adjacent == null) return blocked("no_target");
+            if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
             ResourceHandler<FluidResource> internal = resourceHandler(storage);
             int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
             long moved = context.eject()
@@ -204,10 +222,15 @@ public final class CapabilityTransferPolicies {
             MachineCapability capability = context.capability();
             LongValueStorage storage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             TransferFacet transfer = transferFacet(capability);
-            if (storage == null || transfer == null) return blocked("unsupported_capability");
-            if (context.eject() ? storage.amount() <= 0L : !hasWork(capability)) return blocked("no_work");
+            if (storage == null || transfer == null) {
+                return blocked(BuiltinFailureReasons.UNKNOWN,
+                        Map.of("raw_reason_id", "unsupported_capability"));
+            }
+            if (context.eject() ? storage.amount() <= 0L : !hasWork(capability)) {
+                return blocked(BuiltinFailureReasons.NO_WORK);
+            }
             EnergyHandler adjacent = adjacentEnergy(capability, context.side());
-            if (adjacent == null) return blocked("no_target");
+            if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
             EnergyHandler internal = energyHandler(storage, transfer.transferLimit());
             long limit = transfer.transferLimit();
             long moved = context.eject()
