@@ -135,6 +135,41 @@ class PluginBindingTest {
     }
 
     @Test
+    void kubejs_transaction_keeps_cross_pool_dynamic_recipe_and_publishes_valid_recipes() {
+        var firstPoolId = MMCR.id("test_machine_name");
+        var secondPoolId = MMCR.id("cracker");
+        var samePoolId = MMCR.id("kubejs_transaction_same_pool_recipe");
+        var crossPoolId = MMCR.id("kubejs_transaction_cross_pool_recipe");
+        var validId = MMCR.id("kubejs_transaction_valid_after_cross_pool_conflict");
+        var dynamicSamePool = RecipeTestSupport.create(samePoolId, firstPoolId, 1, List.of(), List.of());
+        var dynamicCrossPool = RecipeTestSupport.create(crossPoolId, firstPoolId, 2, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(samePoolId, dynamicSamePool, crossPoolId, dynamicCrossPool));
+
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerStructure(structure(firstPoolId));
+        transaction.registerStructure(structure(secondPoolId));
+        var kubeJSSamePool = RecipeTestSupport.create(samePoolId, firstPoolId, 3, List.of(), List.of());
+        var kubeJSCrossPool = RecipeTestSupport.create(crossPoolId, secondPoolId, 4, List.of(), List.of());
+        var valid = RecipeTestSupport.create(validId, secondPoolId, 5, List.of(), List.of());
+        transaction.registerRecipe(kubeJSSamePool);
+        transaction.registerRecipe(kubeJSCrossPool);
+        transaction.registerRecipe(valid);
+
+        var committed = transaction.commit();
+
+        assertThat(committed.result().errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(crossPoolId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(firstPoolId.toString());
+        });
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(samePoolId, kubeJSSamePool)
+                .containsEntry(crossPoolId, dynamicCrossPool)
+                .containsEntry(validId, valid);
+        assertThat(RecipeRegistry.getRecipe(samePoolId)).isSameAs(kubeJSSamePool);
+        assertThat(RecipeRegistry.getRecipe(crossPoolId)).isSameAs(dynamicCrossPool);
+    }
+
+    @Test
     void orphan_pool_transaction_replaces_previous_snapshot_with_valid_recipes_only() {
         var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_transaction_previous_recipe");

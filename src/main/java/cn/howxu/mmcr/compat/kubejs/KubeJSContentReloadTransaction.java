@@ -3,12 +3,16 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.resources.Identifier;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -78,9 +82,31 @@ final class KubeJSContentReloadTransaction {
         mergedStructures.putAll(structures);
         Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
         removePublishedRecipes(mergedRecipes);
-        mergedRecipes.putAll(recipes);
+        List<MachineRecipeJson.RecipeJsonException> transactionErrors = new ArrayList<>();
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            Identifier id = entry.getKey();
+            MachineRecipe recipe = entry.getValue();
+            MachineRecipe existing = mergedRecipes.get(id);
+            if (existing != null && !existing.recipePoolId().equals(recipe.recipePoolId())) {
+                transactionErrors.add(new MachineRecipeJson.RecipeJsonException(id, "recipe_pool",
+                        "recipe already belongs to pool " + existing.recipePoolId(), null));
+                MMCR.LOG.warn("Skipping KubeJS recipe {} from pool {}: recipe already belongs to pool {}",
+                        id, recipe.recipePoolId(), existing.recipePoolId());
+                continue;
+            }
+            mergedRecipes.put(id, recipe);
+        }
         RuntimeContentCoordinator.CommitResult committed =
                 RuntimeContentCoordinator.commitDynamicAndSnapshot(mergedStructures, mergedRecipes);
+        if (!transactionErrors.isEmpty()) {
+            DynamicContentReloadService.ReloadResult result = committed.result();
+            List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>(result.errors());
+            errors.addAll(transactionErrors);
+            committed = new RuntimeContentCoordinator.CommitResult(
+                    new DynamicContentReloadService.ReloadResult(result.addedStructures(), result.updatedStructures(),
+                            result.removedStructures(), result.addedRecipes(), result.updatedRecipes(),
+                            result.removedRecipes(), errors), committed.snapshot());
+        }
         publishedStructures = Map.copyOf(structures);
         Map<Identifier, MachineRecipe> validRecipes = new LinkedHashMap<>(recipes);
         committed.result().errors().forEach(error -> validRecipes.remove(error.recipeId()));

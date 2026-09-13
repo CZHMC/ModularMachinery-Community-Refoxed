@@ -185,8 +185,14 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
                     throw new MachineRecipeJson.RecipeJsonException(recipeId, "recipe_pool",
                             "unknown recipe pool " + recipe.recipePoolId(), null);
                 }
-                RecipeRegistry.validateDataPackCandidate(Map.of(recipeId, recipe));
-                validRecipes.put(recipeId, recipe.id().equals(recipeId) ? recipe : recipe.withId(recipeId));
+                MachineRecipe normalizedRecipe = recipe.id().equals(recipeId) ? recipe : recipe.withId(recipeId);
+                RecipeRegistry.validateDataPackCandidate(Map.of(recipeId, normalizedRecipe));
+                MachineRecipe conflicting = conflictingLayerRecipe(normalizedRecipe);
+                if (conflicting != null) {
+                    throw new MachineRecipeJson.RecipeJsonException(recipeId, "recipe_pool",
+                            "recipe already belongs to pool " + conflicting.recipePoolId(), null);
+                }
+                validRecipes.put(recipeId, normalizedRecipe);
             } catch (MachineRecipeJson.RecipeJsonException exception) {
                 errors.add(exception);
             } catch (RuntimeException exception) {
@@ -196,6 +202,17 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
             }
         }
         return validRecipes;
+    }
+
+    private static MachineRecipe conflictingLayerRecipe(MachineRecipe recipe) {
+        for (Map<Identifier, MachineRecipe> layer : List.of(RecipeRegistry.staticSnapshot(),
+                RecipeRegistry.kubeJSSnapshot(), RecipeRegistry.dynamicSnapshot())) {
+            MachineRecipe existing = layer.get(recipe.id());
+            if (existing != null && !existing.recipePoolId().equals(recipe.recipePoolId())) {
+                return existing;
+            }
+        }
+        return null;
     }
 
     private static void logErrors(List<MachineRecipeJson.RecipeJsonException> errors) {

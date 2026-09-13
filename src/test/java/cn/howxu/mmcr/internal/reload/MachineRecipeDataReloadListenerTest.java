@@ -159,6 +159,32 @@ class MachineRecipeDataReloadListenerTest {
     }
 
     @Test
+    void cross_pool_data_pack_recipe_is_reported_and_valid_recipe_continues_publishing() {
+        var conflictingId = Identifier.parse("mmcr_test:cross_pool_datapack_conflict");
+        var validId = Identifier.parse("mmcr_test:cross_pool_datapack_valid");
+        var dynamicRecipe = RecipeTestSupport.create(conflictingId, Identifier.parse("mmcr:test_machine_name"), 1,
+                List.of(), List.of());
+        var dataPackRecipe = RecipeTestSupport.create(conflictingId, Identifier.parse("mmcr:controller_tick"), 2,
+                List.of(), List.of());
+        var validRecipe = RecipeTestSupport.create(validId, Identifier.parse("mmcr:controller_tick"), 3,
+                List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(conflictingId, dynamicRecipe));
+        var listener = new MachineRecipeDataReloadListener();
+
+        listener.applySnapshot(Map.of(conflictingId, dataPackRecipe, validId, validRecipe));
+
+        assertThat(listener.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(conflictingId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(dynamicRecipe.recipePoolId().toString());
+        });
+        assertThat(listener.snapshot()).containsOnlyKeys(validId);
+        assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(validId, validRecipe)
+                .doesNotContainKey(conflictingId);
+        assertThat(RecipeRegistry.getRecipe(conflictingId)).isSameAs(dynamicRecipe);
+    }
+
+    @Test
     void successful_candidate_rebuilds_the_machine_catalog_once() {
         var listener = new MachineRecipeDataReloadListener();
         var machineId = Identifier.parse("mmcr:test_machine_name");
