@@ -43,7 +43,7 @@ class KubeJSRecipeSyncTest {
     @Test
     void sync_uses_recipe_holder_id_for_kubejs_generated_machine_recipes() {
         var holderId = ResourceKey.create(Registries.RECIPE, MMCR.id("from_recipe_event"));
-        var generated = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
+        var generated = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
 
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, generated)));
 
@@ -56,8 +56,8 @@ class KubeJSRecipeSyncTest {
     void sync_replaces_previous_dynamic_recipe_snapshot() {
         var firstId = ResourceKey.create(Registries.RECIPE, MMCR.id("first"));
         var secondId = ResourceKey.create(Registries.RECIPE, MMCR.id("second"));
-        var first = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
-        var second = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
+        var first = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
+        var second = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
 
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(firstId, first)));
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(secondId, second)));
@@ -69,7 +69,7 @@ class KubeJSRecipeSyncTest {
     @Test
     void sync_survives_subsequent_datapack_reload() {
         var id = ResourceKey.create(Registries.RECIPE, MMCR.id("surviving_recipe"));
-        var recipe = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("machine"), 1, List.of(), List.of());
+        var recipe = RecipeTestSupport.create(MMCR.id("generated_recipe"), MMCR.id("test_machine_name"), 1, List.of(), List.of());
 
         KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(id, recipe)));
         RuntimeContentCoordinator.replaceDataPackRecipes(Map.of());
@@ -80,7 +80,7 @@ class KubeJSRecipeSyncTest {
     @Test
     void sync_does_not_publish_recipe_owned_by_active_kubejs_transaction_as_datapack_content() {
         Identifier id = MMCR.id("transaction_recipe");
-        MachineRecipe recipe = RecipeTestSupport.create(id, MMCR.id("machine"), 1, List.of(), List.of());
+        MachineRecipe recipe = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
         KubeJSContentReloadTransaction transaction = new KubeJSContentReloadTransaction();
         transaction.registerRecipe(recipe);
         KubeJSContentReloadTransaction.activate(transaction);
@@ -94,7 +94,7 @@ class KubeJSRecipeSyncTest {
     @Test
     void sync_does_not_duplicate_recipe_already_published_as_dynamic_content() {
         Identifier id = MMCR.id("dynamic_recipe");
-        MachineRecipe recipe = RecipeTestSupport.create(id, MMCR.id("machine"), 1, List.of(), List.of());
+        MachineRecipe recipe = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(id, recipe));
 
         ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
@@ -107,7 +107,7 @@ class KubeJSRecipeSyncTest {
     @Test
     void sync_does_not_replace_explicit_kubejs_id_with_generated_holder_id() {
         Identifier explicitId = MMCR.id("explicit_recipe");
-        MachineRecipe explicit = RecipeTestSupport.create(explicitId, MMCR.id("machine"), 1, List.of(), List.of());
+        MachineRecipe explicit = RecipeTestSupport.create(explicitId, MMCR.id("test_machine_name"), 1, List.of(), List.of());
         KubeJSContentReloadTransaction transaction = new KubeJSContentReloadTransaction();
         transaction.registerRecipe(explicit);
         KubeJSContentReloadTransaction.activate(transaction);
@@ -119,6 +119,20 @@ class KubeJSRecipeSyncTest {
 
         assertThat(RecipeRegistry.getRecipe(explicitId)).isNull();
         assertThat(RecipeRegistry.getRecipe(generatedId)).isNull();
+    }
+
+    @Test
+    void sync_discards_orphan_pool_and_keeps_valid_pool_recipe() {
+        var validId = MMCR.id("valid_pool_recipe");
+        var orphanId = MMCR.id("orphan_pool_recipe");
+        var valid = RecipeTestSupport.create(validId, MMCR.id("test_machine_name"), 1, List.of(), List.of());
+        var orphan = RecipeTestSupport.create(orphanId, MMCR.id("missing_recipe_pool"), 1, List.of(), List.of());
+
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(
+                new RecipeHolder<Recipe<?>>(ResourceKey.create(Registries.RECIPE, validId), valid),
+                new RecipeHolder<Recipe<?>>(ResourceKey.create(Registries.RECIPE, orphanId), orphan)));
+
+        assertThat(RecipeRegistry.kubeJSSnapshot()).containsKey(validId).doesNotContainKey(orphanId);
     }
 
     @Test

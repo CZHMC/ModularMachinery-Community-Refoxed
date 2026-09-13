@@ -118,25 +118,46 @@ class PluginBindingTest {
     }
 
     @Test
-    void invalid_kubejs_content_transaction_preserves_previous_dynamic_snapshot() {
+    void kubejs_transaction_discards_orphan_pool_recipe_and_keeps_valid_recipe() {
+        var machineId = MMCR.id("test_machine_name");
+        var validRecipeId = MMCR.id("kubejs_valid_pool_recipe");
+        var orphanRecipeId = MMCR.id("kubejs_orphan_pool_recipe");
+
+        var transaction = new KubeJSContentReloadTransaction();
+        transaction.registerStructure(structure(machineId));
+        transaction.registerRecipe(RecipeTestSupport.create(validRecipeId, machineId, 1, List.of(), List.of()));
+        transaction.registerRecipe(RecipeTestSupport.create(orphanRecipeId,
+                MMCR.id("missing_recipe_pool"), 1, List.of(), List.of()));
+
+        transaction.commit();
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId).doesNotContainKey(orphanRecipeId);
+    }
+
+    @Test
+    void orphan_pool_transaction_replaces_previous_snapshot_with_valid_recipes_only() {
         var machineId = MMCR.id("test_machine_name");
         var recipeId = MMCR.id("kubejs_transaction_previous_recipe");
+        var validRecipeId = MMCR.id("kubejs_transaction_valid_after_orphan");
 
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(machineId));
         previous.registerRecipe(RecipeTestSupport.create(recipeId, machineId, 1, List.of(), List.of()));
         previous.commit();
-        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
-        var previousRecipes = RecipeRegistry.dynamicSnapshot();
         long previousVersion = RuntimeContentVersion.current();
 
         var invalid = new KubeJSContentReloadTransaction();
-        invalid.registerRecipe(RecipeTestSupport.create(MMCR.id("invalid_kubejs_transaction_recipe"), MMCR.id("missing_machine"), 1, List.of(), List.of()));
+        invalid.registerStructure(structure(machineId));
+        invalid.registerRecipe(RecipeTestSupport.create(validRecipeId, machineId, 1, List.of(), List.of()));
+        invalid.registerRecipe(RecipeTestSupport.create(MMCR.id("invalid_kubejs_transaction_recipe"),
+                MMCR.id("missing_machine"), 1, List.of(), List.of()));
 
-        assertThatThrownBy(invalid::commit).isInstanceOf(IllegalStateException.class);
-        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
-        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
-        assertThat(RuntimeContentVersion.current()).isEqualTo(previousVersion);
+        invalid.commit();
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId)
+                .doesNotContainKey(recipeId)
+                .doesNotContainKey(MMCR.id("invalid_kubejs_transaction_recipe"));
+        assertThat(RuntimeContentVersion.current()).isGreaterThan(previousVersion);
     }
 
     @Test

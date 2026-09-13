@@ -2,7 +2,7 @@ ServerEvents.recipes( event => {
 
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_alloy_furnace', // Use the machine's registered identifier.
+        recipe_pool: 'mmcr_kubejs:kubejs_alloy_furnace', // Use the machine's registered recipe pool identifier.
         tick_time: 300,
         parallelized: true,
         requirements: [

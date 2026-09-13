@@ -3,7 +3,7 @@ ServerEvents.recipes( event => {
     // This example focuses on fluid output rather than recipe complexity.
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_cracker',
+        recipe_pool: 'mmcr_kubejs:kubejs_cracker',
         tick_time: 300,
         requirements: [
             {

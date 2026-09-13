@@ -1,7 +1,7 @@
 ServerEvents.recipes( event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
+        recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
         // Use level_requirements to require a specific machine level.
         level_requirements: [
@@ -42,7 +42,7 @@ ServerEvents.recipes( event => {
 
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
+        recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
         level_requirements: [
             {
@@ -82,7 +82,7 @@ ServerEvents.recipes( event => {
 
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
+        recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
         max_threads: 4,
         level_requirements: [

@@ -1,7 +1,7 @@
 ServerEvents.recipes(event => {
     event.custom({
         type: 'mmcr:machine_recipe',
-        machine: 'kubejs:hello_world',
+        recipe_pool: 'kubejs:hello_world',
         tick_time: 100,
         requirements: [
             {

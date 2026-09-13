@@ -5,7 +5,7 @@ ServerEvents.recipes( event => {
     // Register a standard recipe object with event.custom().
     event.custom({
         type: 'mmcr:machine_recipe', // Required recipe type.
-        machine: 'mmcr_kubejs:kubejs_blast_furnace', // Required machine identifier.
+        recipe_pool: 'mmcr_kubejs:kubejs_blast_furnace', // Required recipe pool identifier.
         tick_time: 100, // Processing time in ticks; must be greater than 0.
         parallelized: true, // Allow this recipe to use parallel controllers.
         // Optional: allows recipes with empty inputs or outputs.
