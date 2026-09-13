@@ -2,9 +2,10 @@ package cn.howxu.mmcr.api.compat.mekanism;
 
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.AfterEach;
@@ -93,8 +94,8 @@ class MekanismRecipeDeclarationTest {
         assertEquals(250, MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.priority());
 
         FailureReason reason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
-        ExecutionStatus status = new ExecutionStatus(reason.id(), StatusSeverity.BLOCKED, reason.id(),
-                Map.of("reason", reason.id().toString()));
+        ExecutionStatus status = ExecutionStatus.blocked(reason.id(), reason.id(),
+                FailureOccurrence.at(reason, reason.id(), FailurePhase.REQUIREMENT_PLAN, null, null, Map.of()));
         assertEquals(reason, status.reason());
         assertThrows(IllegalArgumentException.class, MekanismFailureReasons::register);
     }

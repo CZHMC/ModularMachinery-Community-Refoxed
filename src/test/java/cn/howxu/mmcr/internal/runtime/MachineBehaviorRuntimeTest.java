@@ -13,7 +13,9 @@ import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
@@ -789,8 +791,9 @@ class MachineBehaviorRuntimeTest {
     }
 
     private static ExecutionStatus tickFailure() {
-        return new ExecutionStatus(MMCR.id("tick_failure"), StatusSeverity.BLOCKED,
-                MMCR.id("test"), Map.of("reason", "per_tick"));
+        return ExecutionStatus.blocked(MMCR.id("tick_failure"), MMCR.id("test"),
+                FailureOccurrence.at(BuiltinFailureReasons.PER_TICK, MMCR.id("test"), FailurePhase.PER_TICK,
+                        null, null, Map.of()));
     }
 
     private record TickCapability(Function<CapabilityTickContext, CapabilityTickResult> planner)

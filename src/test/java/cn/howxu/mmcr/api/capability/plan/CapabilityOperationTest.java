@@ -6,7 +6,10 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -40,7 +43,9 @@ class CapabilityOperationTest {
             Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation_failure"),
             StatusSeverity.BLOCKED,
             Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation"),
-            Map.of("reason", "opaque_failure"));
+            FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
+                    Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation"),
+                    FailurePhase.CAPABILITY_COMMIT, null, null, Map.of()));
     private static final OpaqueType TYPE = new OpaqueType(
             Identifier.fromNamespaceAndPath("mmcr_test", "opaque_operation_requirement"));
 

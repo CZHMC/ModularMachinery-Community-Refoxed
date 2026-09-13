@@ -21,6 +21,8 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
@@ -235,12 +237,11 @@ class RequirementPlannerTest {
                             factoryCalls.incrementAndGet();
                             operationParallelism.set(parallelism);
                             return new RequirementPlan.OperationPlan(
-                                    List.of(capability.prepare(new TestRequest(parallelism))), null);
-                        },
-                        (parallelism, reservations) -> parallelism == 2
-                                ? new ExecutionStatus(factoryType.id(), StatusSeverity.BLOCKED, factoryType.id(),
-                                Map.of("reason", "shared_reservation"))
-                                : null);
+                                     List.of(capability.prepare(new TestRequest(parallelism))), null);
+                         },
+                         (parallelism, reservations) -> parallelism == 2
+                                 ? unknownFailure(factoryType.id(), StatusSeverity.BLOCKED, FailurePhase.REQUIREMENT_PLAN)
+                                 : null);
             }
         });
 
@@ -260,8 +261,8 @@ class RequirementPlannerTest {
     void does_not_retry_lower_candidates_after_materialization_failure() {
         TestType failureType = type("materialization_failure");
         AtomicInteger factoryCalls = new AtomicInteger();
-        ExecutionStatus materializationFailure = new ExecutionStatus(
-                failureType.id(), StatusSeverity.FAILURE, failureType.id(), Map.of("reason", "factory"));
+        ExecutionStatus materializationFailure = unknownFailure(failureType.id(), StatusSeverity.FAILURE,
+                FailurePhase.CAPABILITY_COMMIT);
         TestCapability capability = new TestCapability(failureType.id(), IOType.INPUT, 2);
         register(failureType, new RequirementHandler<TestRequirement>() {
             @Override
@@ -316,8 +317,8 @@ class RequirementPlannerTest {
                         (parallelism, reservations) -> reservations.reserveExtract(
                                 storage, 0, ironResource(), parallelism)
                                 ? null
-                                : new ExecutionStatus(reservationType.id(), StatusSeverity.BLOCKED, reservationType.id(),
-                                Map.of("reason", "shared_reservation")));
+                                : unknownFailure(reservationType.id(), StatusSeverity.BLOCKED,
+                                FailurePhase.REQUIREMENT_PLAN));
             }
         });
 
@@ -337,7 +338,8 @@ class RequirementPlannerTest {
     @Test
     void carries_a_structured_handler_failure() {
         TestType failureType = type("planner_failure_requirement");
-        ExecutionStatus failure = new ExecutionStatus(failureType.id(), StatusSeverity.FAILURE, failureType.id(), Map.of());
+        ExecutionStatus failure = unknownFailure(failureType.id(), StatusSeverity.FAILURE,
+                FailurePhase.REQUIREMENT_PLAN);
         register(failureType, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
@@ -394,12 +396,11 @@ class RequirementPlannerTest {
                 CapabilityRequests.ValueRequest valueRequest = (CapabilityRequests.ValueRequest) request;
                 return transaction -> {
                     storage.updateSnapshots(transaction);
-                    long moved = storage.extract(valueRequest.amount(), false);
-                    return moved == valueRequest.amount()
-                            ? CapabilityResult.successful()
-                            : CapabilityResult.failure(new ExecutionStatus(
-                                    EnergyRequirement.TYPE.id(), StatusSeverity.BLOCKED,
-                                    EnergyRequirement.TYPE.id(), Map.of()));
+                            long moved = storage.extract(valueRequest.amount(), false);
+                            return moved == valueRequest.amount()
+                                    ? CapabilityResult.successful()
+                            : CapabilityResult.failure(unknownFailure(EnergyRequirement.TYPE.id(),
+                                    StatusSeverity.BLOCKED, FailurePhase.CAPABILITY_COMMIT));
                 };
             }
         };
@@ -502,7 +503,7 @@ class RequirementPlannerTest {
         assertThat(result.plan().commit()).isFalse();
         assertThat(capability.committedRequestDirections()).containsExactly(IOType.INPUT, IOType.OUTPUT);
         assertThat(result.plan().failure()).satisfies(failure ->
-                assertThat(failure.details()).containsEntry("reason", "forced_output_failure"));
+                assertThat(failure.details()).containsEntry("test_failure", "forced_output_failure"));
         assertThat(storage.amount(0)).isEqualTo(1);
     }
 
@@ -1570,9 +1571,8 @@ class RequirementPlannerTest {
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
                 return new RequirementPlan(context.requirementIndex(), 1,
-                        List.of(transaction -> CapabilityResult.failure(new ExecutionStatus(
-                                ROLLBACK_FAILURE_TYPE.id(), StatusSeverity.FAILURE, ROLLBACK_FAILURE_TYPE.id(),
-                                Map.of("reason", "forced_failure")))), null);
+                         List.of(transaction -> CapabilityResult.failure(unknownFailure(
+                                 ROLLBACK_FAILURE_TYPE.id(), StatusSeverity.FAILURE, FailurePhase.CAPABILITY_COMMIT))), null);
             }
         });
 
@@ -2434,8 +2434,8 @@ class RequirementPlannerTest {
                     committedRequestDirections.add(smartRequest.ioType());
                     return floatStorage.set(smartRequest.interfaceType(), smartRequest.value(), transaction)
                             ? CapabilityResult.successful()
-                            : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
-                                    type.id(), Map.of()));
+                            : CapabilityResult.failure(unknownFailure(type.id(), StatusSeverity.BLOCKED,
+                                    FailurePhase.CAPABILITY_COMMIT));
                 };
             }
             if (request instanceof CapabilityRequests.ValueRequest valueRequest
@@ -2448,16 +2448,16 @@ class RequirementPlannerTest {
                             : longStorage.extract(valueRequest.amount(), false);
                     return moved == valueRequest.amount()
                             ? CapabilityResult.successful()
-                            : CapabilityResult.failure(new ExecutionStatus(type.id(), StatusSeverity.BLOCKED,
-                                    type.id(), Map.of()));
+                            : CapabilityResult.failure(unknownFailure(type.id(), StatusSeverity.BLOCKED,
+                                    FailurePhase.CAPABILITY_COMMIT));
                 };
             }
             CapabilityRequests.ResourceRequest<?> resourceRequest = (CapabilityRequests.ResourceRequest<?>) request;
             lastResourceRequest = resourceRequest;
             resourceRequests.add(resourceRequest);
             if (!(storage instanceof ResourceStorage<?> resourceStorage)) {
-                return transaction -> CapabilityResult.failure(new ExecutionStatus(
-                        type.id(), StatusSeverity.BLOCKED, type.id(), Map.of()));
+                return transaction -> CapabilityResult.failure(unknownFailure(type.id(), StatusSeverity.BLOCKED,
+                        FailurePhase.CAPABILITY_COMMIT));
             }
             return transaction -> {
                 committedRequestDirections.add(resourceRequest.ioType());
@@ -2465,8 +2465,8 @@ class RequirementPlannerTest {
                     long moved = action.insert()
                             ? resourceStorage.insertResource(action.slot(), action.resource(), action.amount(), transaction)
                             : resourceStorage.extractResource(action.slot(), action.resource(), action.amount(), transaction);
-                    if (moved != action.amount()) return CapabilityResult.failure(new ExecutionStatus(
-                            type.id(), StatusSeverity.BLOCKED, type.id(), Map.of()));
+                    if (moved != action.amount()) return CapabilityResult.failure(unknownFailure(
+                            type.id(), StatusSeverity.BLOCKED, FailurePhase.CAPABILITY_COMMIT));
                 }
                 return CapabilityResult.successful();
             };
@@ -2505,10 +2505,20 @@ class RequirementPlannerTest {
                 assertThat(storage.amount(0)).isZero();
                 CapabilityResult outputResult = operation.commit(transaction);
                 if (!outputResult.success()) return outputResult;
-                return CapabilityResult.failure(new ExecutionStatus(type().id(), StatusSeverity.FAILURE, type().id(),
-                        Map.of("reason", "forced_output_failure")));
+                return CapabilityResult.failure(unknownFailure(type().id(), StatusSeverity.FAILURE,
+                        FailurePhase.CAPABILITY_COMMIT, Map.of("test_failure", "forced_output_failure")));
             };
         }
+    }
+
+    private static ExecutionStatus unknownFailure(Identifier source, StatusSeverity severity, FailurePhase phase) {
+        return unknownFailure(source, severity, phase, Map.of());
+    }
+
+    private static ExecutionStatus unknownFailure(Identifier source, StatusSeverity severity, FailurePhase phase,
+                                                  Map<String, String> details) {
+        return new ExecutionStatus(source, severity, source,
+                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, phase, null, null, details));
     }
 
     private static IOPortBlockEntity port(String id) {

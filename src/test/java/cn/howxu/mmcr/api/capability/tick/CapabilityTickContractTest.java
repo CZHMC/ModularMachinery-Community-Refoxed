@@ -11,14 +11,15 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
-import java.util.Map;
 import java.util.Set;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,8 +57,10 @@ class CapabilityTickContractTest {
 
     @Test
     void failure_result_has_no_implicit_operations_or_state_change() {
-        ExecutionStatus failure = new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"),
-                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr_test", "facet"), Map.of());
+        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "facet");
+        ExecutionStatus failure = ExecutionStatus.blocked(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"), source,
+                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
+                        null, null, Map.of()));
         CapabilityTickResult result = new CapabilityTickResult(List.of(), failure, false);
 
         assertThat(result.operations()).isEmpty();
@@ -67,8 +71,10 @@ class CapabilityTickContractTest {
     @Test
     void rejected_operation_rolls_back_earlier_operations_in_the_same_phase() {
         LongValueStorage storage = new LongValueStorage(10L, 10L, null);
-        ExecutionStatus blocked = new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"),
-                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr_test", "facet"), Map.of());
+        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "facet");
+        ExecutionStatus blocked = ExecutionStatus.blocked(Identifier.fromNamespaceAndPath("mmcr_test", "blocked"), source,
+                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
+                        null, null, Map.of()));
         TickCapability capability = new TickCapability(context -> new CapabilityTickResult(List.of(
                 transaction -> {
                     storage.insert(1L, transaction);

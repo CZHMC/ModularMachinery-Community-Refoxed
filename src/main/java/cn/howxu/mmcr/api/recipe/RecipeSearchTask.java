@@ -71,9 +71,8 @@ public final class RecipeSearchTask {
             }
             PlanningResult result = planStart(recipe);
             if (!result.successful()) {
-                if (result.failure() != null) {
-                    failureReport = failureReport.plus(result.failure(), validity(result));
-                }
+                ExecutionStatus failure = withSearchTrace(recipe, result);
+                if (failure != null) failureReport = failureReport.plus(failure, validity(result));
                 continue;
             }
             ExecutionStatus levelFailure = levelFailure(recipe);
@@ -107,6 +106,19 @@ public final class RecipeSearchTask {
         FailureOccurrence occurrence = FailureOccurrence.at(BuiltinFailureReasons.MODULE_CONNECTION,
                 MMCR.id("crafting_runtime"), FailurePhase.RECIPE_SEARCH, recipe.id(), null, Map.of());
         return ExecutionStatus.blocked(MMCR.id("crafting_runtime"), MMCR.id("crafting_runtime"), occurrence);
+    }
+
+    private static @Nullable ExecutionStatus withSearchTrace(MachineRecipe recipe, PlanningResult result) {
+        ExecutionStatus failure = result.failure();
+        if (failure == null) return null;
+        FailureOccurrence occurrence = failure.failure();
+        if (occurrence == null) {
+            occurrence = FailureOccurrence.at(failure.reason(), failure.source(), FailurePhase.UNKNOWN,
+                    recipe.id(), result.failureRequirementIndex(), failure.details());
+        }
+        occurrence = occurrence.append(MMCR.id("crafting_runtime"), FailurePhase.RECIPE_SEARCH,
+                recipe.id(), result.failureRequirementIndex());
+        return new ExecutionStatus(failure.id(), failure.severity(), failure.source(), occurrence);
     }
 
     private @Nullable ExecutionStatus levelFailure(MachineRecipe recipe) {

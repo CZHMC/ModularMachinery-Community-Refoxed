@@ -9,8 +9,10 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
@@ -103,7 +105,10 @@ public final class TestScalarFacet implements MachineCapability, ScalarFacet {
     }
 
     private static CapabilityResult failed(String reason) {
-        return CapabilityResult.failure(new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr_test", reason),
-                StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr_test", "scalar"), Map.of()));
+        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "scalar");
+        return CapabilityResult.failure(ExecutionStatus.blocked(
+                Identifier.fromNamespaceAndPath("mmcr_test", reason), source,
+                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
+                        null, null, Map.of())));
     }
 }

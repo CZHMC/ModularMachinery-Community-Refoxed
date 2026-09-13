@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -130,10 +131,19 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 class CraftingRuntimeTest {
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
+    private static final FailureReason REGISTERED_RUNTIME_REASON = new FailureReason(
+            MMCR.id("runtime_registered_restore"), "gui.mmcr.failure.runtime_registered_restore", 50);
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        if (FailureReasonRegistry.isFrozen()) FailureReasonRegistry.clearForTesting();
+        if (FailureReasonRegistry.find(BuiltinFailureReasons.UNKNOWN.id()) == null) {
+            BuiltinFailureReasons.register();
+        }
+        if (FailureReasonRegistry.find(REGISTERED_RUNTIME_REASON.id()) == null) {
+            FailureReasonRegistry.register(REGISTERED_RUNTIME_REASON);
+        }
     }
 
     @AfterEach
@@ -795,6 +805,25 @@ class CraftingRuntimeTest {
                 outputTag.buildResult()), null);
 
         assertThat(restored.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_output");
+    }
+
+    @Test
+    void active_runtime_restores_a_registered_custom_failure_translation_key() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+        ExecutionStatus failure = ExecutionStatus.blocked(MMCR.id("runtime_custom_failure"),
+                MMCR.id("runtime_custom_source"), FailureOccurrence.at(REGISTERED_RUNTIME_REASON,
+                        MMCR.id("runtime_custom_source"), FailurePhase.RUNTIME, null, null, Map.of()));
+
+        saved.recordSearchFailure(failure);
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(output);
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.failure().reason()).isEqualTo(REGISTERED_RUNTIME_REASON);
+        assertThat(restored.failureUnloc()).isEqualTo(REGISTERED_RUNTIME_REASON.translationKey());
     }
 
     @Test
@@ -1514,8 +1543,9 @@ class CraftingRuntimeTest {
         public CapabilityTickResult plan(CapabilityTickContext context) {
             if (context.phase() == failurePhase && failNext.compareAndSet(true, false)) {
                 if (throwException) throw new IllegalStateException("expected tick phase exception");
-                return new CapabilityTickResult(List.of(), new ExecutionStatus(MMCR.id("runtime_phase_failure"),
-                        StatusSeverity.BLOCKED, type.id(), Map.of("reason", "per_tick")), false);
+                return new CapabilityTickResult(List.of(), ExecutionStatus.blocked(MMCR.id("runtime_phase_failure"), type.id(),
+                        FailureOccurrence.at(BuiltinFailureReasons.PER_TICK, type.id(), FailurePhase.PER_TICK,
+                                null, null, Map.of())), false);
             }
             return CapabilityTickResult.empty();
         }

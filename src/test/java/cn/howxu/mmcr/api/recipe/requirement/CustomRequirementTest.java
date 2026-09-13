@@ -12,8 +12,10 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
@@ -23,12 +25,12 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import java.util.Map;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,8 +67,9 @@ class CustomRequirementTest {
         }
 
         private ExecutionStatus failure() {
-            return new ExecutionStatus(TYPE_ID, StatusSeverity.BLOCKED, TYPE_ID,
-                    Map.of("reason", "virtual_scalar_reserved"));
+            return ExecutionStatus.blocked(TYPE_ID, TYPE_ID,
+                    FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, TYPE_ID, FailurePhase.REQUIREMENT_PLAN,
+                            null, null, Map.of()));
         }
     };
     private static final RequirementType<TestRequirement> TYPE = new RequirementType.Definition<>(
@@ -162,8 +165,9 @@ class CustomRequirementTest {
                 storage.updateSnapshots(transaction);
                 return storage.extract(virtual.parallelism(), false) == virtual.parallelism()
                         ? CapabilityResult.successful()
-                        : CapabilityResult.failure(new ExecutionStatus(TYPE_ID, StatusSeverity.BLOCKED,
-                        TYPE_ID, Map.of("reason", "virtual_scalar_commit")));
+                        : CapabilityResult.failure(ExecutionStatus.blocked(TYPE_ID, TYPE_ID,
+                        FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, TYPE_ID, FailurePhase.CAPABILITY_COMMIT,
+                                null, null, Map.of())));
             };
         }
     }

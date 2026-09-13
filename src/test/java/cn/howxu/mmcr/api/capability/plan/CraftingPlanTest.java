@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import java.util.Map;
 import net.minecraft.resources.Identifier;
@@ -27,7 +29,9 @@ class CraftingPlanTest {
             Identifier.fromNamespaceAndPath("mmcr_test", "first_failure"),
             StatusSeverity.FAILURE,
             Identifier.fromNamespaceAndPath("mmcr_test", "test"),
-            Map.of("reason", "test"));
+            FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
+                    Identifier.fromNamespaceAndPath("mmcr_test", "test"), FailurePhase.CAPABILITY_COMMIT,
+                    null, null, Map.of()));
 
     @Test
     void commits_all_operations_in_requirement_order() {
@@ -68,11 +72,12 @@ class CraftingPlanTest {
 
     @Test
     void publishes_the_first_structured_failure() {
+        Identifier source = Identifier.fromNamespaceAndPath("mmcr_test", "test");
         ExecutionStatus secondFailure = new ExecutionStatus(
                 Identifier.fromNamespaceAndPath("mmcr_test", "second_failure"),
-                StatusSeverity.FAILURE,
-                Identifier.fromNamespaceAndPath("mmcr_test", "test"),
-                Map.of());
+                StatusSeverity.FAILURE, source,
+                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.CAPABILITY_COMMIT,
+                        null, null, Map.of()));
         CraftingPlan plan = plan(
                 transaction -> CapabilityResult.failure(FIRST_FAILURE),
                 transaction -> CapabilityResult.failure(secondFailure));
@@ -177,7 +182,9 @@ class CraftingPlanTest {
                 Identifier.fromNamespaceAndPath("mmcr_test", "unsafe_scale"),
                 StatusSeverity.FAILURE,
                 Identifier.fromNamespaceAndPath("mmcr_test", "test"),
-                Map.of());
+                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN,
+                        Identifier.fromNamespaceAndPath("mmcr_test", "test"), FailurePhase.CAPABILITY_COMMIT,
+                        null, null, Map.of()));
 
         RequirementPlan resolved = RequirementPlan.withOutputSimulation(0, 2, List.of(operation), null, simulation)
                 .preparedAt(2)

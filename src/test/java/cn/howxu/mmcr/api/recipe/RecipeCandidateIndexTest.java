@@ -4,10 +4,17 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.capability.status.FailureReport;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
@@ -40,6 +47,8 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.crafting.ICustomIngredient;
 import net.neoforged.neoforge.common.crafting.IngredientType;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -53,6 +62,7 @@ class RecipeCandidateIndexTest {
     private static final Identifier MACHINE = Identifier.fromNamespaceAndPath("test", "machine");
     private static final Identifier LEVEL_TYPE = Identifier.fromNamespaceAndPath("test", "recipe_search_level_type");
     private static final Identifier LEVEL = Identifier.fromNamespaceAndPath("test", "recipe_search_level");
+    private RequirementHandlerRegistry.TestScope requirementScope;
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -62,6 +72,19 @@ class RecipeCandidateIndexTest {
         TestBootstrap.registerLevel(new MachineLevel(LEVEL, LEVEL_TYPE, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
                 LevelModifier.IDENTITY));
+    }
+
+    @BeforeEach
+    void registerLoadedHeatRequirement() {
+        requirementScope = RequirementHandlerRegistry.openTestScope();
+        LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+        RequirementHandlerRegistry.register(LoadedHeatRequirement.TEMPERATURE_TYPE);
+    }
+
+    @AfterEach
+    void clearLoadedHeatRequirement() {
+        LoadedHeatRequirement.installUnavailableHandler();
+        requirementScope.close();
     }
 
     @Test
@@ -255,6 +278,40 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
+    void search_selects_the_highest_priority_failure_and_keeps_search_and_source_trace_frames() {
+        MachineRecipe missingInput = recipeWithRequirements("search_missing_input",
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY)), List.of());
+        MachineRecipe missingEnergy = recipeWithRequirements("search_missing_energy",
+                List.of(new EnergyRequirement(1)), List.of());
+        MachineRecipe lowTemperature = recipeWithRequirements("search_low_temperature",
+                List.of(LoadedHeatRequirement.minimumTemperature(450D)), List.of());
+        MachineRecipe insufficientLevel = recipeWithRequirements("search_insufficient_level", List.of(),
+                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)));
+        MachineRecipe missingOutput = recipeWithRequirements("search_missing_output",
+                List.of(MachineRequirement.itemOutput(new ItemStack(Items.DIAMOND))), List.of());
+        List<MachineRecipe> candidates = List.of(missingInput, missingEnergy, lowTemperature,
+                insufficientLevel, missingOutput);
+
+        List<MachineRecipe> indexedCandidates = RecipeCandidateIndex.build(candidates).candidates(null);
+        RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
+                indexedCandidates, null, List.of(), List.of()).compute();
+
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(result.failureReport().candidates()).extracting(FailureReport.Candidate::status)
+                .extracting(ExecutionStatus::reason)
+                .containsExactlyInAnyOrder(BuiltinFailureReasons.MISSING_INPUT,
+                        BuiltinFailureReasons.MISSING_ENERGY,
+                        MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT,
+                        BuiltinFailureReasons.LEVEL_INSUFFICIENT,
+                        BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(result.primaryFailure().trace().frames())
+                .anySatisfy(frame -> assertThat(frame.phase()).isEqualTo(FailurePhase.RECIPE_SEARCH))
+                .anySatisfy(frame -> assertThat(frame.source()).isEqualTo(ItemRequirement.TYPE.id()));
+    }
+
+    @Test
     void search_level_failure_is_typed_with_recipe_trace_and_level_details() {
         MachineRecipe levelLimited = RecipeTestSupport.create(id("level_only"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
@@ -313,6 +370,12 @@ class RecipeCandidateIndexTest {
     private static MachineRecipe itemRecipe(String path, Ingredient ingredient) {
         return RecipeTestSupport.create(id(path), MACHINE, 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ingredient, 1, ItemStack.EMPTY)), false);
+    }
+
+    private static MachineRecipe recipeWithRequirements(String path, List<MachineRequirement> requirements,
+                                                        List<LevelRequirement> levels) {
+        return RecipeTestSupport.create(id(path), MACHINE, 20, List.of(), List.of(), List.of(), 0, 1,
+                false, List.of(), requirements, false, levels, false, Set.of());
     }
 
     private static Ingredient singleMemberTagIngredient() {

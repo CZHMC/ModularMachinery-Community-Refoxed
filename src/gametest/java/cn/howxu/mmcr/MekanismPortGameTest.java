@@ -10,7 +10,12 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
+import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mekanism.api.AutomationType;
 import mekanism.api.MekanismAPI;
@@ -135,6 +140,15 @@ public class MekanismPortGameTest {
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
         double capacity = port.heatCapacitor().getHeatCapacity();
         double baseline = ambient * capacity;
+        setHeat(port, baseline);
+        RequirementPlan insufficient = LoadedMekanismBridge.heatHandler().plan(
+                LoadedHeatRequirement.minimumTemperature(ambient + 100D),
+                List.of(new HeatPortCapability(port)), new PlanningContext(1, 0));
+        helper.assertTrue(insufficient.failure() != null,
+                "A heat requirement below the port temperature reports a structured failure");
+        helper.assertValueEqual(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.id(),
+                insufficient.failure().reason().id(),
+                "Heat temperature insufficiency exposes its registered reason ID");
         setHeat(port, baseline * 5.5D);
         double before = port.heatCapacitor().getHeat();
         helper.assertTrue(before > baseline,

@@ -112,8 +112,7 @@ public final class CapabilityTransferPolicies {
             ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
             TransferFacet transfer = transferFacet(capability);
             if (storage == null || transfer == null) {
-                return blocked(BuiltinFailureReasons.UNKNOWN,
-                        Map.of("raw_reason_id", "unsupported_capability"));
+                return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
             if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
@@ -169,8 +168,7 @@ public final class CapabilityTransferPolicies {
             ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
             TransferFacet transfer = transferFacet(capability);
             if (storage == null || transfer == null) {
-                return blocked(BuiltinFailureReasons.UNKNOWN,
-                        Map.of("raw_reason_id", "unsupported_capability"));
+                return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
             if (context.eject() ? !hasStoredContents(storage) : !hasWork(capability)) {
                 return blocked(BuiltinFailureReasons.NO_WORK);
@@ -223,8 +221,7 @@ public final class CapabilityTransferPolicies {
             LongValueStorage storage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             TransferFacet transfer = transferFacet(capability);
             if (storage == null || transfer == null) {
-                return blocked(BuiltinFailureReasons.UNKNOWN,
-                        Map.of("raw_reason_id", "unsupported_capability"));
+                return blocked(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             }
             if (context.eject() ? storage.amount() <= 0L : !hasWork(capability)) {
                 return blocked(BuiltinFailureReasons.NO_WORK);

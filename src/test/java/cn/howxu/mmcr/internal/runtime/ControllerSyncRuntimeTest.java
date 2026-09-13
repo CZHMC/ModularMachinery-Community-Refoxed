@@ -5,7 +5,6 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -424,6 +423,16 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
+    void unknown_typed_status_uses_the_unknown_failure_translation_key() {
+        Identifier source = MMCR.id("controller_sync_unknown");
+        ExecutionStatus unknown = ExecutionStatus.blocked(MMCR.id("unknown_status"), source,
+                FailureOccurrence.at(null, source, FailurePhase.UNKNOWN, null, null, Map.of()));
+
+        assertThat(new ControllerSyncRuntime().failureMessage(unknown))
+                .isEqualTo("gui.mmcr.failure.unknown");
+    }
+
+    @Test
     void published_controller_module_state_and_levels_reach_the_sync_projection() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         DynamicMachine machine = new DynamicMachine(MMCR.id("sync_module_machine"), "Sync Module",
@@ -481,9 +490,9 @@ class ControllerSyncRuntimeTest {
                 ? ExecutionStatus.blocked(MMCR.id("runtime_failure"), MMCR.id("crafting_runtime"),
                 FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, MMCR.id("crafting_runtime"),
                         FailurePhase.REQUIREMENT_PLAN, null, null, Map.of()))
-                : new ExecutionStatus(MMCR.id("runtime_failure"),
-                StatusSeverity.BLOCKED,
-                MMCR.id("crafting_runtime"), Map.of("reason", "insufficient_energy"));
+                : ExecutionStatus.blocked(MMCR.id("runtime_failure"), MMCR.id("crafting_runtime"),
+                FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, MMCR.id("crafting_runtime"),
+                        FailurePhase.UNKNOWN, null, null, Map.of()));
         FactoryRuntime.ThreadSnapshot activeLane = new FactoryRuntime.ThreadSnapshot(0, true, false, true,
                 "mmcr:factory_recipe", 4, 20, 6, "", true, "mmcr:factory_recipe");
         FactoryRuntime.ThreadSnapshot idleLane = new FactoryRuntime.ThreadSnapshot(1, false, false, false,
