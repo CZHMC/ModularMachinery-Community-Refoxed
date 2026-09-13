@@ -1,4 +1,20 @@
 {
+        "block.mmcr.server_controller": "Server Cluster",
+        "item.mmcr.server_controller": "Server Cluster",
+        "machine.kubejs.server": "Server Cluster",
+
+        "block.mmcr.center_controller": "Network Center",
+        "item.mmcr.center_controller": "Network Center",
+        "machine.kubejs.center": "Network Center",
+
+        "block.mmcr.hello_world_controller": "Blast Furnace",
+        "item.mmcr.hello_world_controller": "Blast Furnace",
+        "machine.kubejs.hello_world": "Blast Furnace",
+
+        "block.mmcr.artificial_star_video_controller": "Artificial Star",
+        "item.mmcr.artificial_star_video_controller": "Artificial Star",
+        "machine.kubejs.artificial_star_video": "Artificial Star",
+
         "recipe_pool.kubejs.server": "Server Cluster",
         "recipe_pool.kubejs.center": "Network Center",
         "recipe_pool.kubejs.hello_world": "Blast Furnace",

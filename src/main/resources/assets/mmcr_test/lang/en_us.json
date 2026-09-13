@@ -61,5 +61,17 @@
     "gui.mmcr.before_line": "------------",
     "gui.mmcr.in_line": "Demo Tick System",
     "gui.mmcr.after_line": "------------",
-    "gui.mmcr.display_when_idle": "Demo Tick System: Idle"
+    "gui.mmcr.display_when_idle": "Demo Tick System: Idle",
+
+    "recipe_pool.mmcr.alloy_furnace": "Alloy Furnace",
+    "recipe_pool.mmcr.blast_furnace": "Blast Furnace",
+    "recipe_pool.mmcr.cracker": "Cracker",
+    "recipe_pool.mmcr.distillation_tower": "Distillation Tower",
+    "recipe_pool.mmcr.purpur_furnace": "Purpur Furnace",
+    "recipe_pool.mmcr.reactor": "Reactor",
+    "recipe_pool.mmcr.thermal_smelting_furnace": "Thermal Smelting Furnace",
+    "recipe_pool.mmcr.space_elevator": "Space Elevator",
+    "recipe_pool.mmcr.space_reassembler": "Space Reassembler",
+    "recipe_pool.mmcr.monster_farm": "Monster Farm",
+    "recipe_pool.mmcr.recipe_ticker": "Recipe Ticker"
 }

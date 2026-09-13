@@ -61,5 +61,17 @@
     "gui.mmcr.before_line": "------------",
     "gui.mmcr.in_line": "  Demo Tick System",
     "gui.mmcr.after_line": "------------",
-    "gui.mmcr.display_when_idle": "Demo Tick System: Idle"
+    "gui.mmcr.display_when_idle": "Demo Tick System: Idle",
+
+    "recipe_pool.mmcr.alloy_furnace": "合金炉",
+    "recipe_pool.mmcr.blast_furnace": "高炉",
+    "recipe_pool.mmcr.cracker": "裂化器",
+    "recipe_pool.mmcr.distillation_tower": "蒸馏塔",
+    "recipe_pool.mmcr.purpur_furnace": "紫珀炉",
+    "recipe_pool.mmcr.reactor": "反应堆",
+    "recipe_pool.mmcr.thermal_smelting_furnace": "热能冶炼炉",
+    "recipe_pool.mmcr.space_elevator": "太空电梯",
+    "recipe_pool.mmcr.space_reassembler": "太空重组器",
+    "recipe_pool.mmcr.monster_farm": "怪物农场",
+    "recipe_pool.mmcr.recipe_ticker": "配方Tick测试"
 }
