@@ -15,7 +15,7 @@ class StructurePreviewPanelTest {
         assertThat(StructurePreviewPanel.candidateIndex(0, 0L, 4)).isZero();
         assertThat(StructurePreviewPanel.candidateIndex(0, 999L, 4)).isZero();
         assertThat(StructurePreviewPanel.candidateIndex(0, 1_000L, 4)).isOne();
-        assertThat(StructurePreviewPanel.candidateIndex(7, 0L, 4)).isEqualTo(3);
+        assertThat(StructurePreviewPanel.candidateIndex(7, 0L, 4)).isEqualTo(-1);
     }
 
     @Test

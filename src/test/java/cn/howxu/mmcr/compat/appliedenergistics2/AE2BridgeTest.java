@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -72,11 +76,20 @@ class AE2BridgeTest {
     }
 
     @Test
-    void loadedBridgeReturnsOverlayForAllFourInterfaceIds() {
+    void loadedBridgeReturnsDedicatedOverlaysForEachInterfaceKind() {
         AE2Bridge bridge = AE2BridgeBootstrap.selectForTesting(true);
-        var expected = net.minecraft.resources.Identifier.fromNamespaceAndPath("ae2", "block/interface");
 
-        assertThat(bridge.portKinds())
-                .allSatisfy(kind -> assertThat(bridge.portOverlayTexture(kind)).isEqualTo(expected));
+        assertThat(bridge.portOverlayTexture(InputInterfaceKind.INSTANCE))
+                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
+                        "mmcr", "block/appliedenergistics2/ae2_input"));
+        assertThat(bridge.portOverlayTexture(StockingInterfaceKind.INSTANCE))
+                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
+                        "mmcr", "block/appliedenergistics2/ae2_stocking_input"));
+        assertThat(bridge.portOverlayTexture(OutputInterfaceKind.INSTANCE))
+                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
+                        "mmcr", "block/appliedenergistics2/ae2_output"));
+        assertThat(bridge.portOverlayTexture(AsyncOutputInterfaceKind.INSTANCE))
+                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
+                        "mmcr", "block/appliedenergistics2/ae2_async_output"));
     }
 }
