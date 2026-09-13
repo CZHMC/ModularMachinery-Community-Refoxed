@@ -39,6 +39,16 @@ class BlueprintScreenTest {
     }
 
     @Test
+    void candidateSlotsStartAtTheCandidateRectangle() {
+        BlueprintLayout layout = BlueprintScreen.layoutFor(640, 480, true);
+
+        BlueprintRect candidateSlot = BlueprintScreen.slotRect(layout, layout.candidates(), 0);
+
+        assertThat(candidateSlot.x()).isEqualTo(layout.candidates().x());
+        assertThat(candidateSlot.y()).isEqualTo(layout.candidates().y());
+    }
+
+    @Test
     void nextStageButtonOnlyExistsForMultipleStagesAndSpansTwoColumns() {
         BlueprintLayout layout = BlueprintScreen.layoutFor(640, 360, true);
 

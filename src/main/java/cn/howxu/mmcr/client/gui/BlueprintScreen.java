@@ -324,6 +324,7 @@ public final class BlueprintScreen extends Screen {
         graphics.pose().pushMatrix();
         graphics.pose().translate(currentLayout.left(), currentLayout.top());
         graphics.pose().scale(currentLayout.scale(), currentLayout.scale());
+        int candidatesX = (int) Math.round(localMouse(currentLayout.candidates().x(), currentLayout.left(), currentLayout.scale()));
         int candidatesY = (int) Math.round(localMouse(currentLayout.candidates().y(), currentLayout.top(), currentLayout.scale()));
         int materialsY = (int) Math.round(localMouse(currentLayout.materials().y(), currentLayout.top(), currentLayout.scale()));
         int visibleSlotCount = visibleSlotCount();
@@ -332,7 +333,7 @@ public final class BlueprintScreen extends Screen {
             Candidate candidate = panel.candidateAt(slot, timeMillis, visibleSlotCount);
             if (candidate != null) {
                 ItemStack stack = candidate.stack();
-                int x = ITEM_ROW_SLOT_X + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
+                int x = candidatesX + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
                 int y = candidatesY + SLOT_ICON_OFFSET;
                 graphics.item(stack, x, y, slot);
                 graphics.itemDecorations(font, stack, x, y);
@@ -376,8 +377,8 @@ public final class BlueprintScreen extends Screen {
         return currentLayout.candidates().contains(mouseX, mouseY) || currentLayout.materials().contains(mouseX, mouseY);
     }
 
-    private BlueprintRect slotRect(BlueprintLayout currentLayout, BlueprintRect row, int slot) {
-        int baseX = ITEM_ROW_SLOT_X + slot * SLOT_SIZE;
+    static BlueprintRect slotRect(BlueprintLayout currentLayout, BlueprintRect row, int slot) {
+        int baseX = (int) Math.round(localMouse(row.x(), currentLayout.left(), currentLayout.scale())) + slot * SLOT_SIZE;
         int baseY = (int) Math.round(localMouse(row.y(), currentLayout.top(), currentLayout.scale()));
         return scaledRect(currentLayout.left(), currentLayout.top(), baseX, baseY, SLOT_SIZE, SLOT_SIZE, currentLayout.scale());
     }
