@@ -229,14 +229,18 @@ class KubeJSApiTest {
     }
 
     @Test
-    void level_requirement_factory_adds_an_internal_canonical_requirement() {
+    void rhino_adds_level_requirement_without_internal_imports() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
         var builder = new MachineRecipeBuilderJS("mmcr:level_requirement_test");
-        var requirement = api.levelRequirement(TEST_LEVEL_TYPE.toString(), TEST_LEVEL.toString());
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
 
-        assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement.class);
-        builder.addRequirement(requirement);
+        context.evaluateString(scope, "builder.addRequirement(api.levelRequirement('mmcr:api_test_level_type', 'mmcr:api_test_level'))",
+                "level-requirement-test", 1, null);
+        Object requirement = builder.requirements.getFirst();
 
-        assertThat(builder.requirements).containsExactly(
+        assertThat(requirement).isEqualTo(
                 cn.howxu.mmcr.api.recipe.requirement.LevelRequirement.input(TEST_LEVEL_TYPE, TEST_LEVEL));
     }
 

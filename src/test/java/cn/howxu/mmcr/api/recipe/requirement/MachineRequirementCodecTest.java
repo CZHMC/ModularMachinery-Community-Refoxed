@@ -86,6 +86,17 @@ class MachineRequirementCodecTest {
     }
 
     @Test
+    void codec_defaults_an_omitted_level_requirement_io_to_input() {
+        JsonObject encoded = new JsonObject();
+        encoded.addProperty("type", "mmcr:level");
+        encoded.addProperty("level_type", "test:coil");
+        encoded.addProperty("level", "test:kanthal");
+
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow())
+                .isEqualTo(LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal")));
+    }
+
+    @Test
     void level_handler_ignores_capabilities_and_preserves_requested_parallelism() {
         var plan = new LevelRequirementHandler().plan(
                 LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal")),
