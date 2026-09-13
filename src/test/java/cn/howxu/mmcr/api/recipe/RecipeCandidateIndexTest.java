@@ -194,6 +194,21 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
+    void level_requirements_do_not_count_or_demote_exact_item_candidates() {
+        MachineRecipe itemAndLevel = RecipeTestSupport.create(id("exact_item_and_level"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY),
+                LevelRequirement.input(LEVEL_TYPE, LEVEL)), false, List.of(), false, Set.of());
+
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(itemAndLevel));
+
+        assertThat(itemAndLevel.inputRequirementCount()).isEqualTo(1);
+        assertThat(index.candidates(List.of(Items.IRON_INGOT))).containsExactly(itemAndLevel);
+        assertThat(index.candidates(List.of(Items.DIAMOND))).isEmpty();
+    }
+
+    @Test
     void capability_tagged_inputs_fall_back_when_recipe_also_has_an_exact_item_input() {
         MachineRecipe tagged = RecipeTestSupport.create(id("tagged_exact_item"), MACHINE, 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(

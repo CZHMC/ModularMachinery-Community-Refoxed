@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import net.minecraft.core.HolderSet;
 import net.minecraft.resources.Identifier;
@@ -102,6 +103,7 @@ public final class RecipeCandidateIndex {
         Set<Item> requiredItems = new LinkedHashSet<>();
         boolean hasItemInput = false;
         for (MachineRequirement requirement : recipe.requirements()) {
+            if (requirement instanceof LevelRequirement) continue;
             if (!requirement.tags().isEmpty()) return null;
             if (requirement.io() != RecipeModifier.IOType.INPUT) {
                 continue;

@@ -64,6 +64,9 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             if (input.get("machine") != null) {
                 return DataResult.error(() -> "Legacy field 'machine' is not supported; use 'recipe_pool'");
             }
+            if (input.get("level_requirements") != null) {
+                return DataResult.error(() -> "Legacy field 'level_requirements' is not supported; use 'requirements'");
+            }
             return CANONICAL_CODEC.decode(ops, input);
         }
 
@@ -408,7 +411,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     public int inputRequirementCount() {
         int count = 0;
         for (MachineRequirement requirement : requirements) {
-            if (requirement.io() == RecipeModifier.IOType.INPUT) {
+            if (requirement.io() == RecipeModifier.IOType.INPUT && !(requirement instanceof LevelRequirement)) {
                 count++;
             }
         }

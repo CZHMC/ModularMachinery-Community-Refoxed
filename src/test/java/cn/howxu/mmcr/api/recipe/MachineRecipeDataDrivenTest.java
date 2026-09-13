@@ -191,6 +191,30 @@ class MachineRecipeDataDrivenTest {
     }
 
     @Test
+    void generic_codec_rejects_legacy_level_requirements() {
+        JsonObject json = recipeJson();
+        json.add("level_requirements", new JsonArray());
+
+        var decoded = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .isEqualTo("Legacy field 'level_requirements' is not supported; use 'requirements'");
+    }
+
+    @Test
+    void serializer_rejects_legacy_level_requirements() {
+        JsonObject json = recipeJson();
+        json.add("level_requirements", new JsonArray());
+
+        var decoded = MachineRecipeSerializer.INSTANCE.codec().codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .isEqualTo("Legacy field 'level_requirements' is not supported; use 'requirements'");
+    }
+
+    @Test
     void missing_recipe_pool_keeps_the_required_field_diagnostic() {
         JsonObject json = recipeJson();
         json.remove("recipe_pool");
