@@ -3,7 +3,6 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.internal.sync.JeiRuntimeReloadBridge;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
@@ -42,8 +41,7 @@ public final class KubeJSRecipeSync {
         for (RecipeHolder<?> holder : holders) {
             if (holder.value() instanceof MachineRecipe machineRecipe) {
                 Identifier id = holder.id().identifier();
-                if (!RecipeRegistry.dynamicSnapshot().containsKey(id)
-                        && !KubeJSContentReloadTransaction.ownsRecipe(id)
+                if (!KubeJSContentReloadTransaction.ownsRecipe(id)
                         && !KubeJSContentReloadTransaction.ownsRecipe(machineRecipe)) {
                     recipes.put(id, machineRecipe.withId(id));
                 }

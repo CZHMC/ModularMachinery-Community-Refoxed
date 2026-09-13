@@ -154,6 +154,19 @@ class RecipeRegistryTest {
     }
 
     @Test
+    void dynamicReplacementRejectsMismatchedMapKeyBeforePublishing() {
+        Identifier recipeId = Identifier.parse("mmcr:dynamic_key_recipe");
+        Identifier mismatchedKey = Identifier.parse("mmcr:dynamic_wrong_key");
+        MachineRecipe recipe = recipe(recipeId.toString(), "mmcr:test_machine_name");
+
+        assertThatThrownBy(() -> RecipeRegistry.replaceDynamic(Map.of(mismatchedKey, recipe)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Recipe key does not match recipe id");
+        assertThat(RecipeRegistry.dynamicSnapshot()).isEmpty();
+        assertThat(RecipeRegistry.effectiveSnapshot()).doesNotContainKey(recipeId);
+    }
+
+    @Test
     void dataPackRecipeOverridesStaticRecipeAndWarns() {
         var id = Identifier.parse("mmcr:layered_recipe");
         var staticRecipe = recipe("mmcr:layered_recipe", "mmcr:test_machine_name");

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /** Stores static, KubeJS, data-pack, and direct-runtime recipes and publishes one effective view.
  *
@@ -141,30 +142,92 @@ public final class RecipeRegistry {
 
     public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
-        Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
-        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
-            Identifier id = entry.getKey();
-            MachineRecipe recipe = entry.getValue();
-            if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
-                MMCR.LOG.warn("Skipping recipe {}: unknown recipe pool {} at recipe_pool",
-                        id, recipe.recipePoolId());
-                continue;
-            }
-            if (hasConflictingPool(recipe, List.of(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS()))) {
-                continue;
-            }
-            if (STATE.staticRecipes().containsKey(id)) {
-                throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
-            }
-            if (STATE.dataPack().containsKey(id)) {
-                throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + id);
-            }
-            replacement.put(entry.getKey(), entry.getValue());
-        }
+        DynamicCandidate candidate = validateDynamicCandidate(recipes);
+        Map<Identifier, MachineRecipe> replacement = candidate.acceptedRecipes();
         publish(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS(), replacement);
         reloadVersion++;
         registryVersion++;
         RuntimeContentVersion.advance();
+        }
+    }
+
+    /** Publishes a dynamic layer using the supplied pool-membership rule. */
+    public static void replaceDynamic(Map<Identifier, MachineRecipe> recipes,
+                                      Predicate<Identifier> poolAvailable) {
+        synchronized (RuntimeContentVersion.lock()) {
+        DynamicCandidate candidate = validateDynamicCandidate(recipes, poolAvailable);
+        Map<Identifier, MachineRecipe> replacement = candidate.acceptedRecipes();
+        publish(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS(), replacement);
+        reloadVersion++;
+        registryVersion++;
+        RuntimeContentVersion.advance();
+        }
+    }
+
+    /** Validates a dynamic layer and returns only recipes that can be published. */
+    public static DynamicCandidate validateDynamicCandidate(Map<Identifier, MachineRecipe> recipes) {
+        return validateDynamicCandidate(recipes, MachineRegistry::containsRecipePool);
+    }
+
+    /** Validates a dynamic layer with the pool-membership rule used by its publisher. */
+    public static DynamicCandidate validateDynamicCandidate(Map<Identifier, MachineRecipe> recipes,
+                                                            Predicate<Identifier> poolAvailable) {
+        if (recipes == null) throw new IllegalArgumentException("Dynamic recipes must not be null");
+        if (poolAvailable == null) throw new IllegalArgumentException("Pool membership predicate must not be null");
+        Map<Identifier, MachineRecipe> acceptedRecipes = new LinkedHashMap<>();
+        List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>();
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            try {
+                validateDynamicEntry(entry, poolAvailable);
+                acceptedRecipes.put(entry.getKey(), entry.getValue());
+            } catch (MachineRecipeJson.RecipeJsonException exception) {
+                errors.add(exception);
+                MMCR.LOG.warn("Skipping invalid dynamic recipe {}", entry.getKey(), exception);
+            }
+        }
+        return new DynamicCandidate(acceptedRecipes, errors);
+    }
+
+    private static void validateDynamicEntry(Map.Entry<Identifier, MachineRecipe> entry,
+                                             Predicate<Identifier> poolAvailable) {
+        Identifier id = entry.getKey();
+        MachineRecipe recipe = entry.getValue();
+        if (id == null || recipe == null || recipe.id() == null || !id.equals(recipe.id())) {
+            throw new IllegalArgumentException("Recipe key does not match recipe id: " + id);
+        }
+        if (!poolAvailable.test(recipe.recipePoolId())) {
+            throw new MachineRecipeJson.RecipeJsonException(id, "recipe_pool",
+                    "unknown recipe pool " + recipe.recipePoolId(), null);
+        }
+        MachineRecipe conflicting = conflictingPoolRecipe(recipe,
+                List.of(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS()));
+        if (conflicting != null) {
+            throw new MachineRecipeJson.RecipeJsonException(id, "recipe_pool",
+                    "recipe already belongs to pool " + conflicting.recipePoolId(), null);
+        }
+        if (STATE.staticRecipes().containsKey(id)) {
+            throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
+        }
+        if (STATE.dataPack().containsKey(id)) {
+            throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + id);
+        }
+        try {
+            validateRecipeTypes(Map.of(id, recipe));
+        } catch (MachineRecipeJson.RecipeJsonException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new MachineRecipeJson.RecipeJsonException(id, "$",
+                    exception.getMessage() == null ? "candidate validation failed" : exception.getMessage(),
+                    exception);
+        }
+    }
+
+    public record DynamicCandidate(
+            Map<Identifier, MachineRecipe> acceptedRecipes,
+            List<MachineRecipeJson.RecipeJsonException> errors) {
+        public DynamicCandidate {
+            acceptedRecipes = immutable(acceptedRecipes == null ? Map.of() : acceptedRecipes);
+            errors = List.copyOf(errors == null ? List.of() : errors);
         }
     }
 
@@ -455,15 +518,24 @@ public final class RecipeRegistry {
 
     private static boolean hasConflictingPool(MachineRecipe recipe,
                                                List<Map<Identifier, MachineRecipe>> otherLayers) {
+        MachineRecipe existing = conflictingPoolRecipe(recipe, otherLayers);
+        if (existing != null) {
+            MMCR.LOG.warn("Skipping recipe {} from pool {}: recipe already belongs to pool {}",
+                    recipe.id(), recipe.recipePoolId(), existing.recipePoolId());
+            return true;
+        }
+        return false;
+    }
+
+    private static MachineRecipe conflictingPoolRecipe(MachineRecipe recipe,
+                                                        List<Map<Identifier, MachineRecipe>> otherLayers) {
         for (Map<Identifier, MachineRecipe> layer : otherLayers) {
             MachineRecipe existing = layer.get(recipe.id());
             if (existing != null && !existing.recipePoolId().equals(recipe.recipePoolId())) {
-                MMCR.LOG.warn("Skipping recipe {} from pool {}: recipe already belongs to pool {}",
-                        recipe.id(), recipe.recipePoolId(), existing.recipePoolId());
-                return true;
+                return existing;
             }
         }
-        return false;
+        return null;
     }
 
     public static void clearAll() {

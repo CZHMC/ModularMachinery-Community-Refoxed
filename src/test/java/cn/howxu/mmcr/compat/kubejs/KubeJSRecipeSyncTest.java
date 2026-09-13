@@ -101,16 +101,34 @@ class KubeJSRecipeSyncTest {
     }
 
     @Test
-    void sync_does_not_duplicate_recipe_already_published_as_dynamic_content() {
+    void sync_kubejs_recipe_overrides_dynamic_recipe_with_same_id_and_pool() {
         Identifier id = MMCR.id("dynamic_recipe");
-        MachineRecipe recipe = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
-        RecipeRegistry.replaceDynamic(Map.of(id, recipe));
+        MachineRecipe dynamic = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
+        MachineRecipe kubeJS = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 2, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(id, dynamic));
 
         ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
-        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, recipe)));
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, kubeJS)));
 
-        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(id, recipe);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(id, dynamic);
+        assertThat(RecipeRegistry.kubeJSSnapshot()).containsKey(id);
+        assertThat(RecipeRegistry.getRecipe(id)).isSameAs(RecipeRegistry.kubeJSSnapshot().get(id));
+        assertThat(RecipeRegistry.getRecipe(id).tickTime()).isEqualTo(2);
+    }
+
+    @Test
+    void sync_keeps_dynamic_recipe_when_kubejs_same_id_belongs_to_another_pool() {
+        Identifier id = MMCR.id("cross_pool_dynamic_recipe");
+        MachineRecipe dynamic = RecipeTestSupport.create(id, MMCR.id("test_machine_name"), 1, List.of(), List.of());
+        MachineRecipe kubeJS = RecipeTestSupport.create(id, MMCR.id("controller_tick"), 2, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(id, dynamic));
+
+        ResourceKey<Recipe<?>> holderId = ResourceKey.create(Registries.RECIPE, id);
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of(new RecipeHolder<Recipe<?>>(holderId, kubeJS)));
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(id, dynamic);
         assertThat(RecipeRegistry.kubeJSSnapshot()).doesNotContainKey(id);
+        assertThat(RecipeRegistry.getRecipe(id)).isSameAs(dynamic);
     }
 
     @Test

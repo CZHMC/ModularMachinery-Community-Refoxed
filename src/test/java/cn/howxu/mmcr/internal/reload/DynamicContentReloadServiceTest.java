@@ -188,6 +188,93 @@ class DynamicContentReloadServiceTest {
     }
 
     @Test
+    void dynamic_reload_uses_registry_pool_membership_and_counts_only_published_recipes() {
+        Identifier machineId = Identifier.parse("mmcr:dynamic_pool_alias_machine");
+        Identifier registeredPoolId = Identifier.parse("mmcr:dynamic_pool_alias_registered");
+        Identifier validId = Identifier.parse("mmcr:dynamic_pool_alias_valid");
+        Identifier invalidId = Identifier.parse("mmcr:dynamic_pool_alias_invalid");
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .recipePoolId(registeredPoolId).build());
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(machineId.toString()));
+            candidate.registerRecipe(recipe(validId, registeredPoolId));
+            candidate.registerRecipe(recipe(invalidId, machineId));
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(invalidId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(machineId.toString());
+        });
+        assertThat(result.addedRecipes()).isEqualTo(1);
+        assertThat(result.updatedRecipes()).isZero();
+        assertThat(result.removedRecipes()).isZero();
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(validId, recipe(validId, registeredPoolId))
+                .doesNotContainKey(invalidId);
+        assertThat(result.addedRecipes()).isEqualTo(RecipeRegistry.dynamicSnapshot().size());
+    }
+
+    @Test
+    void dynamic_reload_reports_cross_pool_rejection_and_keeps_valid_recipe() {
+        Identifier firstMachineId = Identifier.parse("mmcr:dynamic_cross_pool_machine_a");
+        Identifier secondMachineId = Identifier.parse("mmcr:dynamic_cross_pool_machine_b");
+        Identifier firstPoolId = Identifier.parse("mmcr:dynamic_cross_pool_a");
+        Identifier secondPoolId = Identifier.parse("mmcr:dynamic_cross_pool_b");
+        Identifier conflictingId = Identifier.parse("mmcr:dynamic_cross_pool_recipe");
+        Identifier validId = Identifier.parse("mmcr:dynamic_cross_pool_valid");
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinitions.register(MachineRegistration.builder(firstMachineId)
+                .recipePoolId(firstPoolId).build());
+        MachineDefinitions.register(MachineRegistration.builder(secondMachineId)
+                .recipePoolId(secondPoolId).build());
+        MachineRecipe kubeJSRecipe = recipe(conflictingId, firstPoolId);
+        RecipeRegistry.replaceKubeJS(Map.of(conflictingId, kubeJSRecipe));
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerStructure(structure(secondMachineId.toString()));
+            candidate.registerRecipe(recipe(conflictingId, secondPoolId));
+            candidate.registerRecipe(recipe(validId, secondPoolId));
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(conflictingId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(firstPoolId.toString());
+        });
+        assertThat(result.addedRecipes()).isEqualTo(1);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validId).doesNotContainKey(conflictingId);
+        assertThat(result.addedRecipes()).isEqualTo(RecipeRegistry.dynamicSnapshot().size());
+        assertThat(RecipeRegistry.getRecipe(conflictingId)).isSameAs(kubeJSRecipe);
+    }
+
+    @Test
+    void dynamic_reload_uses_registered_pool_for_static_machine_and_rejects_machine_alias() {
+        Identifier machineId = Identifier.parse("mmcr:static_pool_alias_machine");
+        Identifier registeredPoolId = Identifier.parse("mmcr:static_pool_alias_registered");
+        Identifier validId = Identifier.parse("mmcr:static_pool_alias_valid");
+        Identifier invalidId = Identifier.parse("mmcr:static_pool_alias_invalid");
+        MachineDefinitions.beginRegistryPhase();
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .recipePoolId(registeredPoolId).build());
+        MachineRegistry.register(new DynamicMachine(machineId, machineId.toString(), new BlockArray(Map.of())));
+
+        var result = DynamicContentReloadService.reload(candidate -> {
+            candidate.registerRecipe(recipe(validId, registeredPoolId));
+            candidate.registerRecipe(recipe(invalidId, machineId));
+        });
+
+        assertThat(result.errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(invalidId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains(machineId.toString());
+        });
+        assertThat(result.addedRecipes()).isEqualTo(1);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validId).doesNotContainKey(invalidId);
+    }
+
+    @Test
     void reloadWithSnapshotReturnsTheCommittedEffectiveContent() {
         String machineId = "mmcr:test_machine_name";
 
