@@ -28,7 +28,7 @@
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.StructureStage}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.StructureRequirements}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.FactorySpec}</li>
- *     <li>{@code cn.howxu.mmcr.api.publicapi.machine.LevelRequirement}</li>
+ *     <li>{@code cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder}</li>
  *     <li>{@code cn.howxu.mmcr.api.publicapi.recipe.ItemInput}</li>

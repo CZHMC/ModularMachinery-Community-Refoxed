@@ -7,10 +7,10 @@ import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -126,7 +126,7 @@ class MachineRecipeCategoryTransferTest {
         MachineRecipe recipe = MachineRecipe.fromCanonical(
                 MMCR.id("jei_chemical_transfer_slots"), MMCR.id("chemical_transfer_machine"), 20,
                 List.of(chemicalInput, chemicalOutput), List.of(), List.of(), 0, 1,
-                false, false, List.of(), false, Set.of());
+                false, false, false, Set.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         List<CapturedSlot> slots = new ArrayList<>();
 
@@ -160,11 +160,10 @@ class MachineRecipeCategoryTransferTest {
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Coils")));
         registerLevel(copperId, typeId, 0, Blocks.COPPER_BLOCK);
         registerLevel(ironId, typeId, 1, Blocks.IRON_BLOCK);
-        LevelRequirement requirement = new LevelRequirement(typeId, ironId);
-        MachineRecipe recipe = RecipeTestSupport.create(
+        LevelRequirement requirement = LevelRequirement.input(typeId, ironId);
+        MachineRecipe recipe = MachineRecipe.fromCanonical(
                 MMCR.id("jei_level_slot"), MMCR.id("level_slot_test_machine"), 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(requirement));
+                List.of(requirement), List.of(), List.of(), 0, 1, false, false, false, Set.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
         List<CapturedSlot> slots = new ArrayList<>();

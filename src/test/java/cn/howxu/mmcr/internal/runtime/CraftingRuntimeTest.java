@@ -509,7 +509,7 @@ class CraftingRuntimeTest {
             CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
             MachineRecipe recipe = new MachineRecipe(MMCR.id("runtime_heat_output_per_tick"),
                     MMCR.id("test_cube"), 3, List.of(LoadedHeatRequirement.outputHeat(5D)),
-                    List.of(new LoadedHeatOutput(5D)), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                    List.of(new LoadedHeatOutput(5D)), List.of(), 0, 1, false, false, false, Set.of());
             double initialHeat = heat.heatCapacitor().getHeat();
 
             assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();

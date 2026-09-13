@@ -207,7 +207,7 @@ public final class DataStorageGameTest {
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("controller_tick_effective_snapshot"), machineId, 20,
                 List.of(MachineRequirement.fromInput(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.DIAMOND), 1))), List.of(), List.of(),
-                0, 1, false, false, List.of(), false, Set.of());
+                0, 1, false, false, false, Set.of());
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(recipeMachine);
         helper.runAtTickTime(20, () -> {

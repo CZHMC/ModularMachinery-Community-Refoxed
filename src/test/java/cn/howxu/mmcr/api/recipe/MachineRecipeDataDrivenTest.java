@@ -191,6 +191,30 @@ class MachineRecipeDataDrivenTest {
     }
 
     @Test
+    void generic_codec_rejects_legacy_level_requirements() {
+        JsonObject json = recipeJson();
+        json.add("level_requirements", new JsonArray());
+
+        var decoded = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .isEqualTo("Legacy field 'level_requirements' is not supported; use 'requirements'");
+    }
+
+    @Test
+    void serializer_rejects_legacy_level_requirements() {
+        JsonObject json = recipeJson();
+        json.add("level_requirements", new JsonArray());
+
+        var decoded = MachineRecipeSerializer.INSTANCE.codec().codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .isEqualTo("Legacy field 'level_requirements' is not supported; use 'requirements'");
+    }
+
+    @Test
     void missing_recipe_pool_keeps_the_required_field_diagnostic() {
         JsonObject json = recipeJson();
         json.remove("recipe_pool");
@@ -291,11 +315,11 @@ class MachineRecipeDataDrivenTest {
             OutputRegistry.register(TEST_OUTPUT_TYPE);
             Identifier recipeId = Identifier.parse("mmcr_test:custom_output_round_trip");
             MachineRecipe base = MachineRecipe.fromCanonical(recipeId, Identifier.parse("mmcr:test_machine_name"),
-                    20, List.of(), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                    20, List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of());
             MachineRecipe recipe = MachineRecipe.withAdditionalOutputs(base, List.of(new TestOutput(23, 0.5F)));
             MachineRecipe equalRecipe = MachineRecipe.fromCanonical(recipeId, recipe.recipePoolId(), recipe.tickTime(),
                     List.of(), List.of(new TestOutput(23, 0.5F)), List.of(), 0, 1, false, false,
-                    List.of(), false, Set.of());
+                    false, Set.of());
 
             assertThat(recipe).isEqualTo(equalRecipe);
             assertThat(recipe.hashCode()).isEqualTo(equalRecipe.hashCode());
@@ -321,7 +345,7 @@ class MachineRecipeDataDrivenTest {
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, stack, 1F,
                         List.of("output-tag"))),
                 List.of(new MachineOutput.ItemOutput(stack, 1F)), List.of(), 0, 1, false, false,
-                List.of(), false, Set.of());
+                false, Set.of());
 
         assertThat(recipe.runtimeRequirements()).filteredOn(
                 requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).hasSize(1);
@@ -335,7 +359,7 @@ class MachineRecipeDataDrivenTest {
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                         new ItemStack(Items.IRON_NUGGET, 1), 1F, List.of())),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET, 1), 1F)),
-                List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(), 0, 1, false, false, false, Set.of());
 
         assertThat(recipe.runtimeRequirements()).filteredOn(
                 requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).hasSize(2);

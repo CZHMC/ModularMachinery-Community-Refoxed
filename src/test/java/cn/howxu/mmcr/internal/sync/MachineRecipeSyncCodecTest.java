@@ -8,11 +8,13 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -22,9 +24,13 @@ import java.util.ArrayList;
 import java.util.function.Consumer;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import io.netty.handler.codec.DecoderException;
 
 import java.util.List;
@@ -37,33 +43,50 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class MachineRecipeSyncCodecTest {
+    private static final Identifier SYNC_LEVEL_TYPE = MMCR.id("sync_level_type");
+    private static final Identifier SYNC_LEVEL = MMCR.id("sync_level");
+
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
     }
 
+    @BeforeEach
+    void registerSyncLevel() {
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(SYNC_LEVEL_TYPE, Component.literal("Sync Level")));
+        TestBootstrap.registerLevel(new MachineLevel(SYNC_LEVEL, SYNC_LEVEL_TYPE, 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, LevelModifier.IDENTITY));
+        TestBootstrap.freezeRegistration();
+    }
+
     @Test
-    void roundTripsVersionTwoRegisteredCustomRequirementAndOutput() {
-        try (RequirementHandlerRegistry.TestScope requirements = RequirementHandlerRegistry.openTestScope();
+    void roundTripsVersionThreeRegisteredCustomAndLevelRequirements() {
+        try (RequirementHandlerRegistry.TestScope requirementScope = RequirementHandlerRegistry.openTestScope();
              OutputRegistry.TestScope outputs = OutputRegistry.openTestScope()) {
             RequirementHandlerRegistry.register(ScalarRequirement.TYPE);
             OutputRegistry.register(ScalarOutput.TYPE);
+            List<MachineRequirement> requirements = List.of(
+                    new ScalarRequirement(RecipeModifier.IOType.INPUT, 12, List.of("input")),
+                    LevelRequirement.input(SYNC_LEVEL_TYPE, SYNC_LEVEL));
             MachineRecipe original = MachineRecipe.fromCanonical(MMCR.id("custom_sync"), MMCR.id("machine"), 20,
-                    List.of(new ScalarRequirement(RecipeModifier.IOType.INPUT, 12, List.of("input"))),
+                    requirements,
                     List.of(new ScalarOutput(34, 0.75F)), List.of(), 2, 3, true, true,
-                    List.of(), true, Set.of(MMCR.id("host")));
+                    true, Set.of(MMCR.id("host")));
             RegistryFriendlyByteBuf buffer = buffer();
 
             MachineRecipeSyncCodec.encode(buffer, original);
             assertThat(buffer.readVarInt()).isEqualTo(-1);
-            assertThat(buffer.readVarInt()).isEqualTo(2);
+            assertThat(buffer.readVarInt()).isEqualTo(3);
             buffer.readerIndex(0);
             MachineRecipe decoded = MachineRecipeSyncCodec.decode(buffer);
 
             assertThat(decoded.id()).isEqualTo(original.id());
             assertThat(decoded.recipePoolId()).isEqualTo(original.recipePoolId());
-            assertThat(decoded.requirements()).containsExactly(new ScalarRequirement(RecipeModifier.IOType.INPUT,
-                    12, List.of("input")));
+            assertThat(decoded.requirements()).containsExactlyElementsOf(requirements);
+            assertThat(decoded.levelRequirements()).singleElement()
+                    .isEqualTo(LevelRequirement.input(SYNC_LEVEL_TYPE, SYNC_LEVEL));
             assertThat(decoded.machineOutputs()).containsExactly(new ScalarOutput(34, 0.75F));
             assertThat(decoded.isParallelized()).isTrue();
             assertThat(decoded.requiredHostIds()).containsExactly(MMCR.id("host"));
@@ -81,12 +104,19 @@ class MachineRecipeSyncCodecTest {
     }
 
     @Test
-    void rejectsLegacyVersionUnknownOversizedAndResidualNewRequirementPayloads() {
-        RegistryFriendlyByteBuf unsupportedVersion = buffer();
-        unsupportedVersion.writeVarInt(-1);
-        unsupportedVersion.writeVarInt(1);
-        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(unsupportedVersion)).isInstanceOf(DecoderException.class)
-                .hasMessageContaining("Unsupported machine recipe sync version");
+    void rejectsUnsupportedVersionsUnknownOversizedAndResidualNewRequirementPayloads() {
+        RegistryFriendlyByteBuf versionTwo = buffer();
+        versionTwo.writeVarInt(-1);
+        versionTwo.writeVarInt(2);
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(versionTwo))
+                .isInstanceOf(DecoderException.class)
+                .hasMessage("Unsupported machine recipe sync version: 2");
+        RegistryFriendlyByteBuf versionFour = buffer();
+        versionFour.writeVarInt(-1);
+        versionFour.writeVarInt(4);
+        assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(versionFour))
+                .isInstanceOf(DecoderException.class)
+                .hasMessage("Unsupported machine recipe sync version: 4");
         assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(MMCR.id("unknown"), 0, buffer -> {
         }))).isInstanceOf(DecoderException.class);
         assertThatThrownBy(() -> MachineRecipeSyncCodec.decode(newRequirementBuffer(EnergyRequirement.TYPE.id(),
@@ -102,25 +132,13 @@ class MachineRecipeSyncCodecTest {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
     }
 
-    private static MachineRecipe decodeLegacy(int kind, Consumer<RegistryFriendlyByteBuf> writer) {
-        RegistryFriendlyByteBuf buffer = buffer();
-        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("legacy"));
-        Identifier.STREAM_CODEC.encode(buffer, MMCR.id("machine"));
-        buffer.writeVarInt(20);
-        buffer.writeVarInt(1);
-        buffer.writeVarInt(kind);
-        writer.accept(buffer);
-        writeLegacyTail(buffer);
-        return MachineRecipeSyncCodec.decode(buffer);
-    }
-
     private static RegistryFriendlyByteBuf newRequirementBuffer(Identifier type, int size,
                                                                   Consumer<RegistryFriendlyByteBuf> writer) {
         RegistryFriendlyByteBuf buffer = buffer();
         RegistryFriendlyByteBuf payload = buffer();
         writer.accept(payload);
         buffer.writeVarInt(-1);
-        buffer.writeVarInt(2);
+        buffer.writeVarInt(3);
         Identifier.STREAM_CODEC.encode(buffer, MMCR.id("new"));
         Identifier.STREAM_CODEC.encode(buffer, MMCR.id("recipe_pool"));
         buffer.writeVarInt(20);
@@ -130,22 +148,6 @@ class MachineRecipeSyncCodecTest {
         buffer.writeVarInt(payloadSize);
         if (payloadSize <= payload.writerIndex()) buffer.writeBytes(payload, 0, payloadSize);
         return buffer;
-    }
-
-    private static void writeLegacyTail(RegistryFriendlyByteBuf buffer) {
-        buffer.writeVarInt(0);
-        buffer.writeVarInt(0);
-        buffer.writeVarInt(1);
-        buffer.writeBoolean(false);
-        buffer.writeBoolean(false);
-        buffer.writeVarInt(0);
-        buffer.writeBoolean(false);
-        buffer.writeVarInt(0);
-    }
-
-    private static void writeTags(RegistryFriendlyByteBuf buffer, String tag) {
-        buffer.writeVarInt(1);
-        buffer.writeUtf(tag);
     }
 
     private record ScalarRequirement(RecipeModifier.IOType io, int value, List<String> tags) implements MachineRequirement {

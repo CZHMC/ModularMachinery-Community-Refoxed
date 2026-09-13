@@ -67,7 +67,7 @@ class FluidChemicalConsumeChanceDisplayTest {
         MachineRequirement fluidInput = new FluidRequirement(RecipeModifier.IOType.INPUT,
                 FluidIngredient.of(Fluids.WATER), 1000, FluidStack.EMPTY, 1F, List.of(), 0.25F);
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("fluid_consume"), MACHINE, 20,
-                List.of(fluidInput), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(fluidInput), List.of(), List.of(), 0, 1, false, false, false, Set.of());
 
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
@@ -81,7 +81,7 @@ class FluidChemicalConsumeChanceDisplayTest {
         MachineRequirement chemicalInput = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
                 ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0F);
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("chemical_consume"), MACHINE, 20,
-                List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, false, Set.of());
 
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
@@ -96,7 +96,7 @@ class FluidChemicalConsumeChanceDisplayTest {
         MachineRequirement chemicalInput = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
                 ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 1F);
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("chemical_render_amount"), MACHINE, 20,
-                List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(chemicalInput), List.of(), List.of(), 0, 1, false, false, false, Set.of());
 
         JeiDisplayEntry chemical = MachineRecipeDisplay.from(recipe).entries().stream()
                 .filter(entry -> entry.typeId().equals(MekanismRecipeTypes.CHEMICAL))

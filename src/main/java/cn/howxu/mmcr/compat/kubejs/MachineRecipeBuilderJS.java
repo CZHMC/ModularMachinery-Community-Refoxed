@@ -5,11 +5,11 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
@@ -56,7 +56,6 @@ public class MachineRecipeBuilderJS {
     private boolean deriveRequirements = true;
     public long energyPerTick = 0L;
     public boolean cancelIfPerTickFails = false;
-    public final List<LevelRequirement> levelRequirements = new ArrayList<>();
     public final Set<Identifier> requiredHostIds = new LinkedHashSet<>();
     final List<MachineRequirement> requirements = new ArrayList<>();
     final List<MachineOutput> customOutputs = new ArrayList<>();
@@ -134,6 +133,12 @@ public class MachineRecipeBuilderJS {
 
     public MachineRecipeBuilderJS addRequirement(MachineRequirement requirement) {
         requirements.add(requirement);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS addRequirement(
+            cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement requirement) {
+        requirements.add(MachineRecipeConverter.toRequirement(requirement));
         return this;
     }
 
@@ -446,7 +451,7 @@ public class MachineRecipeBuilderJS {
         if (!level.typeId().equals(type)) {
             throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
         }
-        levelRequirements.add(new LevelRequirement(type, level.id()));
+        requirements.add(LevelRequirement.input(type, level.id()));
         return this;
     }
 
@@ -534,7 +539,9 @@ public class MachineRecipeBuilderJS {
             }
             for (FluidStack fluidOutput : fluidOutputs) recipeRequirements.add(MachineRequirement.fluidOutput(fluidOutput));
         }
-        if (recipeRequirements != null) recipeRequirements.addAll(requirements);
+        if (recipeRequirements != null) {
+            recipeRequirements.addAll(requirements);
+        }
 
         List<MachineOutput> canonicalOutputs = new ArrayList<>(recipeOutputs.size() + fluidOutputs.size());
         for (int index = 0; index < recipeOutputs.size(); index++) {
@@ -546,7 +553,7 @@ public class MachineRecipeBuilderJS {
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, recipePoolId, tickTime,
                 recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), canonicalOutputs,
                 List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, parallelized,
-                List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
+                allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
         return MachineRecipe.withAdditionalOutputs(recipe, customOutputs);
     }
 

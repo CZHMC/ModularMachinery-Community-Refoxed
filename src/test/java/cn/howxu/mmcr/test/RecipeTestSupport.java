@@ -4,9 +4,9 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -27,11 +27,13 @@ public final class RecipeTestSupport {
     public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                         List<MachineRequirement> requirements, List<MachineOutput> outputs,
                                        List<RecipeModifier> modifiers, int priority, int maxThreads,
-                                       boolean cancelRecipeOnPerTickFailure, boolean parallelized,
-                                       List<LevelRequirement> levelRequirements, boolean allowPartialOutputs,
-                                       Set<Identifier> requiredHostIds) {
-        return new MachineRecipe(id, recipePoolId, tickTime, requirements, outputs, modifiers, priority,
-                maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
+                                        boolean cancelRecipeOnPerTickFailure, boolean parallelized,
+                                        List<LevelRequirement> levelRequirements, boolean allowPartialOutputs,
+                                        Set<Identifier> requiredHostIds) {
+        List<MachineRequirement> canonicalRequirements = new ArrayList<>(requirements == null ? List.of() : requirements);
+        canonicalRequirements.addAll(levelRequirements == null ? List.of() : levelRequirements);
+        return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, canonicalRequirements, outputs, modifiers, priority,
+                maxThreads, cancelRecipeOnPerTickFailure, parallelized,
                 allowPartialOutputs, requiredHostIds);
     }
 
@@ -117,15 +119,16 @@ public final class RecipeTestSupport {
                                        Set<Identifier> requiredHostIds) {
         boolean hasExplicitRequirements = explicitRequirements != null && !explicitRequirements.isEmpty();
         List<MachineRequirement> requirements = hasExplicitRequirements
-                ? castRequirements(explicitRequirements)
-                : deriveRequirements(inputs, outputs, fluidOutputs);
+                ? new ArrayList<>(castRequirements(explicitRequirements))
+                : new ArrayList<>(deriveRequirements(inputs, outputs, fluidOutputs));
+        requirements.addAll(levelRequirements == null ? List.of() : levelRequirements);
         List<MachineOutput> machineOutputs = hasExplicitRequirements
                 ? deriveOutputs(requirements)
                 : new ArrayList<>();
         appendOutputs(machineOutputs, outputs);
         appendOutputs(machineOutputs, fluidOutputs);
         return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, machineOutputs, modifiers,
-                priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
+                priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized,
                 allowPartialOutputs, requiredHostIds);
     }
 

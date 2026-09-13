@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidOutput;
 import cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
@@ -180,7 +181,13 @@ class PublicRecipeBuilderTest {
                 .build();
 
         assertThat(recipe.requirements()).contains(explicit, smart);
-        assertThat(recipe.levelRequirements()).hasSize(1);
+        assertThat(recipe.requirements()).anySatisfy(requirement -> {
+            assertThat(requirement).isInstanceOf(LevelRequirement.class);
+            LevelRequirement level = (LevelRequirement) requirement;
+            assertThat(level.io()).isEqualTo(RecipeIo.INPUT);
+            assertThat(level.typeId()).isEqualTo(TEST_LEVEL_TYPE);
+            assertThat(level.levelId()).isEqualTo(TEST_LEVEL);
+        });
         assertThat(recipe.requiredHostIds()).containsExactly(id("host"));
         assertThat(recipe.modifierIds()).hasSize(1);
     }
@@ -197,6 +204,17 @@ class PublicRecipeBuilderTest {
         assertThat(recipe.requirements()).hasSize(4);
         assertThat(recipe.requirements()).anyMatch(SmartInterfaceRequirement.class::isInstance);
         assertThat(recipe.requirements()).filteredOn(ItemRequirement.class::isInstance).hasSize(2);
+    }
+
+    @Test
+    void converts_internal_level_requirement_to_public_requirement() {
+        var requirement = MachineRecipeConverter.toPublicRequirement(
+                cn.howxu.mmcr.api.recipe.requirement.LevelRequirement.input(TEST_LEVEL_TYPE, TEST_LEVEL));
+
+        assertThat(requirement).isInstanceOfSatisfying(LevelRequirement.class, level -> {
+            assertThat(level.typeId()).isEqualTo(TEST_LEVEL_TYPE);
+            assertThat(level.levelId()).isEqualTo(TEST_LEVEL);
+        });
     }
 
     @Test
@@ -222,7 +240,7 @@ class PublicRecipeBuilderTest {
                         "item", RecipeModifier.IOType.OUTPUT, 2F,
                         RecipeModifier.Operation.MULTIPLY, true))))));
 
-        assertThat(recipe.requirements()).hasSize(6);
+        assertThat(recipe.requirements()).hasSize(7);
         assertThat(recipe.requirements()).anySatisfy(requirement -> {
             assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class);
             var item = (cn.howxu.mmcr.api.recipe.requirement.ItemRequirement) requirement;

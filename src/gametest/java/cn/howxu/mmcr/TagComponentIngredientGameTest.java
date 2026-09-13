@@ -35,7 +35,7 @@ public class TagComponentIngredientGameTest {
                         """)).getOrThrow(), 1F);
         var recipe = MachineRecipe.fromCanonical(Identifier.parse("mmcr:tag_component_input"),
                 MMCR.id("iron_compressor"), 20, List.of(MachineRequirement.fromInput(ingredient)), List.of(),
-                List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(), 0, 1, false, false, false, Set.of());
         var ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         var decoded = MachineRecipe.CODEC.codec().parse(ops,
                 MachineRecipe.CODEC.codec().encodeStart(ops, recipe).getOrThrow()).getOrThrow();

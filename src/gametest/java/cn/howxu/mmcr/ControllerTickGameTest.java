@@ -309,7 +309,7 @@ public class ControllerTickGameTest {
         RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("controller_tick"), 20,
                 List.of(MachineRequirement.fromInput(
                         new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1))), List.of(),
-                List.of(), 0, 1, false, false, List.of(), false, Set.of()));
+                List.of(), 0, 1, false, false, false, Set.of()));
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("controller_tick")));

@@ -238,12 +238,12 @@ public class SharedMultiblockIoGameTest {
     private static MachineRecipe itemRecipe(String path) {
         return MachineRecipe.fromCanonical(MMCR.id(path), MMCR.id("test_cube"), 20,
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
-                        ItemStack.EMPTY)), List.of(), List.of(), 0, 1, false, true, List.of(), false, Set.of());
+                        ItemStack.EMPTY)), List.of(), List.of(), 0, 1, false, true, false, Set.of());
     }
 
     private static MachineRecipe energyRecipe(String path) {
         return MachineRecipe.fromCanonical(MMCR.id(path), MMCR.id("test_cube"), 20,
-                List.of(new EnergyRequirement(15)), List.of(), List.of(), 0, 1, false, false, List.of(), false,
+                List.of(new EnergyRequirement(15)), List.of(), List.of(), 0, 1, false, false, false,
                 Set.of());
     }
 }

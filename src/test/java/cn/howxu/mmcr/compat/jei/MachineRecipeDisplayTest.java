@@ -21,7 +21,6 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -29,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -709,6 +709,24 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void levelRequirementsUseDedicatedJeiRenderingWithoutGenericEntries() {
+        Identifier typeId = MMCR.id("display_level_type");
+        Identifier levelId = MMCR.id("display_level");
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(typeId, Component.literal("Display Level")));
+        registerLevel(levelId, typeId, 1, Blocks.COPPER_BLOCK);
+        TestBootstrap.freezeRegistration();
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("display_level_recipe"),
+                MMCR.id("blast_furnace"), 20, List.of(LevelRequirement.input(typeId, levelId)), List.of(), List.of(),
+                0, 1, false, false, false, Set.of());
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.entries()).noneMatch(entry -> entry.typeId().equals(LevelRequirement.TYPE.id()));
+        assertThat(display.recipe().levelRequirements()).hasSize(1);
+    }
+
+    @Test
     void displayFallsBackToBaseStackForRangeComponentPredicates() {
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("range_component_input_display"),
@@ -941,7 +959,7 @@ class MachineRecipeDisplayTest {
         registerLevel(goldId, typeId, 2, Blocks.GOLD_BLOCK);
         registerLevel(diamondId, typeId, 3, Blocks.DIAMOND_BLOCK);
         TestBootstrap.freezeRegistration();
-        LevelRequirement requirement = new LevelRequirement(typeId, ironId);
+        LevelRequirement requirement = LevelRequirement.input(typeId, ironId);
 
         assertThat(MachineRecipeCategory.levelLabel(requirement).getString()).isEqualTo("Coils: ");
         assertThat(MachineRecipeCategory.levelCandidates(requirement))

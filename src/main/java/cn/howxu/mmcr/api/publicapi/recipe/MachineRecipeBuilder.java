@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
-import cn.howxu.mmcr.api.publicapi.machine.LevelRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import com.google.gson.JsonObject;
@@ -38,7 +37,6 @@ public final class MachineRecipeBuilder {
     private final List<RecipeRequirement> requirements = new ArrayList<>();
     private final List<CustomRecipeIo> customOutputs = new ArrayList<>();
     private final List<Identifier> modifierIds = new ArrayList<>();
-    private final List<LevelRequirement> levelRequirements = new ArrayList<>();
     private final List<RequiredHost> requiredHosts = new ArrayList<>();
 
     private MachineRecipeBuilder(Identifier id) {
@@ -131,7 +129,7 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder outputItem(ItemStack stack, DataComponentPredicateSet components) { return requirement(ItemRequirement.output(new ItemOutput(stack, components))); }
     public MachineRecipeBuilder outputChance(ItemStack stack, float chance) { return requirement(ItemRequirement.output(new ItemOutput(stack, chance))); }
     public MachineRecipeBuilder outputChance(ItemStack stack, float chance, DataComponentPredicateSet components) { return requirement(ItemRequirement.output(new ItemOutput(stack, chance, components))); }
-    public MachineRecipeBuilder levelRequirement(Identifier typeId, Identifier levelId) { levelRequirements.add(new LevelRequirement(typeId, levelId)); return this; }
+    public MachineRecipeBuilder levelRequirement(Identifier typeId, Identifier levelId) { return requirement(new LevelRequirement(typeId, levelId)); }
     public MachineRecipeBuilder requiredHost(Identifier hostId) { requiredHosts.add(new RequiredHost(hostId)); return this; }
     public MachineRecipeBuilder requirement(RecipeRequirement requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
     public MachineRecipeBuilder custom(CustomRecipeIo io) {
@@ -175,7 +173,7 @@ public final class MachineRecipeBuilder {
         return new MachineRecipeDefinition(id, recipePoolId, tickTime, priority, maxThreads,
                 cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, itemInputs, fluidInputs,
                 energyInputs, itemOutputs, fluidOutputs, energyOutputs, recipeRequirements, customOutputs, modifierIds,
-                levelRequirements, Set.copyOf(requiredHosts));
+                Set.copyOf(requiredHosts));
     }
 
     /**

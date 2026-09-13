@@ -15,7 +15,6 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -25,11 +24,11 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
@@ -521,20 +520,6 @@ class RuntimeContentSnapshotTest {
         assertThatThrownBy(() -> MachineRecipeSyncCodec.encode(buf, recipe))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid modifier count");
-    }
-
-    @Test
-    void recipeCodecRejectsOversizedLevelRequirementCountOnEncode() throws Exception {
-        Method writeLevels = MachineRecipeSyncCodec.class.getDeclaredMethod(
-                "writeLevelRequirements", RegistryFriendlyByteBuf.class, List.class);
-        writeLevels.setAccessible(true);
-        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-
-        assertThatThrownBy(() -> writeLevels.invoke(null, buf,
-                Collections.nCopies(1025, new LevelRequirement(MMCR.id("level_type"), MMCR.id("level")))))
-                .isInstanceOf(InvocationTargetException.class)
-                .hasCauseInstanceOf(IllegalArgumentException.class)
-                .hasRootCauseMessage("Invalid level requirement count: 1025");
     }
 
     @Test

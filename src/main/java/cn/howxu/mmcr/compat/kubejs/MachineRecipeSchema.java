@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
@@ -66,10 +67,6 @@ public final class MachineRecipeSchema {
     public static final RecipeKey<List<JsonElement>> REQUIREMENTS =
             new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "requirements", ComponentRole.OTHER);
 
-    public static final RecipeKey<List<JsonElement>> LEVEL_REQUIREMENTS =
-            new RecipeKey<>(ListRecipeComponent.create(JSON_ELEMENT, true, false, IntBounds.OPTIONAL, Optional.empty()), "level_requirements", ComponentRole.OTHER)
-                    .optional(List.of()).exclude();
-
     public static final RecipeKey<Integer> MAX_THREADS =
             new RecipeKey<>(NumberComponent.NON_NEGATIVE_INT, "max_threads", ComponentRole.OTHER).optional(1);
 
@@ -83,7 +80,7 @@ public final class MachineRecipeSchema {
             new RecipeKey<>(BooleanComponent.BOOLEAN, "allow_partial_outputs", ComponentRole.OTHER).optional(false);
 
     public static final RecipeSchema SCHEMA = new RecipeSchema(RECIPE_POOL, TICK_TIME, REQUIREMENTS, OUTPUTS, MODIFIERS,
-            LEVEL_REQUIREMENTS, MAX_THREADS, PARALLELIZED,
+            MAX_THREADS, PARALLELIZED,
             CANCEL_IF_PER_TICK_FAILS, ALLOW_PARTIAL_OUTPUTS)
             .factory(MachineRecipeFactory.INSTANCE)
             .function(new RecipeFunctionInstance("allowPartialOutputs", List.of(),
@@ -194,16 +191,8 @@ public final class MachineRecipeSchema {
                             if (level == null || !level.typeId().equals(Identifier.parse(typeId))) {
                                 throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
                             }
-                            var levels = cx.recipe().json.getAsJsonArray("level_requirements");
-                            if (levels == null) {
-                                levels = new JsonArray();
-                                cx.recipe().json.add("level_requirements", levels);
-                            }
-                            var requirement = new JsonObject();
-                            requirement.addProperty("type", typeId);
-                            requirement.addProperty("level", levelId);
-                            levels.add(requirement);
-                            cx.recipe().save();
+                            appendRequirement(cx.recipe(), LevelRequirement.input(
+                                    Identifier.parse(typeId), Identifier.parse(levelId)));
                         }
                     }))
             .function(new RecipeFunctionInstance("chemicalInput",

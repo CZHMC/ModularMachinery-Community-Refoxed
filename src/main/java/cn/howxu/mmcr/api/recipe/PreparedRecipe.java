@@ -193,6 +193,6 @@ public final class PreparedRecipe {
         fluidOutputs.forEach(output -> canonicalOutputs.add(new MachineOutput.FluidOutput(output, 1F)));
         return MachineRecipe.fromCanonical(Identifier.parse(registryName), Identifier.parse(recipePoolId), tickTime,
                 requirements, canonicalOutputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
-                parallelized, List.of(), allowPartialOutputs, Set.of());
+                parallelized, allowPartialOutputs, Set.of());
     }
 }

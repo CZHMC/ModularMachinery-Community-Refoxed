@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.sync;
 
-import cn.howxu.mmcr.api.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
@@ -48,11 +47,10 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_REQUIREMENTS = 4096;
     private static final int MAX_OUTPUTS = 4096;
     private static final int MAX_MODIFIERS = 1024;
-    private static final int MAX_LEVEL_REQUIREMENTS = 1024;
     private static final int MAX_REQUIRED_HOSTS = 1024;
     private static final int MAX_TAGS = 1024;
     private static final int FORMAT_MARKER = -1;
-    private static final int FORMAT_VERSION = 2;
+    private static final int FORMAT_VERSION = 3;
 
     private MachineRecipeSyncCodec() {
     }
@@ -70,7 +68,6 @@ public final class MachineRecipeSyncCodec {
         buf.writeVarInt(value.maxThreads());
         buf.writeBoolean(value.doesCancelRecipeOnPerTickFailure());
         buf.writeBoolean(value.isParallelized());
-        writeLevelRequirements(buf, value.levelRequirements());
         buf.writeBoolean(value.allowPartialOutputs());
         writeRequiredHosts(buf, value.requiredHostIds());
     }
@@ -96,11 +93,10 @@ public final class MachineRecipeSyncCodec {
         int maxThreads = buf.readVarInt();
         boolean cancelIfPerTickFails = buf.readBoolean();
         boolean parallelized = buf.readBoolean();
-        List<LevelRequirement> levels = readLevelRequirements(buf);
         boolean allowPartialOutputs = buf.readBoolean();
         Set<Identifier> hosts = readRequiredHosts(buf);
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
-                priority, maxThreads, cancelIfPerTickFails, parallelized, levels, allowPartialOutputs, hosts);
+                priority, maxThreads, cancelIfPerTickFails, parallelized, allowPartialOutputs, hosts);
         RecipeRegistry.validateClientSnapshot(Map.of(id, recipe));
         return recipe;
     }
@@ -247,24 +243,6 @@ public final class MachineRecipeSyncCodec {
         List<RecipeModifier> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             values.add(readJsonWithRegistryCodec(buf, RecipeModifier.CODEC));
-        }
-        return List.copyOf(values);
-    }
-
-    private static void writeLevelRequirements(RegistryFriendlyByteBuf buf, List<LevelRequirement> values) {
-        checkSize(values.size(), MAX_LEVEL_REQUIREMENTS, "level requirement");
-        buf.writeVarInt(values.size());
-        for (LevelRequirement value : values) {
-            writeJsonWithRegistryCodec(buf, LevelRequirement.CODEC, value);
-        }
-    }
-
-    private static List<LevelRequirement> readLevelRequirements(RegistryFriendlyByteBuf buf) {
-        int count = buf.readVarInt();
-        checkSize(count, MAX_LEVEL_REQUIREMENTS, "level requirement");
-        List<LevelRequirement> values = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) {
-            values.add(readJsonWithRegistryCodec(buf, LevelRequirement.CODEC));
         }
         return List.copyOf(values);
     }

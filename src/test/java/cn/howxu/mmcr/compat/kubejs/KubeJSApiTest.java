@@ -229,6 +229,22 @@ class KubeJSApiTest {
     }
 
     @Test
+    void rhino_adds_level_requirement_without_internal_imports() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var builder = new MachineRecipeBuilderJS("mmcr:level_requirement_test");
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, "builder.addRequirement(api.levelRequirement('mmcr:api_test_level_type', 'mmcr:api_test_level'))",
+                "level-requirement-test", 1, null);
+        Object requirement = builder.requirements.getFirst();
+
+        assertThat(requirement).isEqualTo(
+                cn.howxu.mmcr.api.recipe.requirement.LevelRequirement.input(TEST_LEVEL_TYPE, TEST_LEVEL));
+    }
+
+    @Test
     void level_slot_factory_exposes_registered_type_to_server_scripts() {
         var slot = api.levelSlot(TEST_LEVEL_TYPE.toString());
 

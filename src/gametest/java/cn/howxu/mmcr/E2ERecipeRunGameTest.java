@@ -61,7 +61,7 @@ public class E2ERecipeRunGameTest {
                         MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(80)),
                         MachineRequirement.itemOutput(new ItemStack(Items.IRON_NUGGET))),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), -100, 1,
-                false, false, List.of(), false, Set.of()));
+                false, false, false, Set.of()));
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);
@@ -110,7 +110,7 @@ public class E2ERecipeRunGameTest {
                         MachineRequirement.fromInput(new MachineIngredient.EnergyIngredient(50)),
                         MachineRequirement.itemOutput(new ItemStack(Items.IRON_NUGGET))),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)), List.of(), 0, 1,
-                false, false, List.of(), false, Set.of()));
+                false, false, false, Set.of()));
 
         var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);

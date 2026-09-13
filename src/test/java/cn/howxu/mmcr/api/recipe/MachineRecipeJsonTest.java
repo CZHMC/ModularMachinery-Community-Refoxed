@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
@@ -116,7 +117,7 @@ class MachineRecipeJsonTest {
             MachineRecipe recipe = MachineRecipe.fromCanonical(id("custom_output_requirement"), id("test_cube"), 20,
                     List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 7, List.of())),
                     List.of(new JsonOutput(7, 1F)), List.of(), 0, 1, false, false,
-                    List.of(), false, Set.of());
+                    false, Set.of());
 
             assertThat(recipe.runtimeRequirements()).filteredOn(
                     requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).hasSize(1);
@@ -141,7 +142,6 @@ class MachineRecipeJsonTest {
         json.addProperty("cancelIfPerTickFails", true);
         json.addProperty("allow_partial_outputs", true);
         json.add("required_host_ids", arrayValue("mmcr:factory_controller"));
-        json.add("level_requirements", array(levelRequirement()));
         var explicit = itemRequirement("input", "minecraft:iron_ingot", 1);
         explicit.add("tags", arrayValue("contract-tag"));
         explicit.add("components", componentJson());
@@ -151,6 +151,7 @@ class MachineRecipeJsonTest {
         energyRequirement.addProperty("io", "input");
         energyRequirement.addProperty("fe_per_tick", 80);
         var requirements = new JsonArray();
+        requirements.add(levelRequirement());
         requirements.add(explicit);
         requirements.add(energyRequirement);
         var fluidRequirement = new JsonObject();
@@ -165,7 +166,7 @@ class MachineRecipeJsonTest {
         var recipe = MachineRecipeJson.parse(id("complex"), json, registries);
 
         assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
-                .hasSize(2);
+                .hasSize(3);
         assertThat(recipe.requirements()).filteredOn(EnergyRequirement.class::isInstance).singleElement()
                 .isInstanceOfSatisfying(EnergyRequirement.class, energy -> assertThat(energy.fePerTick()).isEqualTo(80));
         assertThat(recipe.machineOutputs()).filteredOn(MachineOutput.ItemOutput.class::isInstance).singleElement()
@@ -188,9 +189,11 @@ class MachineRecipeJsonTest {
         assertThat(recipe.allowPartialOutputs()).isTrue();
         assertThat(recipe.requiredHostIds()).containsExactly(Identifier.parse("mmcr:factory_controller"));
         assertThat(recipe.levelRequirements()).singleElement().satisfies(level -> {
+            assertThat(level.io()).isEqualTo(RecipeModifier.IOType.INPUT);
             assertThat(level.typeId()).isEqualTo(Identifier.parse("mmcr:test_level_type"));
             assertThat(level.levelId()).isEqualTo(Identifier.parse("mmcr:test_level"));
         });
+        assertThat(recipe.requirements()).anyMatch(LevelRequirement.class::isInstance);
         assertThat(recipe.requirements()).anyMatch(ItemRequirement.class::isInstance);
         assertThat(recipe.requirements().stream().filter(ItemRequirement.class::isInstance).findFirst().orElseThrow())
                 .isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
@@ -307,6 +310,18 @@ class MachineRecipeJsonTest {
                 .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
                     assertThat(error.recipeId()).isEqualTo(id("legacy_machine"));
                     assertThat(error.path()).isEqualTo("machine");
+                });
+    }
+
+    @Test
+    void parser_rejects_legacy_level_requirements_field() {
+        JsonObject json = recipeJson();
+        json.add("level_requirements", array(levelRequirement()));
+
+        assertThatThrownBy(() -> MachineRecipeJson.parse(id("legacy_level"), json, registries))
+                .isInstanceOfSatisfying(MachineRecipeJson.RecipeJsonException.class, error -> {
+                    assertThat(error.path()).isEqualTo("level_requirements");
+                    assertThat(error).hasMessageContaining("no longer supported");
                 });
     }
 
@@ -430,7 +445,9 @@ class MachineRecipeJsonTest {
 
     private static JsonObject levelRequirement() {
         var level = new JsonObject();
-        level.addProperty("type", "mmcr:test_level_type");
+        level.addProperty("type", "mmcr:level");
+        level.addProperty("io", "input");
+        level.addProperty("level_type", "mmcr:test_level_type");
         level.addProperty("level", "mmcr:test_level");
         return level;
     }
