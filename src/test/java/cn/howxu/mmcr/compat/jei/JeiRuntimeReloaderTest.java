@@ -91,16 +91,30 @@ class JeiRuntimeReloaderTest {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("test_machine_name");
         RecipeRegistry.clearForTesting();
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
         RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("jei_synced_recipe"));
 
         JeiRuntimeReloader.reloadIfAvailable(snapshot);
 
-        assertThat(manager.addedTypes()).contains(JeiMachineRecipeTypes.forMachine(machineId));
+        assertThat(manager.addedTypes()).contains(JeiMachineRecipeTypes.forPool(machineId));
         assertThat(manager.addedRecipeIds()).contains(MMCR.id("jei_synced_recipe"));
-        assertThat(manager.hiddenTypes()).contains(JeiMachineRecipeTypes.forMachine(machineId));
+        assertThat(manager.hiddenTypes()).contains(JeiMachineRecipeTypes.forPool(machineId));
         assertThat(manager.addedRecipeIds()).hasSize(1);
+    }
+
+    @Test
+    void reloadUsesPoolCategoryForRecipesBoundToDifferentMachineIds() {
+        FakeRecipeManager manager = new FakeRecipeManager();
+        Identifier machineId = MMCR.id("shared_pool_machine");
+        Identifier poolId = MMCR.id("shared_pool");
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(poolId));
+        JeiRuntimeReloader.setRuntime(runtime(manager));
+
+        JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, poolId, MMCR.id("shared_pool_recipe")));
+
+        assertThat(manager.addedTypes()).containsExactly(JeiMachineRecipeTypes.forPool(poolId));
+        assertThat(manager.addedRecipeIds()).containsExactly(MMCR.id("shared_pool_recipe"));
     }
 
     @Test
@@ -108,7 +122,7 @@ class JeiRuntimeReloaderTest {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("test_machine_name");
         List<Runnable> queued = new ArrayList<>();
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
         JeiRuntimeReloader.setClientExecutorForTesting(queued::add);
 
@@ -128,7 +142,7 @@ class JeiRuntimeReloaderTest {
         MachineRecipe recipe = RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
         JeiRuntimeReloader.captureInitialDisplays(Map.of(machineId, List.of(MachineRecipeDisplay.from(recipe))));
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
 
         JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, recipeId));
@@ -146,7 +160,7 @@ class JeiRuntimeReloaderTest {
         MachineRecipe recipe = RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)));
         JeiRuntimeReloader.captureInitialDisplays(Map.of(machineId, List.of(MachineRecipeDisplay.from(recipe))));
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
 
         JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, recipeId));
@@ -158,7 +172,7 @@ class JeiRuntimeReloaderTest {
     void reloadDoesNotRefreshTheSameCommittedVersionTwice() {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("test_machine_name");
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
         RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("jei_same_version_recipe"));
 
@@ -174,7 +188,7 @@ class JeiRuntimeReloaderTest {
     void failedAsyncReloadDoesNotClaimVersionBeforeRetrySucceeds() {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("test_machine_name");
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
         RuntimeContentSnapshot snapshot = snapshotWithRecipe(machineId, MMCR.id("jei_retry_recipe"));
         manager.failNextAdd();
@@ -186,11 +200,11 @@ class JeiRuntimeReloaderTest {
     }
 
     @Test
-    void reloadSkipsMachinesWithoutRegisteredJeiCategory() {
+    void reloadSkipsPoolsWithoutRegisteredJeiCategory() {
         FakeRecipeManager manager = new FakeRecipeManager();
         Identifier machineId = MMCR.id("runtime_only_machine");
         RecipeRegistry.clearForTesting();
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(MMCR.id("test_machine_name")));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(MMCR.id("test_machine_name")));
         JeiRuntimeReloader.setRuntime(runtime(manager));
 
         JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, MMCR.id("runtime_only_recipe")));
@@ -205,7 +219,7 @@ class JeiRuntimeReloaderTest {
         Identifier machineId = MMCR.id("test_machine_name");
         Identifier recipeId = MMCR.id("removed_runtime_recipe");
         RecipeRegistry.clearForTesting();
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
 
         JeiRuntimeReloader.reloadIfAvailable(snapshotWithRecipe(machineId, recipeId));
@@ -213,9 +227,9 @@ class JeiRuntimeReloaderTest {
 
         JeiRuntimeReloader.reloadIfAvailable(RuntimeContentSnapshot.empty());
 
-        assertThat(manager.hiddenTypes()).containsExactly(JeiMachineRecipeTypes.forMachine(machineId));
+        assertThat(manager.hiddenTypes()).containsExactly(JeiMachineRecipeTypes.forPool(machineId));
         assertThat(manager.hiddenRecipeIds()).containsExactly(recipeId);
-        assertThat(manager.addedTypes()).doesNotContain(JeiMachineRecipeTypes.forMachine(machineId));
+        assertThat(manager.addedTypes()).doesNotContain(JeiMachineRecipeTypes.forPool(machineId));
         assertThat(manager.addedRecipeIds()).doesNotContain(recipeId);
     }
 
@@ -226,7 +240,7 @@ class JeiRuntimeReloaderTest {
         Identifier staticRecipeId = MMCR.id("pre_existing_static_recipe");
         RecipeRegistry.registerStatic(RecipeTestSupport.create(staticRecipeId, machineId, 20, List.of(),
                 List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1))));
-        JeiRuntimeReloader.markRegisteredMachineCategories(List.of(machineId));
+        JeiRuntimeReloader.markRegisteredRecipePoolCategories(List.of(machineId));
         JeiRuntimeReloader.setRuntime(runtime(manager));
 
         JeiRuntimeReloader.reloadIfAvailable(RuntimeContentSnapshot.empty());
@@ -237,14 +251,18 @@ class JeiRuntimeReloaderTest {
     }
 
     private static RuntimeContentSnapshot snapshotWithRecipe(Identifier machineId, Identifier recipeId) {
+        return snapshotWithRecipe(machineId, machineId, recipeId);
+    }
+
+    private static RuntimeContentSnapshot snapshotWithRecipe(Identifier machineId, Identifier recipePoolId, Identifier recipeId) {
         return new RuntimeContentSnapshot(
                 Map.of(machineId, new MachineStructureDefinition(
                         machineId,
                         new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.BLAST_FURNACE))),
                         PortRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY)),
-                Map.of(recipeId, RecipeTestSupport.create(recipeId, machineId, 20, List.of(),
+                Map.of(recipeId, RecipeTestSupport.create(recipeId, recipePoolId, 20, List.of(),
                         List.of(new ItemStack(Holder.direct(Items.IRON_NUGGET, DataComponentMap.EMPTY), 1)))),
-                Map.of(), Map.of(), Map.of(machineId, machineId), 1L);
+                Map.of(), Map.of(), Map.of(machineId, recipePoolId), 1L);
     }
 
     private static IJeiRuntime runtime(FakeRecipeManager manager) {

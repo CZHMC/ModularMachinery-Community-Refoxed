@@ -18,9 +18,9 @@ public final class JeiMachineRecipeTypes {
             MMCR.id("multiblock_structure"), MachineStructureDisplay.class);
     private static final Map<Identifier, IRecipeType<MachineRecipeDisplay>> TYPES = new ConcurrentHashMap<>();
 
-    public static IRecipeType<MachineRecipeDisplay> forMachine(Identifier machineId) {
-        return TYPES.computeIfAbsent(machineId, id -> IRecipeType.create(
-                Identifier.fromNamespaceAndPath(id.getNamespace(), "machine_recipe/" + id.getPath()),
+    public static IRecipeType<MachineRecipeDisplay> forPool(Identifier poolId) {
+        return TYPES.computeIfAbsent(poolId, id -> IRecipeType.create(
+                Identifier.fromNamespaceAndPath(id.getNamespace(), "recipe_pool/" + id.getPath()),
                 MachineRecipeDisplay.class));
     }
 

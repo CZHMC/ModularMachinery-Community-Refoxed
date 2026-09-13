@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jei;
 
-import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -91,15 +90,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final IDrawable slotBackground;
     private final IGuiHelper guiHelper;
 
-    public MachineRecipeCategory(IGuiHelper guiHelper, Machine machine) {
-        this(guiHelper, machine.registryName(), machine.displayName());
-    }
-
-    public MachineRecipeCategory(IGuiHelper guiHelper, Identifier machineId, Component title) {
+    public MachineRecipeCategory(IGuiHelper guiHelper, Identifier poolId, Identifier iconMachineId) {
         this.guiHelper = guiHelper;
-        this.title = title;
-        this.recipeType = JeiMachineRecipeTypes.forMachine(machineId);
-        this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(machineId).get());
+        this.title = Component.translatable("recipe_pool." + poolId.getNamespace() + "." + poolId.getPath());
+        this.recipeType = JeiMachineRecipeTypes.forPool(poolId);
+        this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(iconMachineId).get());
         this.slotBackground = guiHelper.getSlotDrawable();
     }
 

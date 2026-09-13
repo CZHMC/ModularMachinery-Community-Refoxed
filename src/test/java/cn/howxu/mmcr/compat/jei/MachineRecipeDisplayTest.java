@@ -162,31 +162,31 @@ class MachineRecipeDisplayTest {
         assertThat(display.smartInterfaceInputs()).singleElement()
                 .extracting(MachineRecipeDisplay.SmartInterfaceDisplay::value)
                 .isEqualTo("[1.0, 2.0]");
-        assertThat(display.machineId()).isEqualTo(machineId);
+        assertThat(display.recipePoolId()).isEqualTo(machineId);
     }
 
     @Test
-    void shared_pool_recipe_is_grouped_under_a_registered_machine_category() {
+    void shared_pool_recipes_are_grouped_once_by_pool_in_priority_then_id_order() {
         RecipeRegistry.clearForTesting();
-        var machineId = MMCR.id("jei_shared_pool_machine");
         var recipePoolId = MMCR.id("jei_shared_pool");
-        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
-        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("jei_shared_pool_recipe"), recipePoolId, 20,
+        MachineDefinitions.register(MachineRegistration.builder(MMCR.id("jei_shared_pool_machine"))
+                .recipePoolId(recipePoolId).build());
+        MachineRecipe low = RecipeTestSupport.create(MMCR.id("jei_shared_pool_low"), recipePoolId, 20,
                 List.of(), List.of());
-        RecipeRegistry.registerStatic(recipe);
+        MachineRecipe high = RecipeTestSupport.create(MMCR.id("jei_shared_pool_high"), recipePoolId, 20,
+                List.of(), List.of(), List.of(), 10, 1);
+        RecipeRegistry.registerStatic(low);
+        RecipeRegistry.registerStatic(high);
 
-        assertThat(MachineRecipeDisplays.byMachine()).containsKey(machineId)
-                .doesNotContainKey(recipePoolId);
+        assertThat(MachineRecipeDisplays.byPool()).containsOnlyKeys(recipePoolId);
+        assertThat(MachineRecipeDisplays.byPool().get(recipePoolId))
+                .extracting(MachineRecipeDisplay::recipeId)
+                .containsExactly(MMCR.id("jei_shared_pool_high"), MMCR.id("jei_shared_pool_low"));
     }
 
     @Test
-    void display_uses_a_representative_machine_for_a_shared_recipe_pool() {
-        var machineId = MMCR.id("interface_shared_pool_machine");
+    void smart_interface_display_depends_only_on_recipe_requirement() {
         var recipePoolId = MMCR.id("interface_shared_pool");
-        MachineDefinitions.register(MachineRegistration.builder(machineId)
-                .recipePoolId(recipePoolId)
-                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0))
-                .build());
 
         MachineRecipeDisplay display = displayFor(
                 SmartInterfaceRequirement.input("mode", 1F, 2F), recipePoolId);
@@ -226,18 +226,18 @@ class MachineRecipeDisplayTest {
             assertThat(((TranslatableContents) input.label().getContents()).getKey())
                     .isEqualTo("mmcr.smart_interface.value");
             assertThat(((TranslatableContents) input.tooltip().getContents()).getArgs()[1])
-                    .isEqualTo("1");
+                    .isEqualTo("1.0");
         });
         assertThat(temperature.smartInterfaceInputs()).singleElement().satisfies(input -> {
             assertThat(((TranslatableContents) input.label().getContents()).getKey())
                     .isEqualTo("mmcr.smart_interface.value");
             assertThat(((TranslatableContents) input.tooltip().getContents()).getArgs()[1])
-                    .isEqualTo("5200");
+                    .isEqualTo("5200.0");
         });
     }
 
     @Test
-    void display_includes_smart_interface_modifiers_from_machine_registration() {
+    void display_does_not_include_machine_smart_interface_modifiers() {
         MachineDefinitions.clearForTesting();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.register(MachineRegistration.builder(MMCR.id("jei_interface_modifier"))
@@ -251,10 +251,8 @@ class MachineRecipeDisplayTest {
 
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
-        assertThat(display.smartInterfaceModifiers()).containsExactly(new MachineRecipeDisplay.SmartInterfaceModifierDisplay(
-                "temperature", IntegrationTypeHelper.TARGET_ENERGY, RecipeModifier.IOType.INPUT, false,
-                0F, 100F, 1F, 2F, RecipeModifier.Operation.MULTIPLY));
-        assertThat(display.tooltips()).anyMatch(text -> text.getString().contains("temperature") && text.getString().contains("energy"));
+        assertThat(display.smartInterfaceModifiers()).isEmpty();
+        assertThat(display.tooltips()).noneMatch(text -> text.getString().contains("modifies"));
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
         assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.smartInterfaceTextY(display) - 10);
     }
@@ -298,7 +296,7 @@ class MachineRecipeDisplayTest {
                 MMCR.id("zeta_host"), MMCR.id("alpha_host"), MMCR.id("middle_host")));
 
         MachineRecipeDisplay display = new MachineRecipeDisplay(
-                template.recipe(), template.recipeId(), template.machineId(), template.durationTicks(),
+                template.recipe(), template.recipeId(), template.recipePoolId(), template.durationTicks(),
                 template.itemInputs(), template.itemOutputs(), template.fluidInputs(), template.chemicalInputs(),
                 template.fluidOutputs(), template.energyInputs(), template.energyOutputs(), template.outputs(),
                 template.smartInterfaceInputs(), template.smartInterfaceOutputs(), template.smartInterfaceModifiers(),
@@ -396,7 +394,7 @@ class MachineRecipeDisplayTest {
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
         assertThat(display.recipeId()).isEqualTo(MMCR.id("jei_display"));
-        assertThat(display.machineId()).isEqualTo(MMCR.id("blast_furnace"));
+        assertThat(display.recipePoolId()).isEqualTo(MMCR.id("blast_furnace"));
         assertThat(display.durationTicks()).isEqualTo(120);
         assertThat(display.itemInputs()).hasSize(1);
         assertThat(display.itemInputs()).extracting(MachineRecipeDisplay.ItemInputDisplay::count).containsExactly(8);
@@ -793,11 +791,11 @@ class MachineRecipeDisplayTest {
 
         assertThat(MachineRecipeDisplays.all())
                 .extracting(MachineRecipeDisplay::recipeId)
-                .containsExactly(MMCR.id("high"), MMCR.id("low"), MMCR.id("other"));
+                .containsExactly(MMCR.id("high"), MMCR.id("other"), MMCR.id("low"));
 
-        assertThat(MachineRecipeDisplays.byMachine())
+        assertThat(MachineRecipeDisplays.byPool())
                 .containsOnlyKeys(MMCR.id("blast_furnace"), MMCR.id("other_machine"));
-        assertThat(MachineRecipeDisplays.byMachine().get(MMCR.id("blast_furnace")))
+        assertThat(MachineRecipeDisplays.byPool().get(MMCR.id("blast_furnace")))
                 .extracting(MachineRecipeDisplay::recipeId)
                 .containsExactly(MMCR.id("high"), MMCR.id("low"));
     }

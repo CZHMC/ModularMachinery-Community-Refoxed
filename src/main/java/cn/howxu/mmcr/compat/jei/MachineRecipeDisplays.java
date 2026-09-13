@@ -21,9 +21,7 @@ import java.util.stream.Collectors;
 public final class MachineRecipeDisplays {
 
     private static final Comparator<MachineRecipeDisplay> ORDER = Comparator
-            .comparing(MachineRecipeDisplay::machineId,
-                    Comparator.nullsLast(Comparator.naturalOrder()))
-            .thenComparing(Comparator.comparingInt((MachineRecipeDisplay display) -> display.recipe().priority()).reversed())
+            .comparingInt((MachineRecipeDisplay display) -> display.recipe().priority()).reversed()
             .thenComparing(MachineRecipeDisplay::recipeId);
 
     private MachineRecipeDisplays() {
@@ -41,21 +39,20 @@ public final class MachineRecipeDisplays {
                 .toList();
     }
 
-    public static Map<Identifier, List<MachineRecipeDisplay>> byMachine() {
-        return all().stream().filter(display -> display.machineId() != null).collect(Collectors.groupingBy(
-                MachineRecipeDisplay::machineId,
+    public static Map<Identifier, List<MachineRecipeDisplay>> byPool() {
+        return all().stream().collect(Collectors.groupingBy(
+                MachineRecipeDisplay::recipePoolId,
                 LinkedHashMap::new,
                 Collectors.toList()));
     }
 
-    public static Map<Identifier, List<MachineRecipeDisplay>> byMachine(RuntimeContentSnapshot snapshot) {
+    public static Map<Identifier, List<MachineRecipeDisplay>> byPool(RuntimeContentSnapshot snapshot) {
         RegistryAccess registryAccess = registryAccess();
         return snapshot.recipes().values().stream()
                 .map(recipe -> MachineRecipeDisplay.from(recipe, registryAccess))
-                .filter(display -> display.machineId() != null)
                 .sorted(ORDER)
                 .collect(Collectors.groupingBy(
-                        MachineRecipeDisplay::machineId,
+                        MachineRecipeDisplay::recipePoolId,
                         LinkedHashMap::new,
                         Collectors.toList()));
     }
