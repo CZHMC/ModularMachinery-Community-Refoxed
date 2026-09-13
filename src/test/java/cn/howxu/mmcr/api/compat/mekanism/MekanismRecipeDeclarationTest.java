@@ -1,11 +1,14 @@
 package cn.howxu.mmcr.api.compat.mekanism;
 
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import net.minecraft.resources.Identifier;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -19,6 +22,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * @author howxu <dev@howxu.cn>
  */
 class MekanismRecipeDeclarationTest {
+    @BeforeEach
+    void clear_registry_before_test() {
+        FailureReasonRegistry.clearForTesting();
+    }
+
+    @AfterEach
+    void clear_registry_after_test() {
+        FailureReasonRegistry.clearForTesting();
+    }
+
     @Test
     void chemical_declarations_distinguish_exact_id_and_tag() {
         assertEquals(ChemicalIngredient.Kind.CHEMICAL,
@@ -53,6 +66,7 @@ class MekanismRecipeDeclarationTest {
 
     @Test
     void production_initialization_registers_all_failure_reasons() {
+        BuiltinFailureReasons.register();
         MekanismBridgeBootstrap.bootstrap();
 
         assertRegistered(MekanismFailureReasons.MEKANISM_UNAVAILABLE,
@@ -67,14 +81,33 @@ class MekanismRecipeDeclarationTest {
                 "gui.mmcr.failure.chemical_radioactivity_rejected");
         assertRegistered(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT,
                 "gui.mmcr.failure.heat_temperature_insufficient");
+        assertRegistered(MekanismFailureReasons.HEAT_INPUT_MISSING,
+                "gui.mmcr.failure.heat_input_missing");
         assertRegistered(MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
                 "gui.mmcr.failure.heat_output_blocked");
+
+        assertEquals(BuiltinFailureReasons.MISSING_INPUT.priority(),
+                MekanismFailureReasons.CHEMICAL_INPUT_MISSING.priority());
+        assertEquals(BuiltinFailureReasons.MISSING_OUTPUT.priority(),
+                MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED.priority());
+        assertEquals(250, MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.priority());
 
         FailureReason reason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
         ExecutionStatus status = new ExecutionStatus(reason.id(), StatusSeverity.BLOCKED, reason.id(),
                 Map.of("reason", reason.id().toString()));
         assertEquals(reason, status.reason());
         assertThrows(IllegalArgumentException.class, MekanismFailureReasons::register);
+    }
+
+    @Test
+    void frozen_registry_rejects_a_new_extension_reason() {
+        BuiltinFailureReasons.register();
+        MekanismFailureReasons.register();
+        FailureReasonRegistry.freeze();
+
+        assertThrows(IllegalStateException.class, () -> FailureReasonRegistry.register(
+                new FailureReason(Identifier.parse("mmcr_test:extension_reason"),
+                        "gui.mmcr.failure.extension_reason", 50)));
     }
 
     private static void assertRegistered(FailureReason reason, String translationKey) {

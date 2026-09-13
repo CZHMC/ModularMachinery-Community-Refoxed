@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.api;
 
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.publicapi.ApiRuntime;
@@ -38,6 +39,7 @@ public final class PublicApiBootstrap {
         CapabilityTransferPolicies.ensureRegistered();
         CapabilityRegistry.freeze();
         TransferStrategyRegistry.freeze();
+        FailureReasonRegistry.freeze();
     }
 
     public static synchronized boolean isRegistrationOpen() {
@@ -53,6 +55,7 @@ public final class PublicApiBootstrap {
     /** Resets the public API lifecycle without recursively resetting the coordinator. */
     public static synchronized void resetStateForTesting() {
         MachineStructureRegistry.clearForTesting();
+        FailureReasonRegistry.clearForTesting();
         begun = false;
         ApiRuntime.uninstall();
     }

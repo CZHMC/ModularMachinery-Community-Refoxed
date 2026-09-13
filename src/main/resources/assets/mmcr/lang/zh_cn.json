@@ -654,6 +654,7 @@
   "gui.mmcr.failure.chemical_radioactivity_rejected": "放射性化学品被拒绝",
   "gui.mmcr.failure.heat_temperature_insufficient": "热量温度不足",
   "gui.mmcr.failure.heat_output_blocked": "热量输出受阻",
+  "gui.mmcr.failure.unknown": "未知失败",
   "mmcr.unit.chemical": "mB",
   "mmcr.unit.heat": "J",
   "mmcr.unit.heat_capacity": "J/K",
