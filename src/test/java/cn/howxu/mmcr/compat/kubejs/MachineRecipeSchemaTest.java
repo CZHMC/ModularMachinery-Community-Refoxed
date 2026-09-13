@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -196,6 +197,30 @@ class MachineRecipeSchemaTest {
 
         assertThatIllegalArgumentException().isThrownBy(
                 () -> new MachineRecipeBuilderJS("test:recipe").requiresLevel("test:coil", "test:laser"));
+    }
+
+    @Test
+    void builder_requires_level_adds_canonical_requirement() {
+        Identifier typeId = Identifier.parse("test:requires_level_type");
+        Identifier levelId = Identifier.parse("test:requires_level");
+        Identifier recipePoolId = Identifier.parse("test:requires_level_pool");
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(typeId, Component.literal("Requires Level")));
+        TestBootstrap.registerLevel(new MachineLevel(levelId, typeId, 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
+        MachineRegistry.register(new DynamicMachine(recipePoolId, "Requires Level Pool", new BlockArray(Map.of())));
+
+        var builder = new MachineRecipeBuilderJS(MMCR.id("requires_level_recipe"))
+                .recipePool(recipePoolId.toString())
+                .requiresLevel(typeId.toString(), levelId.toString());
+
+        assertThat(builder.requirements).containsExactly(LevelRequirement.input(typeId, levelId));
+
+        var recipe = builder.createObject();
+
+        assertThat(recipe.requirements()).containsExactly(LevelRequirement.input(typeId, levelId));
+        assertThat(recipe.levelRequirements()).containsExactly(LevelRequirement.input(typeId, levelId));
     }
 
     @Test

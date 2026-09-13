@@ -56,7 +56,6 @@ public class MachineRecipeBuilderJS {
     private boolean deriveRequirements = true;
     public long energyPerTick = 0L;
     public boolean cancelIfPerTickFails = false;
-    public final List<LevelRequirement> levelRequirements = new ArrayList<>();
     public final Set<Identifier> requiredHostIds = new LinkedHashSet<>();
     final List<MachineRequirement> requirements = new ArrayList<>();
     final List<MachineOutput> customOutputs = new ArrayList<>();
@@ -446,7 +445,7 @@ public class MachineRecipeBuilderJS {
         if (!level.typeId().equals(type)) {
             throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
         }
-        levelRequirements.add(LevelRequirement.input(type, level.id()));
+        requirements.add(LevelRequirement.input(type, level.id()));
         return this;
     }
 
@@ -524,7 +523,7 @@ public class MachineRecipeBuilderJS {
             }
         }
 
-        List<MachineRequirement> recipeRequirements = deriveRequirements || !requirements.isEmpty() || !levelRequirements.isEmpty()
+        List<MachineRequirement> recipeRequirements = deriveRequirements || !requirements.isEmpty()
                 ? new ArrayList<>()
                 : null;
         if (deriveRequirements) {
@@ -536,7 +535,6 @@ public class MachineRecipeBuilderJS {
         }
         if (recipeRequirements != null) {
             recipeRequirements.addAll(requirements);
-            recipeRequirements.addAll(levelRequirements);
         }
 
         List<MachineOutput> canonicalOutputs = new ArrayList<>(recipeOutputs.size() + fluidOutputs.size());

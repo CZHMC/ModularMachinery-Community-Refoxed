@@ -207,6 +207,17 @@ class PublicRecipeBuilderTest {
     }
 
     @Test
+    void converts_internal_level_requirement_to_public_requirement() {
+        var requirement = MachineRecipeConverter.toPublicRequirement(
+                cn.howxu.mmcr.api.recipe.requirement.LevelRequirement.input(TEST_LEVEL_TYPE, TEST_LEVEL));
+
+        assertThat(requirement).isInstanceOfSatisfying(LevelRequirement.class, level -> {
+            assertThat(level.typeId()).isEqualTo(TEST_LEVEL_TYPE);
+            assertThat(level.levelId()).isEqualTo(TEST_LEVEL);
+        });
+    }
+
+    @Test
     void adapts_public_recipe_values_to_internal_recipe_semantics() {
         ItemStack itemOutput = new ItemStack(Items.GOLD_INGOT, 2);
         FluidStack fluidOutput = new FluidStack(Fluids.WATER, 250);
