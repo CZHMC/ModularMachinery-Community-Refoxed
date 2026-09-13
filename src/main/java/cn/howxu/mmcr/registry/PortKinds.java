@@ -276,6 +276,11 @@ public final class PortKinds {
         public PortDefinition definition() {
             return PortDefinition.of(MMCR.id(id), chemicalBinding(ioType, tier));
         }
+
+        @Override
+        public List<String> modDependencies() {
+            return List.of("mekanism");
+        }
     }
 
     public record HeatKind(String id, IOType ioType, int tier, double capacity)
@@ -294,6 +299,11 @@ public final class PortKinds {
         @Override
         public PortDefinition definition() {
             return PortDefinition.of(MMCR.id(id), heatBinding(ioType, tier));
+        }
+
+        @Override
+        public List<String> modDependencies() {
+            return List.of("mekanism");
         }
     }
 

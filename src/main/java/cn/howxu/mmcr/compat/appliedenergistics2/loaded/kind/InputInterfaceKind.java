@@ -73,4 +73,9 @@ public final class InputInterfaceKind implements IOPortKind {
     public PortDefinition definition() {
         return definition;
     }
+
+    @Override
+    public List<String> modDependencies() {
+        return List.of("ae2");
+    }
 }

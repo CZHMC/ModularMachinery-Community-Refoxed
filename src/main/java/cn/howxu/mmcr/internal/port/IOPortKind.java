@@ -74,4 +74,7 @@ public interface IOPortKind {
 
     /** 该 kind 的服务端 tick 钩子,用于 MEK 气体管道分发等。默认无。 */
     default void tick(IOPortBlockEntity be) {}
+
+    /** 该 kind 所依赖的外部 mod 列表。空表示无外部依赖。用于数据生成阶段为 LootTable 等数据添加 neoforge:conditions。 */
+    default List<String> modDependencies() { return List.of(); }
 }
