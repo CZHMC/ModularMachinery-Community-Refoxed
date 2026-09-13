@@ -300,7 +300,7 @@ public final class PreviewSceneRenderer {
         quad(vertices, pose, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0, color);
         quad(vertices, pose, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1, color);
         quad(vertices, pose, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, color);
-        quad(vertices, pose, x1, y0, z0, x1, y0, z1, x1, y1, z1, x1, y1, z0, color);
+        quad(vertices, pose, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, color);
     }
 
     private static void quad(VertexConsumer vertices, PoseStack.Pose pose,
