@@ -158,7 +158,7 @@
   "gui.mmcr.blueprint.title": "Blueprint: %s",
   "gui.mmcr.blueprint.y": "Y=%s",
   "gui.mmcr.blueprint.level": "Level=%s",
-  "gui.mmcr.blueprint.candidates": "Candidates",
+  "gui.mmcr.blueprint.candidates": "Replaceable Blocks:",
   "gui.mmcr.blueprint.materials": "Materials",
   "gui.mmcr.blueprint.next_level": "Next Level",
   "gui.mmcr.blueprint.previous_level": "Previous Level",

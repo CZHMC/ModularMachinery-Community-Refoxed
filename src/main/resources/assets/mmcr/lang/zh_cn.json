@@ -158,7 +158,7 @@
   "gui.mmcr.blueprint.title": "蓝图: %s",
   "gui.mmcr.blueprint.y": "Y=%s",
   "gui.mmcr.blueprint.level": "Level=%s",
-  "gui.mmcr.blueprint.candidates": "候选",
+  "gui.mmcr.blueprint.candidates": "可替换方块:",
   "gui.mmcr.blueprint.materials": "材料",
   "gui.mmcr.blueprint.next_level": "下一级",
   "gui.mmcr.blueprint.previous_level": "上一级",

@@ -159,6 +159,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
     public void reset() {
         showAllLayers();
         selectedHit = null;
+        renderer.selectHit(null);
         resetCamera();
         renderer.resetCamera();
     }

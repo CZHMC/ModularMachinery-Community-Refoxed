@@ -123,9 +123,7 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
 
     @Override
     public void selectHit(Object hitResult) {
-        if (hitResult instanceof BlockHitResult blockHitResult) {
-            selectedHit = copyHit(blockHitResult);
-        }
+        selectedHit = hitResult instanceof BlockHitResult blockHitResult ? copyHit(blockHitResult) : null;
     }
 
     public void renderScene(PreviewSceneRenderContext context, PreviewCamera camera) {

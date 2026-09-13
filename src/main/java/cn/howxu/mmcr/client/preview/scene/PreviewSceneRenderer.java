@@ -273,11 +273,8 @@ public final class PreviewSceneRenderer {
 
     private void drawOutlines(PreviewSceneRenderContext context, BlockHitResult hoverHit, BlockHitResult selectedHit) {
         if (context == null) return;
-        if (selectedHit != null) {
-            drawHighlight(context, selectedHit, 0xFF00FFFF);
-        } else if (hoverHit != null) {
-            drawHighlight(context, hoverHit, 0xFFFFFF00);
-        }
+        if (hoverHit != null) drawHighlight(context, hoverHit, 0xFFFFFF00);
+        if (selectedHit != null && !selectedHit.equals(hoverHit)) drawHighlight(context, selectedHit, 0xFF00FFFF);
     }
 
     private static void drawHighlight(PreviewSceneRenderContext context, BlockHitResult hit, int color) {
