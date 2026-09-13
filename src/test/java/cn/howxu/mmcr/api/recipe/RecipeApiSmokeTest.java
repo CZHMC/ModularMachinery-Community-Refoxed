@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.helper.CraftCheck;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -277,8 +278,8 @@ class RecipeApiSmokeTest {
 
     @Test
     void registry_groups_recipes_by_machine_and_priority() {
-        var machineA = Identifier.fromNamespaceAndPath("mmcr", "machine_a");
-        var machineB = Identifier.fromNamespaceAndPath("mmcr", "machine_b");
+        var machineA = MMCR.id("test_machine_name");
+        var machineB = MMCR.id("controller_tick");
 
         var recipe1 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r1"), machineA, 10, List.of(), List.of(), List.of(), 0, 1);
         var recipe2 = RecipeTestSupport.create(Identifier.fromNamespaceAndPath("mmcr", "r2"), machineA, 20, List.of(), List.of(), List.of(), 5, 1);
@@ -299,7 +300,7 @@ class RecipeApiSmokeTest {
     void active_recipe_nbt_roundtrip() {
         var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "active_test"),
-                Identifier.fromNamespaceAndPath("mmcr", "active_test_machine"),
+                MMCR.id("test_machine_name"),
                 100, List.of(), List.of()
         );
         RecipeRegistry.registerStatic(recipe);

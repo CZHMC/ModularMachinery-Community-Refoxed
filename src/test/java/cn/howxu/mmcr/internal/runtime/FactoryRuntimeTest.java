@@ -515,7 +515,7 @@ class FactoryRuntimeTest {
 
     @Test
     void pending_start_is_discarded_when_the_recipe_catalog_changes_before_resolution() {
-        MachineControllerBlockEntity controller = factoryController("factory_reload_pending");
+        MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
@@ -524,7 +524,7 @@ class FactoryRuntimeTest {
 
         Identifier recipeId = MMCR.id("factory_reload_pending_recipe");
         MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
-        MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, MMCR.id("factory_reload_pending"), 40,
+        MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 40,
                 List.of(), List.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
@@ -574,7 +574,7 @@ class FactoryRuntimeTest {
 
     @Test
     void async_completion_searches_the_current_catalog_after_recipe_reload() {
-        Identifier machineId = MMCR.id("factory_reload_completion");
+        Identifier machineId = MMCR.id("test_cube");
         Identifier recipeId = MMCR.id("factory_reload_completion_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, machineId, 1,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
@@ -665,7 +665,7 @@ class FactoryRuntimeTest {
 
     @Test
     void shared_finish_release_wakes_output_capacity_lane_on_the_next_tick() {
-        Identifier machineId = MMCR.id("shared_finish_release");
+        Identifier machineId = MMCR.id("test_cube");
         Identifier activeId = MMCR.id("shared_finish_release_active");
         Identifier blockedId = MMCR.id("shared_finish_release_blocked");
         MachineRecipe active = RecipeTestSupport.create(activeId, machineId, 1,
@@ -838,9 +838,9 @@ class FactoryRuntimeTest {
 
     @Test
     void stale_async_runtime_request_completes_as_a_failed_lane_and_keeps_backoff() {
-        MachineControllerBlockEntity controller = factoryController("factory_async_version_failure");
+        MachineControllerBlockEntity controller = factoryController("test_cube");
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_version_failure_recipe"),
-                MMCR.id("factory_async_version_failure"), 20, List.of(), List.of());
+                MMCR.id("test_cube"), 20, List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
@@ -1164,7 +1164,7 @@ class FactoryRuntimeTest {
         var snapshot = controller.runtimeSnapshot();
         RecipeSearchContextKey key = new RecipeSearchContextKey(snapshot.structure().version(),
                 snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(),
-                RecipeRegistry.catalogForMachineId(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(), null,
+                RecipeRegistry.catalogForMachine(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(), null,
                 thread.coreRecipeSetVersion());
         thread.recordSearchFailure(key, 0L);
 
@@ -1239,7 +1239,7 @@ class FactoryRuntimeTest {
 
     @Test
     void context_pending_start_is_validated_against_the_context_versions() {
-        MachineControllerBlockEntity controller = factoryController("factory_context_pending_start");
+        MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
@@ -1250,7 +1250,7 @@ class FactoryRuntimeTest {
         ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, live.stateVersion() + 1L);
         FactorySearchContext context = new FactorySearchContext(contextSnapshot, List.of(candidate),
                 controller.componentRuntime().capabilities(), controller.componentRuntime().modifierList(),
-                RecipeRegistry.catalogForMachineId(machineId).version(),
+                RecipeRegistry.catalogForMachine(machineId).version(),
                 controller.resourceAvailabilityEpoch(), 1, 0L);
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
@@ -1523,7 +1523,7 @@ class FactoryRuntimeTest {
         var snapshot = controller.runtimeSnapshot();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
                 snapshot.modifierVersion(), snapshot.stateVersion(),
-                RecipeRegistry.catalogForMachineId(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(),
+                RecipeRegistry.catalogForMachine(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(),
                 controller.lockedRecipeId(), 0L);
     }
 

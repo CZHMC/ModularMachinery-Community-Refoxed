@@ -8,16 +8,19 @@ import cn.howxu.mmcr.api.machine.MachineRoleValidator;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipeJson;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.reload.DynamicContentReloadService;
 import cn.howxu.mmcr.internal.network.ControllerSpecSync;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
+import java.util.ArrayList;
 import java.util.Collection;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Commits runtime content layers as validated reload transactions.
@@ -48,14 +51,41 @@ public final class RuntimeContentCoordinator {
         Map<Identifier, MachineStructureDefinition> oldStructures = MachineStructureRegistry.dynamicSnapshot();
         Map<Identifier, MachineRecipe> oldRecipes = RecipeRegistry.dynamicSnapshot();
         Map<Identifier, MachineStructureDefinition> structureReplacement = Map.copyOf(new LinkedHashMap<>(structures));
-        Map<Identifier, MachineRecipe> recipeReplacement = Map.copyOf(new LinkedHashMap<>(recipes));
+        Map<Identifier, MachineRecipe> candidateRecipes = Map.copyOf(new LinkedHashMap<>(recipes));
+        validate(structureReplacement, candidateRecipes);
+        List<MachineRecipeJson.RecipeJsonException> recipeErrors = new ArrayList<>();
+        Map<Identifier, MachineRecipe> validRecipes = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, MachineRecipe> entry : candidateRecipes.entrySet()) {
+            MachineRecipe recipe = entry.getValue();
+            if (!recipePoolAvailable(recipe.recipePoolId(), structureReplacement)) {
+                recipeErrors.add(new MachineRecipeJson.RecipeJsonException(entry.getKey(), "recipe_pool",
+                        "unknown recipe pool " + recipe.recipePoolId(), null));
+                MMCR.LOG.warn("Skipping dynamic recipe {}: unknown recipe pool {} at recipe_pool",
+                        entry.getKey(), recipe.recipePoolId());
+                continue;
+            }
+            try {
+                RecipeRegistry.validateDataPackCandidate(Map.of(entry.getKey(), recipe));
+                validRecipes.put(entry.getKey(), recipe);
+            } catch (MachineRecipeJson.RecipeJsonException exception) {
+                recipeErrors.add(exception);
+                MMCR.LOG.warn("Skipping invalid dynamic recipe {}", entry.getKey(), exception);
+            } catch (RuntimeException exception) {
+                MachineRecipeJson.RecipeJsonException error = new MachineRecipeJson.RecipeJsonException(
+                        entry.getKey(), "$",
+                        exception.getMessage() == null ? "candidate validation failed" : exception.getMessage(),
+                        exception);
+                recipeErrors.add(error);
+                MMCR.LOG.warn("Skipping invalid dynamic recipe {}", entry.getKey(), exception);
+            }
+        }
+        Map<Identifier, MachineRecipe> recipeReplacement = Map.copyOf(validRecipes);
 
-        validate(structureReplacement, recipeReplacement);
         try {
             MachineStructureRegistry.replaceDynamic(structureReplacement);
             RecipeRegistry.replaceDynamic(recipeReplacement);
             DynamicContentReloadService.ReloadResult result = DynamicContentReloadService.ReloadResult.fromSnapshots(
-                    oldStructures, structureReplacement, oldRecipes, recipeReplacement);
+                    oldStructures, structureReplacement, oldRecipes, recipeReplacement, recipeErrors);
             return new CommitResult(result, snapshotLocked());
         } catch (RuntimeException | Error failure) {
             try {
@@ -187,13 +217,6 @@ public final class RuntimeContentCoordinator {
             }
             if (RecipeRegistry.dataPackSnapshot().containsKey(recipe.id())) {
                 throw new IllegalStateException("Dynamic recipe conflicts with data-pack recipe: " + recipe.id());
-            }
-            if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
-                throw new IllegalStateException("Recipe pool not found for dynamic recipe: " + recipe.recipePoolId());
-            }
-            if (!recipePoolAvailable(recipe.recipePoolId(), structures)) {
-                throw new IllegalStateException("Recipe pool is not available for dynamic recipe: "
-                        + recipe.recipePoolId());
             }
         }
     }

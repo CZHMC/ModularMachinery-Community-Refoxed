@@ -18,6 +18,7 @@ import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -34,9 +35,17 @@ class KubeJSRecipeSyncTest {
         TestBootstrap.bootstrap();
     }
 
+    @BeforeEach
+    void restoreRuntimeContent() {
+        TestBootstrap.registerRuntimeBuiltins();
+        KubeJSContentReloadTransaction.clearPublishedForTesting();
+        RecipeRegistry.clearForTesting();
+    }
+
     @AfterEach
     void cleanup() {
         KubeJSContentReloadTransaction.deactivate();
+        KubeJSContentReloadTransaction.clearPublishedForTesting();
         RecipeRegistry.clearForTesting();
     }
 
@@ -133,6 +142,28 @@ class KubeJSRecipeSyncTest {
                 new RecipeHolder<Recipe<?>>(ResourceKey.create(Registries.RECIPE, orphanId), orphan)));
 
         assertThat(RecipeRegistry.kubeJSSnapshot()).containsKey(validId).doesNotContainKey(orphanId);
+    }
+
+    @Test
+    void transaction_reports_orphan_pool_recipe_while_publishing_valid_dynamic_recipe() {
+        var validId = MMCR.id("transaction_valid_pool_recipe");
+        var orphanId = MMCR.id("transaction_orphan_pool_recipe");
+        var transaction = new KubeJSContentReloadTransaction();
+        var valid = RecipeTestSupport.create(validId, MMCR.id("test_machine_name"), 1, List.of(), List.of());
+        var orphan = RecipeTestSupport.create(orphanId, MMCR.id("missing_transaction_recipe_pool"), 1,
+                List.of(), List.of());
+        transaction.registerRecipe(valid);
+        transaction.registerRecipe(orphan);
+
+        var committed = transaction.commit();
+
+        assertThat(committed.result().errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(orphanId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+            assertThat(error.getMessage()).contains("missing_transaction_recipe_pool");
+        });
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsEntry(validId, valid)
+                .doesNotContainKey(orphanId);
     }
 
     @Test

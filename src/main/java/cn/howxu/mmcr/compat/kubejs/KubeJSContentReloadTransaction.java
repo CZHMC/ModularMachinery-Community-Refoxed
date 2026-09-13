@@ -78,11 +78,12 @@ final class KubeJSContentReloadTransaction {
         mergedStructures.putAll(structures);
         Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
         removePublishedRecipes(mergedRecipes);
-        Map<Identifier, MachineRecipe> validRecipes = KubeJSRecipeSync.filterRecipesWithRegisteredPools(recipes);
-        mergedRecipes.putAll(validRecipes);
+        mergedRecipes.putAll(recipes);
         RuntimeContentCoordinator.CommitResult committed =
                 RuntimeContentCoordinator.commitDynamicAndSnapshot(mergedStructures, mergedRecipes);
         publishedStructures = Map.copyOf(structures);
+        Map<Identifier, MachineRecipe> validRecipes = new LinkedHashMap<>(recipes);
+        committed.result().errors().forEach(error -> validRecipes.remove(error.recipeId()));
         publishedRecipes = Map.copyOf(validRecipes);
         return committed;
     }

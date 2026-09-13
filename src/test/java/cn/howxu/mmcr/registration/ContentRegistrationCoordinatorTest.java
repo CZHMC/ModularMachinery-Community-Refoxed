@@ -128,21 +128,32 @@ class ContentRegistrationCoordinatorTest {
     }
 
     @Test
-    void rejectsRecipeWithoutMachine() {
+    void dropsOrphanRecipeWithoutBlockingValidStartupRecipe() {
         Identifier machineId = id("missing_recipe_machine");
+        Identifier validRecipeId = id("valid_startup_recipe");
+        Identifier orphanRecipeId = id("orphan_startup_recipe");
+        MMCRMachineDefinationsEvent definitions = new MMCRMachineDefinationsEvent();
+        definitions.registerMachine(MachineBuilder.machine(machineId).build());
+        definitions.freeze();
+        MMCRMachineStructuresEvent structures = new MMCRMachineStructuresEvent(List.of(machineId));
+        structures.freeze();
         MMCRMachineRecipesEvent recipes = new MMCRMachineRecipesEvent();
-        MachineRecipeDefinition recipe = MachineRecipeBuilder.recipe(id("orphan_recipe")).recipePool(machineId)
+        MachineRecipeDefinition validRecipe = MachineRecipeBuilder.recipe(validRecipeId).recipePool(machineId)
                 .duration(1).build();
-        recipes.registerRecipe(recipe);
+        MachineRecipeDefinition orphanRecipe = MachineRecipeBuilder.recipe(orphanRecipeId).recipePool(id("missing_recipe_pool"))
+                .duration(1).build();
+        recipes.registerRecipe(validRecipe);
+        recipes.registerRecipe(orphanRecipe);
         recipes.freeze();
 
         ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.collectMachines(definitions);
+        ContentRegistrationCoordinator.collectStructures(structures);
         ContentRegistrationCoordinator.collectRecipes(recipes);
+        ContentRegistrationCoordinator.commitStartup();
 
-        assertThatThrownBy(ContentRegistrationCoordinator::commitStartup)
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining(machineId.toString());
-        assertThat(RecipeRegistry.getRecipe(recipe.id())).isNull();
+        assertThat(RecipeRegistry.getRecipe(validRecipeId)).isNotNull();
+        assertThat(RecipeRegistry.getRecipe(orphanRecipeId)).isNull();
     }
 
     @Test

@@ -172,9 +172,8 @@ class PublicApiLifecycleTest {
         Identifier unknown = id("unknown_machine");
         registerRecipe(recipe("unknown_recipe", unknown));
         collectStructures();
-        assertThatThrownBy(ContentRegistrationCoordinator::commitStartup)
-                .isInstanceOf(ApiRegistrationException.class)
-                .hasMessageContaining(unknown.toString());
+        assertThatCode(ContentRegistrationCoordinator::commitStartup).doesNotThrowAnyException();
+        assertThat(RecipeRegistry.getRecipe(id("unknown_recipe"))).isNull();
 
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.clearForTesting();

@@ -342,12 +342,12 @@ class MachineRecipeTest {
 
     @Test
     void registry_filters_recipes_by_machine_and_rejects_null_id() {
-        var machineId = Identifier.fromNamespaceAndPath("mmcr", "compressor");
+        var machineId = MMCR.id("test_machine_name");
         var recipe = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "iron"), machineId, 20, List.of(), List.of());
         var other = RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "gold"),
-                Identifier.fromNamespaceAndPath("mmcr", "other"), 20, List.of(), List.of());
+                MMCR.id("controller_tick"), 20, List.of(), List.of());
 
         var machine = new DynamicMachine(machineId, "Compressor", new BlockArray(Map.of()));
         RecipeRegistry.registerStatic(recipe);
@@ -362,7 +362,7 @@ class MachineRecipeTest {
     @Test
     void registryReloadVersionOnlyChangesWhenRegistryClears() {
         long before = RecipeRegistry.reloadVersion();
-        var machineId = Identifier.fromNamespaceAndPath("mmcr", "versioned_machine");
+        var machineId = MMCR.id("test_machine_name");
 
         RecipeRegistry.registerStatic(RecipeTestSupport.create(
                 Identifier.fromNamespaceAndPath("mmcr", "versioned_recipe"),

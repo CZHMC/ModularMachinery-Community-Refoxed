@@ -208,10 +208,6 @@ public final class ContentRegistrationCoordinator {
         MMCRMachineStructuresEvent.Snapshot snapshot = STRUCTURE_SNAPSHOT;
         Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
         RECIPES.forEach((id, definition) -> {
-            if (!MachineRegistry.containsRecipePool(definition.recipePoolId())) {
-                throw new ApiRegistrationException("Recipe " + id + " refers to unknown recipe pool "
-                        + definition.recipePoolId());
-            }
             recipes.put(id, MachineRecipeConverter.toRecipe(definition, snapshot));
         });
         return recipes;

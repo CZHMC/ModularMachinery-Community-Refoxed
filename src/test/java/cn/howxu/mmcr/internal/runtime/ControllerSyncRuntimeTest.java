@@ -178,6 +178,7 @@ class ControllerSyncRuntimeTest {
                 pattern,
                 MachineControllerSpec.defaultsFor(machineId),
                 PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
@@ -217,6 +218,7 @@ class ControllerSyncRuntimeTest {
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Immediate Progress", pattern,
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 1, false, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
@@ -250,6 +252,7 @@ class ControllerSyncRuntimeTest {
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Level Parallelism", pattern,
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 8, true, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
@@ -326,6 +329,7 @@ class ControllerSyncRuntimeTest {
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Factory Initial Threads", pattern,
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 1, false, true, 4);
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, input);
@@ -357,6 +361,7 @@ class ControllerSyncRuntimeTest {
                 pattern,
                 MachineControllerSpec.defaultsFor(machineId),
                 PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
@@ -391,6 +396,7 @@ class ControllerSyncRuntimeTest {
         DynamicMachine machine = new DynamicMachine(machineId, "Sync Failure",
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
                 MachineControllerSpec.defaultsFor(machineId));
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller, machine);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_failure_recipe"), machineId, 20,
@@ -483,4 +489,5 @@ class ControllerSyncRuntimeTest {
             SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
         }
     }
+
 }

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -19,9 +20,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Set;
 
-/** Stores static, data-pack, and direct-runtime recipes and publishes one effective view.
+/** Stores static, KubeJS, data-pack, and direct-runtime recipes and publishes one effective view.
  *
- * <p>Precedence is {@code data-pack > static > dynamic}. A lower-priority recipe remains
+ * <p>Precedence is {@code data-pack > KubeJS > static > dynamic}. A lower-priority recipe remains
  * in its source layer when it is shadowed by a higher-priority layer.</p>
  *
  * @author howxu <dev@howxu.cn>
@@ -51,6 +52,14 @@ public final class RecipeRegistry {
             }
             if (recipe.id() == null) {
                 throw new IllegalArgumentException("Recipe id null");
+            }
+            if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
+                MMCR.LOG.warn("Skipping recipe {}: unknown recipe pool {} at recipe_pool",
+                        recipe.id(), recipe.recipePoolId());
+                continue;
+            }
+            if (hasConflictingPool(recipe, List.of(STATE.dataPack(), STATE.kubeJS(), STATE.dynamic()))) {
+                continue;
             }
             if (candidate.putIfAbsent(recipe.id(), recipe) != null) {
                 throw new IllegalStateException("Recipe already registered: " + recipe.id());
@@ -83,10 +92,6 @@ public final class RecipeRegistry {
         return catalogForMachine(machine).recipes();
     }
 
-    public static List<MachineRecipe> recipesForMachineId(Identifier machineId) {
-        return catalogForMachineId(machineId).recipes();
-    }
-
     public static List<MachineRecipe> recipesForPool(Identifier recipePoolId) {
         return catalogForPool(recipePoolId).recipes();
     }
@@ -95,7 +100,11 @@ public final class RecipeRegistry {
         return catalogForPool(MachineRegistry.recipePoolForMachine(machine));
     }
 
-    public static MachineRecipeCatalog catalogForMachineId(Identifier machineId) {
+    public static MachineRecipeCatalog catalogForMachine(Identifier machineId) {
+        if (machineId == null || (MachineDefinitions.getRegistration(machineId) == null
+                && MachineRegistry.getMachine(machineId) == null)) {
+            return EMPTY_CATALOG;
+        }
         return catalogForPool(MachineRegistry.recipePoolForMachine(machineId));
     }
 
@@ -135,6 +144,15 @@ public final class RecipeRegistry {
         Map<Identifier, MachineRecipe> replacement = new LinkedHashMap<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             Identifier id = entry.getKey();
+            MachineRecipe recipe = entry.getValue();
+            if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
+                MMCR.LOG.warn("Skipping recipe {}: unknown recipe pool {} at recipe_pool",
+                        id, recipe.recipePoolId());
+                continue;
+            }
+            if (hasConflictingPool(recipe, List.of(STATE.staticRecipes(), STATE.dataPack(), STATE.kubeJS()))) {
+                continue;
+            }
             if (STATE.staticRecipes().containsKey(id)) {
                 throw new IllegalStateException("Dynamic recipe conflicts with static recipe: " + id);
             }
@@ -198,12 +216,17 @@ public final class RecipeRegistry {
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             MachineRecipe recipe = entry.getKey().equals(entry.getValue().id())
                     ? entry.getValue() : entry.getValue().withId(entry.getKey());
-            if (STATE.staticRecipes().containsKey(entry.getKey())) {
-                String warning = "data-pack layer recipe " + entry.getKey() + " overrides static layer recipe " + entry.getKey();
+            replacement.put(entry.getKey(), recipe);
+        }
+        replacement = filterRecipesWithValidPools(replacement);
+        replacement = filterRecipesWithPoolConflicts(replacement,
+                List.of(STATE.staticRecipes(), STATE.kubeJS(), STATE.dynamic()));
+        for (Identifier id : replacement.keySet()) {
+            if (STATE.staticRecipes().containsKey(id)) {
+                String warning = "data-pack layer recipe " + id + " overrides static layer recipe " + id;
                 warnings.add(warning);
                 MMCR.LOG.warn(warning);
             }
-            replacement.put(entry.getKey(), recipe);
         }
         publish(STATE.staticRecipes(), replacement, STATE.kubeJS(), STATE.dynamic(), warnings);
         reloadVersion++;
@@ -284,6 +307,9 @@ public final class RecipeRegistry {
                         ? entry.getValue() : entry.getValue().withId(entry.getKey());
                 replacement.put(entry.getKey(), recipe);
             }
+            replacement = filterRecipesWithValidPools(replacement);
+            replacement = filterRecipesWithPoolConflicts(replacement,
+                    List.of(STATE.staticRecipes(), STATE.dataPack(), STATE.dynamic()));
             publish(STATE.staticRecipes(), STATE.dataPack(), replacement, STATE.dynamic());
             reloadVersion++;
             registryVersion++;
@@ -331,16 +357,15 @@ public final class RecipeRegistry {
                                     Map<Identifier, MachineRecipe> kubeJS,
                                     Map<Identifier, MachineRecipe> dynamic,
                                     List<String> warnings) {
-        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>(staticRecipes);
-        recipes.putAll(kubeJS);
-        recipes.putAll(dataPack);
-        for (Map.Entry<Identifier, MachineRecipe> entry : dynamic.entrySet()) {
-            recipes.putIfAbsent(entry.getKey(), entry.getValue());
-        }
         Map<Identifier, List<MachineRecipe>> recipesByPool = new LinkedHashMap<>();
-        for (MachineRecipe recipe : recipes.values()) {
-            recipesByPool.computeIfAbsent(recipe.recipePoolId(), ignored -> new ArrayList<>()).add(recipe);
-        }
+        Map<Identifier, Identifier> poolByRecipeId = new LinkedHashMap<>();
+        mergeLayer(recipesByPool, poolByRecipeId, staticRecipes, false);
+        mergeLayer(recipesByPool, poolByRecipeId, kubeJS, true);
+        mergeLayer(recipesByPool, poolByRecipeId, dataPack, true);
+        mergeLayer(recipesByPool, poolByRecipeId, dynamic, false);
+
+        Map<Identifier, MachineRecipe> recipes = new LinkedHashMap<>();
+        recipesByPool.values().forEach(poolRecipes -> poolRecipes.forEach(recipe -> recipes.put(recipe.id(), recipe)));
         Map<Identifier, MachineRecipeCatalog> poolCatalogs = new LinkedHashMap<>();
         Set<Identifier> poolIds = new LinkedHashSet<>(STATE.poolCatalogs().keySet());
         poolIds.addAll(recipesByPool.keySet());
@@ -355,13 +380,90 @@ public final class RecipeRegistry {
                             .thenComparing(MachineRecipe::id))
                     .toList();
             MachineRecipeCatalog previous = STATE.poolCatalogs().get(poolId);
+            if (previous != null && previous.recipes().equals(poolRecipes)
+                    && previous.orderedRecipes().equals(orderedRecipes)) {
+                poolCatalogs.put(poolId, previous);
+                continue;
+            }
             long version = previous != null && previous.orderedRecipes().equals(orderedRecipes)
                     ? previous.version() : ++catalogGeneration;
             poolCatalogs.put(poolId, new MachineRecipeCatalog(version, poolRecipes, orderedRecipes,
-                    orderedRecipes.isEmpty() ? RecipeCandidateIndex.empty() : RecipeCandidateIndex.build(orderedRecipes)));
+                    orderedRecipes.isEmpty() ? RecipeCandidateIndex.empty()
+                            : RecipeCandidateIndex.build(poolId, orderedRecipes)));
         }
         return new State(immutable(staticRecipes), immutable(dataPack), immutable(kubeJS), immutable(dynamic),
                 immutable(recipes), immutable(poolCatalogs), List.copyOf(warnings));
+    }
+
+    private static void mergeLayer(Map<Identifier, List<MachineRecipe>> recipesByPool,
+                                   Map<Identifier, Identifier> poolByRecipeId,
+                                   Map<Identifier, MachineRecipe> layer,
+                                   boolean overridesSamePool) {
+        for (Map.Entry<Identifier, MachineRecipe> entry : layer.entrySet()) {
+            MachineRecipe recipe = entry.getValue();
+            Identifier recipeId = entry.getKey();
+            Identifier poolId = recipe.recipePoolId();
+            Identifier existingPoolId = poolByRecipeId.get(recipeId);
+            if (existingPoolId != null && !existingPoolId.equals(poolId)) {
+                MMCR.LOG.warn("Skipping recipe {} from pool {}: recipe already belongs to pool {}",
+                        recipeId, poolId, existingPoolId);
+                continue;
+            }
+            List<MachineRecipe> poolRecipes = recipesByPool.computeIfAbsent(poolId, ignored -> new ArrayList<>());
+            if (existingPoolId == null) {
+                poolRecipes.add(recipe);
+                poolByRecipeId.put(recipeId, poolId);
+            } else if (overridesSamePool) {
+                for (int index = 0; index < poolRecipes.size(); index++) {
+                    if (poolRecipes.get(index).id().equals(recipeId)) {
+                        poolRecipes.set(index, recipe);
+                        break;
+                    }
+                }
+            } else {
+                continue;
+            }
+        }
+    }
+
+    private static Map<Identifier, MachineRecipe> filterRecipesWithValidPools(
+            Map<Identifier, MachineRecipe> recipes) {
+        Map<Identifier, MachineRecipe> valid = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            MachineRecipe recipe = entry.getValue();
+            if (!MachineRegistry.containsRecipePool(recipe.recipePoolId())) {
+                MMCR.LOG.warn("Skipping recipe {}: unknown recipe pool {} at recipe_pool",
+                        entry.getKey(), recipe.recipePoolId());
+                continue;
+            }
+            valid.put(entry.getKey(), recipe);
+        }
+        return valid;
+    }
+
+    private static Map<Identifier, MachineRecipe> filterRecipesWithPoolConflicts(
+            Map<Identifier, MachineRecipe> recipes,
+            List<Map<Identifier, MachineRecipe>> otherLayers) {
+        Map<Identifier, MachineRecipe> valid = new LinkedHashMap<>();
+        for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
+            if (!hasConflictingPool(entry.getValue(), otherLayers)) {
+                valid.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return valid;
+    }
+
+    private static boolean hasConflictingPool(MachineRecipe recipe,
+                                               List<Map<Identifier, MachineRecipe>> otherLayers) {
+        for (Map<Identifier, MachineRecipe> layer : otherLayers) {
+            MachineRecipe existing = layer.get(recipe.id());
+            if (existing != null && !existing.recipePoolId().equals(recipe.recipePoolId())) {
+                MMCR.LOG.warn("Skipping recipe {} from pool {}: recipe already belongs to pool {}",
+                        recipe.id(), recipe.recipePoolId(), existing.recipePoolId());
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void clearAll() {

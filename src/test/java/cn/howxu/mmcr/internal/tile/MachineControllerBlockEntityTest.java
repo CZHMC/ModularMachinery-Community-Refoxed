@@ -627,6 +627,7 @@ class MachineControllerBlockEntityTest {
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 1, false, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machineId);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(new BlockPos(-1, 0, 0),
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
@@ -673,6 +674,7 @@ class MachineControllerBlockEntityTest {
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 1, false, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machineId);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = new BlockPos(-1, 0, 0);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
@@ -1125,6 +1127,7 @@ class MachineControllerBlockEntityTest {
                         new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 1, false, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machineId);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(new BlockPos(1, 0, 0),
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
@@ -1171,6 +1174,7 @@ class MachineControllerBlockEntityTest {
                 new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 1, false, true, 1);
+        RuntimeTestFixtures.registerRecipePool(machineId);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());

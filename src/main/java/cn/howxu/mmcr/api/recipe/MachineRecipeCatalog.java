@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import java.util.List;
 
-/** Immutable published recipe data for one machine.
+/** Immutable published recipe data for one recipe pool.
  *
  * @author howxu <dev@howxu.cn>
  */
