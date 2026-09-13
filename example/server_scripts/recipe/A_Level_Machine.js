@@ -3,15 +3,13 @@ ServerEvents.recipes( event => {
         type: 'mmcr:machine_recipe',
         recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
-        // Use level_requirements to require a specific machine level.
-        level_requirements: [
-            {
-                type: 'mmcr_kubejs:thermal_smelting_coil',
-                level: 'mmcr_kubejs:thermal_smelting_coil_iron'
-            }
-        ],
-        // Define the item and energy requirements.
         requirements: [
+            {
+                type: 'mmcr:level',
+                io: 'input',
+                level_type: 'mmcr_kubejs:thermal_smelting_coil',
+                level: 'mmcr_kubejs:thermal_smelting_coil_iron'
+            },
             {
                 type: 'minecraft:item',
                 io: 'input',
@@ -44,14 +42,13 @@ ServerEvents.recipes( event => {
         type: 'mmcr:machine_recipe',
         recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
-        level_requirements: [
-            {
-                type: 'mmcr_kubejs:thermal_smelting_coil', // Registered level type.
-                level: 'mmcr_kubejs:thermal_smelting_coil_gold' // Required level.
-            }
-        ],
-        // Define the item and energy requirements.
         requirements: [
+            {
+                type: 'mmcr:level',
+                io: 'input',
+                level_type: 'mmcr_kubejs:thermal_smelting_coil',
+                level: 'mmcr_kubejs:thermal_smelting_coil_gold'
+            },
             {
                 type: 'minecraft:item',
                 io: 'input',
@@ -85,14 +82,13 @@ ServerEvents.recipes( event => {
         recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
         max_threads: 4,
-        level_requirements: [
-            {
-                type: 'mmcr_kubejs:thermal_smelting_coil', // Registered level type.
-                level: 'mmcr_kubejs:thermal_smelting_coil_diamond' // Required level.
-            }
-        ],
-        // magic uhh
         requirements: [
+            {
+                type: 'mmcr:level',
+                io: 'input',
+                level_type: 'mmcr_kubejs:thermal_smelting_coil',
+                level: 'mmcr_kubejs:thermal_smelting_coil_diamond'
+            },
             {
                 type: 'minecraft:item',
                 io: 'input',

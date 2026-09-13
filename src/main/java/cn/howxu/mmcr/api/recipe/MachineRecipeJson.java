@@ -2,7 +2,6 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonArray;
@@ -57,8 +56,6 @@ public final class MachineRecipeJson {
         List<RecipeModifier> modifiers = parseList(id, object, "modifiers", RecipeModifier.CODEC, ops);
         List<MachineRequirement> requirements = new ArrayList<>(
                 parseList(id, object, "requirements", MachineRequirement.CODEC, ops));
-        List<LevelRequirement> levels = parseList(id, object, "level_requirements", LevelRequirement.CODEC.codec(), ops);
-        requirements.addAll(levels);
         Set<Identifier> hosts = new LinkedHashSet<>(parseList(id, object, "required_host_ids", Identifier.CODEC, ops));
         int maxThreads = intField(id, object, "max_threads", false, 1);
         if (maxThreads < 0) fail(id, "max_threads", "must be >= 0");
@@ -80,7 +77,7 @@ public final class MachineRecipeJson {
         try {
             MachineRecipe.validateLevelRequirements(requirements);
         } catch (RuntimeException exception) {
-            fail(id, "level_requirements", "invalid level requirement", exception);
+            fail(id, "requirements", "invalid level requirement", exception);
         }
         return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, outputs,
                 modifiers, intField(id, object, "priority", false, 0), maxThreads,
@@ -90,7 +87,8 @@ public final class MachineRecipeJson {
     }
 
     private static void rejectLegacyFields(Identifier id, JsonObject object) {
-        for (String field : List.of("machine", "inputs", "fluid_outputs", "energy_per_tick", "machine_outputs")) {
+        for (String field : List.of("machine", "inputs", "fluid_outputs", "energy_per_tick",
+                "machine_outputs", "level_requirements")) {
             if (object.has(field)) fail(id, field, "field is no longer supported", null);
         }
     }

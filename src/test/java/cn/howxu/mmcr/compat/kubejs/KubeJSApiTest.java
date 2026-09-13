@@ -229,6 +229,18 @@ class KubeJSApiTest {
     }
 
     @Test
+    void level_requirement_factory_adds_an_internal_canonical_requirement() {
+        var builder = new MachineRecipeBuilderJS("mmcr:level_requirement_test");
+        var requirement = api.levelRequirement(TEST_LEVEL_TYPE.toString(), TEST_LEVEL.toString());
+
+        assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement.class);
+        builder.addRequirement(requirement);
+
+        assertThat(builder.requirements).containsExactly(
+                cn.howxu.mmcr.api.recipe.requirement.LevelRequirement.input(TEST_LEVEL_TYPE, TEST_LEVEL));
+    }
+
+    @Test
     void level_slot_factory_exposes_registered_type_to_server_scripts() {
         var slot = api.levelSlot(TEST_LEVEL_TYPE.toString());
 

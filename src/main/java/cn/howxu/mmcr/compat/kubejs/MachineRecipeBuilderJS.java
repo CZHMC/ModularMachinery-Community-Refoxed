@@ -136,6 +136,12 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    public MachineRecipeBuilderJS addRequirement(
+            cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement requirement) {
+        requirements.add(MachineRecipeConverter.toRequirement(requirement));
+        return this;
+    }
+
     /**
      * Adds a registered codec-backed requirement or output to this recipe.
      *

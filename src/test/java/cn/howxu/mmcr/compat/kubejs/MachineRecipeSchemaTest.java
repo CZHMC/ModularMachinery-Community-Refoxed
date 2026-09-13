@@ -99,12 +99,12 @@ class MachineRecipeSchemaTest {
     }
 
     @Test
-    void schema_requires_raw_requirements_and_preserves_level_requirements_for_custom_recipes() {
-        assertThat(MachineRecipeSchema.SCHEMA.keys).contains(
-                MachineRecipeSchema.REQUIREMENTS, MachineRecipeSchema.LEVEL_REQUIREMENTS);
+    void schema_requires_raw_requirements_without_legacy_level_requirements_key() {
+        assertThat(MachineRecipeSchema.SCHEMA.keys).contains(MachineRecipeSchema.REQUIREMENTS);
         assertThat(MachineRecipeSchema.SCHEMA.includedKeys).contains(MachineRecipeSchema.REQUIREMENTS);
         assertThat(MachineRecipeSchema.REQUIREMENTS.excluded).isFalse();
-        assertThat(MachineRecipeSchema.LEVEL_REQUIREMENTS.excluded).isTrue();
+        assertThat(MachineRecipeSchema.SCHEMA.keys).extracting(key -> key.name)
+                .doesNotContain("level_requirements");
     }
 
     @Test
@@ -228,6 +228,28 @@ class MachineRecipeSchemaTest {
         var function = MachineRecipeSchema.SCHEMA.functions.get("requiresLevel");
 
         assertThat(function.arguments()).containsExactly(StringComponent.ID, StringComponent.ID);
+    }
+
+    @Test
+    void schema_requires_level_function_appends_canonical_requirement() {
+        var recipe = new KubeRecipe();
+        recipe.json = new JsonObject();
+        Identifier typeId = Identifier.parse("test:schema_level_type");
+        Identifier levelId = Identifier.parse("test:schema_level");
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(typeId, Component.literal("Schema Level")));
+        TestBootstrap.registerLevel(new MachineLevel(levelId, typeId, 1,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, LevelModifier.IDENTITY));
+        TestBootstrap.freezeRegistration();
+
+        MachineRecipeSchema.SCHEMA.functions.get("requiresLevel").function()
+                .execute(new TestRecipeContext(recipe), List.of(typeId.toString(), levelId.toString()));
+
+        JsonElement encoded = recipe.json.getAsJsonArray("requirements").get(0);
+        assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow())
+                .isEqualTo(LevelRequirement.input(typeId, levelId));
+        assertThat(recipe.json.has("level_requirements")).isFalse();
     }
 
     void builder_creates_component_bearing_item_output() {

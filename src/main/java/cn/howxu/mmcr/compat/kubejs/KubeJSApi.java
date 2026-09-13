@@ -10,9 +10,9 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
@@ -295,11 +295,12 @@ public final class KubeJSApi {
     public LevelRequirement levelRequirement(String typeId, String levelId) {
         Identifier type = Identifier.parse(typeId);
         Identifier level = Identifier.parse(levelId);
-        if (MachineLevelRegistry.getType(type) == null || MachineLevelRegistry.getLevel(level) == null
-                || !MachineLevelRegistry.getLevel(level).typeId().equals(type)) {
+        var registered = MachineLevelRegistry.getLevel(level);
+        if (MachineLevelRegistry.getType(type) == null || registered == null
+                || !registered.typeId().equals(type)) {
             throw new IllegalArgumentException("Unknown or mismatched machine level: " + typeId + "/" + levelId);
         }
-        return LevelRequirement.input(type, level);
+        return new LevelRequirement(type, level);
     }
 
     public LevelSlot levelSlot(String typeId) {
