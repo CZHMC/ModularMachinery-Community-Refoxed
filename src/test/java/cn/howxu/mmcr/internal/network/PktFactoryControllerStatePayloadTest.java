@@ -1,8 +1,14 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
@@ -56,8 +62,8 @@ class PktFactoryControllerStatePayloadTest {
         long parallelism = Long.MAX_VALUE;
         CraftingStateSnapshot lane = new CraftingStateSnapshot(MMCR.id("long_lane"), CraftingStatus.working(),
                 null, 0L, 0L, 0L, 1, 20, parallelism, parallelism, false, "");
-        FactoryRuntime.ThreadSnapshot thread = new FactoryRuntime.ThreadSnapshot(0, true, false, true,
-                "mmcr:long_lane", 1, 20, parallelism, "", false, "");
+        FactoryRuntime.ThreadSnapshot thread = new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true,
+                "mmcr:long_lane", 1, 20, parallelism, (ExecutionStatus) null, false, "");
         FactorySnapshot snapshot = new FactorySnapshot(false, true, List.of(lane), 1, 1, parallelism,
                 false, List.of(thread), "", 0, null, List.of());
         RegistryFriendlyByteBuf buffer = buffer();
@@ -67,6 +73,31 @@ class PktFactoryControllerStatePayloadTest {
 
         assertThat(PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer).snapshot())
                 .isEqualTo(snapshot);
+        buffer.release();
+    }
+
+    @Test
+    void factory_snapshot_round_trip_preserves_typed_failures_in_snapshot_lanes_and_threads() {
+        ExecutionStatus failure = failure(2);
+        CraftingStateSnapshot lane = new CraftingStateSnapshot(MMCR.id("factory_recipe"), CraftingStatus.working(),
+                failure, 0L, 0L, 0L, 0, 0, 0L, 1L, false, "");
+        FactoryRuntime.ThreadSnapshot thread = new FactoryRuntime.ThreadSnapshot(0, "base", true, false, false,
+                "", 0, 0, 1, failure, false, "");
+        FactorySnapshot snapshot = new FactorySnapshot(false, false, List.of(lane), 1, 0, 1L,
+                false, List.of(thread), "", 0, failure, List.of());
+        RegistryFriendlyByteBuf buffer = buffer();
+
+        PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer,
+                new PktFactoryControllerStatePayload(BlockPos.ZERO, snapshot));
+
+        FactorySnapshot decoded = PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer).snapshot();
+        assertThat(decoded.failure().source()).isEqualTo(failure.source());
+        assertThat(decoded.failure().reason()).isEqualTo(failure.reason());
+        assertThat(decoded.failure().failure().trace().frames())
+                .containsExactlyElementsOf(failure.failure().trace().frames());
+        assertThat(decoded.failure().details()).containsExactlyInAnyOrderEntriesOf(failure.details());
+        assertThat(decoded.lanes().getFirst().failure()).isEqualTo(failure);
+        assertThat(decoded.presentationLanes().getFirst().failure()).isEqualTo(failure);
         buffer.release();
     }
 
@@ -103,28 +134,22 @@ class PktFactoryControllerStatePayloadTest {
     void encoder_rejects_oversized_failure_details() {
         assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer(),
                 new PktFactoryControllerStatePayload(BlockPos.ZERO,
-                        snapshot(failure(PktFactoryControllerStatePayload.MAX_FAILURE_DETAIL_ENTRIES + 1)))))
+                        snapshot(failure(FailureStatusCodec.MAX_DETAILS + 1)))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void decoder_rejects_oversized_failure_detail_count_before_allocation() {
-        RegistryFriendlyByteBuf buffer = header(1, 0, 1L, 0, 0);
-        buffer.clear();
-        buffer.writeBlockPos(BlockPos.ZERO);
-        buffer.writeBoolean(true);
-        buffer.writeBoolean(false);
-        buffer.writeVarInt(1);
-        buffer.writeVarInt(0);
-        buffer.writeLong(1L);
-        buffer.writeBoolean(false);
-        buffer.writeUtf("");
-        buffer.writeVarInt(0);
+        RegistryFriendlyByteBuf buffer = buffer();
+        writeFactoryHeader(buffer, 1, 0, 1L, 0, "");
         buffer.writeBoolean(true);
         buffer.writeUtf("mmcr:failure");
         buffer.writeVarInt(StatusSeverity.BLOCKED.ordinal());
         buffer.writeUtf("mmcr:source");
-        buffer.writeVarInt(PktFactoryControllerStatePayload.MAX_FAILURE_DETAIL_ENTRIES + 1);
+        buffer.writeBoolean(true);
+        buffer.writeBoolean(false);
+        buffer.writeVarInt(0);
+        buffer.writeVarInt(FailureStatusCodec.MAX_DETAILS + 1);
 
         assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -176,16 +201,9 @@ class PktFactoryControllerStatePayloadTest {
 
     @Test
     void decoder_rejects_oversized_strings() {
-        RegistryFriendlyByteBuf buffer = header(1, 0, 1L, 0, 0);
-        buffer.clear();
-        buffer.writeBlockPos(BlockPos.ZERO);
-        buffer.writeBoolean(true);
-        buffer.writeBoolean(false);
-        buffer.writeVarInt(1);
-        buffer.writeVarInt(0);
-        buffer.writeLong(1L);
-        buffer.writeBoolean(false);
-        buffer.writeUtf("x".repeat(PktFactoryControllerStatePayload.MAX_STRING_LENGTH + 1));
+        RegistryFriendlyByteBuf buffer = buffer();
+        writeFactoryHeader(buffer, 1, 0, 1L, 0,
+                "x".repeat(PktFactoryControllerStatePayload.MAX_STRING_LENGTH + 1));
 
         assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
                 .isInstanceOf(RuntimeException.class);
@@ -194,9 +212,10 @@ class PktFactoryControllerStatePayloadTest {
 
     private static FactorySnapshot snapshot(int count) {
          return new FactorySnapshot(false, false, List.of(), count, 0, 1L, false,
-                IntStream.range(0, count).mapToObj(index -> new FactoryRuntime.ThreadSnapshot(index,
-                        index == 0, false, false, "", 0, 0, 1, "", false, "")).toList(),
-                "", 0, null, List.of());
+                 IntStream.range(0, count).mapToObj(index -> new FactoryRuntime.ThreadSnapshot(index,
+                         index == 0 ? "base" : "factory-" + index, index == 0, false, false,
+                         "", 0, 0, 1, (ExecutionStatus) null, false, "")).toList(),
+                 "", 0, null, List.of());
     }
 
     private static FactorySnapshot snapshot(ExecutionStatus failure) {
@@ -205,11 +224,19 @@ class PktFactoryControllerStatePayloadTest {
     }
 
     private static ExecutionStatus failure(int detailCount) {
+        return failure(BuiltinFailureReasons.MISSING_OUTPUT, detailCount);
+    }
+
+    private static ExecutionStatus failure(FailureReason reason, int detailCount) {
         Map<String, String> details = IntStream.range(0, detailCount)
                 .boxed().collect(Collectors.toMap(String::valueOf, String::valueOf,
                         (left, right) -> left, LinkedHashMap::new));
-        return new ExecutionStatus(MMCR.id("payload_failure"), StatusSeverity.BLOCKED,
-                MMCR.id("payload_source"), details);
+        FailureTrace trace = new FailureTrace(List.of(
+                new FailureTrace.Frame(MMCR.id("factory_planner"), FailurePhase.REQUIREMENT_PLAN,
+                        MMCR.id("factory_recipe"), 1),
+                new FailureTrace.Frame(MMCR.id("factory_controller"), FailurePhase.RUNTIME, null, null)));
+        return ExecutionStatus.blocked(MMCR.id("payload_failure"), MMCR.id("payload_source"),
+                new FailureOccurrence(reason, trace, details));
     }
 
     private static RegistryFriendlyByteBuf buffer() {
@@ -217,8 +244,17 @@ class PktFactoryControllerStatePayloadTest {
     }
 
     private static RegistryFriendlyByteBuf header(int laneLimit, int activeLaneCount,
-                                                  long maxParallelism, int parallelSlots, int threadCount) {
+                                                   long maxParallelism, int parallelSlots, int threadCount) {
         RegistryFriendlyByteBuf buffer = buffer();
+        writeFactoryHeader(buffer, laneLimit, activeLaneCount, maxParallelism, parallelSlots, "");
+        FailureStatusCodec.write(buffer, null);
+        buffer.writeVarInt(0);
+        buffer.writeVarInt(threadCount);
+        return buffer;
+    }
+
+    private static void writeFactoryHeader(RegistryFriendlyByteBuf buffer, int laneLimit, int activeLaneCount,
+                                           long maxParallelism, int parallelSlots, String machineName) {
         buffer.writeBlockPos(BlockPos.ZERO);
         buffer.writeBoolean(true);
         buffer.writeBoolean(false);
@@ -226,13 +262,9 @@ class PktFactoryControllerStatePayloadTest {
         buffer.writeVarInt(activeLaneCount);
         buffer.writeLong(maxParallelism);
         buffer.writeBoolean(false);
-        buffer.writeUtf("");
+        buffer.writeUtf(machineName);
         buffer.writeVarInt(parallelSlots);
         buffer.writeVarInt(0);
-        buffer.writeBoolean(false);
-        buffer.writeVarInt(0);
-        buffer.writeVarInt(threadCount);
-        return buffer;
     }
 
     private static void writeThread(RegistryFriendlyByteBuf buffer, int index) {
@@ -250,7 +282,7 @@ class PktFactoryControllerStatePayloadTest {
         buffer.writeVarInt(tick);
         buffer.writeVarInt(totalTick);
         buffer.writeLong(parallelism);
-        buffer.writeUtf("");
+        FailureStatusCodec.write(buffer, null);
         buffer.writeBoolean(false);
         buffer.writeUtf("");
     }

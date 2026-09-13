@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -15,6 +16,7 @@ import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -97,10 +99,8 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public List<String> foundLevelIds() { return snapshot.foundLevelIds(); }
     public String lastFailureUnloc() {
-        String failure = SYNC_RUNTIME.failureMessage(snapshot);
-        if (!failure.isEmpty()) return failure;
-        String fallback = ControllerMenuState.failureKey(state.lastFailure.get());
-        return fallback == null ? "" : fallback;
+        String threadFailure = SYNC_RUNTIME.failureMessage(selectedFailure());
+        return threadFailure.isEmpty() ? SYNC_RUNTIME.failureMessage(snapshot.failure()) : threadFailure;
     }
     public List<FactoryRuntime.ThreadSnapshot> threads() { return snapshot.presentationLanes(); }
 
@@ -117,6 +117,10 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         return snapshot.presentationLanes().stream().filter(thread -> thread.index() == selectedThreadIndex).findFirst()
                 .orElseGet(() -> snapshot.presentationLanes().isEmpty()
                         ? FactoryRuntime.ThreadSnapshot.idleBase() : snapshot.presentationLanes().getFirst());
+    }
+
+    public @Nullable ExecutionStatus selectedFailure() {
+        return selectedThread().failure();
     }
 
     public boolean selectedRecipeLocked() { return selectedThread().locked(); }

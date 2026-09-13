@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -25,6 +26,7 @@ import java.text.NumberFormat;
  */
 public final class FactoryControllerScreen extends AbstractScrollableTextScreen<FactoryControllerMenu> {
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
+    private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     private static final int CONTROLLER_TITLE_COLOR = 0xFFE8E8E8;
     private static final int STATUS_LABEL_COLOR = CONTROLLER_TITLE_COLOR;
     private static final int FORMED_STATUS_COLOR = 0xFF55FF55;
@@ -144,7 +146,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
 
     static String selectedFailureUnloc(FactoryControllerMenu menu) {
         FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
-        String threadFailure = selected.lastFailureUnloc();
+        String threadFailure = SYNC_RUNTIME.failureMessage(menu.selectedFailure());
         if (!threadFailure.isEmpty()) return threadFailure;
         return selected.active() ? "" : menu.lastFailureUnloc();
     }

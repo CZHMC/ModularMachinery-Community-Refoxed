@@ -1,14 +1,21 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
+import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -30,9 +37,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class PktMachineStatePayloadTest {
+    private static final FailureReason CUSTOM_REASON = new FailureReason(
+            Identifier.fromNamespaceAndPath("mmcr_test", "custom_packet_reason"),
+            "gui.mmcr.failure.custom_packet_reason", 10);
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        if (FailureReasonRegistry.isFrozen()) FailureReasonRegistry.clearForTesting();
+        if (FailureReasonRegistry.find(BuiltinFailureReasons.UNKNOWN.id()) == null) {
+            BuiltinFailureReasons.register();
+        }
+        if (FailureReasonRegistry.find(CUSTOM_REASON.id()) == null) {
+            FailureReasonRegistry.register(CUSTOM_REASON);
+        }
     }
 
     @Test
@@ -42,7 +60,42 @@ class PktMachineStatePayloadTest {
 
         PktMachineStatePayload.STREAM_CODEC.encode(buffer, payload);
 
-        assertThat(PktMachineStatePayload.STREAM_CODEC.decode(buffer)).isEqualTo(payload);
+        PktMachineStatePayload decoded = PktMachineStatePayload.STREAM_CODEC.decode(buffer);
+        assertThat(decoded).isEqualTo(payload);
+        assertThat(decoded.failure().source()).isEqualTo(payload.failure().source());
+        assertThat(decoded.failure().reason()).isEqualTo(payload.failure().reason());
+        assertThat(decoded.failure().failure().trace().frames())
+                .containsExactlyElementsOf(payload.failure().failure().trace().frames());
+        assertThat(decoded.failure().details()).containsExactlyInAnyOrderEntriesOf(payload.failure().details());
+        buffer.release();
+    }
+
+    @Test
+    void registered_custom_reason_keeps_its_translation_key_in_the_client_snapshot() {
+        PktMachineStatePayload payload = payload(List.of(), failure(CUSTOM_REASON, 1));
+        RegistryFriendlyByteBuf buffer = buffer();
+
+        PktMachineStatePayload.STREAM_CODEC.encode(buffer, payload);
+
+        ExecutionStatus decoded = PktMachineStatePayload.STREAM_CODEC.decode(buffer).failure();
+        assertThat(decoded.reason()).isEqualTo(CUSTOM_REASON);
+        assertThat(decoded.reason().translationKey()).isEqualTo(CUSTOM_REASON.translationKey());
+        buffer.release();
+    }
+
+    @Test
+    void unknown_reason_uses_the_unknown_translation_key_in_the_client_snapshot() {
+        FailureReason unknown = new FailureReason(
+                Identifier.fromNamespaceAndPath("legacy", "removed_machine_reason"),
+                "gui.mmcr.failure.removed_machine_reason");
+        PktMachineStatePayload payload = payload(List.of(), failure(unknown, 1));
+        RegistryFriendlyByteBuf buffer = buffer();
+
+        PktMachineStatePayload.STREAM_CODEC.encode(buffer, payload);
+
+        ExecutionStatus decoded = PktMachineStatePayload.STREAM_CODEC.decode(buffer).failure();
+        assertThat(decoded.reason()).isSameAs(BuiltinFailureReasons.UNKNOWN);
+        assertThat(decoded.reason().translationKey()).isEqualTo("gui.mmcr.failure.unknown");
         buffer.release();
     }
 
@@ -68,7 +121,7 @@ class PktMachineStatePayloadTest {
     @Test
     void encoder_rejects_oversized_machine_failure_details() {
         assertThatThrownBy(() -> PktMachineStatePayload.STREAM_CODEC.encode(buffer(),
-                payload(List.of(), failure(PktMachineStatePayload.MAX_FAILURE_DETAIL_ENTRIES + 1))))
+                payload(List.of(), failure(FailureStatusCodec.MAX_DETAILS + 1))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -139,11 +192,19 @@ class PktMachineStatePayloadTest {
     }
 
     private static ExecutionStatus failure(int detailCount) {
+        return failure(BuiltinFailureReasons.MISSING_INPUT, detailCount);
+    }
+
+    private static ExecutionStatus failure(FailureReason reason, int detailCount) {
         Map<String, String> details = IntStream.range(0, detailCount)
                 .boxed().collect(Collectors.toMap(String::valueOf, String::valueOf,
                         (left, right) -> left, LinkedHashMap::new));
-        return new ExecutionStatus(MMCR.id("payload_failure"), StatusSeverity.BLOCKED,
-                MMCR.id("payload_source"), details);
+        FailureTrace trace = new FailureTrace(List.of(
+                new FailureTrace.Frame(MMCR.id("payload_planner"), FailurePhase.REQUIREMENT_PLAN,
+                        MMCR.id("payload_recipe"), 2),
+                new FailureTrace.Frame(MMCR.id("payload_controller"), FailurePhase.RUNTIME, null, null)));
+        return ExecutionStatus.blocked(MMCR.id("payload_failure"), MMCR.id("payload_source"),
+                new FailureOccurrence(reason, trace, details));
     }
 
     private static RegistryFriendlyByteBuf buffer() {

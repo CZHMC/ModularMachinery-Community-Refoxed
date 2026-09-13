@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -69,15 +71,11 @@ class FactoryControllerScreenTest {
     void active_selected_thread_hides_aggregate_last_failure() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,
-                List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, true, "mmcr:recipe", 1, 20,
-                        1, "", false, ""),
-                        new FactoryRuntime.ThreadSnapshot(1, false, false, false, "", 0, 0, 1,
-                                "", false, "")),
-                "Factory", 0, new ExecutionStatus(
-                        MMCR.id("failure"),
-                        StatusSeverity.BLOCKED,
-                        MMCR.id("crafting_runtime"),
-                        Map.of("reason", "insufficient_resource")), List.of()));
+                List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true, "mmcr:recipe", 1, 20,
+                                1, (ExecutionStatus) null, false, ""),
+                        new FactoryRuntime.ThreadSnapshot(1, "factory-1", false, false, false, "", 0, 0, 1,
+                                (ExecutionStatus) null, false, "")),
+                "Factory", 0, failure(MMCR.id("failure")), List.of()));
 
         assertThat(FactoryControllerScreen.selectedFailureUnloc(menu)).isEmpty();
     }
@@ -101,7 +99,8 @@ class FactoryControllerScreenTest {
                 new ControllerTextLine(MachineControllerScreen.levelLine(
                         detailLevel(2)), MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(Component.translatable(
-                        "gui.mmcr.controller.last_failure", Component.translatable("mmcr:selected_failure")),
+                        "gui.mmcr.controller.last_failure", Component.translatable(
+                                "gui.mmcr.controller.failure.missing_input")),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(MachineControllerScreen.parallelSlotLine(2),
                         MachineControllerScreen.STATUS_LABEL_COLOR),
@@ -137,9 +136,9 @@ class FactoryControllerScreenTest {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "lane-0", true, false, true,
-                                "mmcr:recipe_0", 1, 20, 1, "", false, ""),
+                                "mmcr:recipe_0", 1, 20, 1, (ExecutionStatus) null, false, ""),
                         new FactoryRuntime.ThreadSnapshot(1, "lane-1", false, false, true,
-                                "mmcr:recipe_1", 2, 20, 1, "", false, "")),
+                                "mmcr:recipe_1", 2, 20, 1, (ExecutionStatus) null, false, "")),
                 "Factory", 0, null, List.of()));
         ControllerScreenTextSnapshot.Line first = new ControllerScreenTextSnapshot.Line(
                 ControllerScreenTextScope.CONTROLLER, MMCR.id("factory_lane_0"), Component.literal("lane 0"));
@@ -223,10 +222,15 @@ class FactoryControllerScreenTest {
     private static FactoryControllerMenu menuWithDetailRows() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 3, 2, 8L, true,
-                List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, true, "mmcr:recipe", 20, 20,
-                        4, "mmcr:selected_failure", false, "")),
-                "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList()));
-        return menu;
+                List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true, "mmcr:recipe", 20, 20,
+                        4, failure(MMCR.id("selected_failure")), false, "")),
+                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList()));
+         return menu;
+    }
+
+    private static ExecutionStatus failure(Identifier id) {
+        return ExecutionStatus.blocked(id, id, FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, id,
+                FailurePhase.RUNTIME, null, null, Map.of()));
     }
 
     private static MachineLevel detailLevel(int index) {

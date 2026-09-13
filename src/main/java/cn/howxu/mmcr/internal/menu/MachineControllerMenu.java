@@ -39,7 +39,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot active;
     private final DataSlot activeTick;
     private final DataSlot activeTotalTick;
-    private final DataSlot lastFailure;
     private final DataSlot redstonePaused;
     private final DataSlot parallelControllerCount;
     private final DataSlot factoryControllerPresent;
@@ -76,10 +75,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         });
         this.activeTotalTick = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() { return machineState(owner).totalTick(); }
-            @Override public void set(int value) {}
-        });
-        this.lastFailure = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
-            @Override public int get() { return failureCode(SYNC_RUNTIME.failureMessage(machineState(owner).failure())); }
             @Override public void set(int value) {}
         });
         this.redstonePaused = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
@@ -124,7 +119,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.active = addDataSlot(DataSlot.standalone());
         this.activeTick = addDataSlot(DataSlot.standalone());
         this.activeTotalTick = addDataSlot(DataSlot.standalone());
-        this.lastFailure = addDataSlot(DataSlot.standalone());
         this.redstonePaused = addDataSlot(DataSlot.standalone());
         this.parallelControllerCount = addDataSlot(DataSlot.standalone());
         this.factoryControllerPresent = addDataSlot(DataSlot.standalone());
@@ -242,13 +236,15 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public @Nullable String lastFailureMessage() {
+        String failure;
         if (clientSnapshot != null) {
-            String failure = SYNC_RUNTIME.failureMessage(clientSnapshot.failure());
-            return failure.isEmpty() ? failureKey(lastFailure.get()) : failure;
+            failure = SYNC_RUNTIME.failureMessage(clientSnapshot.failure());
+        } else {
+            MachineStateSnapshot state = localState();
+            if (state == null) return null;
+            failure = SYNC_RUNTIME.failureMessage(state.failure());
         }
-        MachineStateSnapshot state = localState();
-        if (state != null) return SYNC_RUNTIME.failureMessage(state.failure());
-        return failureKey(lastFailure.get());
+        return failure.isEmpty() ? null : failure;
     }
 
     public boolean isRedstonePaused() {
@@ -343,7 +339,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.active.set(snapshot.active() ? 1 : 0);
         this.activeTick.set(snapshot.tick());
         this.activeTotalTick.set(snapshot.totalTick());
-        this.lastFailure.set(failureCode(SYNC_RUNTIME.failureMessage(snapshot.failure())));
         this.redstonePaused.set(snapshot.redstonePaused() ? 1 : 0);
         this.factoryControllerPresent.set(snapshot.factoryControllerPresent() ? 1 : 0);
         this.factoryThreadCount.set(snapshot.factoryThreadCount());
@@ -429,24 +424,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     private static @Nullable Identifier identifierOrNull(String value) {
         return value == null || value.isEmpty() ? null : Identifier.parse(value);
-    }
-
-    private static int failureCode(@Nullable String key) {
-        if ("gui.mmcr.controller.failure.missing_input".equals(key)) return 1;
-        if ("gui.mmcr.controller.failure.missing_output".equals(key)) return 2;
-        if ("gui.mmcr.controller.failure.missing_energy".equals(key)) return 3;
-        if ("gui.mmcr.controller.failure.level_insufficient".equals(key)) return 4;
-        return 0;
-    }
-
-    private static @Nullable String failureKey(int code) {
-        return switch (code) {
-            case 1 -> "gui.mmcr.controller.failure.missing_input";
-            case 2 -> "gui.mmcr.controller.failure.missing_output";
-            case 3 -> "gui.mmcr.controller.failure.missing_energy";
-            case 4 -> "gui.mmcr.controller.failure.level_insufficient";
-            default -> null;
-        };
     }
 
     @Override

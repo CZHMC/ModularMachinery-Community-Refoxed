@@ -17,14 +17,12 @@ final class ControllerMenuState {
 
     final DataSlot formed;
     final DataSlot active;
-    final DataSlot lastFailure;
     final DataSlot redstonePaused;
     final DataSlot parallelControllerCount;
 
     ControllerMenuState(AbstractMachineMenu menu, MachineControllerBlockEntity owner) {
         formed = add(menu, owner, state -> state.formed() ? 1 : 0);
         active = add(menu, owner, state -> state.active() ? 1 : 0);
-        lastFailure = add(menu, owner, state -> failureCode(SYNC_RUNTIME.failureMessage(state.failure())));
         redstonePaused = add(menu, owner, state -> state.redstonePaused() ? 1 : 0);
         parallelControllerCount = add(menu, owner, MachineStateSnapshot::parallelControllerCount);
     }
@@ -72,21 +70,4 @@ final class ControllerMenuState {
         for (int col = 0; col < 9; col++) menu.addControllerSlot(new Slot(inventory, col, x + col * 18, HOTBAR_Y));
     }
 
-    static int failureCode(String key) {
-        if ("gui.mmcr.controller.failure.missing_input".equals(key)) return 1;
-        if ("gui.mmcr.controller.failure.missing_output".equals(key)) return 2;
-        if ("gui.mmcr.controller.failure.missing_energy".equals(key)) return 3;
-        if ("gui.mmcr.controller.failure.level_insufficient".equals(key)) return 4;
-        return 0;
-    }
-
-    static String failureKey(int code) {
-        return switch (code) {
-            case 1 -> "gui.mmcr.controller.failure.missing_input";
-            case 2 -> "gui.mmcr.controller.failure.missing_output";
-            case 3 -> "gui.mmcr.controller.failure.missing_energy";
-            case 4 -> "gui.mmcr.controller.failure.level_insufficient";
-            default -> null;
-        };
-    }
 }

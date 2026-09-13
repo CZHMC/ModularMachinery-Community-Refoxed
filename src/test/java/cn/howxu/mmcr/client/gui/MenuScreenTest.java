@@ -2,8 +2,10 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
@@ -176,8 +178,9 @@ class MenuScreenTest {
         TestBootstrap.registerLevel(level);
 
         MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
-        ExecutionStatus failure = new ExecutionStatus(MMCR.id("menu_test_failure"), StatusSeverity.BLOCKED,
-                MMCR.id("menu_test_source"), Map.of("reason", "missing_input"));
+        ExecutionStatus failure = ExecutionStatus.blocked(MMCR.id("menu_test_failure"), MMCR.id("menu_test_source"),
+                FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, MMCR.id("menu_test_source"),
+                        FailurePhase.REQUIREMENT_PLAN, null, null, Map.of()));
         menu.applyClientSnapshot(new PktMachineStatePayload(
                 BlockPos.ZERO, "mmcr:recipe", true, true,
                 List.of(levelId.toString()), false, "", "mmcr:test_cube", 2, 3, true,

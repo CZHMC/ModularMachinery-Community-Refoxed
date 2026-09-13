@@ -1,8 +1,10 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
@@ -42,9 +44,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MachineControllerScreenTest {
     private static final BlockPos CONTROLLER_POS = new BlockPos(11, 22, 33);
     private static final Identifier TICK_MACHINE_ID = Identifier.parse("mmcr:screen_tick_machine");
-    private static final ExecutionStatus FAILURE = new ExecutionStatus(
-            MMCR.id("screen_tick_failure"), StatusSeverity.BLOCKED, MMCR.id("screen_tick_controller"),
-            Map.of("reason", "insufficient_energy"));
+    private static final ExecutionStatus FAILURE = ExecutionStatus.blocked(
+            MMCR.id("screen_tick_failure"), MMCR.id("screen_tick_controller"),
+            FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, MMCR.id("screen_tick_controller"),
+                    FailurePhase.REQUIREMENT_PLAN, null, null, Map.of()));
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
