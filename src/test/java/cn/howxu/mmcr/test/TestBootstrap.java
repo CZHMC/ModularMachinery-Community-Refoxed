@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
@@ -112,6 +114,7 @@ public final class TestBootstrap {
     }
 
     public static synchronized void bootstrap() throws Exception {
+        ensureFailureReasons();
         if (initialized) {
             if (MachineDefinitions.getRegistration(id("test_cube")) == null) {
                 restoreMachineDefinitions();
@@ -159,6 +162,14 @@ public final class TestBootstrap {
         registerTestEvents();
         registerRuntimeTestContent();
         initialized = true;
+    }
+
+    private static void ensureFailureReasons() {
+        if (FailureReasonRegistry.find(BuiltinFailureReasons.UNKNOWN.id()) != null) return;
+        boolean frozen = FailureReasonRegistry.isFrozen();
+        if (frozen) FailureReasonRegistry.clearForTesting();
+        BuiltinFailureReasons.register();
+        if (frozen) FailureReasonRegistry.freeze();
     }
 
     public static void restoreMachineDefinitions() {

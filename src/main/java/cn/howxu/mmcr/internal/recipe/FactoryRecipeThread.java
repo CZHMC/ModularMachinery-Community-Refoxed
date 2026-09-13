@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -11,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
+import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import java.util.stream.Collectors;
 import net.minecraft.core.HolderLookup;
@@ -53,7 +55,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private int failureStreak;
     private long nextSearchTick = Long.MIN_VALUE;
     private @Nullable RecipeSearchContextKey lastSearchFailureKey;
-    private @Nullable String lastSearchFailureReason;
+    private @Nullable Identifier lastSearchFailureReason;
     private @Nullable RecipeSearchContextKey currentSearchContextKey;
     private boolean resourceWakePending;
     private long recipeSetVersion;
@@ -171,8 +173,8 @@ public final class FactoryRecipeThread extends RecipeThread {
         if (reason == null || !matchesFailureReason(reason)) return false;
         if (resource == null) {
             return reason == ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY
-                    && (lastSearchFailureReason.equals("no_output_capacity")
-                    || lastSearchFailureReason.equals("finish")
+                    && (BuiltinFailureReasons.MISSING_OUTPUT.id().equals(lastSearchFailureReason)
+                    || BuiltinFailureReasons.FINISH.id().equals(lastSearchFailureReason)
                     || !failureResourceMatchers.getOrDefault(reason, List.of()).isEmpty());
         }
         return failureResourceMatchers.getOrDefault(reason, List.of()).stream().anyMatch(matcher -> matcher.test(resource));
@@ -188,7 +190,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         failureCandidates = List.of();
     }
 
-    public @Nullable String searchFailureReason() {
+    public @Nullable Identifier searchFailureReason() {
         return lastSearchFailureReason;
     }
 
@@ -406,22 +408,26 @@ public final class FactoryRecipeThread extends RecipeThread {
         recordSearchFailure(key, gameTime);
     }
 
-    private @Nullable String failureReason() {
-        return runtime.failure() == null ? null
-                : runtime.failure().details().get("reason");
+    private @Nullable Identifier failureReason() {
+        return runtime.failure() == null || runtime.failure().reason() == null
+                ? null : runtime.failure().reason().id();
     }
 
     private boolean matchesFailureReason(ResourceAvailabilityNotifier.Reason reason) {
         if (lastSearchFailureReason == null) return false;
-        return switch (reason) {
-            case INPUT_AVAILABLE -> lastSearchFailureReason.equals("insufficient_resource")
-                    || lastSearchFailureReason.equals("per_tick");
-            case ENERGY_AVAILABLE -> lastSearchFailureReason.equals("insufficient_energy");
-            case OUTPUT_CAPACITY -> lastSearchFailureReason.equals("insufficient_resource")
-                    || lastSearchFailureReason.equals("no_output_capacity")
-                    || lastSearchFailureReason.equals("finish");
-            case MODULE_CONNECTION -> lastSearchFailureReason.equals("module_connection");
-        };
+        if (reason == ResourceAvailabilityNotifier.Reason.MODULE_CONNECTION) {
+            return BuiltinFailureReasons.MODULE_CONNECTION.id().equals(lastSearchFailureReason);
+        }
+        for (MachineRecipe recipe : failureCandidates) {
+            for (MachineRequirement requirement : recipe.runtimeRequirements()) {
+                for (RequirementHandler.ResourceWakeup wakeup
+                        : RequirementHandlerRegistry.resourceWakeupsFor(requirement)) {
+                    if (reason.name().equals(wakeup.reason().name())
+                            && wakeup.failureReasonIds().contains(lastSearchFailureReason)) return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void updateFailureResourceMatchers(List<MachineRecipe> candidates) {
@@ -431,7 +437,7 @@ public final class FactoryRecipeThread extends RecipeThread {
             failureResourceMatchers = Map.of();
             return;
         }
-        if (lastSearchFailureReason.equals("module_connection")) {
+        if (BuiltinFailureReasons.MODULE_CONNECTION.id().equals(lastSearchFailureReason)) {
             matchers.put(ResourceAvailabilityNotifier.Reason.MODULE_CONNECTION,
                     List.of(resource -> resource instanceof ModuleConnectionStatus));
         }
@@ -446,9 +452,9 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     static void addRequirementMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
-                                       MachineRequirement requirement, String failureReason) {
+                                       MachineRequirement requirement, Identifier failureReason) {
         for (RequirementHandler.ResourceWakeup wakeup : RequirementHandlerRegistry.resourceWakeupsFor(requirement)) {
-            if (!wakeup.matches(failureReason)) continue;
+            if (!wakeup.failureReasonIds().contains(failureReason)) continue;
             ResourceAvailabilityNotifier.Reason reason = ResourceAvailabilityNotifier.Reason.valueOf(
                     wakeup.reason().name());
             addMatcher(matchers, reason, wakeup.matcher());
@@ -526,7 +532,8 @@ public final class FactoryRecipeThread extends RecipeThread {
         long remaining = lastSearchFailureKey == null || nextSearchTick == Long.MIN_VALUE
                 ? 0L : Math.max(0L, nextSearchTick - gameTime);
         output.putInt("search_retry_remaining", (int) Math.min(100L, remaining));
-        output.putString("search_failure_reason", lastSearchFailureReason == null ? "" : lastSearchFailureReason);
+        output.putString("search_failure_reason_id",
+                lastSearchFailureReason == null ? "" : lastSearchFailureReason.toString());
         if (lastSearchFailureKey != null) {
             output.putBoolean("has_search_failure_key", true);
             ValueOutput key = output.child("search_failure_key");
@@ -595,13 +602,13 @@ public final class FactoryRecipeThread extends RecipeThread {
         }
         int restoredStreak = Math.max(0, input.getIntOr("search_failure_streak", 0));
         int restoredRemaining = Math.max(0, Math.min(100, input.getIntOr("search_retry_remaining", 0)));
+        Identifier restoredReason = readSearchFailureReason(input);
         if (!thread.coreThread && restoredStreak > 0 && restoredKey != null
-                && restoredKey.equals(thread.currentSearchContextKey(lockedRecipeId))) {
+                && restoredKey.equals(thread.currentSearchContextKey(lockedRecipeId)) && restoredReason != null) {
             thread.failureStreak = restoredStreak;
             thread.nextSearchTick = (controller.getLevel() == null ? 0L : controller.getLevel().getGameTime())
                     + restoredRemaining;
-            String reason = input.getStringOr("search_failure_reason", "");
-            thread.lastSearchFailureReason = reason.isEmpty() ? null : reason;
+            thread.lastSearchFailureReason = restoredReason;
             thread.lastSearchFailureKey = restoredKey;
             thread.failureCandidates = thread.lastRecipe == null
                     ? List.copyOf(availableCandidates) : List.of(thread.lastRecipe);
@@ -610,6 +617,12 @@ public final class FactoryRecipeThread extends RecipeThread {
             thread.clearSearchFailure();
         }
         return thread;
+    }
+
+    private static @Nullable Identifier readSearchFailureReason(ValueInput input) {
+        var typedReason = input.getString("search_failure_reason_id");
+        if (typedReason.isPresent()) return FailureStatusMigration.factoryReasonId(typedReason.get());
+        return FailureStatusMigration.factoryReasonId(input.getStringOr("search_failure_reason", ""));
     }
 
     private static List<MachineRecipe> catalogCandidates(MachineControllerBlockEntity controller) {

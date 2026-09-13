@@ -14,8 +14,10 @@ import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
-import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -176,8 +178,9 @@ class CraftingRuntimeTest {
     void capability_tick_failure_is_observable_and_a_later_success_clears_it() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
-        ExecutionStatus failure = new ExecutionStatus(MMCR.id("tick_failure"), StatusSeverity.BLOCKED,
-                MMCR.id("test"), Map.of("reason", "per_tick"));
+        ExecutionStatus failure = ExecutionStatus.blocked(MMCR.id("tick_failure"), MMCR.id("test"),
+                FailureOccurrence.at(BuiltinFailureReasons.PER_TICK, MMCR.id("test"), FailurePhase.PER_TICK,
+                        null, null, Map.of()));
 
         runtime.handleCapabilityTickResult(new CapabilityTickResult(List.of(), failure, false));
         assertThat(runtime.failure()).isSameAs(failure);
@@ -298,7 +301,7 @@ class CraftingRuntimeTest {
         assertThat(runtime.active()).isTrue();
         assertThat(runtime.finishPending()).isTrue();
         assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().details()).containsEntry("reason", "finish");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.FINISH);
         assertThat(runtime.shouldRetryFinish()).isFalse();
 
         LevelStub.setGameTime(controller.getLevel(), 10);
@@ -350,7 +353,7 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().details()).containsEntry("reason", "insufficient_resource");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
         assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
@@ -360,11 +363,10 @@ class CraftingRuntimeTest {
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         FailureReason reason = new FailureReason(MMCR.id("runtime_registered_failure"),
                 "gui.mmcr.failure.runtime_registered_failure");
-        FailureReasonRegistry.register(reason);
         Field failure = CraftingRuntime.class.getDeclaredField("failure");
         failure.setAccessible(true);
-        failure.set(runtime, new ExecutionStatus(MMCR.id("test"), StatusSeverity.BLOCKED, MMCR.id("test"),
-                Map.of("reason", reason.id().toString())));
+        failure.set(runtime, ExecutionStatus.blocked(MMCR.id("test"), MMCR.id("test"),
+                FailureOccurrence.at(reason, MMCR.id("test"), FailurePhase.RUNTIME, null, null, Map.of())));
 
         assertThat(runtime.failureUnloc()).isEqualTo(reason.translationKey());
     }
@@ -428,7 +430,7 @@ class CraftingRuntimeTest {
         runtime.tick();
 
         assertThat(runtime.active()).isFalse();
-        assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
     }
 
     @Test
@@ -577,13 +579,13 @@ class CraftingRuntimeTest {
         controller.componentRuntime().replaceModifiers(Map.of("changed", List.of()));
         RuntimeTestFixtures.republish(controller);
         runtime.tick();
-        assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
 
         runtime.start(recipe, 1);
         controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.connected(MMCR.id("host")), 1);
         RuntimeTestFixtures.republish(controller);
         runtime.tick();
-        assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
     }
 
     @Test
@@ -598,7 +600,7 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().details()).containsEntry("reason", "smart_interface_changed");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
         assertThat(runtime.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.smart_interface_changed");
     }
 
@@ -613,7 +615,7 @@ class CraftingRuntimeTest {
         thread.invalidateForSmartInterfaceChange();
 
         assertThat(thread.runtime().active()).isFalse();
-        assertThat(thread.runtime().failure().details()).containsEntry("reason", "smart_interface_changed");
+        assertThat(thread.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
     }
 
     @Test
@@ -638,7 +640,7 @@ class CraftingRuntimeTest {
                 "gui.mmcr.controller.failure.smart_interface_changed"));
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().details()).containsEntry("reason", "smart_interface_changed");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
         assertThat(smartInterface.value("mode")).contains(9F);
     }
 
@@ -796,6 +798,66 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void active_runtime_migrates_legacy_failure_reason_when_typed_failure_is_absent() {
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        for (int slot = 0; slot < output.itemStorage().size(); slot++) {
+            setItem(output.itemStorage(), slot, stack(Items.COBBLESTONE, 64));
+        }
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
+        MachineRecipe recipe = recipe("runtime_legacy_finish_failure", 1,
+                List.of(output(Items.IRON_NUGGET, 1)));
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        saved.tick();
+        saved.finish();
+
+        TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        saved.save(outputTag);
+        CompoundTag legacy = outputTag.buildResult();
+        legacy.remove("failure");
+        legacy.putBoolean("has_failure", true);
+        legacy.putString("failure_reason", "no_output_capacity");
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, legacy), null);
+
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(restored.failure().failure().trace().frames().getFirst().phase()).isEqualTo(FailurePhase.FINISH);
+        assertThat(restored.failure().details()).doesNotContainKey("raw_reason_id");
+    }
+
+    @Test
+    void inactive_runtime_migrates_unknown_legacy_failure_with_raw_reason_id() {
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        output.putBoolean("active", false);
+        output.putBoolean("has_failure", true);
+        output.putString("failure_reason", "legacy:removed_reason");
+
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.UNKNOWN);
+        assertThat(restored.failure().details()).containsEntry("raw_reason_id", "legacy:removed_reason");
+    }
+
+    @Test
+    void inactive_runtime_clears_malformed_legacy_failure_reason() {
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        output.putBoolean("active", false);
+        output.putBoolean("has_failure", true);
+        output.putString("failure_reason", "not a valid identifier");
+
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
+
+        assertThat(restored.failure()).isNull();
+    }
+
+    @Test
     void active_runtime_persists_the_start_effective_snapshot_and_consumption_plan() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
@@ -911,7 +973,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     @Test
@@ -952,7 +1014,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     @Test
@@ -976,7 +1038,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     @Test
@@ -1184,7 +1246,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     @Test
@@ -1205,7 +1267,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     @Test
@@ -1226,7 +1288,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     @Test
@@ -1255,7 +1317,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
         assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
     }
 
@@ -1279,7 +1341,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     private static void assertMalformedActivityState(String recipePath,
@@ -1298,7 +1360,7 @@ class CraftingRuntimeTest {
 
         assertThat(restored.active()).isFalse();
         assertThat(restored.failure()).isNotNull();
-        assertThat(restored.failure().details()).containsEntry("reason", "recipe_load");
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
     private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -145,8 +146,8 @@ public class UpgradeBusGameTest {
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
                     "Bus content mutation invalidates the active recipe on the next tick");
             helper.assertTrue(controller.runtimeSnapshot().crafting().failure() != null
-                            && "version_invalidated".equals(controller.runtimeSnapshot().crafting().failure()
-                            .details().get("reason")),
+                            && BuiltinFailureReasons.VERSION_INVALIDATED.equals(
+                            controller.runtimeSnapshot().crafting().failure().reason()),
                     "Bus mutation uses the version invalidation failure path");
             helper.assertTrue(input.itemStorage().amount(0) == 0L,
                     "Invalidation does not restore consumed inputs");

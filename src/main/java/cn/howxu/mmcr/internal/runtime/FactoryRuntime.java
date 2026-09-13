@@ -1,7 +1,12 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -335,13 +340,13 @@ public final class FactoryRuntime {
             snapshots.add(new ThreadSnapshot(index, lane.laneId(), lane.isBaseThread(), lane.isCoreThread(), lane.runtime().active(),
                     state.recipeId() == null ? "" : state.recipeId().toString(), lane.runtime().tickCount(),
                     lane.runtime().totalTick(), lane.runtime().active() ? lane.runtime().parallelism() : 1,
-                    lane.runtime().failureUnloc(), lockedRecipe != null,
+                    state.failure(), lockedRecipe != null,
                     lockedRecipe == null ? "" : lockedRecipe.toString()));
         }
         while (snapshots.size() < laneLimit) {
             int index = snapshots.size();
             snapshots.add(new ThreadSnapshot(index, "idle-" + index, false, false, false,
-                    "", 0, 0, 1, "", false, ""));
+                    "", 0, 0, 1, (ExecutionStatus) null, false, ""));
         }
         return List.copyOf(snapshots);
     }
@@ -801,23 +806,50 @@ public final class FactoryRuntime {
     /** Immutable runtime-owned lane snapshot. */
     public record ThreadSnapshot(int index, String laneId, boolean baseThread, boolean coreThread, boolean active,
                                  String recipeId, int tick, int totalTick, long parallelism,
-                                 String lastFailureUnloc, boolean locked, String lockedRecipeId) {
+                                 @Nullable ExecutionStatus failure, boolean locked, String lockedRecipeId) {
         public ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
                               String recipeId, int tick, int totalTick, long parallelism,
                               String lastFailureUnloc, boolean locked, String lockedRecipeId) {
             this(index, index == 0 ? "base" : "factory-" + index, baseThread, coreThread, active,
-                    recipeId, tick, totalTick, parallelism, lastFailureUnloc, locked, lockedRecipeId);
+                    recipeId, tick, totalTick, parallelism, legacyFailure(lastFailureUnloc), locked, lockedRecipeId);
+        }
+
+        public ThreadSnapshot(int index, String laneId, boolean baseThread, boolean coreThread, boolean active,
+                              String recipeId, int tick, int totalTick, long parallelism,
+                              String lastFailureUnloc, boolean locked, String lockedRecipeId) {
+            this(index, laneId, baseThread, coreThread, active, recipeId, tick, totalTick, parallelism,
+                    legacyFailure(lastFailureUnloc), locked, lockedRecipeId);
         }
 
         public ThreadSnapshot {
             laneId = laneId == null ? "" : laneId;
             recipeId = recipeId == null ? "" : recipeId;
-            lastFailureUnloc = lastFailureUnloc == null ? "" : lastFailureUnloc;
             lockedRecipeId = locked ? lockedRecipeId == null ? "" : lockedRecipeId : "";
         }
 
+        /**
+         * Temporary string presentation boundary for unchanged Task 7 packet/menu callers.
+         * Remove this accessor and the string constructors when Task 7 migrates those callers.
+         */
+        public String lastFailureUnloc() {
+            if (failure == null) return "";
+            String legacyMessage = failure.details().get("legacy_message");
+            if (legacyMessage != null) return legacyMessage;
+            FailureReason reason = failure.reason();
+            return (reason == null ? BuiltinFailureReasons.UNKNOWN : reason).translationKey();
+        }
+
+        private static @Nullable ExecutionStatus legacyFailure(@Nullable String message) {
+            if (message == null || message.isEmpty()) return null;
+            Identifier source = MMCR.id("factory_runtime");
+            return ExecutionStatus.blocked(source, source,
+                    FailureOccurrence.at(BuiltinFailureReasons.UNKNOWN, source, FailurePhase.UNKNOWN,
+                            null, null, Map.of("legacy_message", message)));
+        }
+
         public static ThreadSnapshot idleBase() {
-            return new ThreadSnapshot(0, "base", true, false, false, "", 0, 0, 1L, "", false, "");
+            return new ThreadSnapshot(0, "base", true, false, false, "", 0, 0, 1L,
+                    (ExecutionStatus) null, false, "");
         }
     }
 }

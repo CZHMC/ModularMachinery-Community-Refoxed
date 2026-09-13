@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
@@ -133,6 +134,10 @@ public final class ControllerSyncRuntime {
         return locked == null ? "" : locked;
     }
 
+    /**
+     * Temporary translation-key presentation boundary for unchanged Task 7 packet/menu callers.
+     * Remove these overloads when those callers consume typed failures directly.
+     */
     public String failureMessage(ControllerRuntimeSnapshot runtime) {
         require(runtime);
         FactorySnapshot factory = runtime.factory();
@@ -161,14 +166,8 @@ public final class ControllerSyncRuntime {
 
     private static String failureUnloc(ExecutionStatus failure) {
         if (failure == null) return "";
-        return switch (failure.details().getOrDefault("reason", "")) {
-            case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
-            case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
-            case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
-            case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";
-            case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
-            default -> "gui.mmcr.controller.failure.missing_input";
-        };
+        var reason = failure.reason();
+        return (reason == null ? BuiltinFailureReasons.UNKNOWN : reason).translationKey();
     }
 
     private static void require(ControllerRuntimeSnapshot runtime) {

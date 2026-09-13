@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -97,7 +100,7 @@ class ControllerSyncRuntimeTest {
         assertThat(state.moduleConnected()).isTrue();
         assertThat(state.installedModuleCount()).isEqualTo(2);
         assertThat(state.foundLevelIds()).containsExactly("mmcr:steel");
-        assertThat(state.failure().details()).containsEntry("reason", "insufficient_energy");
+        assertThat(state.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
     }
 
     @Test
@@ -111,6 +114,18 @@ class ControllerSyncRuntimeTest {
         assertThat(factory.presentationLanes()).hasSize(2).isUnmodifiable();
         assertThat(factory.foundLevelIds()).containsExactly("mmcr:steel");
         assertThat(factory.lanes()).isUnmodifiable();
+    }
+
+    @Test
+    void equivalent_typed_failures_are_equal_by_value_for_published_state() {
+        MachineStateSnapshot first = new ControllerSyncRuntime().machineState(runtimeSnapshot(true));
+        MachineStateSnapshot equivalent = new ControllerSyncRuntime().machineState(runtimeSnapshot(true));
+
+        assertThat(first.failure()).isNotSameAs(equivalent.failure());
+        assertThat(first.failure()).isEqualTo(equivalent.failure());
+        assertThat(PktMachineStatePayload.stateChanged(
+                PktMachineStatePayload.from(BlockPos.ZERO, runtimeSnapshot(true)),
+                PktMachineStatePayload.from(BlockPos.ZERO, runtimeSnapshot(true)))).isFalse();
     }
 
     @Test
@@ -404,7 +419,7 @@ class ControllerSyncRuntimeTest {
 
         assertThat(state.active()).isFalse();
         assertThat(state.failure()).isNotNull();
-        assertThat(state.failure().details()).containsEntry("reason", "insufficient_resource");
+        assertThat(state.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
         assertThat(state.craftingStatus()).isEqualTo(CraftingStatus.Status.NO_RECIPE);
     }
 
@@ -445,7 +460,7 @@ class ControllerSyncRuntimeTest {
     @Test
     void finalFactoryPayloadRoundTripsAllLaneAndLevelStateWithoutAnOwnerBlockEntity() {
         PktFactoryControllerStatePayload payload = new PktFactoryControllerStatePayload(BlockPos.ZERO,
-                new ControllerSyncRuntime().factoryState(runtimeSnapshot()));
+                new ControllerSyncRuntime().factoryState(runtimeSnapshot(false)));
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY,
                 ConnectionType.NEOFORGE);
 
@@ -458,7 +473,16 @@ class ControllerSyncRuntimeTest {
     }
 
     private static ControllerRuntimeSnapshot runtimeSnapshot() {
-        ExecutionStatus failure = new ExecutionStatus(MMCR.id("runtime_failure"), StatusSeverity.BLOCKED,
+        return runtimeSnapshot(true);
+    }
+
+    private static ControllerRuntimeSnapshot runtimeSnapshot(boolean typedFailure) {
+        ExecutionStatus failure = typedFailure
+                ? ExecutionStatus.blocked(MMCR.id("runtime_failure"), MMCR.id("crafting_runtime"),
+                FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, MMCR.id("crafting_runtime"),
+                        FailurePhase.REQUIREMENT_PLAN, null, null, Map.of()))
+                : new ExecutionStatus(MMCR.id("runtime_failure"),
+                StatusSeverity.BLOCKED,
                 MMCR.id("crafting_runtime"), Map.of("reason", "insufficient_energy"));
         FactoryRuntime.ThreadSnapshot activeLane = new FactoryRuntime.ThreadSnapshot(0, true, false, true,
                 "mmcr:factory_recipe", 4, 20, 6, "", true, "mmcr:factory_recipe");

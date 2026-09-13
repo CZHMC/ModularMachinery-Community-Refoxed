@@ -4,6 +4,7 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
@@ -136,7 +137,7 @@ class SmartInterfaceBlockEntityTest {
 
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().details()).containsEntry("reason", "smart_interface_changed");
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
     }
 
     @Test

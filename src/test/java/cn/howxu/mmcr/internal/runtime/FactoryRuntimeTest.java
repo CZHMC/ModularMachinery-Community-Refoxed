@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -372,8 +373,7 @@ class FactoryRuntimeTest {
         assertThat(failed.recipe()).isEqualTo(failingRecipe);
         assertThat(failed.failure()).isNotNull();
         assertThat(snapshot.failure()).isNotNull();
-        assertThat(snapshot.failure().details())
-                .containsExactly(Map.entry("reason", "insufficient_resource"));
+        assertThat(snapshot.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
         assertThat(runtime.activeLaneCount()).isEqualTo(2);
         assertThat(failed.active()).isTrue();
         assertThat(survivor.active()).isTrue();
@@ -382,8 +382,7 @@ class FactoryRuntimeTest {
         assertThat(snapshot.presentationLanes()).hasSize(2);
         assertThat(snapshot.presentationLanes().get(0).active()).isTrue();
         assertThat(snapshot.lanes().get(0).failure()).isNotNull();
-        assertThat(snapshot.lanes().get(0).failure().details())
-                .containsExactly(Map.entry("reason", "insufficient_resource"));
+        assertThat(snapshot.lanes().get(0).failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
         assertThat(snapshot.presentationLanes().get(1).active()).isTrue();
         assertThat(snapshot.lanes().get(1).failure()).isNull();
         assertThat(snapshot.presentationLanes().get(1).lastFailureUnloc()).isEmpty();
@@ -409,7 +408,7 @@ class FactoryRuntimeTest {
                 .allSatisfy(lane -> assertThat(lane.lastFailureUnloc())
                         .isEqualTo("gui.mmcr.controller.failure.smart_interface_changed"));
         assertThat(runtime.snapshot().failure()).isNotNull();
-        assertThat(runtime.snapshot().failure().details()).containsEntry("reason", "smart_interface_changed");
+        assertThat(runtime.snapshot().failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
     }
 
     @Test
@@ -457,7 +456,7 @@ class FactoryRuntimeTest {
 
         assertThatCode(() -> thread.searchAndStartRecipe(candidates, 1, 0L)).doesNotThrowAnyException();
         assertThat(thread.runtime().failure()).isNotNull();
-        assertThat(thread.runtime().failure().details()).containsEntry("reason", "recipe_search");
+        assertThat(thread.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_SEARCH);
     }
 
     @Test
@@ -638,7 +637,7 @@ class FactoryRuntimeTest {
         List<MachineRecipe> invalidCandidates = new ArrayList<>();
         invalidCandidates.add(null);
         assertThat(unknown.searchAndStartRecipe(invalidCandidates, 1, 0L)).isFalse();
-        assertThat(unknown.searchFailureReason()).isEqualTo("recipe_search");
+        assertThat(unknown.searchFailureReason()).isEqualTo(BuiltinFailureReasons.RECIPE_SEARCH.id());
         assertThat(unknown.matchesAvailability(Reason.OUTPUT_CAPACITY, null)).isFalse();
     }
 
@@ -838,8 +837,8 @@ class FactoryRuntimeTest {
         resolveSharedRequests(controller);
 
         assertThat(controller.runtimeSnapshot().factory().failure()).isNotNull();
-        assertThat(controller.runtimeSnapshot().factory().failure().details())
-                .containsEntry("reason", "version_invalidated");
+        assertThat(controller.runtimeSnapshot().factory().failure().reason())
+                .isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
 
         controller.serverTick();
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
@@ -1410,7 +1409,7 @@ class FactoryRuntimeTest {
     void restored_retry_remaining_is_clamped_to_one_hundred_ticks() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
-        thread.recordSearchFailure(searchKey(controller), 0L);
+        assertThat(thread.searchAndStartRecipe(List.of(inputRecipe("retry_remaining_clamped")), 1, 0L)).isFalse();
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
         thread.save(output);

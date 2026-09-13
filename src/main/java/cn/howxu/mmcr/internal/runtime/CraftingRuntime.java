@@ -8,8 +8,11 @@ import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
@@ -32,6 +35,8 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
+import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
@@ -87,16 +92,18 @@ public final class CraftingRuntime {
 
     public CraftingStatus start(MachineRecipe recipe, long requestedParallelism) {
         if (recipe == null || requestedParallelism <= 0) {
-            return fail("invalid_start");
+            return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
         }
         if (active()) return status;
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         if (!runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
-            return fail("module_connection");
+            return fail(failure(BuiltinFailureReasons.MODULE_CONNECTION, FailurePhase.RECIPE_START, Map.of()));
         }
         RecipeBehavior behavior = recipeBehavior(runtime);
-        if (behavior == null) return fail("recipe_behavior");
+        if (behavior == null) {
+            return fail(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.RECIPE_START, Map.of()));
+        }
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
         List<RecipeModifier> contextModifiers = contextModifiers(runtime);
         List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers);
@@ -109,7 +116,7 @@ public final class CraftingRuntime {
             behavior.beforeStart().accept(startContext);
         } catch (RuntimeException exception) {
             logCallbackFailure("beforeStart", runtime, recipe, exception);
-            return fail("behavior_before_start");
+            return fail(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.RECIPE_START, Map.of()));
         } finally {
             flushScreenTextReplacements(machineContext.screenText());
         }
@@ -147,12 +154,14 @@ public final class CraftingRuntime {
 
     public CraftingStatus tick() {
         if (!active()) return status;
-        if (!versionsCurrent()) return invalidate("version_invalidated");
+        if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (activeRecipe.isFinishPending()) return status;
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         RecipeBehavior behavior = recipeBehavior(runtime);
-        if (behavior == null) return waiting(failure("recipe_behavior"));
+        if (behavior == null) {
+            return waiting(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.PER_TICK, Map.of()));
+        }
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeTickContext recipeTickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
@@ -177,7 +186,7 @@ public final class CraftingRuntime {
             if (!tickPlan.commit()) return waiting(tickPlan.failure());
         } catch (RuntimeException exception) {
             logTickFailure("commit", runtime, activeRecipe.getRecipe(), exception);
-            return waiting(failure("per_tick"));
+            return waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
         }
         if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, machineContext, recipeTickContext)) {
             if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
@@ -224,13 +233,15 @@ public final class CraftingRuntime {
 
     public CraftingStatus finish() {
         if (!active()) return status;
-        if (!versionsCurrent()) return invalidate("version_invalidated");
+        if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (!activeRecipe.isFinishPending()) return status;
         if (!activeRecipe.shouldRetryFinish(currentGameTime())) return status;
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         RecipeBehavior behavior = recipeBehavior(runtime);
-        if (behavior == null) return finishBlocked(failure("recipe_behavior"));
+        if (behavior == null) {
+            return finishBlocked(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.FINISH, Map.of()));
+        }
         CraftingContext context = context(runtime);
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeFinishContext finishContext = new RecipeFinishContext(machineContext,
@@ -240,11 +251,15 @@ public final class CraftingRuntime {
             behavior.beforeFinish().accept(finishContext);
         } catch (RuntimeException exception) {
             logCallbackFailure("beforeFinish", runtime, activeRecipe.getRecipe(), exception);
-            return finishBlocked(failure("behavior_before_finish"));
+            return finishBlocked(failure(BuiltinFailureReasons.BEHAVIOR_BEFORE_FINISH,
+                    FailurePhase.FINISH, Map.of()));
         } finally {
             flushScreenTextReplacements(machineContext.screenText());
         }
-        if (finishContext.cancelled()) return finishBlocked(failure("behavior_before_finish_cancelled"));
+        if (finishContext.cancelled()) {
+            return finishBlocked(failure(BuiltinFailureReasons.BEHAVIOR_BEFORE_FINISH_CANCELLED,
+                    FailurePhase.FINISH, Map.of()));
+        }
         if (finishContext.outputsDiscarded()) {
             activeRecipe.applyTickGrant(true, true, currentGameTime());
             activeRecipe = null;
@@ -264,10 +279,10 @@ public final class CraftingRuntime {
                     activeRecipe.getParallelism(), activeRecipe.getRecipe().allowPartialOutputs());
         } catch (IllegalArgumentException exception) {
             logCallbackFailure("beforeFinish.output_validation", runtime, activeRecipe.getRecipe(), exception);
-            return finishBlocked(failure("invalid_outputs"));
+            return finishBlocked(failure(BuiltinFailureReasons.INVALID_OUTPUTS, FailurePhase.FINISH, Map.of()));
         } catch (RuntimeException exception) {
             logFinishFailure("planning", runtime, activeRecipe.getRecipe(), exception);
-            return finishBlocked(failure("finish"));
+            return finishBlocked(failure(BuiltinFailureReasons.FINISH, FailurePhase.FINISH, Map.of()));
         }
         finishPlan = result.plan();
         if (!result.successful() || finishPlan == null) {
@@ -280,7 +295,7 @@ public final class CraftingRuntime {
             committed = finishPlan.commit();
         } catch (RuntimeException exception) {
             logFinishFailure("commit", runtime, activeRecipe.getRecipe(), exception);
-            return finishBlocked(failure("finish"));
+            return finishBlocked(failure(BuiltinFailureReasons.FINISH, FailurePhase.FINISH, Map.of()));
         } finally {
             finishCommitInProgress = false;
         }
@@ -290,7 +305,7 @@ public final class CraftingRuntime {
         }
         if (smartInterfaceChangePending) {
             smartInterfaceChangePending = false;
-            return invalidate("smart_interface_changed");
+            return invalidate(BuiltinFailureReasons.SMART_INTERFACE_CHANGED, FailurePhase.RUNTIME);
         }
 
         activeRecipe.applyTickGrant(true, true, currentGameTime());
@@ -321,7 +336,8 @@ public final class CraftingRuntime {
         } catch (RuntimeException exception) {
             MMCR.LOG.warn("Machine recipe tick capability phase failed: phase={} controller={}", phase,
                     controller.getBlockPos(), exception);
-            handleCapabilityTickResult(new CapabilityTickResult(List.of(), failure("per_tick"), false));
+            handleCapabilityTickResult(new CapabilityTickResult(List.of(),
+                    failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false));
             return false;
         }
         if (result.failure() == null) return true;
@@ -359,6 +375,10 @@ public final class CraftingRuntime {
         return activeRecipe;
     }
 
+    /**
+     * Temporary string presentation boundary for unchanged Task 7 packet/menu callers.
+     * Remove it when those callers consume the typed failure directly.
+     */
     public @Nullable String failureUnloc() {
         return failure == null ? null : failureUnloc(failure);
     }
@@ -388,7 +408,8 @@ public final class CraftingRuntime {
     }
 
     public void recordSearchFailure(@Nullable ExecutionStatus nextFailure) {
-        failure = nextFailure == null ? failure("recipe_search") : nextFailure;
+        failure = nextFailure == null
+                ? failure(BuiltinFailureReasons.RECIPE_SEARCH, FailurePhase.RECIPE_SEARCH, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
     }
 
@@ -425,7 +446,7 @@ public final class CraftingRuntime {
             smartInterfaceChangePending = true;
             return;
         }
-        invalidate("smart_interface_changed");
+        invalidate(BuiltinFailureReasons.SMART_INTERFACE_CHANGED, FailurePhase.RUNTIME);
     }
 
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
@@ -496,10 +517,7 @@ public final class CraftingRuntime {
     public void save(ValueOutput output) {
         boolean present = activeRecipe != null && activeRecipe.getRecipe() != null;
         output.putBoolean("active", present);
-        output.putBoolean("has_failure", failure != null);
-        if (failure != null) {
-            output.putString("failure_reason", failure.details().getOrDefault("reason", ""));
-        }
+        FailureStatusCodec.write(output.child("failure"), failure);
         if (present) {
             output.putLong("structure_version", structureVersion);
             output.putLong("capability_version", capabilityVersion);
@@ -512,11 +530,9 @@ public final class CraftingRuntime {
 
     public void load(ValueInput input, @Nullable StructureClaimRegistry.ResourceDomain domain) {
         boolean active = input.getBooleanOr("active", false);
-        boolean hasFailure = input.getBooleanOr("has_failure", false);
-        String failureReason = input.getStringOr("failure_reason", "");
         if (!active) {
             invalidate();
-            restoreFailure(hasFailure, failureReason);
+            restoreFailure(readFailure(input, null));
             return;
         }
         ActiveMachineRecipe.LoadResult loaded = ActiveMachineRecipe.load(input.childOrEmpty("recipe"));
@@ -534,24 +550,32 @@ public final class CraftingRuntime {
             if (restoredUpgradeContentRevision != Long.MIN_VALUE) {
                 upgradeContentRevision = restoredUpgradeContentRevision;
             }
-            restoreFailure(hasFailure, failureReason);
+            restoreFailure(readFailure(input, loaded.recipe().getRecipe().id()));
         }
+    }
+
+    private static @Nullable ExecutionStatus readFailure(ValueInput input, @Nullable Identifier recipeId) {
+        var failureInput = input.child("failure");
+        if (failureInput.isPresent()) return FailureStatusCodec.read(failureInput.get());
+        if (!input.getBooleanOr("has_failure", false)) return null;
+        return FailureStatusMigration.craftingFailure(input.getStringOr("failure_reason", ""), recipeId);
     }
 
     private void failLoad() {
         invalidate();
-        failure = failure("recipe_load");
+        failure = failure(BuiltinFailureReasons.RECIPE_LOAD, FailurePhase.RECIPE_LOAD, Map.of());
         status = CraftingStatus.failure(failureUnloc(failure));
     }
 
-    private void restoreFailure(boolean present, String reason) {
-        if (!present) return;
-        failure = failure(reason);
+    private void restoreFailure(@Nullable ExecutionStatus restoredFailure) {
+        if (restoredFailure == null) return;
+        failure = restoredFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
     }
 
     private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure) {
-        failure = nextFailure == null ? failure("per_tick") : nextFailure;
+        failure = nextFailure == null
+                ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
         if (activeRecipe != null && activeRecipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
             activeRecipe = null;
@@ -565,13 +589,14 @@ public final class CraftingRuntime {
 
     private CraftingStatus finishBlocked(@Nullable ExecutionStatus nextFailure) {
         if (activeRecipe != null) activeRecipe.markFinishBlocked(currentGameTime());
-        failure = nextFailure == null ? failure("finish") : nextFailure;
+        failure = nextFailure == null
+                ? failure(BuiltinFailureReasons.FINISH, FailurePhase.FINISH, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
         return status;
     }
 
-    private CraftingStatus invalidate(String reason) {
-        failure = failure(reason);
+    private CraftingStatus invalidate(FailureReason reason, FailurePhase phase) {
+        failure = failure(reason, phase, Map.of());
         activeRecipe = null;
         startPlan = null;
         finishPlan = null;
@@ -584,13 +609,10 @@ public final class CraftingRuntime {
     }
 
     private CraftingStatus fail(@Nullable ExecutionStatus nextFailure) {
-        failure = nextFailure == null ? failure("start") : nextFailure;
+        failure = nextFailure == null
+                ? failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
         return status;
-    }
-
-    private CraftingStatus fail(String reason) {
-        return fail(failure(reason));
     }
 
     private MachineBehaviorContext behaviorContext() {
@@ -750,24 +772,16 @@ public final class CraftingRuntime {
         return controller.getLevel() == null ? 0L : controller.getLevel().getGameTime();
     }
 
-    private static ExecutionStatus failure(String reason) {
-        return new ExecutionStatus(MMCR.id("crafting_runtime"), StatusSeverity.BLOCKED,
-                MMCR.id("crafting_runtime"), Map.of("reason", reason));
+    private ExecutionStatus failure(FailureReason reason, FailurePhase phase, Map<String, String> details) {
+        Identifier source = MMCR.id("crafting_runtime");
+        return ExecutionStatus.blocked(source, source,
+                FailureOccurrence.at(reason, source, phase,
+                        activeRecipe == null ? null : activeRecipe.getRecipe().id(), null, details));
     }
 
     private static String failureUnloc(ExecutionStatus status) {
         if (status == null) return "";
-        var registeredReason = status.reason();
-        if (registeredReason != null) return registeredReason.translationKey();
-        return switch (status.details().getOrDefault("reason", "")) {
-            case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
-            case "level_insufficient" -> "gui.mmcr.controller.failure.level_insufficient";
-            case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
-            case "version_invalidated" -> "gui.mmcr.controller.failure.structure_changed";
-            case "smart_interface_changed" -> "gui.mmcr.controller.failure.smart_interface_changed";
-            case "finish", "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
-            case "per_tick" -> "gui.mmcr.controller.failure.missing_input";
-            default -> "gui.mmcr.controller.failure.missing_input";
-        };
+        FailureReason reason = status.reason();
+        return (reason == null ? BuiltinFailureReasons.UNKNOWN : reason).translationKey();
     }
 }
