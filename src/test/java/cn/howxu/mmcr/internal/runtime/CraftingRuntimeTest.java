@@ -159,6 +159,19 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void direct_start_rejects_a_recipe_from_a_different_machine_pool() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_foreign_pool"),
+                MMCR.id("foreign_recipe_pool"), 20, List.of(), List.of());
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isFalse();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.failure().details()).containsEntry("reason", "recipe_pool");
+    }
+
+    @Test
     void recipe_tick_callback_is_preserved_when_capability_phases_are_enabled() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         AtomicInteger callbacks = new AtomicInteger();
@@ -583,6 +596,25 @@ class CraftingRuntimeTest {
         controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.connected(MMCR.id("host")), 1);
         RuntimeTestFixtures.republish(controller);
         runtime.tick();
+        assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
+    }
+
+    @Test
+    void rebinding_versions_invalidates_an_active_recipe_when_the_machine_pool_changes() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = controllerRuntime(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_pool_rebind"), MMCR.id("test_cube"),
+                20, List.of(), List.of());
+
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        Identifier foreignMachineId = MMCR.id("runtime_foreign_pool_machine");
+        RuntimeTestFixtures.registerRecipePool(foreignMachineId);
+        controller.setMachine(new DynamicMachine(foreignMachineId, "foreign pool machine", new BlockArray(Map.of())));
+
+        runtime.rebindCurrentVersions();
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNotNull();
         assertThat(runtime.failure().details()).containsEntry("reason", "version_invalidated");
     }
 

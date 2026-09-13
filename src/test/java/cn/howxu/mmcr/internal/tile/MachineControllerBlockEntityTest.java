@@ -1106,6 +1106,49 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void loading_a_controller_recipe_lock_does_not_use_a_recipe_from_another_pool() {
+        Identifier recipeId = MMCR.id("controller_foreign_lock_recipe");
+        Identifier foreignPool = MMCR.id("controller_foreign_lock_pool");
+        RuntimeTestFixtures.registerRecipePool(foreignPool);
+        MachineRecipe foreign = RecipeTestSupport.create(recipeId, foreignPool, 20, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, foreign));
+        try {
+            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                    HolderLookup.Provider.create(Stream.empty()));
+            output.putString("locked_recipe", recipeId.toString());
+
+            MachineControllerBlockEntity restored = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                    HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+            assertThat(restored.lockedRecipeId()).isNull();
+        } finally {
+            RecipeRegistry.replaceDynamic(Map.of());
+        }
+    }
+
+    @Test
+    void loading_a_controller_recipe_lock_waits_for_the_machine_before_pool_validation() {
+        Identifier machineId = MMCR.id("controller_deferred_lock_machine");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_deferred_lock_recipe"), machineId,
+                20, List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        output.putString("locked_recipe", recipe.id().toString());
+
+        MachineControllerBlockEntity restored = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        restored.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        assertThat(restored.lockedRecipeId()).isNull();
+
+        restored.setMachine(new DynamicMachine(machineId, "deferred lock machine", new BlockArray(Map.of())));
+
+        assertThat(restored.lockedRecipeId()).isEqualTo(recipe.id());
+    }
+
+    @Test
     void negative_structure_runtime_version_loads_as_zero() {
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));

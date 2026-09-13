@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -49,7 +50,7 @@ public final class RecipeSearchTask {
         this.machineId = machineId;
         this.structureVersion = structureVersion;
         this.maxParallelism = Math.max(1L, maxParallelism);
-        this.candidates = List.copyOf(orderedCandidates == null ? List.of() : orderedCandidates);
+        this.candidates = poolCandidates(machineId, orderedCandidates);
         this.lockedRecipeId = lockedRecipeId;
         this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
         this.modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
@@ -142,6 +143,13 @@ public final class RecipeSearchTask {
                         .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
                         .thenComparing(MachineRecipe::id))
                 .toList();
+    }
+
+    private static List<MachineRecipe> poolCandidates(Identifier machineId, List<MachineRecipe> candidates) {
+        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machineId);
+        if (recipePoolId == null || candidates == null || candidates.isEmpty()) return List.of();
+        return candidates.stream().filter(recipe -> recipe != null
+                && recipePoolId.equals(recipe.recipePoolId())).toList();
     }
 
     private static List<RecipeModifier> flattenModifiers(ControllerRuntimeSnapshot snapshot) {

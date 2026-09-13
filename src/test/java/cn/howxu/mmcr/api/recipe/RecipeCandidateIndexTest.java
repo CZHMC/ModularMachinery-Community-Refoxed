@@ -238,6 +238,19 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
+    void search_task_does_not_select_a_candidate_from_another_recipe_pool() {
+        MachineRecipe foreign = RecipeTestSupport.create(id("foreign_pool_search"),
+                Identifier.fromNamespaceAndPath("test", "other_pool"), 20,
+                List.of(), List.of(), List.of(), 0, 1);
+
+        RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
+                List.of(foreign), null, List.of(), List.of()).compute();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.recipe()).isNull();
+    }
+
+    @Test
     void search_failure_priority_prefers_missing_inputs_then_energy_then_levels() {
         ExecutionStatus missingInput = failure("insufficient_resource");
         ExecutionStatus missingEnergy = failure("insufficient_energy");

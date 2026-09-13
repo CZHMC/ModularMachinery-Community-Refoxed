@@ -260,6 +260,14 @@ public final class ActiveMachineRecipe {
     }
 
     public static LoadResult load(ValueInput input) {
+        return load(input, null);
+    }
+
+    public static LoadResult loadForPool(ValueInput input, Identifier recipePoolId) {
+        return load(input, Objects.requireNonNull(recipePoolId, "recipePoolId"));
+    }
+
+    private static LoadResult load(ValueInput input, @Nullable Identifier recipePoolId) {
         HolderLookup.Provider registries = input.lookup();
         String recipeName = input.getStringOr("recipeName", "");
         Identifier recipeId;
@@ -268,6 +276,7 @@ public final class ActiveMachineRecipe {
         } catch (IllegalArgumentException exception) {
             return new LoadResult(null);
         }
+        if (recipeId == null) return new LoadResult(null);
         MachineRecipe recipe;
         if (input.getBooleanOr("has_recipe_definition", false)) {
             int definitionVersion = input.getIntOr("recipe_definition_version", -1);
@@ -296,9 +305,13 @@ public final class ActiveMachineRecipe {
                 return new LoadResult(null);
             }
         } else {
-            recipe = RecipeRegistry.getRecipe(recipeId);
+            recipe = recipePoolId == null ? RecipeRegistry.getRecipe(recipeId)
+                    : RecipeRegistry.catalogForPool(recipePoolId).recipes().stream()
+                    .filter(candidate -> recipeId.equals(candidate.id())).findFirst().orElse(null);
         }
-        if (recipe == null) return new LoadResult(null);
+        if (recipe == null || recipePoolId != null && !recipePoolId.equals(recipe.recipePoolId())) {
+            return new LoadResult(null);
+        }
         List<MachineRequirement> effectiveRequirements = null;
         List<MachineOutput> effectiveOutputs = null;
         int effectiveDuration = -1;
