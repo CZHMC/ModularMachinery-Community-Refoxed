@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.client.preview.StructureMaterialSummary.Entry;
 import cn.howxu.mmcr.client.preview.StructurePreviewPanel;
@@ -12,13 +13,16 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /** Client-side host for the standalone blueprint structure preview.
@@ -29,11 +33,8 @@ public final class BlueprintScreen extends Screen {
     private static final int BASE_HEIGHT = 330;
     private static final int OUTER_MARGIN = 8;
     private static final int GAP = 6;
-    private static final int ITEM_ROW_SLOT_X = OUTER_MARGIN;
-    private static final int SLOT_COUNT = 12;
     private static final float MATERIAL_QUANTITY_SCALE = 0.6F;
     private static final int PREVIEW_HEIGHT = 190;
-    private static final int SLOT_SIZE = 24;
     private static final int SLOT_ICON_OFFSET = 4;
     static final int MATERIAL_SLOT_SIZE = 25;
     static final int MATERIAL_COLUMNS = 10;
@@ -46,6 +47,9 @@ public final class BlueprintScreen extends Screen {
     private static final int PANEL_COLOR = 0xFFB6E4F2;
     private static final int OUTER_BORDER_COLOR = 0xFF40798B;
     private static final int INNER_BORDER_COLOR = 0xFFDDF4FA;
+    private static final int SLOT_FRAME_DARK = 0xFF373737;
+    private static final int SLOT_FRAME_LIGHT = 0xFF8B8B8B;
+    private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
 
     private final Machine machine;
     private final ItemStack blueprint;
@@ -57,6 +61,12 @@ public final class BlueprintScreen extends Screen {
     private @Nullable Button resetButton;
     private @Nullable Button nextStageButton;
     private @Nullable Button previousStageButton;
+    private int materialScrollOffset;
+    private int candidateScrollOffset;
+    private boolean draggingMaterialScrollbar;
+    private boolean draggingCandidateScrollbar;
+    private int materialScrollbarDragOffsetY;
+    private int candidateScrollbarDragOffsetY;
     private boolean closed;
 
     public BlueprintScreen(Machine machine, ItemStack blueprint) {
@@ -116,7 +126,17 @@ public final class BlueprintScreen extends Screen {
     @Override
     public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubleClick) {
         BlueprintLayout currentLayout = layout;
-        if (currentLayout != null && itemRowAt(currentLayout, event.x(), event.y())) return true;
+        if (currentLayout != null && event.button() == 0
+                && materialScrollbarRect(currentLayout).contains(event.x(), event.y())) {
+            beginMaterialScrollbarDrag(event, currentLayout);
+            return true;
+        }
+        if (currentLayout != null && event.button() == 0
+                && candidateScrollbarRect(currentLayout).contains(event.x(), event.y())) {
+            beginCandidateScrollbarDrag(event, currentLayout);
+            return true;
+        }
+        if (currentLayout != null && gridContains(currentLayout, event.x(), event.y())) return true;
         if (currentLayout != null && currentLayout.preview().contains(event.x(), event.y())) {
             return panel.mouseClicked(previewX(event.x()), previewY(event.y()), event.button());
         }
@@ -126,7 +146,14 @@ public final class BlueprintScreen extends Screen {
     @Override
     public boolean mouseReleased(@NonNull MouseButtonEvent event) {
         BlueprintLayout currentLayout = layout;
-        if (currentLayout != null && itemRowAt(currentLayout, event.x(), event.y())) return true;
+        if (event.button() == 0 && (draggingMaterialScrollbar || draggingCandidateScrollbar)) {
+            draggingMaterialScrollbar = false;
+            draggingCandidateScrollbar = false;
+            return true;
+        }
+        if (currentLayout != null && (materialScrollbarRect(currentLayout).contains(event.x(), event.y())
+                || candidateScrollbarRect(currentLayout).contains(event.x(), event.y()))) return true;
+        if (currentLayout != null && gridContains(currentLayout, event.x(), event.y())) return true;
         if (currentLayout != null && currentLayout.preview().contains(event.x(), event.y())) {
             return panel.mouseReleased(previewX(event.x()), previewY(event.y()), event.button());
         }
@@ -136,7 +163,15 @@ public final class BlueprintScreen extends Screen {
     @Override
     public boolean mouseDragged(@NonNull MouseButtonEvent event, double dragX, double dragY) {
         BlueprintLayout currentLayout = layout;
-        if (currentLayout != null && itemRowAt(currentLayout, event.x(), event.y())) return true;
+        if (currentLayout != null && draggingMaterialScrollbar) {
+            materialScrollOffset = materialScrollOffsetFrom(event.y(), currentLayout);
+            return true;
+        }
+        if (currentLayout != null && draggingCandidateScrollbar) {
+            candidateScrollOffset = candidateScrollOffsetFrom(event.y(), currentLayout);
+            return true;
+        }
+        if (currentLayout != null && gridContains(currentLayout, event.x(), event.y())) return true;
         if (currentLayout != null && currentLayout.preview().contains(event.x(), event.y())) {
             float scale = currentLayout.scale();
             return panel.mouseDragged(previewX(event.x()), previewY(event.y()), event.button(), dragX / scale, dragY / scale);
@@ -147,7 +182,22 @@ public final class BlueprintScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         BlueprintLayout currentLayout = layout;
-        if (currentLayout != null && itemRowAt(currentLayout, mouseX, mouseY)) return true;
+        if (currentLayout != null && materialScrollbarRect(currentLayout).contains(mouseX, mouseY)) {
+            scrollMaterials(scrollY, currentLayout);
+            return true;
+        }
+        if (currentLayout != null && candidateScrollbarRect(currentLayout).contains(mouseX, mouseY)) {
+            scrollCandidates(scrollY, currentLayout);
+            return true;
+        }
+        if (currentLayout != null && currentLayout.materials().contains(mouseX, mouseY)) {
+            scrollMaterials(scrollY, currentLayout);
+            return true;
+        }
+        if (currentLayout != null && currentLayout.candidates().contains(mouseX, mouseY)) {
+            scrollCandidates(scrollY, currentLayout);
+            return true;
+        }
         if (currentLayout != null && currentLayout.preview().contains(mouseX, mouseY)) {
             return panel.mouseScrolled(previewX(mouseX), previewY(mouseY), scrollY);
         }
@@ -320,67 +370,228 @@ public final class BlueprintScreen extends Screen {
     }
 
     private void renderItems(GuiGraphicsExtractor graphics, BlueprintLayout currentLayout, int mouseX, int mouseY) {
-        long timeMillis = System.currentTimeMillis();
+        List<Entry> entries = panel.materials().entries();
+        List<Candidate> candidates = panel.selectedCandidates();
+        int visibleMaterialRows = visibleMaterialRows(currentLayout);
+        int visibleCandidateRows = visibleCandidateRows(currentLayout);
+        int materialRows = materialRows(entries);
+        int candidateRows = candidateRows(candidates);
+        materialScrollOffset = clampScrollOffset(materialScrollOffset, materialRows, visibleMaterialRows);
+        candidateScrollOffset = clampScrollOffset(candidateScrollOffset, candidateRows, visibleCandidateRows);
+
+        int firstMaterial = materialScrollOffset * MATERIAL_COLUMNS;
+        int visibleMaterialSlots = visibleMaterialRows * MATERIAL_COLUMNS;
+        for (int visible = 0; visible < visibleMaterialSlots; visible++) {
+            int index = firstMaterial + visible;
+            if (index >= entries.size()) break;
+            Entry entry = entries.get(index);
+            BlueprintRect slot = materialSlotRect(currentLayout, visible);
+            renderSlotFrame(graphics, slot);
+            if (slot.contains(mouseX, mouseY)) {
+                ItemStack iconStack = entry.stack().copyWithCount(1);
+                ArrayList<Component> tooltip = new ArrayList<>(getTooltipFromItem(minecraft, iconStack));
+                tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count",
+                        ReadableNumber.formatExact(entry.count())));
+                graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
+            }
+        }
+
+        int firstCandidate = candidateScrollOffset * CANDIDATE_COLUMNS;
+        int visibleCandidateSlots = visibleCandidateRows * CANDIDATE_COLUMNS;
+        for (int visible = 0; visible < visibleCandidateSlots; visible++) {
+            int index = firstCandidate + visible;
+            if (index >= candidates.size()) break;
+            Candidate candidate = candidates.get(index);
+            BlueprintRect slot = candidateSlotRect(currentLayout, visible);
+            renderSlotFrame(graphics, slot);
+            if (slot.contains(mouseX, mouseY)) {
+                ItemStack iconStack = candidate.stack().copyWithCount(1);
+                ArrayList<Component> tooltip = new ArrayList<>(getTooltipFromItem(minecraft, iconStack));
+                if (candidate.modifier()) tooltip.add(Component.translatable("gui.mmcr.blueprint.modifier"));
+                graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
+            }
+        }
+
+        renderScrollbar(graphics, currentLayout, materialScrollbarRect(currentLayout), materialScrollOffset,
+                materialRows, visibleMaterialRows);
+        renderScrollbar(graphics, currentLayout, candidateScrollbarRect(currentLayout), candidateScrollOffset,
+                candidateRows, visibleCandidateRows);
+
         graphics.pose().pushMatrix();
         graphics.pose().translate(currentLayout.left(), currentLayout.top());
         graphics.pose().scale(currentLayout.scale(), currentLayout.scale());
-        int candidatesX = (int) Math.round(localMouse(currentLayout.candidates().x(), currentLayout.left(), currentLayout.scale()));
-        int candidatesY = (int) Math.round(localMouse(currentLayout.candidates().y(), currentLayout.top(), currentLayout.scale()));
-        int materialsY = (int) Math.round(localMouse(currentLayout.materials().y(), currentLayout.top(), currentLayout.scale()));
-        int visibleSlotCount = visibleSlotCount();
-        for (int slot = 0; slot < visibleSlotCount; slot++) {
-            BlueprintRect candidateSlot = slotRect(currentLayout, currentLayout.candidates(), slot);
-            Candidate candidate = panel.candidateAt(slot, timeMillis, visibleSlotCount);
-            if (candidate != null) {
-                ItemStack stack = candidate.stack();
-                int x = candidatesX + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
-                int y = candidatesY + SLOT_ICON_OFFSET;
-                graphics.item(stack, x, y, slot);
-                graphics.itemDecorations(font, stack, x, y);
-                if (candidateSlot.contains(mouseX, mouseY)) {
-                    ArrayList<Component> tooltip = new ArrayList<>(getTooltipFromItem(minecraft, stack));
-                    if (candidate.modifier()) tooltip.add(Component.translatable("gui.mmcr.blueprint.modifier"));
-                    graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
-                }
-            }
-
-            BlueprintRect materialSlot = slotRect(currentLayout, currentLayout.materials(), slot);
-            Entry entry = panel.materialAt(slot, timeMillis, visibleSlotCount);
-            if (entry != null) {
-                ItemStack stack = entry.stack().copyWithCount(1);
-                int x = ITEM_ROW_SLOT_X + slot * SLOT_SIZE + SLOT_ICON_OFFSET;
-                int y = materialsY + SLOT_ICON_OFFSET;
-                graphics.item(stack, x, y, slot);
-                String quantity = entry.count() > 1
-                        ? ReadableNumber.formatForSlot(entry.count(), 0, "") : null;
-                graphics.pose().pushMatrix();
-                graphics.pose().translate(x + 8, y + 8);
-                graphics.pose().scale(MATERIAL_QUANTITY_SCALE, MATERIAL_QUANTITY_SCALE);
-                graphics.itemDecorations(font, stack, 0, 0, quantity);
-                graphics.pose().popMatrix();
-                if (materialSlot.contains(mouseX, mouseY)) {
-                    ArrayList<Component> tooltip = new ArrayList<>(getTooltipFromItem(minecraft, stack));
-                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count",
-                            ReadableNumber.formatExact(entry.count())));
-                    graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
-                }
-            }
+        for (int visible = 0; visible < visibleMaterialSlots; visible++) {
+            int index = firstMaterial + visible;
+            if (index >= entries.size()) break;
+            Entry entry = entries.get(index);
+            ItemStack iconStack = entry.stack().copyWithCount(1);
+            BlueprintRect slot = materialSlotRect(currentLayout, visible);
+            int x = slotX(currentLayout, slot) + SLOT_ICON_OFFSET;
+            int y = slotY(currentLayout, slot) + SLOT_ICON_OFFSET;
+            graphics.item(iconStack, x, y, visible);
+            renderMaterialCount(graphics, iconStack, entry.count(), x, y);
+        }
+        for (int visible = 0; visible < visibleCandidateSlots; visible++) {
+            int index = firstCandidate + visible;
+            if (index >= candidates.size()) break;
+            Candidate candidate = candidates.get(index);
+            BlueprintRect slot = candidateSlotRect(currentLayout, visible);
+            graphics.item(candidate.stack().copyWithCount(1), slotX(currentLayout, slot) + SLOT_ICON_OFFSET,
+                    slotY(currentLayout, slot) + SLOT_ICON_OFFSET, visible);
         }
         graphics.pose().popMatrix();
     }
 
-    private int visibleSlotCount() {
-        return SLOT_COUNT;
+    private void renderScrollbar(GuiGraphicsExtractor graphics, BlueprintLayout currentLayout, BlueprintRect scrollbar,
+            int offset, int totalRows, int visibleRows) {
+        int handleHeight = Math.max(1, Math.round(SCROLLBAR_HANDLE_HEIGHT * currentLayout.scale()));
+        int handleY = scrollbarHandleY(offset, totalRows, visibleRows, scrollbar.y(), scrollbar.height(), handleHeight);
+        graphics.blit(RenderPipelines.GUI_TEXTURED, SCROLLER, scrollbar.x(), handleY, 0, 0,
+                scrollbar.width(), handleHeight, 32, 32);
     }
 
-    private boolean itemRowAt(BlueprintLayout currentLayout, double mouseX, double mouseY) {
+    private void renderSlotFrame(GuiGraphicsExtractor graphics, BlueprintRect slot) {
+        int right = slot.x() + slot.width();
+        int bottom = slot.y() + slot.height();
+        graphics.fill(slot.x(), slot.y(), right, bottom, SLOT_FRAME_DARK);
+        graphics.fill(slot.x(), slot.y(), right, slot.y() + 1, SLOT_FRAME_LIGHT);
+        graphics.fill(slot.x(), slot.y(), slot.x() + 1, bottom, SLOT_FRAME_LIGHT);
+        graphics.fill(slot.x(), bottom - 1, right, bottom, 0xFFFFFFFF);
+        graphics.fill(right - 1, slot.y(), right, bottom, 0xFFFFFFFF);
+    }
+
+    private void renderMaterialCount(GuiGraphicsExtractor graphics, ItemStack iconStack, long count, int x, int y) {
+        String quantity = ReadableNumber.formatForSlot(count, 0, "");
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(x + 8, y + 8);
+        graphics.pose().scale(MATERIAL_QUANTITY_SCALE, MATERIAL_QUANTITY_SCALE);
+        graphics.itemDecorations(font, iconStack, 0, 0, quantity);
+        graphics.pose().popMatrix();
+    }
+
+    private void beginMaterialScrollbarDrag(MouseButtonEvent event, BlueprintLayout currentLayout) {
+        List<Entry> entries = panel.materials().entries();
+        int totalRows = materialRows(entries);
+        int visibleRows = visibleMaterialRows(currentLayout);
+        BlueprintRect scrollbar = materialScrollbarRect(currentLayout);
+        int handleHeight = Math.max(1, Math.round(SCROLLBAR_HANDLE_HEIGHT * currentLayout.scale()));
+        materialScrollOffset = clampScrollOffset(materialScrollOffset, totalRows, visibleRows);
+        draggingMaterialScrollbar = totalRows > visibleRows;
+        materialScrollbarDragOffsetY = Math.clamp((int) event.y()
+                - scrollbarHandleY(materialScrollOffset, totalRows, visibleRows, scrollbar.y(), scrollbar.height(), handleHeight),
+                0, handleHeight);
+        materialScrollOffset = materialScrollOffsetFrom(event.y(), currentLayout);
+    }
+
+    private void beginCandidateScrollbarDrag(MouseButtonEvent event, BlueprintLayout currentLayout) {
+        List<Candidate> candidates = panel.selectedCandidates();
+        int totalRows = candidateRows(candidates);
+        int visibleRows = visibleCandidateRows(currentLayout);
+        BlueprintRect scrollbar = candidateScrollbarRect(currentLayout);
+        int handleHeight = Math.max(1, Math.round(SCROLLBAR_HANDLE_HEIGHT * currentLayout.scale()));
+        candidateScrollOffset = clampScrollOffset(candidateScrollOffset, totalRows, visibleRows);
+        draggingCandidateScrollbar = totalRows > visibleRows;
+        candidateScrollbarDragOffsetY = Math.clamp((int) event.y()
+                - scrollbarHandleY(candidateScrollOffset, totalRows, visibleRows, scrollbar.y(), scrollbar.height(), handleHeight),
+                0, handleHeight);
+        candidateScrollOffset = candidateScrollOffsetFrom(event.y(), currentLayout);
+    }
+
+    private void scrollMaterials(double scrollY, BlueprintLayout currentLayout) {
+        List<Entry> entries = panel.materials().entries();
+        materialScrollOffset = clampScrollOffset(materialScrollOffset - (int) Math.signum(scrollY),
+                materialRows(entries), visibleMaterialRows(currentLayout));
+    }
+
+    private void scrollCandidates(double scrollY, BlueprintLayout currentLayout) {
+        List<Candidate> candidates = panel.selectedCandidates();
+        candidateScrollOffset = clampScrollOffset(candidateScrollOffset - (int) Math.signum(scrollY),
+                candidateRows(candidates), visibleCandidateRows(currentLayout));
+    }
+
+    private int materialScrollOffsetFrom(double mouseY, BlueprintLayout currentLayout) {
+        List<Entry> entries = panel.materials().entries();
+        BlueprintRect scrollbar = materialScrollbarRect(currentLayout);
+        return scrollOffsetFromScrollbarY((int) mouseY, materialRows(entries), visibleMaterialRows(currentLayout),
+                scrollbar.y(), scrollbar.height(), Math.max(1, Math.round(SCROLLBAR_HANDLE_HEIGHT * currentLayout.scale())),
+                materialScrollbarDragOffsetY);
+    }
+
+    private int candidateScrollOffsetFrom(double mouseY, BlueprintLayout currentLayout) {
+        List<Candidate> candidates = panel.selectedCandidates();
+        BlueprintRect scrollbar = candidateScrollbarRect(currentLayout);
+        return scrollOffsetFromScrollbarY((int) mouseY, candidateRows(candidates), visibleCandidateRows(currentLayout),
+                scrollbar.y(), scrollbar.height(), Math.max(1, Math.round(SCROLLBAR_HANDLE_HEIGHT * currentLayout.scale())),
+                candidateScrollbarDragOffsetY);
+    }
+
+    private boolean gridContains(BlueprintLayout currentLayout, double mouseX, double mouseY) {
         return currentLayout.candidates().contains(mouseX, mouseY) || currentLayout.materials().contains(mouseX, mouseY);
     }
 
+    private static int visibleMaterialRows(BlueprintLayout currentLayout) {
+        int height = (int) Math.round(localMouse(currentLayout.materials().height(), 0, currentLayout.scale()));
+        return Math.max(1, (height + MATERIAL_SLOT_GAP) / (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP));
+    }
+
+    private static int visibleCandidateRows(BlueprintLayout currentLayout) {
+        int height = (int) Math.round(localMouse(currentLayout.candidates().height(), 0, currentLayout.scale()));
+        return Math.max(1, (height + MATERIAL_SLOT_GAP) / (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP));
+    }
+
+    private static int materialRows(List<Entry> entries) {
+        return (entries.size() + MATERIAL_COLUMNS - 1) / MATERIAL_COLUMNS;
+    }
+
+    private static int candidateRows(List<Candidate> candidates) {
+        return (candidates.size() + CANDIDATE_COLUMNS - 1) / CANDIDATE_COLUMNS;
+    }
+
+    private static BlueprintRect materialSlotRect(BlueprintLayout currentLayout, int visible) {
+        BlueprintRect materials = currentLayout.materials();
+        int x = slotX(currentLayout, materials) + visible % MATERIAL_COLUMNS * (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP);
+        int y = slotY(currentLayout, materials) + visible / MATERIAL_COLUMNS * (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP);
+        return scaledRect(currentLayout.left(), currentLayout.top(), x, y,
+                MATERIAL_SLOT_SIZE, MATERIAL_SLOT_SIZE, currentLayout.scale());
+    }
+
+    private static BlueprintRect candidateSlotRect(BlueprintLayout currentLayout, int visible) {
+        BlueprintRect candidates = currentLayout.candidates();
+        int x = slotX(currentLayout, candidates) + visible % CANDIDATE_COLUMNS * (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP);
+        int y = slotY(currentLayout, candidates) + visible / CANDIDATE_COLUMNS * (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP);
+        return scaledRect(currentLayout.left(), currentLayout.top(), x, y,
+                MATERIAL_SLOT_SIZE, MATERIAL_SLOT_SIZE, currentLayout.scale());
+    }
+
+    private static BlueprintRect materialScrollbarRect(BlueprintLayout currentLayout) {
+        BlueprintRect materials = currentLayout.materials();
+        return scaledRect(currentLayout.left(), currentLayout.top(),
+                slotX(currentLayout, materials) + (int) Math.round(localMouse(materials.width(), 0, currentLayout.scale())),
+                slotY(currentLayout, materials), SCROLLBAR_WIDTH,
+                (int) Math.round(localMouse(materials.height(), 0, currentLayout.scale())), currentLayout.scale());
+    }
+
+    private static BlueprintRect candidateScrollbarRect(BlueprintLayout currentLayout) {
+        BlueprintRect candidates = currentLayout.candidates();
+        return scaledRect(currentLayout.left(), currentLayout.top(),
+                slotX(currentLayout, candidates) + (int) Math.round(localMouse(candidates.width(), 0, currentLayout.scale()))
+                        - SCROLLBAR_WIDTH,
+                slotY(currentLayout, candidates), SCROLLBAR_WIDTH,
+                (int) Math.round(localMouse(candidates.height(), 0, currentLayout.scale())), currentLayout.scale());
+    }
+
     static BlueprintRect slotRect(BlueprintLayout currentLayout, BlueprintRect row, int slot) {
-        int baseX = (int) Math.round(localMouse(row.x(), currentLayout.left(), currentLayout.scale())) + slot * SLOT_SIZE;
-        int baseY = (int) Math.round(localMouse(row.y(), currentLayout.top(), currentLayout.scale()));
-        return scaledRect(currentLayout.left(), currentLayout.top(), baseX, baseY, SLOT_SIZE, SLOT_SIZE, currentLayout.scale());
+        return scaledRect(currentLayout.left(), currentLayout.top(),
+                slotX(currentLayout, row) + slot * (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP), slotY(currentLayout, row),
+                MATERIAL_SLOT_SIZE, MATERIAL_SLOT_SIZE, currentLayout.scale());
+    }
+
+    private static int slotX(BlueprintLayout currentLayout, BlueprintRect slot) {
+        return (int) Math.round(localMouse(slot.x(), currentLayout.left(), currentLayout.scale()));
+    }
+
+    private static int slotY(BlueprintLayout currentLayout, BlueprintRect slot) {
+        return (int) Math.round(localMouse(slot.y(), currentLayout.top(), currentLayout.scale()));
     }
 
     private double previewX(double mouseX) {
