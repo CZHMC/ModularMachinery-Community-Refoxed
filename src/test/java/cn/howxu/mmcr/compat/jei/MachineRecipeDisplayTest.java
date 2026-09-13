@@ -162,6 +162,21 @@ class MachineRecipeDisplayTest {
         assertThat(display.smartInterfaceInputs()).singleElement()
                 .extracting(MachineRecipeDisplay.SmartInterfaceDisplay::value)
                 .isEqualTo("[1.0, 2.0]");
+        assertThat(display.machineId()).isEqualTo(machineId);
+    }
+
+    @Test
+    void shared_pool_recipe_is_grouped_under_a_registered_machine_category() {
+        RecipeRegistry.clearForTesting();
+        var machineId = MMCR.id("jei_shared_pool_machine");
+        var recipePoolId = MMCR.id("jei_shared_pool");
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("jei_shared_pool_recipe"), recipePoolId, 20,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+
+        assertThat(MachineRecipeDisplays.byMachine()).containsKey(machineId)
+                .doesNotContainKey(recipePoolId);
     }
 
     @Test
@@ -355,6 +370,8 @@ class MachineRecipeDisplayTest {
     @BeforeEach
     void resetMachineDefinitions() {
         MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(MMCR.id("blast_furnace")).build());
+        MachineDefinitions.register(MachineRegistration.builder(MMCR.id("other_machine")).build());
     }
 
     @Test

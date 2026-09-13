@@ -32,7 +32,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -367,6 +369,9 @@ class RecipeApiSmokeTest {
         var recipe = prepared.toMachineRecipe();
         assertThat(recipe.id().toString()).isEqualTo("mmcr:from_prepared");
         assertThat(recipe.recipePoolId().toString()).isEqualTo("mmcr:prep_machine");
+        assertThat(Arrays.stream(PreparedRecipe.class.getMethods()).map(Method::getName))
+                .contains("getRecipePoolId")
+                .doesNotContain("getMachineId");
         assertThat(recipe.tickTime()).isEqualTo(50);
         assertThat(recipe.priority()).isEqualTo(3);
         assertThat(recipe.maxThreads()).isEqualTo(2);

@@ -16,6 +16,8 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.network.chat.Component;
@@ -46,6 +48,7 @@ import java.util.OptionalDouble;
 import java.util.stream.Collectors;
 
 import java.util.stream.Stream;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Immutable JEI-facing view of a machine recipe.
@@ -55,7 +58,7 @@ import java.util.stream.Stream;
 public record MachineRecipeDisplay(
         MachineRecipe recipe,
         Identifier recipeId,
-        Identifier machineId,
+        @Nullable Identifier machineId,
         int durationTicks,
         List<ItemInputDisplay> itemInputs,
         List<ItemOutputDisplay> itemOutputs,
@@ -91,6 +94,7 @@ public record MachineRecipeDisplay(
         List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceOutputs = new ArrayList<>();
         var registration = representativeRegistration(recipe.recipePoolId());
+        Identifier machineId = representativeMachineId(recipe.recipePoolId());
         List<SmartInterfaceModifierDisplay> smartInterfaceModifiers = registration == null ? List.of()
                 : registration.smartInterfaceModifiers().stream().map(SmartInterfaceModifierDisplay::from).toList();
         List<MachineRequirement> requirements = recipe.runtimeRequirements();
@@ -137,7 +141,7 @@ public record MachineRecipeDisplay(
         return new MachineRecipeDisplay(
                 recipe,
                 recipe.id(),
-                recipe.recipePoolId(),
+                machineId,
                 recipe.tickTime(),
                 List.copyOf(itemInputs),
                 List.copyOf(itemOutputs),
@@ -165,6 +169,17 @@ public record MachineRecipeDisplay(
         if (recipePoolId == null) return null;
         return MachineDefinitions.allRegistrations().stream()
                 .filter(registration -> recipePoolId.equals(registration.recipePoolId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static @Nullable Identifier representativeMachineId(Identifier recipePoolId) {
+        MachineRegistration registration = representativeRegistration(recipePoolId);
+        if (registration != null) return registration.id();
+        return MachineRegistry.getAll().values().stream()
+                .filter(machine -> recipePoolId != null
+                        && recipePoolId.equals(MachineRegistry.recipePoolForMachine(machine)))
+                .map(Machine::registryName)
                 .findFirst()
                 .orElse(null);
     }

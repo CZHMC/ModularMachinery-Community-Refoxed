@@ -167,6 +167,43 @@ class MachineRecipeDataDrivenTest {
     }
 
     @Test
+    void generic_codec_rejects_legacy_machine_when_recipe_pool_is_present() {
+        JsonObject json = recipeJson();
+        json.addProperty("machine", "mmcr:legacy_machine");
+
+        var decoded = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .contains("machine");
+    }
+
+    @Test
+    void serializer_rejects_legacy_machine_when_both_fields_are_present() {
+        JsonObject json = recipeJson();
+        json.addProperty("machine", "mmcr:legacy_machine");
+
+        var decoded = MachineRecipeSerializer.INSTANCE.codec().codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .contains("machine");
+    }
+
+    @Test
+    void missing_recipe_pool_keeps_the_required_field_diagnostic() {
+        JsonObject json = recipeJson();
+        json.remove("recipe_pool");
+        json.addProperty("machine", "mmcr:legacy_machine");
+
+        var decoded = MachineRecipe.CODEC.codec().parse(JsonOps.INSTANCE, json);
+
+        assertThat(decoded.error()).isPresent()
+                .get().extracting(error -> error.message()).asString()
+                .contains("recipe_pool");
+    }
+
+    @Test
     void removed_machine_outputs_field_is_rejected() {
         JsonObject json = recipeJson();
         JsonObject output = new JsonObject();

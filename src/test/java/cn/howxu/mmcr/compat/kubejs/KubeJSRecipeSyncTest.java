@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
@@ -12,6 +13,9 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.resources.Identifier;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -115,5 +119,21 @@ class KubeJSRecipeSyncTest {
 
         assertThat(RecipeRegistry.getRecipe(explicitId)).isNull();
         assertThat(RecipeRegistry.getRecipe(generatedId)).isNull();
+    }
+
+    @Test
+    void legacy_json_is_rejected_before_kubejs_recipe_sync_can_publish_it() {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "mmcr:machine_recipe");
+        json.addProperty("recipe_pool", "mmcr:machine");
+        json.addProperty("machine", "mmcr:legacy_machine");
+        json.addProperty("tick_time", 20);
+        json.add("requirements", new JsonArray());
+
+        var decoded = MachineRecipeSerializer.INSTANCE.codec().codec().parse(JsonOps.INSTANCE, json);
+        KubeJSRecipeSync.replaceDataPackRecipes(List.of());
+
+        assertThat(decoded.error()).isPresent();
+        assertThat(RecipeRegistry.kubeJSSnapshot()).isEmpty();
     }
 }

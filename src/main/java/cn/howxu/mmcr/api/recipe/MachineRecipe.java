@@ -11,7 +11,9 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.ListBuilder;
+import com.mojang.serialization.MapLike;
 import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.RecordBuilder;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.resources.Identifier;
@@ -32,13 +34,14 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.Objects;
 import java.util.LinkedHashSet;
+import java.util.stream.Stream;
 
 public final class MachineRecipe implements Recipe<RecipeInput> {
 
     static final int MAX_LIST_ENTRIES = 4096;
     static final int MAX_CHILD_PAYLOAD = 1_000_000;
 
-    public static final MapCodec<MachineRecipe> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+    private static final MapCodec<MachineRecipe> CANONICAL_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Identifier.CODEC.optionalFieldOf("id", MMCR.id("generated_recipe")).forGetter(MachineRecipe::id),
             Identifier.CODEC.fieldOf("recipe_pool").forGetter(MachineRecipe::recipePoolId),
             Codec.INT.fieldOf("tick_time").forGetter(MachineRecipe::tickTime),
@@ -54,6 +57,26 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             boundedList(Identifier.CODEC, "required_host_ids").xmap(MachineRecipe::copyHostIds, List::copyOf)
             .optionalFieldOf("required_host_ids", Set.of()).forGetter(MachineRecipe::requiredHostIds)
     ).apply(instance, MachineRecipe::create));
+
+    public static final MapCodec<MachineRecipe> CODEC = new MapCodec<>() {
+        @Override
+        public <T> DataResult<MachineRecipe> decode(DynamicOps<T> ops, MapLike<T> input) {
+            if (input.get("machine") != null && input.get("recipe_pool") != null) {
+                return DataResult.error(() -> "Legacy field 'machine' is not supported; use 'recipe_pool'");
+            }
+            return CANONICAL_CODEC.decode(ops, input);
+        }
+
+        @Override
+        public <T> RecordBuilder<T> encode(MachineRecipe input, DynamicOps<T> ops, RecordBuilder<T> prefix) {
+            return CANONICAL_CODEC.encode(input, ops, prefix);
+        }
+
+        @Override
+        public <T> Stream<T> keys(DynamicOps<T> ops) {
+            return CANONICAL_CODEC.keys(ops);
+        }
+    };
 
     private final Identifier id;
     private final Identifier recipePoolId;

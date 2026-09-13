@@ -49,6 +49,18 @@ class MachineRegistryTest {
     }
 
     @Test
+    void recipe_pool_presence_uses_configured_pool_instead_of_machine_id() {
+        Identifier machineId = Identifier.parse("mmcr:registered_machine");
+        Identifier recipePoolId = Identifier.parse("mmcr:registered_pool");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
+        MachineRegistry.register(new DynamicMachine(machineId, "Registered", new BlockArray(Map.of())));
+
+        assertThat(MachineRegistry.containsRecipePool(recipePoolId)).isTrue();
+        assertThat(MachineRegistry.containsRecipePool(machineId)).isFalse();
+    }
+
+    @Test
     void effective_snapshot_is_reused_until_registry_changes() {
         MachineRegistry.clearForTesting();
         var first = new DynamicMachine(Identifier.parse("mmcr:first"), "First", new BlockArray(Map.of()));

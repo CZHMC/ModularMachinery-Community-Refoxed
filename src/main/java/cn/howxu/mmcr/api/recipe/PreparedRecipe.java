@@ -15,7 +15,7 @@ import java.util.Set;
 public final class PreparedRecipe {
 
     private final String registryName;
-    private final String machineId;
+    private final String recipePoolId;
     private int tickTime;
     private final List<MachineIngredient> inputs;
     private final List<ItemStack> outputs;
@@ -28,26 +28,26 @@ public final class PreparedRecipe {
     private boolean allowPartialOutputs;
 
     public PreparedRecipe(String registryName,
-                          String machineId,
+                          String recipePoolId,
                           int tickTime,
                           List<MachineIngredient> inputs,
                           List<ItemStack> outputs) {
-        this(registryName, machineId, tickTime, inputs, outputs, Collections.emptyList(), 0, 1);
+        this(registryName, recipePoolId, tickTime, inputs, outputs, Collections.emptyList(), 0, 1);
     }
 
     public PreparedRecipe(String registryName,
-                          String machineId,
+                          String recipePoolId,
                           int tickTime,
                           List<MachineIngredient> inputs,
                           List<ItemStack> outputs,
                           List<RecipeModifier> modifiers,
                           int priority,
                           int maxThreads) {
-        this(registryName, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, false);
+        this(registryName, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads, false);
     }
 
     public PreparedRecipe(String registryName,
-                          String machineId,
+                          String recipePoolId,
                           int tickTime,
                           List<MachineIngredient> inputs,
                           List<ItemStack> outputs,
@@ -55,11 +55,11 @@ public final class PreparedRecipe {
                           int priority,
                           int maxThreads,
                           boolean cancelRecipeOnPerTickFailure) {
-        this(registryName, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, Collections.emptyList());
+        this(registryName, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, Collections.emptyList());
     }
 
     public PreparedRecipe(String registryName,
-                          String machineId,
+                          String recipePoolId,
                           int tickTime,
                           List<MachineIngredient> inputs,
                           List<ItemStack> outputs,
@@ -68,11 +68,11 @@ public final class PreparedRecipe {
                           int maxThreads,
                           boolean cancelRecipeOnPerTickFailure,
                           List<FluidStack> fluidOutputs) {
-        this(registryName, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, false);
+        this(registryName, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, false);
     }
 
     public PreparedRecipe(String registryName,
-                          String machineId,
+                          String recipePoolId,
                           int tickTime,
                           List<MachineIngredient> inputs,
                           List<ItemStack> outputs,
@@ -82,11 +82,11 @@ public final class PreparedRecipe {
                           boolean cancelRecipeOnPerTickFailure,
                           List<FluidStack> fluidOutputs,
                           boolean parallelized) {
-        this(registryName, machineId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, parallelized, false);
+        this(registryName, recipePoolId, tickTime, inputs, outputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure, fluidOutputs, parallelized, false);
     }
 
     public PreparedRecipe(String registryName,
-                          String machineId,
+                          String recipePoolId,
                           int tickTime,
                           List<MachineIngredient> inputs,
                           List<ItemStack> outputs,
@@ -98,7 +98,7 @@ public final class PreparedRecipe {
                           boolean parallelized,
                           boolean allowPartialOutputs) {
         this.registryName = registryName;
-        this.machineId = machineId;
+        this.recipePoolId = recipePoolId;
         this.tickTime = Math.max(1, tickTime);
         this.inputs = inputs == null ? Collections.emptyList() : List.copyOf(inputs);
         this.outputs = outputs == null ? Collections.emptyList() : List.copyOf(outputs);
@@ -115,8 +115,8 @@ public final class PreparedRecipe {
         return registryName;
     }
 
-    public String getMachineId() {
-        return machineId;
+    public String getRecipePoolId() {
+        return recipePoolId;
     }
 
     public int getTickTime() {
@@ -191,7 +191,7 @@ public final class PreparedRecipe {
         List<MachineOutput> canonicalOutputs = new ArrayList<>();
         outputs.forEach(output -> canonicalOutputs.add(new MachineOutput.ItemOutput(output, 1F)));
         fluidOutputs.forEach(output -> canonicalOutputs.add(new MachineOutput.FluidOutput(output, 1F)));
-        return MachineRecipe.fromCanonical(Identifier.parse(registryName), Identifier.parse(machineId), tickTime,
+        return MachineRecipe.fromCanonical(Identifier.parse(registryName), Identifier.parse(recipePoolId), tickTime,
                 requirements, canonicalOutputs, modifiers, priority, maxThreads, cancelRecipeOnPerTickFailure,
                 parallelized, List.of(), allowPartialOutputs, Set.of());
     }

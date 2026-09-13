@@ -76,9 +76,10 @@ public final class MachineRegistry {
 
     public static boolean containsRecipePool(Identifier recipePoolId) {
         if (recipePoolId == null) return false;
-        if (getMachine(recipePoolId) != null) return true;
-        return MachineDefinitions.allRegistrations().stream()
-                .anyMatch(registration -> recipePoolId.equals(registration.recipePoolId()));
+        if (MachineDefinitions.allRegistrations().stream()
+                .anyMatch(registration -> recipePoolId.equals(registration.recipePoolId()))) return true;
+        return EFFECTIVE_MACHINES.values().stream()
+                .anyMatch(machine -> recipePoolId.equals(recipePoolForMachine(machine)));
     }
 
     public static void installStructures(Map<Identifier, MachineStructureDefinition> structures) {
