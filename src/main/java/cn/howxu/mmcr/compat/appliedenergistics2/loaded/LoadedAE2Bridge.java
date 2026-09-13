@@ -4,6 +4,7 @@ import appeng.api.AECapabilities;
 import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.locator.MenuLocators;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeComponentProvider;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeDataProvider;
@@ -41,7 +42,13 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     private static final String OUTPUT_INTERFACE_ID = "ae2_me_output_interface";
     private static final String ASYNC_OUTPUT_INTERFACE_ID = "ae2_me_async_output_interface";
     private static final Identifier INTERFACE_OVERLAY_TEXTURE =
-            Identifier.fromNamespaceAndPath("ae2", "block/interface");
+            MMCR.id("block/appliedenergistics2/ae2_input");
+    private static final Identifier STOCKING_INTERFACE_OVERLAY_TEXTURE =
+            MMCR.id("block/appliedenergistics2/ae2_stocking_input");
+    private static final Identifier OUTPUT_INTERFACE_OVERLAY_TEXTURE =
+            MMCR.id("block/appliedenergistics2/ae2_output");
+    private static final Identifier ASYNC_OUTPUT_INTERFACE_OVERLAY_TEXTURE =
+            MMCR.id("block/appliedenergistics2/ae2_async_output");
 
     @Override
     public boolean available() {
@@ -84,7 +91,11 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public Identifier portOverlayTexture(IOPortKind kind) {
-        return isPort(kind.id()) ? INTERFACE_OVERLAY_TEXTURE : null;
+        if (kind instanceof InputInterfaceKind) return INTERFACE_OVERLAY_TEXTURE;
+        if (kind instanceof StockingInterfaceKind) return STOCKING_INTERFACE_OVERLAY_TEXTURE;
+        if (kind instanceof OutputInterfaceKind) return OUTPUT_INTERFACE_OVERLAY_TEXTURE;
+        if (kind instanceof AsyncOutputInterfaceKind) return ASYNC_OUTPUT_INTERFACE_OVERLAY_TEXTURE;
+        return null;
     }
 
     @Override
