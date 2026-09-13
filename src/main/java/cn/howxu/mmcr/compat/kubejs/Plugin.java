@@ -117,7 +117,7 @@ public class Plugin implements KubeJSPlugin {
                                               Consumer<RuntimeContentSnapshot> afterCommit) {
         ServerReload reload = SERVER_RELOADS.remove(manager);
         try {
-            if (reload != null && (errorCount == reload.errorCount() || !reload.transaction().isEmpty())) {
+            if (reload != null && (errorCount == reload.errorCount() || reload.transaction().hasPublishableContent())) {
                 var committed = reload.transaction().commit();
                 committed.result().errors().forEach(error -> MMCR.LOG.warn(
                         "Skipping KubeJS recipe {} at {}: {}", error.recipeId(), error.path(), error.getMessage()));

@@ -16,6 +16,7 @@ import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Set;
 import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
@@ -82,6 +83,22 @@ public final class RuntimeContentCoordinator {
             Map<Identifier, MachineRecipe> recipes) {
         synchronized (RuntimeContentVersion.lock()) {
             return commitDynamicLocked(structures, recipes);
+        }
+    }
+
+    public static boolean hasPublishableDynamicContent(
+            Map<Identifier, MachineStructureDefinition> structures,
+            Map<Identifier, MachineRecipe> recipes,
+            Set<Identifier> transactionStructureIds,
+            Set<Identifier> transactionRecipeIds) {
+        synchronized (RuntimeContentVersion.lock()) {
+            Map<Identifier, MachineStructureDefinition> structureCandidate = Map.copyOf(new LinkedHashMap<>(structures));
+            Map<Identifier, MachineRecipe> recipeCandidate = Map.copyOf(new LinkedHashMap<>(recipes));
+            validate(structureCandidate, recipeCandidate);
+            if (!transactionStructureIds.isEmpty()) return true;
+            return RecipeRegistry.validateDynamicCandidate(recipeCandidate,
+                            poolId -> recipePoolAvailable(poolId, structureCandidate))
+                    .acceptedRecipes().keySet().stream().anyMatch(transactionRecipeIds::contains);
         }
     }
 

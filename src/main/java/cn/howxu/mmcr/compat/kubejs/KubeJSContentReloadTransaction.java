@@ -71,18 +71,42 @@ final class KubeJSContentReloadTransaction {
         }
     }
 
-    boolean isEmpty() {
-        return structures.isEmpty() && recipes.isEmpty();
+    boolean hasPublishableContent() {
+        PreparedContent content = prepareContent();
+        return RuntimeContentCoordinator.hasPublishableDynamicContent(content.structures(), content.recipes(),
+                structures.keySet(), content.transactionRecipes().keySet());
     }
 
     RuntimeContentCoordinator.CommitResult commit() {
-        Map<Identifier, MachineStructureDefinition> mergedStructures = new LinkedHashMap<>(
-                MachineStructureRegistry.dynamicSnapshot());
+        PreparedContent content = prepareContent();
+        RuntimeContentCoordinator.CommitResult committed = RuntimeContentCoordinator.commitDynamicAndSnapshot(
+                content.structures(), content.recipes());
+        if (!content.errors().isEmpty()) {
+            DynamicContentReloadService.ReloadResult result = committed.result();
+            List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>(result.errors());
+            errors.addAll(content.errors());
+            committed = new RuntimeContentCoordinator.CommitResult(
+                    new DynamicContentReloadService.ReloadResult(result.addedStructures(), result.updatedStructures(),
+                            result.removedStructures(), result.addedRecipes(), result.updatedRecipes(),
+                            result.removedRecipes(), errors), committed.snapshot());
+        }
+        Map<Identifier, MachineRecipe> validRecipes = new LinkedHashMap<>(content.transactionRecipes());
+        committed.result().errors().forEach(error -> validRecipes.remove(error.recipeId()));
+        publishedStructures = Map.copyOf(structures);
+        publishedRecipes = Map.copyOf(validRecipes);
+        return committed;
+    }
+
+    private PreparedContent prepareContent() {
+        Map<Identifier, MachineStructureDefinition> previousStructures = MachineStructureRegistry.dynamicSnapshot();
+        Map<Identifier, MachineStructureDefinition> mergedStructures = new LinkedHashMap<>(previousStructures);
         removePublishedStructures(mergedStructures);
         mergedStructures.putAll(structures);
-        Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
+        Map<Identifier, MachineRecipe> previousRecipes = RecipeRegistry.dynamicSnapshot();
+        Map<Identifier, MachineRecipe> mergedRecipes = new LinkedHashMap<>(previousRecipes);
         removePublishedRecipes(mergedRecipes);
         List<MachineRecipeJson.RecipeJsonException> transactionErrors = new ArrayList<>();
+        Map<Identifier, MachineRecipe> transactionRecipes = new LinkedHashMap<>();
         for (Map.Entry<Identifier, MachineRecipe> entry : recipes.entrySet()) {
             Identifier id = entry.getKey();
             MachineRecipe recipe = entry.getValue();
@@ -95,23 +119,15 @@ final class KubeJSContentReloadTransaction {
                 continue;
             }
             mergedRecipes.put(id, recipe);
+            transactionRecipes.put(id, recipe);
         }
-        RuntimeContentCoordinator.CommitResult committed =
-                RuntimeContentCoordinator.commitDynamicAndSnapshot(mergedStructures, mergedRecipes);
-        if (!transactionErrors.isEmpty()) {
-            DynamicContentReloadService.ReloadResult result = committed.result();
-            List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>(result.errors());
-            errors.addAll(transactionErrors);
-            committed = new RuntimeContentCoordinator.CommitResult(
-                    new DynamicContentReloadService.ReloadResult(result.addedStructures(), result.updatedStructures(),
-                            result.removedStructures(), result.addedRecipes(), result.updatedRecipes(),
-                            result.removedRecipes(), errors), committed.snapshot());
-        }
-        publishedStructures = Map.copyOf(structures);
-        Map<Identifier, MachineRecipe> validRecipes = new LinkedHashMap<>(recipes);
-        committed.result().errors().forEach(error -> validRecipes.remove(error.recipeId()));
-        publishedRecipes = Map.copyOf(validRecipes);
-        return committed;
+        return new PreparedContent(mergedStructures, mergedRecipes, transactionRecipes, transactionErrors);
+    }
+
+    private record PreparedContent(Map<Identifier, MachineStructureDefinition> structures,
+                                   Map<Identifier, MachineRecipe> recipes,
+                                   Map<Identifier, MachineRecipe> transactionRecipes,
+                                   List<MachineRecipeJson.RecipeJsonException> errors) {
     }
 
     private static void removePublishedStructures(Map<Identifier, MachineStructureDefinition> mergedStructures) {

@@ -129,9 +129,13 @@ class PluginBindingTest {
         transaction.registerRecipe(RecipeTestSupport.create(orphanRecipeId,
                 MMCR.id("missing_recipe_pool"), 1, List.of(), List.of()));
 
-        transaction.commit();
+        var committed = transaction.commit();
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId).doesNotContainKey(orphanRecipeId);
+        assertThat(committed.result().errors()).singleElement().satisfies(error -> {
+            assertThat(error.recipeId()).isEqualTo(orphanRecipeId);
+            assertThat(error.path()).isEqualTo("recipe_pool");
+        });
     }
 
     @Test
@@ -463,6 +467,33 @@ class PluginBindingTest {
         Plugin.completeServerReload(reload, 1);
 
         assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId).doesNotContainKey(invalidRecipeId);
+    }
+
+    @Test
+    void invalid_only_recipe_reload_preserves_previous_snapshot() {
+        var machineId = MMCR.id("test_machine_name");
+        var externalMachineId = MMCR.id("cracker");
+        var previousRecipeId = MMCR.id("kubejs_previous_recipe_before_invalid_reload");
+        var invalidRecipeId = MMCR.id("kubejs_invalid_only_recipe");
+        var previous = new KubeJSContentReloadTransaction();
+        previous.registerStructure(structure(machineId));
+        previous.registerRecipe(RecipeTestSupport.create(previousRecipeId, machineId, 1, List.of(), List.of()));
+        previous.commit();
+        MachineStructureRegistry.replaceDynamic(Map.of(machineId, structure(machineId),
+                externalMachineId, structure(externalMachineId)));
+        var previousStructures = MachineStructureRegistry.dynamicSnapshot();
+        var previousRecipes = RecipeRegistry.dynamicSnapshot();
+        long previousVersion = RuntimeContentVersion.current();
+
+        var reload = new Object();
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
+                invalidRecipeId, MMCR.id("missing_recipe_pool"), 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 1);
+
+        assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+        assertThat(RuntimeContentVersion.current()).isEqualTo(previousVersion);
     }
 
     @Test
