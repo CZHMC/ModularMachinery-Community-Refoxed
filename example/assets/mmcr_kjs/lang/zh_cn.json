@@ -68,5 +68,23 @@
 
     "block.mmcr.kubejs_sps_controller": "SPS 控制器",
     "item.mmcr.kubejs_sps_controller": "SPS 控制器",
-    "machine.mmcr_kubejs.kubejs_sps": "SPS"
+    "machine.mmcr_kubejs.kubejs_sps": "SPS",
+
+    "recipe_pool.mmcr_kubejs.kubejs_alloy_furnace": "合金炉",
+    "recipe_pool.mmcr_kubejs.kubejs_blast_furnace": "高炉",
+    "recipe_pool.mmcr_kubejs.kubejs_cracker": "裂化器",
+    "recipe_pool.mmcr_kubejs.kubejs_distillation_tower": "蒸馏塔",
+    "recipe_pool.mmcr_kubejs.kubejs_purpur_furnace": "紫珀炉",
+    "recipe_pool.mmcr_kubejs.kubejs_reactor": "反应堆",
+    "recipe_pool.mmcr_kubejs.kubejs_thermal_smelting_furnace": "热能冶炼炉",
+    "recipe_pool.mmcr_kubejs.kubejs_space_elevator": "太空电梯",
+    "recipe_pool.mmcr_kubejs.kubejs_space_reassembler": "太空重组器",
+    "recipe_pool.mmcr_kubejs.kubejs_monster_farm": "怪物农场",
+    "recipe_pool.mmcr_kubejs.gzr": "四元方悔血炼池",
+    "recipe_pool.mmcr_kubejs.kubejs_recipe_ticker": "配方Tick测试",
+    "recipe_pool.mmcr_kubejs.kubejs_pure_tick_machine": "Pure Tick测试",
+    "recipe_pool.mmcr_kubejs.kubejs_data_storage_machine": "Data Storage测试",
+    "recipe_pool.mmcr_kubejs.kubejs_network_producer_machine": "算力生产者",
+    "recipe_pool.mmcr_kubejs.kubejs_network_center_machine": "算力中心",
+    "recipe_pool.mmcr_kubejs.kubejs_sps": "SPS"
 }

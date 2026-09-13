@@ -35,6 +35,7 @@ public class ALLOY_FURNACE {
         if (!event.definitions().containsKey(ALLOY_FURNACE)) {
             var machine = MachineBuilder
                     .machine(ALLOY_FURNACE)
+                    .recipePool(ALLOY_FURNACE)
                     .allowModifiers()
                     .displayNameKey("machine.mmcr.alloy_furnace")
                     .appearance(appearance -> appearance.machineBasicBlock(Identifier.parse("minecraft:bricks")))

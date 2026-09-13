@@ -31,6 +31,7 @@ public class REACTOR {
         if (!event.definitions().containsKey(REACTOR)) {
             var machine = MachineBuilder
                     .machine(REACTOR)
+                    .recipePool(REACTOR)
                     .displayNameKey("machine.mmcr.reactor")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:blue_ice")))
                     .build();

@@ -56,6 +56,7 @@ public class PURE_TICK_MACHINE {
         if (!event.definitions().containsKey(PURE_TICK_MACHINE)) {
             var machine = MachineBuilder
                     .machine(PURE_TICK_MACHINE)
+                    .recipePool(PURE_TICK_MACHINE)
                     .displayNameKey("machine.mmcr.pure_tick_machine")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:green_terracotta")))
                     .allowMultithreading()

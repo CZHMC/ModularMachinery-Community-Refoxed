@@ -170,6 +170,18 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void recipe_pool_is_the_only_machine_recipe_ownership_builder_api() {
+        assertThat(new MachineBuilderJS("mmcr:pooled_machine")
+                .recipePool("mmcr:shared_pool")
+                .createObject().recipePoolId()).isEqualTo(Identifier.parse("mmcr:shared_pool"));
+        assertThat(new MachineBuilderJS("mmcr:default_pool_machine")
+                .createObject().recipePoolId()).isEqualTo(Identifier.parse("mmcr:default_pool_machine"));
+        assertThat(List.of(MachineBuilderJS.class.getMethods()))
+                .extracting(Method::getName)
+                .doesNotContain("recipeFamily");
+    }
+
+    @Test
     void startup_builder_sets_controller_tooltip_lines() {
         var registration = new MachineBuilderJS(MMCR.id("arc_furnace"))
                 .controllerTooltip("tooltip.mmcr.arc_furnace.0", "tooltip.mmcr.arc_furnace.1")

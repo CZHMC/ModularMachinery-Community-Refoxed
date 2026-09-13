@@ -43,6 +43,7 @@ public class THERMAL_SMELTING_FURNACE {
         if (!event.definitions().containsKey(THERMAL_SMELTING_FURNACE)) {
             var machine = MachineBuilder
                     .machine(THERMAL_SMELTING_FURNACE)
+                    .recipePool(THERMAL_SMELTING_FURNACE)
                     .displayNameKey("machine.mmcr.thermal_smelting_furnace")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:smooth_basalt")))
                     .parallelizable(true)

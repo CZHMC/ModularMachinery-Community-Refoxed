@@ -23,6 +23,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -110,6 +111,22 @@ class MachineRecipeSchemaTest {
         assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.REQUIREMENTS.component).allowEmpty()).isTrue();
         assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.OUTPUTS.component).allowEmpty()).isTrue();
         assertThat(((ListRecipeComponent<?>) MachineRecipeSchema.MODIFIERS.component).allowEmpty()).isTrue();
+    }
+
+    @Test
+    void schema_requires_recipe_pool_and_rejects_legacy_machine_field() {
+        JsonObject missingPool = new JsonObject();
+        missingPool.addProperty("type", "mmcr:machine_recipe");
+        missingPool.addProperty("tick_time", 20);
+        missingPool.add("requirements", new JsonArray());
+        JsonObject legacyMachine = missingPool.deepCopy();
+        legacyMachine.addProperty("machine", "mmcr:legacy_machine");
+
+        assertThat(MachineRecipeSerializer.INSTANCE.codec().codec().parse(JsonOps.INSTANCE, missingPool).error())
+                .isPresent();
+        assertThat(MachineRecipeSerializer.INSTANCE.codec().codec().parse(JsonOps.INSTANCE, legacyMachine).error())
+                .hasValueSatisfying(error -> assertThat(error.message())
+                        .contains("Legacy field 'machine' is not supported; use 'recipe_pool'"));
     }
 
     @Test

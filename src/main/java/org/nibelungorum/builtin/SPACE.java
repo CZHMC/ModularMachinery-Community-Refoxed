@@ -34,6 +34,7 @@ public class SPACE {
         if (!event.definitions().containsKey(SPACE_ELEVATOR) && !event.definitions().containsKey(SPACE_REASSEMBLER)) {
             var machine = MachineBuilder
                     .machine(SPACE_ELEVATOR)
+                    .recipePool(SPACE_ELEVATOR)
                     .displayNameKey("machine.mmcr.space_elevator")
                     .appearance(a -> a
                             .machineBasicBlock("smooth_quartz")
@@ -47,6 +48,7 @@ public class SPACE {
 
             machine = MachineBuilder
                     .machine(SPACE_REASSEMBLER)
+                    .recipePool(SPACE_REASSEMBLER)
                     .displayNameKey("machine.mmcr.space_reassembler")
                     .appearance(a -> a.machineBasicBlock("quartz_pillar"))
                     .role(MachineRole.MODULE)

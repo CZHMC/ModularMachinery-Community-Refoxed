@@ -30,6 +30,7 @@ public class PURPUR_FURNACE {
         if (!event.definitions().containsKey(PURPUR_FURNACE)) {
             var machine = MachineBuilder
                     .machine(PURPUR_FURNACE)
+                    .recipePool(PURPUR_FURNACE)
                     .displayNameKey("machine.mmcr.purpur_furnace")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("end_stone_bricks")))
                     .maxParallelism(32).parallelizable(true)

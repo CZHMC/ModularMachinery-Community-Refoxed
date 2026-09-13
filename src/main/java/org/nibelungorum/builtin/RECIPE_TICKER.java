@@ -59,6 +59,7 @@ public class RECIPE_TICKER {
         if (!event.definitions().containsKey(RECIPE_TICKER)) {
             var machine = MachineBuilder
                     .machine(RECIPE_TICKER)
+                    .recipePool(RECIPE_TICKER)
                     .displayNameKey("machine.mmcr.recipe_ticker")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:green_terracotta")))
                     .recipeBehavior(behavior -> behavior

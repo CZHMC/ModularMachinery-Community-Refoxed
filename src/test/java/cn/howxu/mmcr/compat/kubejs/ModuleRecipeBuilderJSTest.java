@@ -104,6 +104,22 @@ class ModuleRecipeBuilderJSTest {
     }
 
     @Test
+    void recipe_builder_requires_explicit_recipe_pool_without_machine_ownership_api() {
+        Identifier poolId = MMCR.id("explicit_recipe_pool");
+        MachineDefinitions.register(MachineRegistration.builder(poolId).build());
+
+        assertThat(new MachineRecipeBuilderJS("mmcr:explicit_pool_recipe")
+                .recipePool(poolId.toString())
+                .createObject().recipePoolId()).isEqualTo(poolId);
+        assertThatThrownBy(() -> new MachineRecipeBuilderJS("mmcr:missing_pool_recipe").createObject())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("recipePool() not called");
+        assertThat(List.of(MachineRecipeBuilderJS.class.getMethods()))
+                .extracting(java.lang.reflect.Method::getName)
+                .doesNotContain("machine");
+    }
+
+    @Test
     void create_object_preserves_complete_public_recipe_values() {
         Identifier machineId = MMCR.id("module_machine");
         MachineDefinitions.register(MachineRegistration.builder(machineId).build());

@@ -36,6 +36,7 @@ public class BLAST_FURNACE {
         if (!event.definitions().containsKey(BLAST_FURNACE)) {
             var machine = MachineBuilder
                     .machine(BLAST_FURNACE)
+                    .recipePool(BLAST_FURNACE)
                     .displayNameKey("machine.mmcr.blast_furnace")
                     .allowMultithreading()
                     .maxParallelism(Integer.MAX_VALUE)

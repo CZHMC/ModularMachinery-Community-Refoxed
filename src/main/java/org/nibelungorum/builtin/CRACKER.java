@@ -33,6 +33,7 @@ public class CRACKER {
         if (!event.definitions().containsKey(CRACKER)) {
             var machine = MachineBuilder
                     .machine(CRACKER)
+                    .recipePool(CRACKER)
                     .displayNameKey("machine.mmcr.cracker")
                     .controller(builder -> builder
                             .id(CRACKER.withSuffix("_controller"))

@@ -61,7 +61,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     public static final MapCodec<MachineRecipe> CODEC = new MapCodec<>() {
         @Override
         public <T> DataResult<MachineRecipe> decode(DynamicOps<T> ops, MapLike<T> input) {
-            if (input.get("machine") != null && input.get("recipe_pool") != null) {
+            if (input.get("machine") != null) {
                 return DataResult.error(() -> "Legacy field 'machine' is not supported; use 'recipe_pool'");
             }
             return CANONICAL_CODEC.decode(ops, input);

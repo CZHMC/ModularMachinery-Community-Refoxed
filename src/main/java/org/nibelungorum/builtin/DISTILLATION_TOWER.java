@@ -32,6 +32,7 @@ public class DISTILLATION_TOWER {
         if (!event.definitions().containsKey(DISTILLATION_TOWER)) {
             var machine = MachineBuilder
                     .machine(DISTILLATION_TOWER)
+                    .recipePool(DISTILLATION_TOWER)
                     .displayNameKey("machine.mmcr.distillation_tower")
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("polished_blackstone")))
                     .maxParallelism(32)
