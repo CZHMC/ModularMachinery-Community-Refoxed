@@ -2,6 +2,8 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.recipe.helper.CraftCheck;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -34,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -41,6 +44,7 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RecipeApiSmokeTest {
 
@@ -402,6 +406,43 @@ class RecipeApiSmokeTest {
     }
 
     @Test
+    void failure_adapters_map_every_requirement_failure_kind() {
+        assertThat(FailureAdapters.reason(RequirementFailure.Kind.MISSING_INPUT))
+                .isSameAs(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(FailureAdapters.reason(RequirementFailure.Kind.MISSING_OUTPUT))
+                .isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(FailureAdapters.reason(RequirementFailure.Kind.MISSING_ENERGY))
+                .isSameAs(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(FailureAdapters.reason(RequirementFailure.Kind.TAG_MISMATCH))
+                .isSameAs(BuiltinFailureReasons.TAG_MISMATCH);
+        assertThat(FailureAdapters.reason(RequirementFailure.Kind.COMMIT_LOST_INPUT))
+                .isSameAs(BuiltinFailureReasons.COMMIT_LOST_INPUT);
+        assertThat(FailureAdapters.reason(RequirementFailure.Kind.COMMIT_LOST_OUTPUT))
+                .isSameAs(BuiltinFailureReasons.COMMIT_LOST_OUTPUT);
+    }
+
+    @Test
+    void failure_adapter_copies_requirement_diagnostics_and_trace_index() {
+        RequirementFailure requirementFailure = new RequirementFailure(
+                2, RequirementFailure.Kind.MISSING_OUTPUT, 8L, 5L, 3L,
+                List.of("output_bus"), List.of("output_bus"));
+        var source = Identifier.fromNamespaceAndPath("mmcr", "craft_check");
+
+        var occurrence = FailureAdapters.occurrence(requirementFailure, source, FailurePhase.REQUIREMENT_PLAN);
+
+        assertThat(occurrence.reason()).isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(occurrence.details()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "required", "8", "available", "5", "short_amount", "3"));
+        assertThat(occurrence.trace().frames()).singleElement().satisfies(frame -> {
+            assertThat(frame.source()).isEqualTo(source);
+            assertThat(frame.phase()).isEqualTo(FailurePhase.REQUIREMENT_PLAN);
+            assertThat(frame.requirementIndex()).isEqualTo(2);
+        });
+        assertThatThrownBy(() -> occurrence.details().put("extra", "value"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
     void craft_check_reports_success_and_failure() {
         assertThat(CraftCheck.success().isSuccess()).isTrue();
         assertThat(CraftCheck.partialSuccess().isSuccess()).isFalse();
@@ -410,13 +451,28 @@ class RecipeApiSmokeTest {
     }
 
     @Test
+    void craft_check_converts_legacy_message_to_unknown_failure() {
+        var check = CraftCheck.failure("legacy.custom");
+
+        assertThat(check.isFailure()).isTrue();
+        assertThat(check.getFailure()).isNotNull();
+        assertThat(check.getFailure().reason()).isSameAs(BuiltinFailureReasons.UNKNOWN);
+        assertThat(check.getFailure().details()).containsEntry("legacy_message", "legacy.custom");
+        assertThat(check.getUnlocalizedMessage()).isEqualTo(BuiltinFailureReasons.UNKNOWN.translationKey());
+    }
+
+    @Test
     void craft_check_preserves_structured_requirement_failure() {
         var failure = new RequirementFailure(2, RequirementFailure.Kind.MISSING_OUTPUT, 8, 5);
 
         var check = CraftCheck.failure("no room", failure);
 
-        assertThat(check.getUnlocalizedMessage()).isEqualTo("no room");
-        assertThat(check.getRequirementFailure()).isEqualTo(failure);
+        assertThat(check.getUnlocalizedMessage()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT.translationKey());
+        assertThat(check.getFailure()).isNotNull();
+        assertThat(check.getFailure().reason()).isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(check.getFailure().details()).containsEntry("required", "8");
+        assertThat(check.getFailure().details()).containsEntry("available", "5");
+        assertThat(check.getFailure().details()).containsEntry("short_amount", "3");
     }
 
     @Test

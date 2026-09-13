@@ -2,11 +2,11 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailureReport;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -22,9 +22,7 @@ public record RecipeSearchResult(
         long modifierVersion,
         @Nullable MachineRecipe recipe,
         @Nullable PlanningResult planningResult,
-        @Nullable String failureUnloc,
-        @Nullable ExecutionStatus failure,
-        @Nullable LevelInsufficientFailure levelFailure,
+        @Nullable FailureReport failureReport,
         float validity,
         boolean hasMoreSpecificPendingInputCandidate) {
 
@@ -33,13 +31,16 @@ public record RecipeSearchResult(
         if (success) {
             Objects.requireNonNull(recipe, "recipe");
             if (planningResult == null || !planningResult.successful()
-                    || failureUnloc != null || failure != null || levelFailure != null) {
+                    || failureReport != null && !failureReport.candidates().isEmpty()) {
                 throw new IllegalArgumentException("Successful recipe search results must not carry a failure");
             }
         } else if (recipe != null) {
             throw new IllegalArgumentException("Failed recipe search results must not carry a recipe");
-        } else if (planningResult != null && planningResult.successful()) {
-            throw new IllegalArgumentException("Failed recipe search results must not carry a successful plan");
+        } else {
+            if (planningResult != null) {
+                throw new IllegalArgumentException("Failed recipe search results must not carry a plan");
+            }
+            Objects.requireNonNull(failureReport, "failureReport");
         }
     }
 
@@ -48,27 +49,24 @@ public record RecipeSearchResult(
                                               PlanningResult planningResult,
                                               boolean hasMoreSpecificPendingInputCandidate) {
         return new RecipeSearchResult(true, machineId, structureVersion, capabilityVersion, modifierVersion,
-                recipe, planningResult, null, null, null, 1.0F,
+                recipe, planningResult, null, 1.0F,
                 hasMoreSpecificPendingInputCandidate);
     }
 
     public static RecipeSearchResult failure(Identifier machineId, long structureVersion,
-                                              long capabilityVersion, long modifierVersion,
-                                              @Nullable PlanningResult planningResult,
-                                              @Nullable String failureUnloc, @Nullable ExecutionStatus failure,
-                                              float validity) {
+                                               long capabilityVersion, long modifierVersion,
+                                               FailureReport failureReport,
+                                               float validity) {
         return new RecipeSearchResult(false, machineId, structureVersion, capabilityVersion, modifierVersion,
-                null, planningResult, failureUnloc, failure, null, validity, false);
+                null, null, failureReport, validity, false);
     }
 
-    public static RecipeSearchResult levelFailure(Identifier machineId, long structureVersion,
-                                                   long capabilityVersion, long modifierVersion,
-                                                   LevelInsufficientFailure levelFailure) {
-        return new RecipeSearchResult(false, machineId, structureVersion, capabilityVersion, modifierVersion, null,
-                null, "gui.mmcr.controller.failure.level_insufficient",
-                new ExecutionStatus(Identifier.fromNamespaceAndPath("mmcr", "crafting_runtime"),
-                        StatusSeverity.BLOCKED, Identifier.fromNamespaceAndPath("mmcr", "crafting_runtime"),
-                        Map.of("reason", "level_insufficient")),
-                levelFailure, 1.0F, false);
+    public @Nullable ExecutionStatus failure() {
+        return failureReport == null ? null : failureReport.primary();
+    }
+
+    public @Nullable FailureOccurrence primaryFailure() {
+        ExecutionStatus status = failure();
+        return status == null ? null : status.failure();
     }
 }

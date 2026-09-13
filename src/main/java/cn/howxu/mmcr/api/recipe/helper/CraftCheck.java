@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.api.recipe.helper;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.recipe.FailureAdapters;
 import cn.howxu.mmcr.api.recipe.RequirementFailure;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -14,22 +19,17 @@ public final class CraftCheck {
         INVALID_SKIP
     }
 
-    private static final CraftCheck SUCCESS = new CraftCheck(ResultType.SUCCESS, "", null);
-    private static final CraftCheck PARTIAL_SUCCESS = new CraftCheck(ResultType.PARTIAL_SUCCESS, "", null);
-    private static final CraftCheck INVALID_SKIP = new CraftCheck(ResultType.INVALID_SKIP, "", null);
+    private static final Identifier SOURCE = MMCR.id("craft_check");
+    private static final CraftCheck SUCCESS = new CraftCheck(ResultType.SUCCESS, null);
+    private static final CraftCheck PARTIAL_SUCCESS = new CraftCheck(ResultType.PARTIAL_SUCCESS, null);
+    private static final CraftCheck INVALID_SKIP = new CraftCheck(ResultType.INVALID_SKIP, null);
 
     private final ResultType type;
-    private final String unlocalizedMessage;
-    private final @Nullable RequirementFailure requirementFailure;
+    private final @Nullable FailureOccurrence failure;
 
-    protected CraftCheck(ResultType type, String unlocalizedMessage) {
-        this(type, unlocalizedMessage, null);
-    }
-
-    protected CraftCheck(ResultType type, String unlocalizedMessage, @Nullable RequirementFailure requirementFailure) {
-        this.type = type;
-        this.unlocalizedMessage = unlocalizedMessage;
-        this.requirementFailure = requirementFailure;
+    protected CraftCheck(ResultType type, @Nullable FailureOccurrence failure) {
+        this.type = Objects.requireNonNull(type, "type");
+        this.failure = failure;
     }
 
     public static CraftCheck success() {
@@ -45,11 +45,13 @@ public final class CraftCheck {
     }
 
     public static CraftCheck failure(String unlocMessage) {
-        return new CraftCheck(ResultType.FAILURE_MISSING_INPUT, unlocMessage, null);
+        return new CraftCheck(ResultType.FAILURE_MISSING_INPUT,
+                FailureAdapters.legacyMessage(unlocMessage, SOURCE, FailurePhase.REQUIREMENT_PLAN));
     }
 
     public static CraftCheck failure(String unlocMessage, RequirementFailure requirementFailure) {
-        return new CraftCheck(ResultType.FAILURE_MISSING_INPUT, unlocMessage, requirementFailure);
+        return new CraftCheck(ResultType.FAILURE_MISSING_INPUT,
+                FailureAdapters.occurrence(requirementFailure, SOURCE, FailurePhase.REQUIREMENT_PLAN));
     }
 
     public ResultType getType() {
@@ -57,15 +59,19 @@ public final class CraftCheck {
     }
 
     public String getUnlocalizedMessage() {
-        return unlocalizedMessage;
+        return failure == null || failure.reason() == null ? "" : failure.reason().translationKey();
     }
 
-    public @Nullable RequirementFailure getRequirementFailure() {
-        return requirementFailure;
+    public @Nullable FailureOccurrence getFailure() {
+        return failure;
     }
 
     public boolean isSuccess() {
         return this.type == ResultType.SUCCESS;
+    }
+
+    public boolean isFailure() {
+        return this.type == ResultType.FAILURE_MISSING_INPUT;
     }
 
     public boolean isInvalid() {
@@ -77,12 +83,11 @@ public final class CraftCheck {
         if (this == obj) return true;
         if (!(obj instanceof CraftCheck other)) return false;
         return type == other.type
-                && unlocalizedMessage.equals(other.unlocalizedMessage)
-                && Objects.equals(requirementFailure, other.requirementFailure);
+                && Objects.equals(failure, other.failure);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, unlocalizedMessage, requirementFailure);
+        return Objects.hash(type, failure);
     }
 }

@@ -4,7 +4,11 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReport;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -23,7 +27,6 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class RecipeSearchTask {
-    static final int LEVEL_FAILURE_PRIORITY = 2;
     private final ControllerRuntimeSnapshot snapshot;
     private final Identifier machineId;
     private final long structureVersion;
@@ -56,59 +59,35 @@ public final class RecipeSearchTask {
     }
 
     public RecipeSearchResult compute() {
-        @Nullable String bestFailureUnloc = null;
-        @Nullable ExecutionStatus bestFailure = null;
-        @Nullable PlanningResult bestPlanningResult = null;
-        @Nullable LevelInsufficientFailure bestLevelFailure = null;
-        float bestValidity = 0.0F;
+        FailureReport failureReport = FailureReport.empty();
         List<MachineRecipe> ordered = searchCandidates();
 
         for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {
             MachineRecipe recipe = ordered.get(recipeIndex);
             if (!snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
-                ExecutionStatus moduleFailure = new ExecutionStatus(MMCR.id("crafting_runtime"),
-                        StatusSeverity.BLOCKED, MMCR.id("crafting_runtime"), Map.of("reason", "module_connection"));
-                float validity = validity(moduleFailure);
-                if (preferFailure(moduleFailure, validity, bestFailure, bestValidity)) {
-                    bestValidity = validity;
-                    bestFailure = moduleFailure;
-                    bestFailureUnloc = failureUnloc(moduleFailure);
-                }
+                ExecutionStatus moduleFailure = moduleFailure(recipe);
+                failureReport = failureReport.plus(moduleFailure, validity(moduleFailure));
                 continue;
             }
             PlanningResult result = planStart(recipe);
             if (!result.successful()) {
-                float validity = validity(result);
-                if (preferFailure(result.failure(), validity, bestFailure, bestValidity)) {
-                    bestValidity = validity;
-                    bestFailure = result.failure();
-                    bestFailureUnloc = failureUnloc(result.failure());
-                    bestPlanningResult = result;
+                if (result.failure() != null) {
+                    failureReport = failureReport.plus(result.failure(), validity(result));
                 }
                 continue;
             }
-            LevelInsufficientFailure levelFailure = levelFailure(recipe);
+            ExecutionStatus levelFailure = levelFailure(recipe);
             if (levelFailure == null) {
                 boolean conflictProne = lockedRecipeId == null
                         && hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
                 return RecipeSearchResult.success(recipe, machineId, structureVersion,
                         snapshot.capabilityVersion(), snapshot.modifierVersion(), result, conflictProne);
             }
-            if (bestLevelFailure == null) bestLevelFailure = levelFailure;
-        }
-        if (bestLevelFailure != null && (bestFailure == null
-                || LEVEL_FAILURE_PRIORITY < failurePriority(bestFailure))) {
-            return RecipeSearchResult.levelFailure(machineId, structureVersion,
-                    snapshot.capabilityVersion(), snapshot.modifierVersion(), bestLevelFailure);
-        }
-        if (bestFailure != null) {
-            return RecipeSearchResult.failure(machineId, structureVersion,
-                    snapshot.capabilityVersion(), snapshot.modifierVersion(), bestPlanningResult,
-                    bestFailureUnloc, bestFailure, bestValidity);
+            failureReport = failureReport.plus(levelFailure, 1.0F);
         }
         return RecipeSearchResult.failure(machineId, structureVersion,
-                snapshot.capabilityVersion(), snapshot.modifierVersion(), bestPlanningResult,
-                bestFailureUnloc, bestFailure, bestValidity);
+                snapshot.capabilityVersion(), snapshot.modifierVersion(), failureReport,
+                primaryValidity(failureReport));
     }
 
     private PlanningResult planStart(MachineRecipe recipe) {
@@ -124,13 +103,26 @@ public final class RecipeSearchTask {
         return CraftingContextPool.global().borrow(recipe.id(), new CapabilitySnapshot(capabilities), modifiers);
     }
 
-    private @Nullable LevelInsufficientFailure levelFailure(MachineRecipe recipe) {
+    private static ExecutionStatus moduleFailure(MachineRecipe recipe) {
+        FailureOccurrence occurrence = FailureOccurrence.at(BuiltinFailureReasons.MODULE_CONNECTION,
+                MMCR.id("crafting_runtime"), FailurePhase.RECIPE_SEARCH, recipe.id(), null, Map.of());
+        return ExecutionStatus.blocked(MMCR.id("crafting_runtime"), MMCR.id("crafting_runtime"), occurrence);
+    }
+
+    private @Nullable ExecutionStatus levelFailure(MachineRecipe recipe) {
         for (LevelRequirement requirement : recipe.levelRequirements()) {
             MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
             MachineLevel actual = snapshot.foundLevels().get(requirement.typeId());
             if (required == null || actual == null || actual.priority() < required.priority()) {
-                return new LevelInsufficientFailure(requirement.typeId(), requirement.levelId(),
-                        actual == null ? null : actual.id());
+                Map<String, String> details = actual == null
+                        ? Map.of("level_type", requirement.typeId().toString(),
+                        "required_level", requirement.levelId().toString())
+                        : Map.of("level_type", requirement.typeId().toString(),
+                        "required_level", requirement.levelId().toString(),
+                        "actual_level", actual.id().toString());
+                FailureOccurrence occurrence = FailureOccurrence.at(BuiltinFailureReasons.LEVEL_INSUFFICIENT,
+                        MMCR.id("crafting_runtime"), FailurePhase.LEVEL_CHECK, recipe.id(), null, details);
+                return ExecutionStatus.blocked(MMCR.id("crafting_runtime"), MMCR.id("crafting_runtime"), occurrence);
             }
         }
         return null;
@@ -188,32 +180,12 @@ public final class RecipeSearchTask {
         return completedRequirements + validity(result.failure());
     }
 
-    static int failurePriority(@Nullable ExecutionStatus failure) {
-        if (failure == null) return Integer.MAX_VALUE;
-        return switch (failure.details().getOrDefault("reason", "")) {
-            case "insufficient_resource" -> 0;
-            case "insufficient_energy" -> 1;
-            default -> 3;
-        };
-    }
-
-    private static boolean preferFailure(@Nullable ExecutionStatus candidate, float candidateValidity,
-                                         @Nullable ExecutionStatus current, float currentValidity) {
-        if (current == null) return true;
-        int candidatePriority = failurePriority(candidate);
-        int currentPriority = failurePriority(current);
-        return candidateValidity > currentValidity
-                || candidateValidity == currentValidity && candidatePriority < currentPriority;
-    }
-
-    private static @Nullable String failureUnloc(@Nullable ExecutionStatus failure) {
-        if (failure == null) return null;
-        return switch (failure.details().getOrDefault("reason", "")) {
-            case "insufficient_resource" -> "gui.mmcr.controller.failure.missing_input";
-            case "insufficient_energy" -> "gui.mmcr.controller.failure.missing_energy";
-            case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
-            case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
-            default -> "gui.mmcr.controller.failure.missing_input";
-        };
+    private static float primaryValidity(FailureReport report) {
+        ExecutionStatus primary = report.primary();
+        if (primary == null) return 0.0F;
+        for (FailureReport.Candidate candidate : report.candidates()) {
+            if (candidate.status() == primary) return candidate.validity();
+        }
+        return 0.0F;
     }
 }

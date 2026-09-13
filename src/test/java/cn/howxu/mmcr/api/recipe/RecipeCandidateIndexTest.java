@@ -7,8 +7,8 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
-import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
@@ -225,17 +225,13 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
-    void search_failure_priority_prefers_missing_inputs_then_energy_then_levels() {
-        ExecutionStatus missingInput = failure("insufficient_resource");
-        ExecutionStatus missingEnergy = failure("insufficient_energy");
-        ExecutionStatus missingOutput = failure("no_output_capacity");
-
-        assertThat(RecipeSearchTask.failurePriority(missingInput))
-                .isLessThan(RecipeSearchTask.failurePriority(missingEnergy));
-        assertThat(RecipeSearchTask.failurePriority(missingInput))
-                .isLessThan(RecipeSearchTask.LEVEL_FAILURE_PRIORITY);
-        assertThat(RecipeSearchTask.LEVEL_FAILURE_PRIORITY)
-                .isLessThan(RecipeSearchTask.failurePriority(missingOutput));
+    void search_failure_report_prioritizes_core_failure_reasons() {
+        assertThat(BuiltinFailureReasons.MISSING_INPUT.priority())
+                .isGreaterThan(BuiltinFailureReasons.MISSING_ENERGY.priority());
+        assertThat(BuiltinFailureReasons.MISSING_ENERGY.priority())
+                .isGreaterThan(BuiltinFailureReasons.LEVEL_INSUFFICIENT.priority());
+        assertThat(BuiltinFailureReasons.LEVEL_INSUFFICIENT.priority())
+                .isGreaterThan(BuiltinFailureReasons.MISSING_OUTPUT.priority());
     }
 
     @Test
@@ -250,13 +246,64 @@ class RecipeCandidateIndexTest {
         RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
                 List.of(levelLimited, energyLimited, inputLimited), null, List.of(), List.of()).compute();
 
-        assertThat(result.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_input");
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(result.primaryFailure()).isSameAs(result.failure().failure());
+        assertThat(result.failure().details()).containsEntry("required", "1");
+        assertThat(result.failure().details()).containsEntry("available", "0");
+        assertThat(result.planningResult()).isNull();
+    }
+
+    @Test
+    void search_level_failure_is_typed_with_recipe_trace_and_level_details() {
+        MachineRecipe levelLimited = RecipeTestSupport.create(id("level_only"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(new LevelRequirement(LEVEL_TYPE, LEVEL)), false, Set.of());
+
+        RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
+                List.of(levelLimited), null, List.of(), List.of()).compute();
+
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.LEVEL_INSUFFICIENT);
+        assertThat(result.failure().details()).containsEntry("level_type", LEVEL_TYPE.toString());
+        assertThat(result.failure().details()).containsEntry("required_level", LEVEL.toString());
+        assertThat(result.failure().details()).doesNotContainKey("actual_level");
+        assertThat(result.primaryFailure()).isSameAs(result.failure().failure());
+        assertThat(result.primaryFailure().trace().frames()).singleElement().satisfies(frame -> {
+            assertThat(frame.source()).isEqualTo(MMCR.id("crafting_runtime"));
+            assertThat(frame.phase()).isEqualTo(FailurePhase.LEVEL_CHECK);
+            assertThat(frame.recipeId()).isEqualTo(levelLimited.id());
+            assertThat(frame.requirementIndex()).isNull();
+        });
+    }
+
+    @Test
+    void search_failure_report_keeps_first_equal_priority_and_validity_candidate() {
+        Identifier requiredHost = id("required_host");
+        MachineRecipe first = RecipeTestSupport.create(id("first_module_failure"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(), false, Set.of(requiredHost));
+        MachineRecipe second = RecipeTestSupport.create(id("second_module_failure"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
+                List.of(), false, Set.of(requiredHost));
+
+        RecipeSearchResult result = new RecipeSearchTask(snapshot(ModuleConnectionStatus.disconnected()), MACHINE,
+                0L, 1L, List.of(first, second), null, List.of(), List.of()).compute();
+
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MODULE_CONNECTION);
+        assertThat(result.primaryFailure().trace().frames()).singleElement()
+                .satisfies(frame -> assertThat(frame.recipeId()).isEqualTo(first.id()));
     }
 
     private static ControllerRuntimeSnapshot emptySnapshot() {
+        return snapshot(ModuleConnectionStatus.notRequired());
+    }
+
+    private static ControllerRuntimeSnapshot snapshot(ModuleConnectionStatus moduleConnectionStatus) {
         return new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 0L, 0L, 0L,
                 Map.of(), Map.of(), Set.of(),
-                ModuleConnectionStatus.notRequired(), 0,
+                moduleConnectionStatus, 0,
                 new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 CraftingStateSnapshot.empty(0L, 0L, 0L),
                 FactorySnapshot.empty(), List.of(), List.of(), List.of(),
@@ -287,11 +334,6 @@ class RecipeCandidateIndexTest {
 
     private static Identifier id(String path) {
         return Identifier.fromNamespaceAndPath("test", path);
-    }
-
-    private static ExecutionStatus failure(String reason) {
-        return new ExecutionStatus(MMCR.id("recipe_search_test"), StatusSeverity.BLOCKED,
-                MMCR.id("recipe_search_test"), Map.of("reason", reason));
     }
 
     private static void bindComponents(Item... items) {

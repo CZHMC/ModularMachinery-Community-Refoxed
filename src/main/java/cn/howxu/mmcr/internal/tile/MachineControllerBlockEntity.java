@@ -1072,6 +1072,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private static String failureUnloc(@Nullable ExecutionStatus failure) {
         if (failure == null) return "";
+        if (failure.reason() != null) return failure.reason().translationKey();
         return switch (failure.details().getOrDefault("reason", "")) {
             case "module_connection" -> "gui.mmcr.controller.failure.module_connection";
             case "no_output_capacity" -> "gui.mmcr.controller.failure.missing_output";
@@ -3293,10 +3294,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         clearPendingConflictStart();
         recipeSearchRetryCounter++;
         runtime.craftingRuntime().recordSearchFailure(result.failure());
-        lastFailureUnloc = result.failureUnloc();
-        if (result.levelFailure() != null) {
-            lastFailureUnloc = "gui.mmcr.controller.failure.level_insufficient";
-        }
+        lastFailureUnloc = result.failure() == null ? null : failureUnloc(result.failure());
         return false;
     }
 
