@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
@@ -236,14 +237,14 @@ public final class FactoryRecipeThread extends RecipeThread {
             lastRecipeCapabilityVersion = snapshot.capabilityVersion();
             lastRecipeModifierVersion = snapshot.modifierVersion();
             lastRecipeComponentStateVersion = snapshot.stateVersion();
-            lastRecipeCatalogVersion = RecipeRegistry.catalog(recipe.recipePoolId()).version();
+            lastRecipeCatalogVersion = RecipeRegistry.catalogForPool(recipe.recipePoolId()).version();
         }
     }
     @Override
     protected void onFinished() {
         idleTicks = 0;
         if (lastRecipe != null && lastRecipeCatalogVersion != Long.MIN_VALUE) {
-            MachineRecipeCatalog catalog = RecipeRegistry.catalog(lastRecipe.recipePoolId());
+            MachineRecipeCatalog catalog = RecipeRegistry.catalogForPool(lastRecipe.recipePoolId());
             MachineRecipe current = catalog.recipes().stream()
                     .filter(candidate -> lastRecipe.id().equals(candidate.id()))
                     .findFirst().orElse(null);
@@ -468,7 +469,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         var machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(machine == null ? null : machine.registryName());
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
                 snapshot.modifierVersion(), snapshot.stateVersion(), catalog.version(),
                 controller.resourceAvailabilityEpoch(), lockedRecipeId, recipeSetVersion);
@@ -579,7 +580,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 thread.lastRecipeModifierVersion = input.getLongOr("last_modifier_version", Long.MIN_VALUE);
                 thread.lastRecipeComponentStateVersion = input.getLongOr("last_component_state_version", Long.MIN_VALUE);
                 thread.lastRecipeCatalogVersion = input.getLongOr("last_catalog_version",
-                        RecipeRegistry.catalog(thread.lastRecipe.recipePoolId()).version());
+                        RecipeRegistry.catalogForPool(thread.lastRecipe.recipePoolId()).version());
             }
         }
         thread.runtime.load(input.childOrEmpty("runtime"), controller.resourceDomain());
@@ -614,10 +615,9 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private static List<MachineRecipe> catalogCandidates(MachineControllerBlockEntity controller) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() == null
-                ? null : snapshot.structure().configuredMachine().registryName()
-                : snapshot.structure().machine().registryName());
+        Machine machine = snapshot.structure().machine() == null
+                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         return catalog.recipes();
     }
 

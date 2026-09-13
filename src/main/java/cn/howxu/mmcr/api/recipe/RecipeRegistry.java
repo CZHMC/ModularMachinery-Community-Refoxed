@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -78,20 +79,29 @@ public final class RecipeRegistry {
         return recipe;
     }
 
-    public static List<MachineRecipe> byMachine(Machine machine) {
-        if (machine == null || machine.registryName() == null) return Collections.emptyList();
-        return byMachineId(machine.registryName());
+    public static List<MachineRecipe> recipesForMachine(Machine machine) {
+        return catalogForMachine(machine).recipes();
     }
 
-    public static List<MachineRecipe> byMachineId(Identifier machineId) {
-        if (machineId == null) return Collections.emptyList();
-        MachineRecipeCatalog catalog = STATE.catalogs().get(machineId);
-        return catalog == null ? List.of() : catalog.recipes();
+    public static List<MachineRecipe> recipesForMachineId(Identifier machineId) {
+        return catalogForMachineId(machineId).recipes();
     }
 
-    public static MachineRecipeCatalog catalog(Identifier machineId) {
-        if (machineId == null) return EMPTY_CATALOG;
-        return STATE.catalogs().getOrDefault(machineId, EMPTY_CATALOG);
+    public static List<MachineRecipe> recipesForPool(Identifier recipePoolId) {
+        return catalogForPool(recipePoolId).recipes();
+    }
+
+    public static MachineRecipeCatalog catalogForMachine(Machine machine) {
+        return catalogForPool(MachineRegistry.recipePoolForMachine(machine));
+    }
+
+    public static MachineRecipeCatalog catalogForMachineId(Identifier machineId) {
+        return catalogForPool(MachineRegistry.recipePoolForMachine(machineId));
+    }
+
+    public static MachineRecipeCatalog catalogForPool(Identifier recipePoolId) {
+        if (recipePoolId == null) return EMPTY_CATALOG;
+        return STATE.poolCatalogs().getOrDefault(recipePoolId, EMPTY_CATALOG);
     }
 
     public static List<MachineRecipe> recipes() {
@@ -327,31 +337,31 @@ public final class RecipeRegistry {
         for (Map.Entry<Identifier, MachineRecipe> entry : dynamic.entrySet()) {
             recipes.putIfAbsent(entry.getKey(), entry.getValue());
         }
-        Map<Identifier, List<MachineRecipe>> byMachine = new LinkedHashMap<>();
+        Map<Identifier, List<MachineRecipe>> recipesByPool = new LinkedHashMap<>();
         for (MachineRecipe recipe : recipes.values()) {
-            byMachine.computeIfAbsent(recipe.recipePoolId(), ignored -> new ArrayList<>()).add(recipe);
+            recipesByPool.computeIfAbsent(recipe.recipePoolId(), ignored -> new ArrayList<>()).add(recipe);
         }
-        Map<Identifier, MachineRecipeCatalog> catalogs = new LinkedHashMap<>();
-        Set<Identifier> machineIds = new LinkedHashSet<>(STATE.catalogs().keySet());
-        machineIds.addAll(byMachine.keySet());
-        for (Identifier machineId : machineIds) {
-            List<MachineRecipe> machineRecipes = byMachine.getOrDefault(machineId, List.of()).stream()
+        Map<Identifier, MachineRecipeCatalog> poolCatalogs = new LinkedHashMap<>();
+        Set<Identifier> poolIds = new LinkedHashSet<>(STATE.poolCatalogs().keySet());
+        poolIds.addAll(recipesByPool.keySet());
+        for (Identifier poolId : poolIds) {
+            List<MachineRecipe> poolRecipes = recipesByPool.getOrDefault(poolId, List.of()).stream()
                     .sorted(Comparator.comparingInt(MachineRecipe::priority)
                             .thenComparing(MachineRecipe::id))
                     .toList();
-            List<MachineRecipe> orderedRecipes = machineRecipes.stream()
+            List<MachineRecipe> orderedRecipes = poolRecipes.stream()
                     .sorted(Comparator.comparingInt(MachineRecipe::priority)
                             .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
                             .thenComparing(MachineRecipe::id))
                     .toList();
-            MachineRecipeCatalog previous = STATE.catalogs().get(machineId);
+            MachineRecipeCatalog previous = STATE.poolCatalogs().get(poolId);
             long version = previous != null && previous.orderedRecipes().equals(orderedRecipes)
                     ? previous.version() : ++catalogGeneration;
-            catalogs.put(machineId, new MachineRecipeCatalog(version, machineRecipes, orderedRecipes,
+            poolCatalogs.put(poolId, new MachineRecipeCatalog(version, poolRecipes, orderedRecipes,
                     orderedRecipes.isEmpty() ? RecipeCandidateIndex.empty() : RecipeCandidateIndex.build(orderedRecipes)));
         }
         return new State(immutable(staticRecipes), immutable(dataPack), immutable(kubeJS), immutable(dynamic),
-                immutable(recipes), immutable(catalogs), List.copyOf(warnings));
+                immutable(recipes), immutable(poolCatalogs), List.copyOf(warnings));
     }
 
     public static void clearAll() {
@@ -362,8 +372,8 @@ public final class RecipeRegistry {
         Map<Identifier, MachineRecipeCatalog> emptyCatalogs = new LinkedHashMap<>();
         State next;
         try {
-            for (Identifier machineId : STATE.catalogs().keySet()) {
-                emptyCatalogs.put(machineId, new MachineRecipeCatalog(++catalogGeneration,
+            for (Identifier poolId : STATE.poolCatalogs().keySet()) {
+                emptyCatalogs.put(poolId, new MachineRecipeCatalog(++catalogGeneration,
                         List.of(), List.of(), RecipeCandidateIndex.empty()));
             }
             next = State.empty(emptyCatalogs);
@@ -401,14 +411,14 @@ public final class RecipeRegistry {
                          Map<Identifier, MachineRecipe> kubeJS,
                           Map<Identifier, MachineRecipe> dynamic,
                           Map<Identifier, MachineRecipe> effective,
-                          Map<Identifier, MachineRecipeCatalog> catalogs,
+                          Map<Identifier, MachineRecipeCatalog> poolCatalogs,
                           List<String> warnings) {
         private static State empty() {
             return empty(Map.of());
         }
 
-        private static State empty(Map<Identifier, MachineRecipeCatalog> catalogs) {
-            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), immutable(catalogs), List.of());
+        private static State empty(Map<Identifier, MachineRecipeCatalog> poolCatalogs) {
+            return new State(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), immutable(poolCatalogs), List.of());
         }
 
         private List<MachineRecipe> effectiveValues() {

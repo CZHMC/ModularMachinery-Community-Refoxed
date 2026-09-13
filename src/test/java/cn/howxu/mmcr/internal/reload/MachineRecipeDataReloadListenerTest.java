@@ -118,7 +118,7 @@ class MachineRecipeDataReloadListenerTest {
     void successful_candidate_rebuilds_the_machine_catalog_once() {
         var listener = new MachineRecipeDataReloadListener();
         var machineId = Identifier.parse("mmcr:test_machine_name");
-        var before = RecipeRegistry.catalog(machineId);
+        var before = RecipeRegistry.catalogForPool(machineId);
         var resourceManager = resources(Map.of(
                 Identifier.parse("mmcr_test:recipes/valid.json"), resource(recipeJson())));
         var candidate = MachineRecipeDataReloadListener.loadCandidate(resourceManager, registries);
@@ -128,7 +128,7 @@ class MachineRecipeDataReloadListenerTest {
 
         assertThat(listener.errors()).isEmpty();
         assertThat(RecipeCandidateIndex.buildCountForTesting()).isEqualTo(1);
-        var published = RecipeRegistry.catalog(machineId);
+        var published = RecipeRegistry.catalogForPool(machineId);
         assertThat(published.version()).isGreaterThan(before.version());
         assertThat(published.inputIndex().allCandidates()).containsExactlyElementsOf(published.orderedRecipes());
         RecipeRegistry.replaceDataPack(Map.of());

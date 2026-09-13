@@ -3650,7 +3650,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return RecipeRegistry.catalog(machine == null ? null : machine.registryName()).version();
+        return RecipeRegistry.catalogForMachine(machine).version();
     }
 
     private void setActiveState(boolean activeState) {
@@ -3699,7 +3699,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine configuredMachine = currentRuntimeSnapshot().structure().configuredMachine();
         Identifier machineId = configuredMachine == null ? null : configuredMachine.registryName();
         if (machineId == null) return List.of();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(machineId);
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(configuredMachine);
         if (machineId.equals(cachedCandidatesMachineId)
                 && cachedCandidatesCatalogVersion == catalog.version()) {
             return cachedCandidates;

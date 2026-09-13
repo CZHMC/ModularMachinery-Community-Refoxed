@@ -165,6 +165,23 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void display_uses_a_representative_machine_for_a_shared_recipe_pool() {
+        var machineId = MMCR.id("interface_shared_pool_machine");
+        var recipePoolId = MMCR.id("interface_shared_pool");
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .recipePoolId(recipePoolId)
+                .smartInterfaceType(new SmartInterfaceType("mode", 0F, 0))
+                .build());
+
+        MachineRecipeDisplay display = displayFor(
+                SmartInterfaceRequirement.input("mode", 1F, 2F), recipePoolId);
+
+        assertThat(display.smartInterfaceInputs()).singleElement()
+                .extracting(MachineRecipeDisplay.SmartInterfaceDisplay::value)
+                .isEqualTo("[1.0, 2.0]");
+    }
+
+    @Test
     void display_uses_i18n_tooltip_for_interface_output() {
         var machineId = MMCR.id("interface_jei_fallback");
         MachineDefinitions.register(MachineRegistration.builder(machineId)

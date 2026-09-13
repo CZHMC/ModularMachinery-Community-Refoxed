@@ -16,6 +16,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -89,7 +90,7 @@ public record MachineRecipeDisplay(
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceOutputs = new ArrayList<>();
-        var registration = MachineDefinitions.getRegistration(recipe.recipePoolId());
+        var registration = representativeRegistration(recipe.recipePoolId());
         List<SmartInterfaceModifierDisplay> smartInterfaceModifiers = registration == null ? List.of()
                 : registration.smartInterfaceModifiers().stream().map(SmartInterfaceModifierDisplay::from).toList();
         List<MachineRequirement> requirements = recipe.runtimeRequirements();
@@ -158,6 +159,14 @@ public record MachineRecipeDisplay(
         return ids.stream()
                 .sorted(Comparator.comparing(Identifier::toString))
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), Collections::unmodifiableSet));
+    }
+
+    private static MachineRegistration representativeRegistration(Identifier recipePoolId) {
+        if (recipePoolId == null) return null;
+        return MachineDefinitions.allRegistrations().stream()
+                .filter(registration -> recipePoolId.equals(registration.recipePoolId()))
+                .findFirst()
+                .orElse(null);
     }
 
     private static Stream<Holder<Item>> safeItems(Ingredient ingredient) {

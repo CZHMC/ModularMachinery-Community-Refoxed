@@ -206,7 +206,7 @@ public abstract class RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return RecipeRegistry.catalog(machine == null ? null : machine.registryName()).version();
+        return RecipeRegistry.catalogForMachine(machine).version();
     }
 
     private void invalidatePendingStart(long token, MachineRecipe recipe) {

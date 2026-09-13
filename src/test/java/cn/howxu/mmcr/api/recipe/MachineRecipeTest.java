@@ -353,7 +353,7 @@ class MachineRecipeTest {
         RecipeRegistry.registerStatic(recipe);
         RecipeRegistry.registerStatic(other);
 
-        assertThat(RecipeRegistry.byMachine(machine)).containsExactly(recipe);
+        assertThat(RecipeRegistry.recipesForMachine(machine)).containsExactly(recipe);
         assertThatThrownBy(() -> RecipeRegistry.registerStatic(
                 RecipeTestSupport.create(null, machineId, 1, List.of(), List.of())))
                 .isInstanceOf(IllegalArgumentException.class);

@@ -644,7 +644,7 @@ class MachineBehaviorRuntimeTest {
                 input(Items.IRON_INGOT), output(Items.GOLD_NUGGET));
         RecipeRegistry.registerStatic(lifecycleRecipe);
         assertThat(controller.structureSnapshot().machine()).isSameAs(recipeMachine);
-        assertThat(RecipeRegistry.byMachineId(machineId)).containsExactly(lifecycleRecipe);
+        assertThat(RecipeRegistry.recipesForMachineId(machineId)).containsExactly(lifecycleRecipe);
         assertThat(controller.componentRuntime().capabilities())
                 .as("components=%s capabilities=%s", controller.componentRuntime().components(),
                         controller.componentRuntime().capabilities())

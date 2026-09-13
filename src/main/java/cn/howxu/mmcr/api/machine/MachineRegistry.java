@@ -36,6 +36,16 @@ public final class MachineRegistry {
         return machine != null ? machine : STRUCTURE_MACHINES.get(id);
     }
 
+    public static Identifier recipePoolForMachine(Machine machine) {
+        return machine == null ? null : recipePoolForMachine(machine.registryName());
+    }
+
+    public static Identifier recipePoolForMachine(Identifier machineId) {
+        if (machineId == null) return null;
+        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        return registration == null ? machineId : registration.recipePoolId();
+    }
+
     public static Map<Identifier, Machine> getAll() {
         synchronized (RuntimeContentVersion.lock()) {
             return EFFECTIVE_MACHINES;

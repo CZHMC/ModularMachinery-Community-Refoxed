@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import com.mojang.serialization.MapCodec;
@@ -37,8 +39,8 @@ class RecipeRegistryTest {
 
         RecipeRegistry.replaceDynamic(Map.of(dynamicRecipe.id(), dynamicRecipe));
 
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).containsExactly(staticRecipe);
-        assertThat(RecipeRegistry.byMachineId(dynamicRecipe.recipePoolId())).containsExactly(dynamicRecipe);
+        assertThat(RecipeRegistry.recipesForPool(staticRecipe.recipePoolId())).containsExactly(staticRecipe);
+        assertThat(RecipeRegistry.recipesForPool(dynamicRecipe.recipePoolId())).containsExactly(dynamicRecipe);
 
         RecipeRegistry.replaceDynamic(Map.of());
 
@@ -62,6 +64,23 @@ class RecipeRegistryTest {
     }
 
     @Test
+    void machineCatalogResolvesConfiguredRecipePoolAndDefaultsToMachineId() {
+        Identifier machineId = Identifier.parse("mmcr:shared_pool_machine");
+        Identifier recipePoolId = Identifier.parse("mmcr:shared_pool");
+        Identifier defaultMachineId = Identifier.parse("mmcr:self_pool_machine");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
+        MachineRecipe sharedPoolRecipe = recipe("mmcr:shared_pool_recipe", recipePoolId.toString());
+        MachineRecipe defaultPoolRecipe = recipe("mmcr:self_pool_recipe", defaultMachineId.toString());
+
+        RecipeRegistry.replaceDynamic(Map.of(sharedPoolRecipe.id(), sharedPoolRecipe,
+                defaultPoolRecipe.id(), defaultPoolRecipe));
+
+        assertThat(RecipeRegistry.catalogForMachineId(machineId).recipes()).containsExactly(sharedPoolRecipe);
+        assertThat(RecipeRegistry.catalogForMachineId(defaultMachineId).recipes()).containsExactly(defaultPoolRecipe);
+    }
+
+    @Test
     void dataPackRecipeOverridesStaticRecipeAndWarns() {
         var id = Identifier.parse("mmcr:layered_recipe");
         var staticRecipe = recipe("mmcr:layered_recipe", "mmcr:static_machine");
@@ -73,8 +92,8 @@ class RecipeRegistryTest {
         assertThat(RecipeRegistry.getRecipe(id)).isSameAs(dataPackRecipe);
         assertThat(RecipeRegistry.dataPackSnapshot()).containsEntry(id, dataPackRecipe);
         assertThat(RecipeRegistry.staticSnapshot()).containsEntry(id, staticRecipe);
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).isEmpty();
-        assertThat(RecipeRegistry.byMachineId(dataPackRecipe.recipePoolId())).containsExactly(dataPackRecipe);
+        assertThat(RecipeRegistry.recipesForPool(staticRecipe.recipePoolId())).isEmpty();
+        assertThat(RecipeRegistry.recipesForPool(dataPackRecipe.recipePoolId())).containsExactly(dataPackRecipe);
         assertThat(RecipeRegistry.lastDataPackWarnings()).containsExactly(
                 "data-pack layer recipe mmcr:layered_recipe overrides static layer recipe mmcr:layered_recipe");
     }
@@ -88,7 +107,7 @@ class RecipeRegistryTest {
 
         assertThat(RecipeRegistry.getRecipe(holderId).id()).isEqualTo(holderId);
         assertThat(RecipeRegistry.getRecipe(Identifier.parse("mmcr:generated_recipe"))).isNull();
-        assertThat(RecipeRegistry.byMachineId(generated.recipePoolId())).extracting(MachineRecipe::id)
+        assertThat(RecipeRegistry.recipesForPool(generated.recipePoolId())).extracting(MachineRecipe::id)
                 .containsExactly(holderId);
     }
 
@@ -117,13 +136,13 @@ class RecipeRegistryTest {
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
         assertThat(RecipeRegistry.effectiveSnapshot().values()).containsExactly(dataPackRecipe, dynamicRecipe);
         assertThat(RecipeRegistry.recipes()).containsExactly(dataPackRecipe, dynamicRecipe);
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).containsExactly(dynamicRecipe, dataPackRecipe);
+        assertThat(RecipeRegistry.recipesForPool(staticRecipe.recipePoolId())).containsExactly(dynamicRecipe, dataPackRecipe);
 
         RecipeRegistry.replaceDataPack(Map.of());
 
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(2);
         assertThat(RecipeRegistry.getRecipe(staticRecipe.id())).isSameAs(staticRecipe);
-        assertThat(RecipeRegistry.byMachineId(staticRecipe.recipePoolId())).containsExactly(dynamicRecipe, staticRecipe);
+        assertThat(RecipeRegistry.recipesForPool(staticRecipe.recipePoolId())).containsExactly(dynamicRecipe, staticRecipe);
     }
 
     @Test
@@ -131,14 +150,14 @@ class RecipeRegistryTest {
         Identifier machineA = Identifier.parse("mmcr:catalog_machine_a");
         MachineRecipe first = recipe("mmcr:catalog_recipe_a", machineA.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(first.id(), first));
-        long firstVersion = RecipeRegistry.catalog(machineA).version();
+        long firstVersion = RecipeRegistry.catalogForPool(machineA).version();
 
         MachineRecipe changed = recipe(first.id().toString(), machineA.toString(), 40);
         RecipeRegistry.replaceDynamic(Map.of(changed.id(), changed));
 
-        assertThat(RecipeRegistry.catalog(machineA).version()).isNotEqualTo(firstVersion);
-        assertThat(RecipeRegistry.catalog(machineA).recipes()).containsExactly(changed);
-        assertThat(RecipeRegistry.catalog(machineA).recipes().getFirst().tickTime()).isEqualTo(40);
+        assertThat(RecipeRegistry.catalogForPool(machineA).version()).isNotEqualTo(firstVersion);
+        assertThat(RecipeRegistry.catalogForPool(machineA).recipes()).containsExactly(changed);
+        assertThat(RecipeRegistry.catalogForPool(machineA).recipes().getFirst().tickTime()).isEqualTo(40);
     }
 
     @Test
@@ -148,14 +167,14 @@ class RecipeRegistryTest {
         MachineRecipe firstA = recipe("mmcr:catalog_tick_recipe_a", machineA.toString(), 20);
         MachineRecipe firstB = recipe("mmcr:catalog_tick_recipe_b", machineB.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(firstA.id(), firstA, firstB.id(), firstB));
-        long machineAVersion = RecipeRegistry.catalog(machineA).version();
+        long machineAVersion = RecipeRegistry.catalogForPool(machineA).version();
 
         MachineRecipe changedB = recipe(firstB.id().toString(), machineB.toString(), 60);
         RecipeRegistry.replaceDynamic(Map.of(firstA.id(), firstA, changedB.id(), changedB));
 
-        assertThat(RecipeRegistry.catalog(machineA).version()).isEqualTo(machineAVersion);
-        assertThat(RecipeRegistry.catalog(machineA).recipes()).containsExactly(firstA);
-        assertThat(RecipeRegistry.catalog(machineB).recipes()).containsExactly(changedB);
+        assertThat(RecipeRegistry.catalogForPool(machineA).version()).isEqualTo(machineAVersion);
+        assertThat(RecipeRegistry.catalogForPool(machineA).recipes()).containsExactly(firstA);
+        assertThat(RecipeRegistry.catalogForPool(machineB).recipes()).containsExactly(changedB);
     }
 
     @Test
@@ -163,11 +182,11 @@ class RecipeRegistryTest {
         Identifier machine = Identifier.parse("mmcr:catalog_empty_machine");
         MachineRecipe recipe = recipe("mmcr:catalog_empty_recipe", machine.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
-        long populatedVersion = RecipeRegistry.catalog(machine).version();
+        long populatedVersion = RecipeRegistry.catalogForPool(machine).version();
 
         RecipeRegistry.replaceDynamic(Map.of());
 
-        MachineRecipeCatalog emptyCatalog = RecipeRegistry.catalog(machine);
+        MachineRecipeCatalog emptyCatalog = RecipeRegistry.catalogForPool(machine);
         assertThat(emptyCatalog.version()).isGreaterThan(populatedVersion);
         assertThat(emptyCatalog.recipes()).isEmpty();
         assertThat(emptyCatalog.orderedRecipes()).isEmpty();
@@ -179,16 +198,16 @@ class RecipeRegistryTest {
         Identifier machine = Identifier.parse("mmcr:catalog_clear_machine");
         MachineRecipe recipe = recipe("mmcr:catalog_clear_recipe", machine.toString(), 20);
         RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
-        long populatedVersion = RecipeRegistry.catalog(machine).version();
+        long populatedVersion = RecipeRegistry.catalogForPool(machine).version();
 
         RecipeRegistry.clearAll();
 
-        MachineRecipeCatalog emptyCatalog = RecipeRegistry.catalog(machine);
+        MachineRecipeCatalog emptyCatalog = RecipeRegistry.catalogForPool(machine);
         assertThat(emptyCatalog.version()).isGreaterThan(populatedVersion);
         assertThat(emptyCatalog.recipes()).isEmpty();
         assertThat(emptyCatalog.orderedRecipes()).isEmpty();
         assertThat(emptyCatalog.inputIndex().allCandidates()).isEmpty();
-        assertThat(RecipeRegistry.catalog(Identifier.parse("mmcr:catalog_never_seen")).recipes()).isEmpty();
+        assertThat(RecipeRegistry.catalogForPool(Identifier.parse("mmcr:catalog_never_seen")).recipes()).isEmpty();
     }
 
     @Test

@@ -194,8 +194,7 @@ public final class FactoryRuntime {
     public void syncCoreLanes(MachineControllerBlockEntity controller, Machine machine,
                               List<MachineRecipe> candidates) {
         ensureBaseLane(controller);
-        Identifier machineId = machine == null ? null : machine.registryName();
-        long catalogVersion = RecipeRegistry.catalog(machineId).version();
+        long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
         Map<Identifier, MachineRecipe> byId = new LinkedHashMap<>();
         for (MachineRecipe recipe : candidates == null ? List.<MachineRecipe>of() : candidates) {
             byId.putIfAbsent(recipe.id(), recipe);
@@ -463,7 +462,7 @@ public final class FactoryRuntime {
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         Machine machine = current.structure().machine() == null
                 ? current.structure().configuredMachine() : current.structure().machine();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(machine == null ? null : machine.registryName());
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         Map<String, List<MachineRecipe>> coreCandidates = new LinkedHashMap<>();
         if (machine != null) {
             for (FactoryThreadSpec spec : machine.factoryThreads()) {
@@ -526,8 +525,7 @@ public final class FactoryRuntime {
                                                      long maxParallelism, long gameTime) {
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier machineId = machine == null ? null : machine.registryName();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalog(machineId);
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         List<MachineRecipe> candidateSnapshot = nonNullCandidates(candidates);
         List<MachineRecipe> ordered = orderedCandidates(candidateSnapshot, catalog);
         Set<Item> inputItems = currentInputItems();
@@ -633,9 +631,8 @@ public final class FactoryRuntime {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier machineId = machine == null ? null : machine.registryName();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
-                snapshot.modifierVersion(), snapshot.stateVersion(), RecipeRegistry.catalog(machineId).version(),
+                snapshot.modifierVersion(), snapshot.stateVersion(), RecipeRegistry.catalogForMachine(machine).version(),
                 lane.searchResourceEpoch(controller.resourceAvailabilityEpoch()), lockedRecipeId,
                 lane.coreRecipeSetVersion());
     }

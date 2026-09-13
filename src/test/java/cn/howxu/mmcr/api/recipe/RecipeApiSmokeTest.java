@@ -288,9 +288,9 @@ class RecipeApiSmokeTest {
 
         assertThat(RecipeRegistry.getRecipe(recipe1.id())).isEqualTo(recipe1);
         assertThat(RecipeRegistry.registeredRecipeCount()).isEqualTo(3);
-        assertThat(RecipeRegistry.byMachineId(machineA)).containsExactly(recipe1, recipe2);
-        assertThat(RecipeRegistry.byMachineId(machineB)).containsExactly(recipe3);
-        assertThat(RecipeRegistry.byMachineId(Identifier.fromNamespaceAndPath("mmcr", "unknown"))).isEmpty();
+        assertThat(RecipeRegistry.recipesForPool(machineA)).containsExactly(recipe1, recipe2);
+        assertThat(RecipeRegistry.recipesForPool(machineB)).containsExactly(recipe3);
+        assertThat(RecipeRegistry.recipesForPool(Identifier.fromNamespaceAndPath("mmcr", "unknown"))).isEmpty();
     }
 
     @Test

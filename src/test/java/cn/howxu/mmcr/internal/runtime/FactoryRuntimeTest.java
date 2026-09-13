@@ -17,6 +17,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -110,6 +112,25 @@ class FactoryRuntimeTest {
         assertThat(snapshot.laneLimit()).isEqualTo(3);
         assertThat(snapshot.presentationLanes()).hasSize(3).isUnmodifiable();
         assertThat(snapshot.lanes()).isUnmodifiable();
+    }
+
+    @Test
+    void searchContextUsesTheConfiguredMachineRecipePoolCatalog() {
+        Identifier machineId = MMCR.id("factory_shared_pool_machine");
+        Identifier recipePoolId = MMCR.id("factory_shared_pool");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolId(recipePoolId).build());
+        MachineControllerBlockEntity controller = factoryController(machineId.getPath());
+        MachineRecipe candidate = RecipeTestSupport.create(MMCR.id("factory_shared_pool_recipe"), recipePoolId,
+                20, List.of(), List.of());
+        RecipeRegistry.registerStatic(candidate);
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+
+        FactorySearchContext context = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(candidate), 1, 0L);
+
+        assertThat(context.catalogVersion()).isEqualTo(RecipeRegistry.catalogForPool(recipePoolId).version());
+        assertThat(context.orderedCandidates()).containsExactly(candidate);
     }
 
     @Test
@@ -1143,7 +1164,7 @@ class FactoryRuntimeTest {
         var snapshot = controller.runtimeSnapshot();
         RecipeSearchContextKey key = new RecipeSearchContextKey(snapshot.structure().version(),
                 snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(),
-                RecipeRegistry.catalog(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(), null,
+                RecipeRegistry.catalogForMachineId(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(), null,
                 thread.coreRecipeSetVersion());
         thread.recordSearchFailure(key, 0L);
 
@@ -1229,7 +1250,7 @@ class FactoryRuntimeTest {
         ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, live.stateVersion() + 1L);
         FactorySearchContext context = new FactorySearchContext(contextSnapshot, List.of(candidate),
                 controller.componentRuntime().capabilities(), controller.componentRuntime().modifierList(),
-                RecipeRegistry.catalog(machineId).version(),
+                RecipeRegistry.catalogForMachineId(machineId).version(),
                 controller.resourceAvailabilityEpoch(), 1, 0L);
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
@@ -1250,7 +1271,7 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
-        List<MachineRecipe> candidates = RecipeRegistry.catalog(MMCR.id("test_cube")).recipes();
+        List<MachineRecipe> candidates = RecipeRegistry.recipesForPool(MMCR.id("test_cube"));
 
         FactorySearchContext firstContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 0L);
         FactorySearchContext secondContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 1L);
@@ -1282,7 +1303,7 @@ class FactoryRuntimeTest {
         RecipeRegistry.registerStaticBatch(List.of(iron, gold));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
-        List<MachineRecipe> candidates = RecipeRegistry.catalog(MMCR.id("test_cube")).recipes();
+        List<MachineRecipe> candidates = RecipeRegistry.recipesForPool(MMCR.id("test_cube"));
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
 
         FactorySearchContext ironContext = runtime.createSearchContext(controller.runtimeSnapshot(), candidates, 1, 0L);
@@ -1502,7 +1523,7 @@ class FactoryRuntimeTest {
         var snapshot = controller.runtimeSnapshot();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
                 snapshot.modifierVersion(), snapshot.stateVersion(),
-                RecipeRegistry.catalog(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(),
+                RecipeRegistry.catalogForMachineId(MMCR.id("test_cube")).version(), controller.resourceAvailabilityEpoch(),
                 controller.lockedRecipeId(), 0L);
     }
 
