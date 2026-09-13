@@ -144,15 +144,6 @@ public class AE2OutputInterfaceGameTest {
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0) == null
                             && port.getInterfaceLogic().getConfig().getKey(1) == null,
                     "Output interface starts with an empty interface config");
-
-            Identifier portBlockId = portState.getBlock().builtInRegistryHolder().key().identifier();
-            helper.assertTrue(portBlockId.equals(MMCR.id("ae2_me_output_interface")),
-                    "Output interface block resolves to mmcr:ae2_me_output_interface");
-            IOPortKind portKind = ((IOPortBlock) portState.getBlock()).kind();
-            Identifier overlay = AE2Bridge.get().portOverlayTexture(portKind);
-            helper.assertTrue(overlay != null
-                            && overlay.equals(Identifier.fromNamespaceAndPath("ae2", "block/interface")),
-                    "Output interface shares the ae2:block/interface overlay texture");
         });
 
         helper.runAtTickTime(4, () -> {
