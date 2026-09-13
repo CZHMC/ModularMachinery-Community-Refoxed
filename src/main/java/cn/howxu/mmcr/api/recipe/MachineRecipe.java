@@ -53,7 +53,6 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             Codec.BOOL.optionalFieldOf("cancelIfPerTickFails", false).forGetter(MachineRecipe::doesCancelRecipeOnPerTickFailure),
             boundedList(MachineRequirement.CODEC, "requirements").fieldOf("requirements").forGetter(MachineRecipe::requirements),
             Codec.BOOL.optionalFieldOf("parallelized", false).forGetter(MachineRecipe::isParallelized),
-            boundedList(LevelRequirement.CODEC.codec(), "level_requirements").optionalFieldOf("level_requirements", Collections.emptyList()).forGetter(MachineRecipe::levelRequirements),
             Codec.BOOL.optionalFieldOf("allow_partial_outputs", false).forGetter(MachineRecipe::allowPartialOutputs),
             boundedList(Identifier.CODEC, "required_host_ids").xmap(MachineRecipe::copyHostIds, List::copyOf)
             .optionalFieldOf("required_host_ids", Set.of()).forGetter(MachineRecipe::requiredHostIds)
@@ -89,7 +88,6 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final int maxThreads;
     private final boolean cancelRecipeOnPerTickFailure;
     private final boolean parallelized;
-    private final List<LevelRequirement> levelRequirements;
     private final boolean allowPartialOutputs;
     private final Set<Identifier> requiredHostIds;
 
@@ -101,10 +99,9 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                           List<RecipeModifier> modifiers,
                           int priority,
                           int maxThreads,
-                          boolean cancelRecipeOnPerTickFailure,
-                          boolean parallelized,
-                          List<LevelRequirement> levelRequirements,
-                          boolean allowPartialOutputs,
+                           boolean cancelRecipeOnPerTickFailure,
+                           boolean parallelized,
+                           boolean allowPartialOutputs,
                           Set<Identifier> requiredHostIds) {
         if (id == null) {
             throw new IllegalArgumentException("Recipe id must not be null");
@@ -119,13 +116,13 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.recipePoolId = recipePoolId;
         this.tickTime = tickTime;
         this.requirements = MachineRequirement.copyList(requirements == null ? List.of() : requirements);
+        validateLevelRequirements(this.requirements);
         this.outputs = MachineOutput.copyList(outputs == null ? List.of() : outputs);
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.priority = priority;
         this.maxThreads = maxThreads;
         this.cancelRecipeOnPerTickFailure = cancelRecipeOnPerTickFailure;
         this.parallelized = parallelized;
-        this.levelRequirements = validateLevelRequirements(levelRequirements);
         this.allowPartialOutputs = allowPartialOutputs;
         this.requiredHostIds = copyHostIds(requiredHostIds);
     }
@@ -139,7 +136,6 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.maxThreads = recipe.maxThreads;
         this.cancelRecipeOnPerTickFailure = recipe.cancelRecipeOnPerTickFailure;
         this.parallelized = recipe.parallelized;
-        this.levelRequirements = recipe.levelRequirements;
         this.allowPartialOutputs = recipe.allowPartialOutputs;
         this.requiredHostIds = recipe.requiredHostIds;
         List<MachineOutput> copiedAdditionalOutputs = MachineOutput.copyList(additionalOutputs == null
@@ -169,7 +165,6 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.maxThreads = recipe.maxThreads;
         this.cancelRecipeOnPerTickFailure = recipe.cancelRecipeOnPerTickFailure;
         this.parallelized = recipe.parallelized;
-        this.levelRequirements = recipe.levelRequirements;
         this.allowPartialOutputs = recipe.allowPartialOutputs;
         this.requiredHostIds = recipe.requiredHostIds;
     }
@@ -189,14 +184,13 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                        List<RecipeModifier> modifiers,
                                        int priority,
                                        int maxThreads,
-                                       boolean cancelRecipeOnPerTickFailure,
-                                       boolean parallelized,
-                                        List<LevelRequirement> levelRequirements,
+                                        boolean cancelRecipeOnPerTickFailure,
+                                        boolean parallelized,
                                         boolean allowPartialOutputs,
                                         Set<Identifier> requiredHostIds) {
         List<MachineOutput> effectiveOutputs = appendOutputs(outputs, outputsFromRequirements(requirements));
         return new MachineRecipe(id, recipePoolId, tickTime, requirements, effectiveOutputs, modifiers, priority, maxThreads,
-                cancelRecipeOnPerTickFailure, parallelized, levelRequirements, allowPartialOutputs, requiredHostIds);
+                cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, requiredHostIds);
     }
 
     private static List<MachineOutput> outputsFromRequirements(List<MachineRequirement> requirements) {
@@ -215,13 +209,12 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                                          int priority,
                                          int maxThreads,
                                          boolean cancelRecipeOnPerTickFailure,
-                                         List<MachineRequirement> requirements,
-                                         boolean parallelized,
-                                         List<LevelRequirement> levelRequirements,
-                                         boolean allowPartialOutputs,
+                                          List<MachineRequirement> requirements,
+                                          boolean parallelized,
+                                          boolean allowPartialOutputs,
                                          Set<Identifier> requiredHostIds) {
-         return fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
-                 priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
+        return fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
+                 priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized,
                  allowPartialOutputs, requiredHostIds);
     }
 
@@ -274,22 +267,22 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return first.equals(second);
     }
 
-    static List<LevelRequirement> validateLevelRequirements(List<LevelRequirement> levelRequirements) {
-        if (levelRequirements == null || levelRequirements.isEmpty()) return Collections.emptyList();
+    static void validateLevelRequirements(List<MachineRequirement> requirements) {
         var typeIds = new HashSet<Identifier>();
-        for (LevelRequirement requirement : levelRequirements) {
-            if (!typeIds.add(requirement.typeId())) {
-                throw new IllegalArgumentException("Duplicate machine level requirement type: " + requirement.typeId());
+        for (MachineRequirement requirement : requirements) {
+            if (!(requirement instanceof LevelRequirement levelRequirement)) continue;
+            if (!typeIds.add(levelRequirement.typeId())) {
+                throw new IllegalArgumentException("Duplicate machine level requirement type: " + levelRequirement.typeId());
             }
-            var level = MachineLevelRegistry.getLevel(requirement.levelId());
+            var level = MachineLevelRegistry.getLevel(levelRequirement.levelId());
             if (level == null) {
-                throw new IllegalArgumentException("Unknown machine level: " + requirement.levelId());
+                throw new IllegalArgumentException("Unknown machine level: " + levelRequirement.levelId());
             }
-            if (!level.typeId().equals(requirement.typeId())) {
-                throw new IllegalArgumentException("Machine level " + requirement.levelId() + " does not belong to type " + requirement.typeId());
+            if (!level.typeId().equals(levelRequirement.typeId())) {
+                throw new IllegalArgumentException("Machine level " + levelRequirement.levelId()
+                        + " does not belong to type " + levelRequirement.typeId());
             }
         }
-        return List.copyOf(levelRequirements);
     }
 
     public Identifier id() {
@@ -398,7 +391,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     public List<LevelRequirement> levelRequirements() {
-        return levelRequirements;
+        return requirements.stream()
+                .filter(LevelRequirement.class::isInstance)
+                .map(LevelRequirement.class::cast)
+                .toList();
     }
 
     public Set<Identifier> requiredHostIds() {
@@ -524,7 +520,6 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 && recipePoolId.equals(that.recipePoolId)
                 && requirements.equals(that.requirements)
                 && outputs.equals(that.outputs)
-                && levelRequirements.equals(that.levelRequirements)
                 && requiredHostIds.equals(that.requiredHostIds)
                 && modifiers.equals(that.modifiers)
                 && cancelRecipeOnPerTickFailure == that.cancelRecipeOnPerTickFailure
@@ -535,7 +530,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     @Override
     public int hashCode() {
         return Objects.hash(id, recipePoolId, tickTime, requirements, outputs, modifiers, priority, maxThreads,
-                cancelRecipeOnPerTickFailure, parallelized, levelRequirements, allowPartialOutputs, requiredHostIds);
+                cancelRecipeOnPerTickFailure, parallelized, allowPartialOutputs, requiredHostIds);
     }
 
     private static <E> Codec<List<E>> boundedList(Codec<E> elementCodec, String field) {

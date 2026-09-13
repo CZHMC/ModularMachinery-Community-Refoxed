@@ -388,7 +388,7 @@ class RecipeRegistryTest {
             Identifier invalidId = Identifier.parse("mmcr:invalid_output_recipe");
             MachineRecipe invalid = MachineRecipe.fromCanonical(invalidId, Identifier.parse("mmcr:test_machine_name"),
                     20, List.of(), List.of(new InvalidOutput(7, 1F)), List.of(), 0, 1, false, false,
-                    List.of(), false, Set.of());
+                    false, Set.of());
 
             RecipeRegistry.replaceDataPack(Map.of(invalidId, invalid));
 

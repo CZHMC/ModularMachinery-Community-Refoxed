@@ -126,7 +126,7 @@ class MachineRecipeCategoryTransferTest {
         MachineRecipe recipe = MachineRecipe.fromCanonical(
                 MMCR.id("jei_chemical_transfer_slots"), MMCR.id("chemical_transfer_machine"), 20,
                 List.of(chemicalInput, chemicalOutput), List.of(), List.of(), 0, 1,
-                false, false, List.of(), false, Set.of());
+                false, false, false, Set.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         List<CapturedSlot> slots = new ArrayList<>();
 

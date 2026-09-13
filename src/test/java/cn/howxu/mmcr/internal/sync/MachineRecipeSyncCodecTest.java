@@ -51,7 +51,7 @@ class MachineRecipeSyncCodecTest {
             MachineRecipe original = MachineRecipe.fromCanonical(MMCR.id("custom_sync"), MMCR.id("machine"), 20,
                     List.of(new ScalarRequirement(RecipeModifier.IOType.INPUT, 12, List.of("input"))),
                     List.of(new ScalarOutput(34, 0.75F)), List.of(), 2, 3, true, true,
-                    List.of(), true, Set.of(MMCR.id("host")));
+                    true, Set.of(MMCR.id("host")));
             RegistryFriendlyByteBuf buffer = buffer();
 
             MachineRecipeSyncCodec.encode(buffer, original);

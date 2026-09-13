@@ -116,7 +116,7 @@ class MachineRecipeJsonTest {
             MachineRecipe recipe = MachineRecipe.fromCanonical(id("custom_output_requirement"), id("test_cube"), 20,
                     List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 7, List.of())),
                     List.of(new JsonOutput(7, 1F)), List.of(), 0, 1, false, false,
-                    List.of(), false, Set.of());
+                    false, Set.of());
 
             assertThat(recipe.runtimeRequirements()).filteredOn(
                     requirement -> requirement.io() == RecipeModifier.IOType.OUTPUT).hasSize(1);

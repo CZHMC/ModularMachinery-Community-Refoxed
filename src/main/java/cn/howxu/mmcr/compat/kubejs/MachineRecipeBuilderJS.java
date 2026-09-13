@@ -524,7 +524,7 @@ public class MachineRecipeBuilderJS {
             }
         }
 
-        List<MachineRequirement> recipeRequirements = deriveRequirements || !requirements.isEmpty()
+        List<MachineRequirement> recipeRequirements = deriveRequirements || !requirements.isEmpty() || !levelRequirements.isEmpty()
                 ? new ArrayList<>()
                 : null;
         if (deriveRequirements) {
@@ -534,7 +534,10 @@ public class MachineRecipeBuilderJS {
             }
             for (FluidStack fluidOutput : fluidOutputs) recipeRequirements.add(MachineRequirement.fluidOutput(fluidOutput));
         }
-        if (recipeRequirements != null) recipeRequirements.addAll(requirements);
+        if (recipeRequirements != null) {
+            recipeRequirements.addAll(requirements);
+            recipeRequirements.addAll(levelRequirements);
+        }
 
         List<MachineOutput> canonicalOutputs = new ArrayList<>(recipeOutputs.size() + fluidOutputs.size());
         for (int index = 0; index < recipeOutputs.size(); index++) {
@@ -546,7 +549,7 @@ public class MachineRecipeBuilderJS {
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, recipePoolId, tickTime,
                 recipeRequirements == null ? List.of() : List.copyOf(recipeRequirements), canonicalOutputs,
                 List.copyOf(conditions), priority, maxThreads, cancelIfPerTickFails, parallelized,
-                List.copyOf(levelRequirements), allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
+                allowPartialOutputs, new LinkedHashSet<>(requiredHostIds));
         return MachineRecipe.withAdditionalOutputs(recipe, customOutputs);
     }
 

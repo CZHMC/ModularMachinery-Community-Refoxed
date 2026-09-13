@@ -72,14 +72,13 @@ public final class MachineRecipeConverter {
                     + " refers to unknown machine modifier " + id);
             return modifier.modifiers();
         }).flatMap(List::stream).toList();
-        definition.levelRequirements().forEach(level -> {
+        requirements.stream().filter(LevelRequirement.class::isInstance).map(LevelRequirement.class::cast).forEach(level -> {
             if (!levels.containsKey(level.levelId())) throw new ApiRegistrationException("Recipe " + definition.id()
                     + " refers to unknown machine level " + level.levelId());
         });
         return MachineRecipe.fromCanonical(definition.id(), definition.recipePoolId(), definition.tickTime(), requirements,
                 outputs, recipeModifiers, definition.priority(), definition.maxThreads(),
-                definition.cancelRecipeOnPerTickFailure(), definition.parallelized(), definition.levelRequirements().stream()
-                         .map(MachineRecipeConverter::toInternalLevel).toList(), definition.allowPartialOutputs(),
+                definition.cancelRecipeOnPerTickFailure(), definition.parallelized(), definition.allowPartialOutputs(),
                 definition.requiredHostIds());
     }
 
@@ -111,6 +110,9 @@ public final class MachineRecipeConverter {
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement smart) {
             return new SmartInterfaceRequirement(toInternalIo(smart.io()), smart.interfaceType(), smart.minValue(), smart.maxValue());
         }
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement level) {
+            return new LevelRequirement(toInternalIo(level.io()), level.typeId(), level.levelId());
+        }
         throw new IllegalArgumentException("Unsupported public recipe requirement: " + value);
     }
 
@@ -132,6 +134,9 @@ public final class MachineRecipeConverter {
         if (value instanceof SmartInterfaceRequirement smart) {
             return new cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement(io, smart.interfaceType(),
                     smart.minValue(), smart.maxValue());
+        }
+        if (value instanceof LevelRequirement level) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement(io, level.typeId(), level.levelId());
         }
         return codecBackedRequirement(value, io);
     }
@@ -224,7 +229,4 @@ public final class MachineRecipeConverter {
         return output;
     }
 
-    private static LevelRequirement toInternalLevel(cn.howxu.mmcr.api.publicapi.machine.LevelRequirement level) {
-        return LevelRequirement.input(level.typeId(), level.levelId());
-    }
 }

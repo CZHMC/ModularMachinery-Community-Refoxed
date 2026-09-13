@@ -254,6 +254,7 @@ class MachineRecipeTest {
         var decoded = MachineRecipe.CODEC.codec().parse(jsonOps(),
                 MachineRecipe.CODEC.codec().encodeStart(jsonOps(), recipe).getOrThrow()).getOrThrow();
 
+        assertThat(recipe.requirements()).containsExactly(LevelRequirement.input(coilType, kanthal));
         assertThat(decoded.levelRequirements()).containsExactlyElementsOf(recipe.levelRequirements());
     }
 

@@ -123,7 +123,7 @@ public class AE2InterfaceGameTest {
                         MachineRequirement.itemOutput(new ItemStack(Items.IRON_NUGGET))),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F)),
                 List.of(), 0, 1,
-                false, false, List.of(), false, Set.of()));
+                false, false, false, Set.of()));
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos,
                 MachineControllerBlockEntity.class);

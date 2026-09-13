@@ -108,7 +108,7 @@ class ActiveMachineRecipeTest {
         Identifier foreignPool = Identifier.fromNamespaceAndPath("mmcr", "foreign_active_pool");
         RuntimeTestFixtures.registerRecipePool(foreignPool);
         MachineRecipe foreign = new MachineRecipe(recipeId, foreignPool, 20, List.of(), List.of(),
-                List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(), 0, 1, false, false, false, Set.of());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, foreign));
         TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));
@@ -128,7 +128,7 @@ class ActiveMachineRecipeTest {
         HolderLookup.Provider lookup = registryProvider();
         Identifier registeredId = MMCR.id("pool_scoped_missing_id_candidate");
         MachineRecipe registered = new MachineRecipe(registeredId, MMCR.id("test_cube"), 20, List.of(), List.of(),
-                List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(), 0, 1, false, false, false, Set.of());
         RecipeRegistry.replaceDynamic(Map.of(registeredId, registered));
         TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
 
@@ -150,7 +150,7 @@ class ActiveMachineRecipeTest {
         Identifier poolId = MMCR.id("embedded_catalog_pool");
         RuntimeTestFixtures.registerRecipePool(poolId);
         MachineRecipe recipe = new MachineRecipe(recipeId, poolId, 20, List.of(), List.of(),
-                List.of(), 0, 1, false, false, List.of(), false, Set.of());
+                List.of(), 0, 1, false, false, false, Set.of());
         TagValueOutput serialized = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
 
         try {

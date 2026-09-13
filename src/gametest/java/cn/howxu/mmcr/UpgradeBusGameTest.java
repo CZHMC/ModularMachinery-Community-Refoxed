@@ -117,7 +117,7 @@ public class UpgradeBusGameTest {
                     List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(
                                     Ingredient.of(Items.IRON_INGOT), 1)),
                             MachineRequirement.itemOutput(goldNugget)),
-                    List.of(new MachineOutput.ItemOutput(goldNugget, 1F)), List.of(), 0, 1, false, false, List.of(),
+                    List.of(new MachineOutput.ItemOutput(goldNugget, 1F)), List.of(), 0, 1, false, false,
                     false, Set.of()));
 
             controller.serverTick();

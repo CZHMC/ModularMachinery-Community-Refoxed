@@ -63,7 +63,9 @@ public final class MachineRecipeSyncCodec {
         Identifier.STREAM_CODEC.encode(buf, value.id());
         Identifier.STREAM_CODEC.encode(buf, value.recipePoolId());
         buf.writeVarInt(value.tickTime());
-        writeRequirements(buf, value.requirements());
+        writeRequirements(buf, value.requirements().stream()
+                .filter(requirement -> !(requirement instanceof LevelRequirement))
+                .toList());
         writeOutputs(buf, value.outputsWithoutDerivedRequirements());
         writeModifiers(buf, value.modifiers());
         buf.writeVarInt(value.priority());
@@ -89,7 +91,7 @@ public final class MachineRecipeSyncCodec {
         Identifier id = Identifier.STREAM_CODEC.decode(buf);
         Identifier recipePoolId = Identifier.STREAM_CODEC.decode(buf);
         int tickTime = buf.readVarInt();
-        List<MachineRequirement> requirements = readRequirements(buf);
+        List<MachineRequirement> requirements = new ArrayList<>(readRequirements(buf));
         List<MachineOutput> outputs = readOutputs(buf);
         List<RecipeModifier> modifiers = readModifiers(buf);
         int priority = buf.readVarInt();
@@ -97,10 +99,11 @@ public final class MachineRecipeSyncCodec {
         boolean cancelIfPerTickFails = buf.readBoolean();
         boolean parallelized = buf.readBoolean();
         List<LevelRequirement> levels = readLevelRequirements(buf);
+        requirements.addAll(levels);
         boolean allowPartialOutputs = buf.readBoolean();
         Set<Identifier> hosts = readRequiredHosts(buf);
         MachineRecipe recipe = MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, outputs, modifiers,
-                priority, maxThreads, cancelIfPerTickFails, parallelized, levels, allowPartialOutputs, hosts);
+                priority, maxThreads, cancelIfPerTickFails, parallelized, allowPartialOutputs, hosts);
         RecipeRegistry.validateClientSnapshot(Map.of(id, recipe));
         return recipe;
     }

@@ -27,11 +27,13 @@ public final class RecipeTestSupport {
     public static MachineRecipe create(Identifier id, Identifier recipePoolId, int tickTime,
                                         List<MachineRequirement> requirements, List<MachineOutput> outputs,
                                        List<RecipeModifier> modifiers, int priority, int maxThreads,
-                                       boolean cancelRecipeOnPerTickFailure, boolean parallelized,
-                                       List<LevelRequirement> levelRequirements, boolean allowPartialOutputs,
-                                       Set<Identifier> requiredHostIds) {
-        return new MachineRecipe(id, recipePoolId, tickTime, requirements, outputs, modifiers, priority,
-                maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
+                                        boolean cancelRecipeOnPerTickFailure, boolean parallelized,
+                                        List<LevelRequirement> levelRequirements, boolean allowPartialOutputs,
+                                        Set<Identifier> requiredHostIds) {
+        List<MachineRequirement> canonicalRequirements = new ArrayList<>(requirements == null ? List.of() : requirements);
+        if (levelRequirements != null) canonicalRequirements.addAll(levelRequirements);
+        return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, canonicalRequirements, outputs, modifiers, priority,
+                maxThreads, cancelRecipeOnPerTickFailure, parallelized,
                 allowPartialOutputs, requiredHostIds);
     }
 
@@ -117,15 +119,16 @@ public final class RecipeTestSupport {
                                        Set<Identifier> requiredHostIds) {
         boolean hasExplicitRequirements = explicitRequirements != null && !explicitRequirements.isEmpty();
         List<MachineRequirement> requirements = hasExplicitRequirements
-                ? castRequirements(explicitRequirements)
-                : deriveRequirements(inputs, outputs, fluidOutputs);
+                ? new ArrayList<>(castRequirements(explicitRequirements))
+                : new ArrayList<>(deriveRequirements(inputs, outputs, fluidOutputs));
+        if (levelRequirements != null) requirements.addAll(levelRequirements);
         List<MachineOutput> machineOutputs = hasExplicitRequirements
                 ? deriveOutputs(requirements)
                 : new ArrayList<>();
         appendOutputs(machineOutputs, outputs);
         appendOutputs(machineOutputs, fluidOutputs);
         return MachineRecipe.fromCanonical(id, recipePoolId, tickTime, requirements, machineOutputs, modifiers,
-                priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized, levelRequirements,
+                priority, maxThreads, cancelRecipeOnPerTickFailure, parallelized,
                 allowPartialOutputs, requiredHostIds);
     }
 
