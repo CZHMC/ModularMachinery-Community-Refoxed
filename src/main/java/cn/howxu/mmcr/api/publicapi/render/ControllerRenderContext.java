@@ -64,7 +64,7 @@ public record ControllerRenderContext(
         }
 
         private static @Nullable ExecutionStatus copyFailure(@Nullable ExecutionStatus failure) {
-            return failure == null ? null : new ExecutionStatus(failure.id(), failure.severity(), failure.source(), failure.details());
+            return failure;
         }
     }
 }

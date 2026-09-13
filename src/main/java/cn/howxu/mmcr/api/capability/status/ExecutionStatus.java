@@ -25,8 +25,8 @@ public record ExecutionStatus(
     /**
      * Compatibility boundary for existing serialized and producer status data.
      */
-    public <T extends Map<String, String>> ExecutionStatus(Identifier id, StatusSeverity severity,
-                                                            Identifier source, T details) {
+    public ExecutionStatus(Identifier id, StatusSeverity severity, Identifier source,
+                           Map<String, String> details) {
         this(id, severity, source, legacyFailure(source, details));
     }
 

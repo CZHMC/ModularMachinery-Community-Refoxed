@@ -34,6 +34,7 @@ public record FailureTrace(List<FailureTrace.Frame> frames) {
      * @param phase execution phase of the observation
      * @param recipeId related recipe, when available
      * @param requirementIndex related requirement index, when available
+     * @author howxu <dev@howxu.cn>
      */
     public record Frame(Identifier source, FailurePhase phase,
                         @Nullable Identifier recipeId, @Nullable Integer requirementIndex) {

@@ -51,6 +51,7 @@ public record FailureReport(List<FailureReport.Candidate> candidates) {
      *
      * @param status candidate status
      * @param validity candidate validity
+     * @author howxu <dev@howxu.cn>
      */
     public record Candidate(ExecutionStatus status, float validity) {
         public Candidate {
