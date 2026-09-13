@@ -26,16 +26,21 @@ import java.util.Objects;
  */
 public final class BlueprintScreen extends Screen {
     private static final int BASE_WIDTH = 420;
-    private static final int BASE_HEIGHT = 260;
+    private static final int BASE_HEIGHT = 330;
     private static final int OUTER_MARGIN = 8;
     private static final int GAP = 6;
-    private static final int ITEM_ROW_GAP = 2;
     private static final int ITEM_ROW_SLOT_X = OUTER_MARGIN;
     private static final int SLOT_COUNT = 12;
     private static final float MATERIAL_QUANTITY_SCALE = 0.6F;
     private static final int PREVIEW_HEIGHT = 190;
     private static final int SLOT_SIZE = 24;
     private static final int SLOT_ICON_OFFSET = 4;
+    static final int MATERIAL_SLOT_SIZE = 25;
+    static final int MATERIAL_COLUMNS = 10;
+    static final int MATERIAL_SLOT_GAP = 2;
+    private static final int SCROLLBAR_WIDTH = 12;
+    private static final int SCROLLBAR_HANDLE_HEIGHT = 32;
+    private static final int CANDIDATE_COLUMNS = 2;
     private static final int BUTTON_HEIGHT = 18;
     private static final int TEXT_COLOR = 0xFF202020;
     private static final int PANEL_COLOR = 0xFFB6E4F2;
@@ -168,34 +173,70 @@ public final class BlueprintScreen extends Screen {
         int top = Math.round((screenHeight - BASE_HEIGHT * scale) / 2.0F);
 
         int contentWidth = BASE_WIDTH - 2 * OUTER_MARGIN;
-        int leftWidth = Math.round((contentWidth - GAP) * 0.70F);
-        int rightWidth = contentWidth - GAP - leftWidth;
-        int rightX = OUTER_MARGIN + leftWidth + GAP;
-        int materialsY = OUTER_MARGIN + PREVIEW_HEIGHT + ITEM_ROW_GAP;
-        int candidatesY = materialsY + SLOT_SIZE + ITEM_ROW_GAP;
-        int buttonWidth = (rightWidth - GAP) / 2;
-        int controlsY = 94;
+        int materialsWidth = MATERIAL_COLUMNS * MATERIAL_SLOT_SIZE
+                + (MATERIAL_COLUMNS - 1) * MATERIAL_SLOT_GAP;
+        int candidatesX = OUTER_MARGIN + materialsWidth + SCROLLBAR_WIDTH + GAP;
+        int candidatesWidth = contentWidth - (candidatesX - OUTER_MARGIN);
+        int previewBottom = OUTER_MARGIN + PREVIEW_HEIGHT;
+        int materialsY = previewBottom + GAP;
+        int materialsHeight = BASE_HEIGHT - OUTER_MARGIN - materialsY;
+        int titleY = OUTER_MARGIN;
+        int selectedBlockY = titleY + BUTTON_HEIGHT + GAP;
+        int selectedBlockHeight = multipleStages ? 2 * BUTTON_HEIGHT + GAP : BUTTON_HEIGHT;
+        int candidatesY = selectedBlockY + selectedBlockHeight + GAP;
+        int candidatesHeight = previewBottom - candidatesY;
+        int buttonWidth = (candidatesWidth - GAP) / 2;
+        int controlsRows = multipleStages ? 4 : 2;
+        int controlsHeight = controlsRows * BUTTON_HEIGHT + (controlsRows - 1) * GAP;
+        int controlsY = BASE_HEIGHT - OUTER_MARGIN - controlsHeight;
         BlueprintRect[] layerButtons = new BlueprintRect[]{
-                scaledRect(left, top, rightX, controlsY, buttonWidth, BUTTON_HEIGHT, scale),
-                scaledRect(left, top, rightX + buttonWidth + GAP, controlsY, buttonWidth, BUTTON_HEIGHT, scale),
-                scaledRect(left, top, rightX, controlsY + BUTTON_HEIGHT + GAP, buttonWidth, BUTTON_HEIGHT, scale),
-                scaledRect(left, top, rightX + buttonWidth + GAP, controlsY + BUTTON_HEIGHT + GAP,
+                scaledRect(left, top, candidatesX, controlsY, buttonWidth, BUTTON_HEIGHT, scale),
+                scaledRect(left, top, candidatesX + buttonWidth + GAP, controlsY, buttonWidth, BUTTON_HEIGHT, scale),
+                scaledRect(left, top, candidatesX, controlsY + BUTTON_HEIGHT + GAP, buttonWidth, BUTTON_HEIGHT, scale),
+                scaledRect(left, top, candidatesX + buttonWidth + GAP, controlsY + BUTTON_HEIGHT + GAP,
                         buttonWidth, BUTTON_HEIGHT, scale)
         };
         BlueprintRect nextStage = multipleStages
-                ? scaledRect(left, top, rightX, controlsY + 2 * (BUTTON_HEIGHT + GAP),
+                ? scaledRect(left, top, candidatesX, controlsY + 2 * (BUTTON_HEIGHT + GAP),
                         buttonWidth * 2 + GAP, BUTTON_HEIGHT, scale)
                 : null;
         BlueprintRect previousStage = multipleStages
-                ? scaledRect(left, top, rightX, controlsY + 3 * (BUTTON_HEIGHT + GAP),
+                ? scaledRect(left, top, candidatesX, controlsY + 3 * (BUTTON_HEIGHT + GAP),
                         buttonWidth * 2 + GAP, BUTTON_HEIGHT, scale)
                 : null;
         return new BlueprintLayout(left, top, scale,
-                scaledRect(left, top, OUTER_MARGIN, OUTER_MARGIN, leftWidth, PREVIEW_HEIGHT, scale),
-                scaledRect(left, top, OUTER_MARGIN, candidatesY, leftWidth, SLOT_SIZE, scale),
-                scaledRect(left, top, OUTER_MARGIN, materialsY, leftWidth, SLOT_SIZE, scale),
-                scaledRect(left, top, rightX, OUTER_MARGIN, rightWidth, 78, scale),
+                scaledRect(left, top, OUTER_MARGIN, OUTER_MARGIN, materialsWidth, PREVIEW_HEIGHT, scale),
+                scaledRect(left, top, OUTER_MARGIN, materialsY, materialsWidth, materialsHeight, scale),
+                scaledRect(left, top, candidatesX, candidatesY, candidatesWidth, candidatesHeight, scale),
+                scaledRect(left, top, candidatesX, titleY, candidatesWidth, BUTTON_HEIGHT, scale),
+                scaledRect(left, top, candidatesX, selectedBlockY, candidatesWidth, selectedBlockHeight, scale),
+                scaledRect(left, top, candidatesX, controlsY, candidatesWidth, controlsHeight, scale),
                 layerButtons, nextStage, previousStage);
+    }
+
+    static int clampScrollOffset(int offset, int totalRows, int visibleRows) {
+        return Math.clamp(offset, 0, Math.max(0, totalRows - visibleRows));
+    }
+
+    static int scrollbarHandleY(int offset, int totalRows, int visibleRows,
+            int trackY, int trackHeight, int handleHeight) {
+        int range = Math.max(0, totalRows - visibleRows);
+        if (range == 0) return trackY;
+        int travel = trackHeight - handleHeight;
+        return trackY + clampScrollOffset(offset, totalRows, visibleRows) * travel / range;
+    }
+
+    static int scrollOffsetFromScrollbarY(int mouseY, int totalRows, int visibleRows,
+            int trackY, int trackHeight, int handleHeight, int dragOffsetY) {
+        int range = Math.max(0, totalRows - visibleRows);
+        if (range == 0) return 0;
+        int travel = trackHeight - handleHeight;
+        int handleY = Math.clamp(mouseY - trackY - dragOffsetY, 0, travel);
+        return clampScrollOffset(Math.round((float) handleY * range / travel), totalRows, visibleRows);
+    }
+
+    static int baseHeight() {
+        return BASE_HEIGHT;
     }
 
     static double localMouse(double mouse, int origin, float scale) {
@@ -258,18 +299,22 @@ public final class BlueprintScreen extends Screen {
         graphics.pose().pushMatrix();
         graphics.pose().translate(currentLayout.left(), currentLayout.top());
         graphics.pose().scale(currentLayout.scale(), currentLayout.scale());
-        int infoX = (int) Math.round(localMouse(currentLayout.info().x(), currentLayout.left(), currentLayout.scale()));
-        int infoY = (int) Math.round(localMouse(currentLayout.info().y(), currentLayout.top(), currentLayout.scale()));
-        graphics.text(font, title, infoX + 4, infoY + 4, TEXT_COLOR, false);
+        int titleX = (int) Math.round(localMouse(currentLayout.title().x(), currentLayout.left(), currentLayout.scale()));
+        int titleY = (int) Math.round(localMouse(currentLayout.title().y(), currentLayout.top(), currentLayout.scale()));
+        graphics.text(font, title, titleX + 4, titleY + 4, TEXT_COLOR, false);
+        int selectedBlockX = (int) Math.round(localMouse(currentLayout.selectedBlock().x(), currentLayout.left(),
+                currentLayout.scale()));
+        int selectedBlockY = (int) Math.round(localMouse(currentLayout.selectedBlock().y(), currentLayout.top(),
+                currentLayout.scale()));
         int selectedLayer = panel.selectedLayer();
         Component layer = selectedLayer < 0
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.literal(Integer.toString(selectedLayer));
-        graphics.text(font, Component.translatable("gui.mmcr.blueprint.y", layer), infoX + 4, infoY + 24,
+        graphics.text(font, Component.translatable("gui.mmcr.blueprint.y", layer), selectedBlockX + 4, selectedBlockY + 4,
                 TEXT_COLOR, false);
         if (panel.hasMultipleStages()) {
             graphics.text(font, Component.translatable("gui.mmcr.blueprint.level", panel.stageNumber()),
-                    infoX + 4, infoY + 40, TEXT_COLOR, false);
+                    selectedBlockX + 4, selectedBlockY + BUTTON_HEIGHT + 4, TEXT_COLOR, false);
         }
         graphics.pose().popMatrix();
     }
@@ -363,7 +408,18 @@ record BlueprintRect(int x, int y, int width, int height) {
 }
 
 record BlueprintLayout(int left, int top, float scale, BlueprintRect preview,
-        BlueprintRect candidates, BlueprintRect materials, BlueprintRect info,
-        BlueprintRect[] layerButtons, @Nullable BlueprintRect nextStageButton,
-        @Nullable BlueprintRect previousStageButton) {
+        BlueprintRect materials, BlueprintRect candidates, BlueprintRect title,
+        BlueprintRect selectedBlock, BlueprintRect controls, BlueprintRect[] layerButtons,
+        @Nullable BlueprintRect nextStageButton, @Nullable BlueprintRect previousStageButton) {
+    int materialSlotSize() {
+        return BlueprintScreen.MATERIAL_SLOT_SIZE;
+    }
+
+    int materialColumns() {
+        return BlueprintScreen.MATERIAL_COLUMNS;
+    }
+
+    int materialSlotGap() {
+        return BlueprintScreen.MATERIAL_SLOT_GAP;
+    }
 }

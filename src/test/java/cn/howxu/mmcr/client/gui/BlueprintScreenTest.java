@@ -9,13 +9,33 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class BlueprintScreenTest {
     @Test
-    void layoutKeepsThePreviewOnTheLeftAndUsesEightSlotRows() {
+    void layoutKeepsThePreviewOnTheLeftOfTheInformationColumn() {
         BlueprintLayout layout = BlueprintScreen.layoutFor(640, 360, false);
 
-        assertThat(layout.preview().x()).isLessThan(layout.info().x());
-        assertThat(layout.preview().width()).isGreaterThan(layout.info().width());
+        assertThat(layout.preview().x()).isLessThan(layout.title().x());
+        assertThat(layout.preview().width()).isGreaterThan(layout.title().width());
         assertThat(layout.materials().y()).isGreaterThan(layout.preview().y());
         assertThat(layout.nextStageButton()).isNull();
+    }
+
+    @Test
+    void layoutUsesSquareMaterialSlotsAndKeepsCandidatesAbovePreviewBottom() {
+        BlueprintLayout layout = BlueprintScreen.layoutFor(640, 480, true);
+
+        assertThat(layout.materialSlotSize()).isEqualTo(25);
+        assertThat(layout.materialColumns()).isEqualTo(10);
+        assertThat(layout.materialSlotGap()).isEqualTo(2);
+        assertThat(layout.candidates().y() + layout.candidates().height())
+                .isLessThanOrEqualTo(layout.preview().y() + layout.preview().height());
+        assertThat(layout.controls().y() + layout.controls().height())
+                .isEqualTo(layout.top() + Math.round(BlueprintScreen.baseHeight() * layout.scale()) - 8);
+    }
+
+    @Test
+    void scrollbarDragMapsToClampedRowOffsets() {
+        assertThat(BlueprintScreen.clampScrollOffset(8, 6, 3)).isEqualTo(3);
+        assertThat(BlueprintScreen.scrollbarHandleY(3, 6, 3, 10, 60, 12)).isEqualTo(58);
+        assertThat(BlueprintScreen.scrollOffsetFromScrollbarY(58, 6, 3, 10, 60, 12, 0)).isEqualTo(3);
     }
 
     @Test
