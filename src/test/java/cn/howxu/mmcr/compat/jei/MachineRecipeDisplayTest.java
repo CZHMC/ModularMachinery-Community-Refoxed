@@ -709,6 +709,24 @@ class MachineRecipeDisplayTest {
     }
 
     @Test
+    void levelRequirementsUseDedicatedJeiRenderingWithoutGenericEntries() {
+        Identifier typeId = MMCR.id("display_level_type");
+        Identifier levelId = MMCR.id("display_level");
+        TestBootstrap.beginRegistration();
+        TestBootstrap.registerType(new LevelType(typeId, Component.literal("Display Level")));
+        registerLevel(levelId, typeId, 1, Blocks.COPPER_BLOCK);
+        TestBootstrap.freezeRegistration();
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("display_level_recipe"),
+                MMCR.id("blast_furnace"), 20, List.of(LevelRequirement.input(typeId, levelId)), List.of(), List.of(),
+                0, 1, false, false, false, Set.of());
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.entries()).noneMatch(entry -> entry.typeId().equals(LevelRequirement.TYPE.id()));
+        assertThat(display.recipe().levelRequirements()).hasSize(1);
+    }
+
+    @Test
     void displayFallsBackToBaseStackForRangeComponentPredicates() {
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("range_component_input_display"),

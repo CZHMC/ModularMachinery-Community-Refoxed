@@ -161,10 +161,9 @@ class MachineRecipeCategoryTransferTest {
         registerLevel(copperId, typeId, 0, Blocks.COPPER_BLOCK);
         registerLevel(ironId, typeId, 1, Blocks.IRON_BLOCK);
         LevelRequirement requirement = LevelRequirement.input(typeId, ironId);
-        MachineRecipe recipe = RecipeTestSupport.create(
+        MachineRecipe recipe = MachineRecipe.fromCanonical(
                 MMCR.id("jei_level_slot"), MMCR.id("level_slot_test_machine"), 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(), false,
-                List.of(requirement));
+                List.of(requirement), List.of(), List.of(), 0, 1, false, false, false, Set.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
         List<CapturedSlot> slots = new ArrayList<>();
