@@ -502,6 +502,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot currentState = runtimeSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(currentState.structure()), currentState.structure().formed(), m,
                 currentState.structure().matchedStage());
+        clearInvalidRecipeLock(m);
         runtime.publishComponentState(runtime.components(), currentState.foundModifiers(), Map.of(),
                 currentState.linkedPortPositions());
         refreshModuleConnectionState();
@@ -2447,6 +2448,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     && previousStructure.configuredMachine().registryName().equals(matchedMachine.registryName());
             boolean structureChanged = runtime.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
                     facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
+            clearInvalidRecipeLock(matchedMachine);
 
             boolean refreshComponents = !previousStructure.formed() || structureChanged
                     || previousWork.componentRefreshRequired();
@@ -3778,6 +3780,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         cachedCandidatesRecipePoolId = null;
         cachedCandidatesCatalogVersion = Long.MIN_VALUE;
         cachedCandidates = List.of();
+    }
+
+    private void clearInvalidRecipeLock(@Nullable Machine machine) {
+        if (lockedRecipeId == null || RecipeRegistry.catalogForMachine(machine).recipes().stream()
+                .anyMatch(recipe -> lockedRecipeId.equals(recipe.id()))) return;
+        lockedRecipeId = null;
     }
 
     @Override

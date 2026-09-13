@@ -1149,6 +1149,30 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void changing_the_controller_recipe_pool_clears_the_previous_recipe_lock() {
+        Identifier firstMachineId = MMCR.id("controller_lock_first_machine");
+        Identifier secondMachineId = MMCR.id("controller_lock_second_machine");
+        RuntimeTestFixtures.registerRecipePool(firstMachineId);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_lock_first_recipe"), firstMachineId,
+                20, List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        output.putString("locked_recipe", recipe.id().toString());
+
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        controller.loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+        controller.setMachine(new DynamicMachine(firstMachineId, "first lock machine", new BlockArray(Map.of())));
+        assertThat(controller.lockedRecipeId()).isEqualTo(recipe.id());
+
+        controller.setMachine(new DynamicMachine(secondMachineId, "second lock machine", new BlockArray(Map.of())));
+
+        assertThat(controller.lockedRecipeId()).isNull();
+    }
+
+    @Test
     void negative_structure_runtime_version_loads_as_zero() {
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()));

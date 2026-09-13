@@ -82,6 +82,21 @@ class SmartInterfaceBindingCoordinatorTest {
     }
 
     @Test
+    void reconcile_replaces_a_stale_binding_when_the_same_controller_changes_machine() throws Exception {
+        Identifier firstMachineId = MMCR.id("binding_first_machine");
+        Identifier secondMachineId = MMCR.id("binding_second_machine");
+        var smartInterface = smartInterface(new BlockPos(1, 0, 0));
+        var first = controller(BlockPos.ZERO, firstMachineId, MMCR.id("block/first_machine_casing"));
+        var second = controller(BlockPos.ZERO, secondMachineId, MMCR.id("block/second_machine_casing"));
+
+        coordinator(false, type("mode", 1F, 0)).reconcile(first, List.of(smartInterface));
+        coordinator(false, type("mode", 1F, 0)).reconcile(second, List.of(smartInterface));
+
+        assertThat(smartInterface.machineId()).contains(secondMachineId);
+        assertThat(smartInterface.controllerPositions()).containsExactly(BlockPos.ZERO);
+    }
+
+    @Test
     void unbindAll_removes_only_the_controller_bindings() throws Exception {
         var controller = controller();
         var smartInterface = smartInterface(new BlockPos(1, 0, 0));
