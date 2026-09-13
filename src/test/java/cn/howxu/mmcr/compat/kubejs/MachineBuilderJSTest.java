@@ -292,6 +292,17 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void registered_machine_retains_explicit_shared_recipe_pool() {
+        Identifier machineId = MMCR.id("shared_pool_machine");
+        Identifier recipePoolId = MMCR.id("shared_recipe_pool");
+
+        new MachineBuilderJS(machineId).recipePool(recipePoolId.toString()).register();
+        Plugin.freezeStartupRegistryPhaseForTesting();
+
+        assertThat(MachineDefinitions.getRegistration(machineId).recipePoolId()).isEqualTo(recipePoolId);
+    }
+
+    @Test
     void registered_machine_preserves_all_recipe_behavior_callbacks() {
         Identifier id = MMCR.id("registered_recipe_callbacks");
         AtomicInteger calls = new AtomicInteger();

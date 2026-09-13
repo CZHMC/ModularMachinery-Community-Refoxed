@@ -9,6 +9,7 @@ MMCREvents.startup(event => {
 
     const machine_producer = event
         .createMachine(PRODUCER_ID)
+        .recipePool(PRODUCER_ID)
         .displayNameKey("machine.kubejs.server")
         .appearance("mekanism:block_tin")
         .networkInterface(1, 1)
@@ -119,6 +120,7 @@ MMCREvents.startup(event => {
 
     const machine_center = event
         .createMachine(CENTER_ID)
+        .recipePool(CENTER_ID)
         .displayNameKey("machine.kubejs.center")
         .appearance("mekanism:induction_casing")
         .networkInterface(1, 16)

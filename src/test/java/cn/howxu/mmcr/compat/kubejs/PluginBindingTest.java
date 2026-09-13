@@ -429,7 +429,7 @@ class PluginBindingTest {
     }
 
     @Test
-    void server_script_error_discards_collected_content_and_preserves_previous_snapshot() {
+    void server_script_error_without_collected_content_preserves_previous_snapshot() {
         var machineId = MMCR.id("test_machine_name");
         var previousRecipeId = MMCR.id("kubejs_transaction_error_previous_recipe");
         var previous = new KubeJSContentReloadTransaction();
@@ -441,13 +441,28 @@ class PluginBindingTest {
 
         var reload = new Object();
         Plugin.beginServerReload(reload, 0);
-        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
-        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
-                MMCR.id("kubejs_transaction_error_recipe"), machineId, 1, List.of(), List.of()));
         Plugin.completeServerReload(reload, 1);
 
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(RecipeRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousRecipes);
+    }
+
+    @Test
+    void recipe_script_error_publishes_valid_collected_content() {
+        var machineId = MMCR.id("test_machine_name");
+        var validRecipeId = MMCR.id("kubejs_valid_recipe_after_script_error");
+        var invalidRecipeId = MMCR.id("kubejs_invalid_recipe_after_script_error");
+        var reload = new Object();
+
+        Plugin.beginServerReload(reload, 0);
+        KubeJSContentReloadTransaction.active().registerStructure(structure(machineId));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
+                validRecipeId, machineId, 1, List.of(), List.of()));
+        KubeJSContentReloadTransaction.active().registerRecipe(RecipeTestSupport.create(
+                invalidRecipeId, MMCR.id("missing_recipe_pool"), 1, List.of(), List.of()));
+        Plugin.completeServerReload(reload, 1);
+
+        assertThat(RecipeRegistry.dynamicSnapshot()).containsKey(validRecipeId).doesNotContainKey(invalidRecipeId);
     }
 
     @Test

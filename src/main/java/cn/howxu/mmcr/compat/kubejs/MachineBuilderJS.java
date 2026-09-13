@@ -604,6 +604,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         MachineRegistration registration = createObject();
         MachineBuilder builder = MachineBuilder.machine(id)
                 .displayNameKey(registration.displayNameKey())
+                .recipePool(registration.recipePoolId())
                 .controller(controller -> controller
                         .id(registration.controllerSpec().id())
                         .frontTexture(registration.controllerSpec().frontTexture())
