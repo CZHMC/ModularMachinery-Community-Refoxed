@@ -7,7 +7,6 @@ import net.minecraft.resources.Identifier;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.HashSet;
 
 /**
  * Immutable declaration of the capabilities bound to one stable port identity.
@@ -36,12 +35,8 @@ public interface PortDefinition {
         public Immutable {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(bindings, "bindings");
-            HashSet<CapabilityType> types = new HashSet<>();
             for (CapabilityBinding binding : bindings) {
                 Objects.requireNonNull(binding, "binding");
-                if (!types.add(binding.type())) {
-                    throw new IllegalArgumentException("duplicate capability binding: " + binding.type().id());
-                }
             }
             bindings = List.copyOf(bindings);
         }

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 import appeng.api.AECapabilities;
 import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
+import appeng.menu.implementations.PatternProviderMenu;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
@@ -11,10 +12,12 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeDataPro
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -41,6 +44,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     private static final String STOCKING_INTERFACE_ID = "ae2_me_stocking_input_interface";
     private static final String OUTPUT_INTERFACE_ID = "ae2_me_output_interface";
     private static final String ASYNC_OUTPUT_INTERFACE_ID = "ae2_me_async_output_interface";
+    private static final String PATTERN_INTERFACE_ID = "ae2_me_pattern_interface";
     private static final Identifier INTERFACE_OVERLAY_TEXTURE =
             MMCR.id("block/appliedenergistics2/ae2_input");
     private static final Identifier STOCKING_INTERFACE_OVERLAY_TEXTURE =
@@ -49,6 +53,8 @@ public final class LoadedAE2Bridge implements AE2Bridge {
             MMCR.id("block/appliedenergistics2/ae2_output");
     private static final Identifier ASYNC_OUTPUT_INTERFACE_OVERLAY_TEXTURE =
             MMCR.id("block/appliedenergistics2/ae2_async_output");
+    private static final Identifier PATTERN_INTERFACE_OVERLAY_TEXTURE =
+            MMCR.id("block/appliedenergistics2/ae2_pattern_interface");
 
     @Override
     public boolean available() {
@@ -61,7 +67,8 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 InputInterfaceKind.INSTANCE,
                 StockingInterfaceKind.INSTANCE,
                 OutputInterfaceKind.INSTANCE,
-                AsyncOutputInterfaceKind.INSTANCE);
+                AsyncOutputInterfaceKind.INSTANCE,
+                PatternInterfaceKind.INSTANCE);
     }
 
     @Override
@@ -69,7 +76,8 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         return INPUT_INTERFACE_ID.equals(id)
                 || STOCKING_INTERFACE_ID.equals(id)
                 || OUTPUT_INTERFACE_ID.equals(id)
-                || ASYNC_OUTPUT_INTERFACE_ID.equals(id);
+                || ASYNC_OUTPUT_INTERFACE_ID.equals(id)
+                || PATTERN_INTERFACE_ID.equals(id);
     }
 
     @Override
@@ -86,6 +94,9 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (level.getBlockEntity(pos) instanceof AsyncOutputInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
+        if (level.getBlockEntity(pos) instanceof PatternInterfaceBlockEntity host) {
+            return MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(host));
+        }
         return false;
     }
 
@@ -95,6 +106,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (kind instanceof StockingInterfaceKind) return STOCKING_INTERFACE_OVERLAY_TEXTURE;
         if (kind instanceof OutputInterfaceKind) return OUTPUT_INTERFACE_OVERLAY_TEXTURE;
         if (kind instanceof AsyncOutputInterfaceKind) return ASYNC_OUTPUT_INTERFACE_OVERLAY_TEXTURE;
+        if (kind instanceof PatternInterfaceKind) return PATTERN_INTERFACE_OVERLAY_TEXTURE;
         return null;
     }
 
@@ -118,6 +130,9 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         BlockEntityType<?> asyncOutputInterfaceType = ModBlockEntities.BES.get(ASYNC_OUTPUT_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, asyncOutputInterfaceType,
                 (be, ignored) -> be instanceof AsyncOutputInterfaceBlockEntity host ? host : null);
+        BlockEntityType<?> patternInterfaceType = ModBlockEntities.BES.get(PATTERN_INTERFACE_ID).get();
+        event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, patternInterfaceType,
+                (be, ignored) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
     }
 
     @Override
@@ -130,6 +145,8 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 OutputInterfaceBlockEntity.class);
         registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
                 AsyncOutputInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
+                PatternInterfaceBlockEntity.class);
     }
 
     @Override

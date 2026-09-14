@@ -2,12 +2,26 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 
 import appeng.api.networking.IGridNode;
 import appeng.me.helpers.IGridConnectedBlockEntity;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.*;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
@@ -19,6 +33,8 @@ import snownee.jade.api.IWailaCommonRegistration;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,6 +54,16 @@ class AE2InterfaceJadeProviderTest {
 
         assertThat(registrations).containsExactly(
                 new Registration(InterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class));
+    }
+
+    @Test
+    void registersThePatternHostWithTheCommonGridDataProvider() {
+        List<Registration> registrations = new ArrayList<>();
+
+        new LoadedAE2Bridge().registerJadeCommon(commonRegistration(registrations));
+
+        assertThat(registrations).contains(new Registration(InterfaceJadeDataProvider.INSTANCE,
+                PatternInterfaceBlockEntity.class));
     }
 
     @Test
@@ -63,6 +89,22 @@ class AE2InterfaceJadeProviderTest {
 
         assertThat(serverData.getByteOr(InterfaceJadeDataProvider.STATE, (byte) 0))
                 .isEqualTo((byte) 3);
+    }
+
+    @Test
+    void componentProviderRendersOnlyNonEmptyOutputCapabilityContents() {
+        CompoundTag serverData = new CompoundTag();
+        serverData.putByte(InterfaceJadeDataProvider.STATE, (byte) 3);
+        List<Component> added = new ArrayList<>();
+        Object host = capabilityGridHost();
+
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
+                tooltip(added), accessor(host, serverData), null);
+
+        assertThat(added).contains(
+                Component.translatable("gui.mmcr.port.fluids").append(Component.literal(" 1,000 mB")));
+        assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.items")
+                .append(Component.literal(" 4")));
     }
 
     private static IWailaCommonRegistration commonRegistration(List<Registration> registrations) {
@@ -106,6 +148,28 @@ class AE2InterfaceJadeProviderTest {
                         ? node : defaultValue(method.getReturnType()));
     }
 
+    private static Object capabilityGridHost() {
+        List<MachineCapability> capabilities = List.of(
+                new PresentedCapability("item", "4", "item", IOType.INPUT),
+                new PresentedCapability("fluid", "1,000", "mB", IOType.OUTPUT));
+        IGridNode node = (IGridNode) Proxy.newProxyInstance(
+                IGridNode.class.getClassLoader(),
+                new Class<?>[]{IGridNode.class},
+                (_, method, _) -> switch (method.getName()) {
+                    case "isPowered", "hasGridBooted", "meetsChannelRequirements" -> true;
+                    default -> defaultValue(method.getReturnType());
+                });
+        return Proxy.newProxyInstance(
+                IGridConnectedBlockEntity.class.getClassLoader(),
+                new Class<?>[]{IGridConnectedBlockEntity.class, CapabilityHost.class},
+                (_, method, _) -> switch (method.getName()) {
+                    case "getActionableNode" -> node;
+                    case "capabilitySnapshot" -> new CapabilitySnapshot(capabilities);
+                    case "capabilities" -> capabilities;
+                    default -> defaultValue(method.getReturnType());
+                });
+    }
+
     private static BlockAccessor accessor(Object target, CompoundTag serverData) {
         return (BlockAccessor) Proxy.newProxyInstance(
                 BlockAccessor.class.getClassLoader(),
@@ -145,5 +209,59 @@ class AE2InterfaceJadeProviderTest {
     }
 
     private record Registration(Object provider, Class<?> hostType) {
+    }
+
+    private static final class PresentedCapability implements MachineCapability, PresentationFacet {
+        private final CapabilityType type;
+        private final CapabilityDirections directions;
+        private final CapabilityView view;
+        private final List<CapabilityDisplay> displays;
+
+        private PresentedCapability(String label, String value, String unit, IOType direction) {
+            type = new CapabilityType(MMCR.id(label));
+            directions = CapabilityDirections.of(direction);
+            view = new CapabilityView() {
+                @Override
+                public CapabilityType type() {
+                    return PresentedCapability.this.type;
+                }
+
+                @Override
+                public CapabilityDirections directions() {
+                    return PresentedCapability.this.directions;
+                }
+
+                @Override
+                public Set<Class<? extends CapabilityFacet>> facets() {
+                    return Set.of(PresentationFacet.class);
+                }
+            };
+            displays = List.of(new CapabilityDisplay(label, value, unit, Optional.empty()));
+        }
+
+        @Override
+        public CapabilityType type() {
+            return type;
+        }
+
+        @Override
+        public CapabilityDirections directions() {
+            return directions;
+        }
+
+        @Override
+        public CapabilityView view() {
+            return view;
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            throw new UnsupportedOperationException("Not used for Jade display tests");
+        }
+
+        @Override
+        public List<CapabilityDisplay> displays(CapabilityView ignored) {
+            return displays;
+        }
     }
 }

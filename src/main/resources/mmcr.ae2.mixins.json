@@ -10,7 +10,8 @@
     "InterfaceLogicMixin"
   ],
   "client": [
-    "InterfaceScreenMixin"
+    "InterfaceScreenMixin",
+    "PatternProviderScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

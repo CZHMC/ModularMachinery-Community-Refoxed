@@ -31,18 +31,15 @@ public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
     private static void mmcr$replaceTitle(Args args) {
         InterfaceMenu menu = args.get(0);
         var host = menu.getHost();
-        if (host instanceof IOPortBlockEntity port) {
-            args.set(2, Component.translatable("container.mmcr." + port.kind().id()));
-        }
+        Component title = titleFor(host, null);
+        if (title != null) args.set(2, title);
     }
 
     @Inject(method = "updateBeforeRender", at = @At("TAIL"))
     private void mmcr$replaceStyleTitle(CallbackInfo ci) {
         InterfaceMenu menu = (InterfaceMenu) ((AbstractContainerScreen<?>) (Object) this).getMenu();
         var host = menu.getHost();
-        Component displayTitle = host instanceof IOPortBlockEntity port
-                ? Component.translatable("container.mmcr." + port.kind().id())
-                : Component.translatable("gui.ae2.Interface");
+        Component displayTitle = titleFor(host, Component.translatable("gui.ae2.Interface"));
         ((AEBaseScreen<?>) (Object) this).getStyle().getText()
                 .get(AEBaseScreen.TEXT_ID_DIALOG_TITLE)
                 .setText(displayTitle);
@@ -55,5 +52,11 @@ public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
         boolean lockedInterface = menu.getHost() instanceof OutputInterfaceBaseBlockEntity
                 || menu.getHost() instanceof StockingInterfaceBlockEntity;
         button.visible = !lockedInterface && visible;
+    }
+
+    public static Component titleFor(Object host, Component fallback) {
+        return host instanceof IOPortBlockEntity port
+                ? Component.translatable("container.mmcr." + port.kind().id())
+                : fallback;
     }
 }

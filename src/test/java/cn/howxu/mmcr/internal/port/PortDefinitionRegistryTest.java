@@ -131,23 +131,21 @@ class PortDefinitionRegistryTest {
     }
 
     @Test
-    void rejects_duplicate_bindings_for_the_same_capability_type() {
+    void preserves_duplicate_bindings_for_the_same_capability_type() {
         CapabilityBinding first = binding("item", IOType.INPUT, PortTierPolicy.always());
         CapabilityBinding duplicate = binding("item", IOType.OUTPUT, PortTierPolicy.always());
 
-        assertThatThrownBy(() -> PortDefinition.of(id("duplicate"), List.of(first, duplicate)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("duplicate");
+        assertThat(PortDefinition.of(id("duplicate"), List.of(first, duplicate)).bindings())
+                .containsExactly(first, duplicate);
     }
 
     @Test
-    void rejects_split_input_and_output_bindings_for_the_same_capability_type() {
+    void preserves_split_input_and_output_bindings_for_the_same_capability_type() {
         CapabilityBinding input = binding("split", CapabilityDirections.of(IOType.INPUT), PortTierPolicy.always());
         CapabilityBinding output = binding("split", CapabilityDirections.of(IOType.OUTPUT), PortTierPolicy.always());
 
-        assertThatThrownBy(() -> PortDefinition.of(id("split"), List.of(input, output)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("duplicate");
+        assertThat(PortDefinition.of(id("split"), List.of(input, output)).bindings())
+                .containsExactly(input, output);
     }
 
     @Test

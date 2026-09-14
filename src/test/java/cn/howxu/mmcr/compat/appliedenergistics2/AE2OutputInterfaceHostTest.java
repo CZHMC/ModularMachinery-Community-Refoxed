@@ -5,16 +5,31 @@ import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.GenericStack;
+import appeng.api.config.LockCraftingMode;
+import appeng.api.config.Settings;
+import appeng.api.config.YesNo;
+import appeng.api.networking.GridFlags;
+import appeng.api.networking.IManagedGridNode;
+import appeng.api.util.AECableType;
+import appeng.me.ManagedGridNode;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.util.InterfaceMenuPolicy;
+import cn.howxu.mmcr.mixin.compat.appliedenergistics2.PatternProviderScreenMixin;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -22,10 +37,19 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.util.ProblemReporter;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,6 +64,7 @@ class AE2OutputInterfaceHostTest {
         TestBootstrap.bootstrap();
         if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
         bindTestAE2InterfaceItem();
+        bindTestPatternInterfaceEntityType();
     }
 
     @Test
@@ -82,6 +107,73 @@ class AE2OutputInterfaceHostTest {
                 Items.IRON_INGOT.getDefaultInstance().copyWithCount(4))).isTrue();
     }
 
+    @Test
+    void patternHostUsesTheNativeChannelledSmartCableNode() throws Exception {
+        PatternInterfaceBlockEntity host = patternHost();
+
+        assertThat(host).isExactlyInstanceOf(PatternInterfaceBlockEntity.class);
+        assertThat(initializationFlags(host.getMainNode())).contains(GridFlags.REQUIRE_CHANNEL);
+        assertThat(host.getCableConnectionType(Direction.NORTH)).isEqualTo(AECableType.SMART);
+    }
+
+    @Test
+    void patternHostKeepsNativePatternAndReturnInventoriesSeparate() {
+        PatternInterfaceBlockEntity host = patternHost();
+
+        assertThat(host.getLogic().getPatternInv().size()).isEqualTo(9);
+        assertThat(host.getLogic().getReturnInv().size()).isEqualTo(9);
+        assertThat((Object) host.getLogic().getPatternInv()).isNotSameAs(host.getLogic().getReturnInv());
+        assertThat(host.itemOutputStorage().reservationIdentity()).isSameAs(host.getLogic().getReturnInv());
+        assertThat(host.fluidOutputStorage().reservationIdentity()).isSameAs(host.getLogic().getReturnInv());
+        assertThat(host.itemInputStorage().reservationIdentity()).isNotSameAs(host.getLogic().getReturnInv());
+        assertThat(host.fluidInputStorage().reservationIdentity()).isNotSameAs(host.getLogic().getReturnInv());
+    }
+
+    @Test
+    void patternHostRestoresNativePriorityAndConfiguration() {
+        PatternInterfaceBlockEntity source = patternHost();
+        source.getLogic().setPriority(7);
+        source.getConfigManager().putSetting(Settings.BLOCKING_MODE, YesNo.YES);
+        source.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE, LockCraftingMode.LOCK_UNTIL_RESULT);
+        TagValueOutput output = TagValueOutput.createWithContext(
+                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()));
+        source.getLogic().writeToNBT(output);
+        PatternInterfaceBlockEntity restored = patternHost();
+
+        restored.getLogic().readFromNBT(TagValueInput.create(
+                ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()), output.buildResult()));
+
+        assertThat(restored.getLogic().getPriority()).isEqualTo(7);
+        assertThat(restored.getConfigManager().getSetting(Settings.BLOCKING_MODE)).isEqualTo(YesNo.YES);
+        assertThat(restored.getConfigManager().getSetting(Settings.LOCK_CRAFTING_MODE))
+                .isEqualTo(LockCraftingMode.LOCK_UNTIL_RESULT);
+    }
+
+    @Test
+    void patternHostExposesSeparateInputAndOutputCapabilityViews() {
+        PatternInterfaceBlockEntity host = patternHost();
+
+        assertThat(host.capabilitySnapshot().capabilities()).hasSize(4);
+        assertThat(host.capabilitySnapshot().capabilities())
+                .filteredOn(capability -> capability.directions().supports(IOType.INPUT)
+                        && !capability.directions().supports(IOType.OUTPUT))
+                .hasSize(2);
+        assertThat(host.capabilitySnapshot().capabilities())
+                .filteredOn(capability -> capability.directions().supports(IOType.OUTPUT)
+                        && !capability.directions().supports(IOType.INPUT))
+                .hasSize(2);
+    }
+
+    @Test
+    void patternProviderTitleChangesOnlyForTheMmcrHost() {
+        var original = net.minecraft.network.chat.Component.translatable("gui.ae2.PatternProvider");
+
+        assertThat(PatternProviderScreenMixin.titleFor(patternHost(), original))
+                .isEqualTo(net.minecraft.network.chat.Component.translatable(
+                        "container.mmcr.ae2_me_pattern_interface"));
+        assertThat(PatternProviderScreenMixin.titleFor(new Object(), original)).isSameAs(original);
+    }
+
     private static final class TestOutputHost extends OutputInterfaceBaseBlockEntity {
         private int inputNotifications;
 
@@ -101,6 +193,11 @@ class AE2OutputInterfaceHostTest {
         }
     }
 
+    private static PatternInterfaceBlockEntity patternHost() {
+        return PatternInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
     private static void bindTestAE2InterfaceItem() {
         Identifier id = Identifier.fromNamespaceAndPath("ae2", "interface");
         MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
@@ -113,6 +210,34 @@ class AE2OutputInterfaceHostTest {
         } finally {
             registry.freeze();
         }
+    }
+
+    private static void bindTestPatternInterfaceEntityType() {
+        Identifier id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
+        MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        registry.unfreeze(true);
+        try {
+            if (!registry.containsKey(id)) {
+                Registry.register(registry, id,
+                        new BlockEntityType<>(PatternInterfaceKind.INSTANCE.entityFactory(), Blocks.IRON_BLOCK));
+            }
+        } finally {
+            registry.freeze();
+        }
+        ModBlockEntities.BES.put(PatternInterfaceKind.INSTANCE.id(),
+                DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<GridFlags> initializationFlags(IManagedGridNode node) throws Exception {
+        Field initDataField = ManagedGridNode.class.getDeclaredField("initData");
+        initDataField.setAccessible(true);
+        Object initData = initDataField.get(node);
+        if (initData == null) throw new AssertionError("AE2 node was initialized before flag inspection");
+
+        Field flagsField = initData.getClass().getDeclaredField("flags");
+        flagsField.setAccessible(true);
+        return Set.copyOf((Set<GridFlags>) flagsField.get(initData));
     }
 
     private static boolean ae2KeyTypesAreInitialized() {

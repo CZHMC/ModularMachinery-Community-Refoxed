@@ -1,18 +1,11 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.capability.CapabilityDirections;
-import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
-import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
-import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
-import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
-import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
@@ -25,27 +18,13 @@ import java.util.List;
  */
 public final class StockingInterfaceKind implements IOPortKind {
     private static final String ID = "ae2_me_stocking_input_interface";
-    private static final List<PortFamilyDescriptor> FAMILIES = List.of(
-            new PortFamilyDescriptor(PortFamilyIds.ITEM, IOType.INPUT, ItemBusSize.values().length,
-                    List.of("item_input_bus")),
-            new PortFamilyDescriptor(PortFamilyIds.FLUID, IOType.INPUT, FluidHatchSize.values().length,
-                    List.of("fluid_input_hatch")));
+    private static final List<PortFamilyDescriptor> FAMILIES = AE2ResourceFamilies.inputFamilies();
 
     public static final StockingInterfaceKind INSTANCE = new StockingInterfaceKind();
 
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
-            new CapabilityBinding(BuiltinCapabilityDefinitions.ITEM_TYPE, CapabilityDirections.of(IOType.INPUT),
-                    context -> {
-                        StockingInterfaceBlockEntity host = (StockingInterfaceBlockEntity) context.host();
-                        return new ItemBusCapability(host, host.itemStorage(), IOType.INPUT, false);
-                    },
-                    (_, _) -> true),
-            new CapabilityBinding(BuiltinCapabilityDefinitions.FLUID_TYPE, CapabilityDirections.of(IOType.INPUT),
-                    context -> {
-                        StockingInterfaceBlockEntity host = (StockingInterfaceBlockEntity) context.host();
-                        return new FluidHatchCapability(host, host.fluidStorage(), IOType.INPUT, false);
-                    },
-                    (_, _) -> true)));
+            AE2ResourceFamilies.ITEM.inputBinding(host -> ((StockingInterfaceBlockEntity) host).itemStorage(), false),
+            AE2ResourceFamilies.FLUID.inputBinding(host -> ((StockingInterfaceBlockEntity) host).fluidStorage(), false)));
 
     private StockingInterfaceKind() {}
 

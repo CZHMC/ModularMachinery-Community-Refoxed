@@ -14,6 +14,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.*;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.*;
 import com.mojang.serialization.Lifecycle;
@@ -74,6 +75,7 @@ class AE2InputInterfaceKindTest {
         PortKinds.clearForTesting();
         PortKinds.register(StockingInterfaceKind.INSTANCE);
         PortKinds.register(OutputInterfaceKind.INSTANCE);
+        PortKinds.register(PatternInterfaceKind.INSTANCE);
     }
 
     @AfterAll
@@ -224,6 +226,8 @@ class AE2InputInterfaceKindTest {
                 .contains(GridFlags.REQUIRE_CHANNEL);
         assertThat(initializationFlags(newAsyncOutputEntity().getMainNode()))
                 .contains(GridFlags.REQUIRE_CHANNEL);
+        assertThat(initializationFlags(newPatternEntity().getMainNode()))
+                .contains(GridFlags.REQUIRE_CHANNEL);
     }
 
     @Test
@@ -240,6 +244,14 @@ class AE2InputInterfaceKindTest {
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
 
         assertThat(entity).isExactlyInstanceOf(AsyncOutputInterfaceBlockEntity.class);
+    }
+
+    @Test
+    void entityFactoryCreatesPatternInterfaceHost() {
+        var entity = PatternInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+
+        assertThat(entity).isExactlyInstanceOf(PatternInterfaceBlockEntity.class);
     }
 
     @Test
@@ -448,6 +460,11 @@ class AE2InputInterfaceKindTest {
         }
     }
 
+    private static PatternInterfaceBlockEntity newPatternEntity() {
+        return PatternInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
     private static RegisterCapabilitiesEvent capabilityEvent() {
         try {
             Constructor<RegisterCapabilitiesEvent> constructor = RegisterCapabilitiesEvent.class.getDeclaredConstructor();
@@ -483,6 +500,7 @@ class AE2InputInterfaceKindTest {
         bindTestEntityType(StockingInterfaceKind.INSTANCE);
         bindTestEntityType(OutputInterfaceKind.INSTANCE);
         bindTestEntityType(AsyncOutputInterfaceKind.INSTANCE);
+        bindTestEntityType(PatternInterfaceKind.INSTANCE);
     }
 
     private static void bindTestEntityType(IOPortKind kind) {

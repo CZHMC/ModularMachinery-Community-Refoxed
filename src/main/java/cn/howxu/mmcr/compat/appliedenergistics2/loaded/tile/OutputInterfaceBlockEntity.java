@@ -8,8 +8,7 @@ import appeng.api.networking.ticking.TickingRequest;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.MEStorage;
 import appeng.core.settings.TickRates;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
@@ -44,12 +43,10 @@ public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEn
                 ? IActionSource.ofMachine(this) : actionSource;
         outputTicker = new OutputTicker();
         mainNode.addService(IGridTickable.class, outputTicker);
-        itemStorage = new OutputResourceStorage<>(getStorage(), effectiveNetworkSupplier,
-                ItemResourceStorage.adapter(), effectiveActionSource,
-                this::onStorageChanged);
-        fluidStorage = new OutputResourceStorage<>(getStorage(), effectiveNetworkSupplier,
-                FluidResourceStorage.adapter(), effectiveActionSource,
-                this::onStorageChanged);
+        itemStorage = AE2ResourceFamilies.ITEM.outputView(getStorage(), effectiveNetworkSupplier,
+                effectiveActionSource, this::onStorageChanged);
+        fluidStorage = AE2ResourceFamilies.FLUID.outputView(getStorage(), effectiveNetworkSupplier,
+                effectiveActionSource, this::onStorageChanged);
     }
 
     @Override

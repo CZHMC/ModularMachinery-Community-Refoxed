@@ -23,8 +23,7 @@ import appeng.me.storage.NullInventory;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.FluidNetworkResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.ItemNetworkResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -89,9 +88,9 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     private final IManagedGridNode uiNode = GridHelper.createManagedNode(this, UI_NODE_LISTENER);
     private final InterfaceLogic logic = new InterfaceLogic(uiNode, this, AEBlocks.INTERFACE.asItem());
     private final LiveResourceStorage<ItemResource> itemStorage = new LiveResourceStorage<>(
-            new ItemNetworkResourceStorage(NullInventory.of(), List.of()));
+            AE2ResourceFamilies.ITEM.stockingInputView(NullInventory.of(), List.of()));
     private final LiveResourceStorage<FluidResource> fluidStorage = new LiveResourceStorage<>(
-            new FluidNetworkResourceStorage(NullInventory.of(), List.of()));
+            AE2ResourceFamilies.FLUID.stockingInputView(NullInventory.of(), List.of()));
     @Nullable
     private IStackWatcher storageWatcher;
     private CapabilitySnapshot capabilitySnapshot;
@@ -255,8 +254,8 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         IGrid grid = mainNode.getGrid();
         MEStorage storage = grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
         List<AEKey> keys = configuredKeys();
-        itemStorage.rebind(new ItemNetworkResourceStorage(storage, keys));
-        fluidStorage.rebind(new FluidNetworkResourceStorage(storage, keys));
+        itemStorage.rebind(AE2ResourceFamilies.ITEM.stockingInputView(storage, keys));
+        fluidStorage.rebind(AE2ResourceFamilies.FLUID.stockingInputView(storage, keys));
     }
 
     private List<AEKey> configuredKeys() {

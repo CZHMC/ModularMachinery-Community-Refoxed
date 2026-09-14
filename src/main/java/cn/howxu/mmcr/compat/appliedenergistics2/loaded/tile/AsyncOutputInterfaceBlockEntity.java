@@ -10,8 +10,7 @@ import appeng.api.storage.MEStorage;
 import appeng.core.settings.TickRates;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.AsyncOutputResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AsyncOutputService;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -51,10 +50,10 @@ public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBl
                 ? IActionSource.ofMachine(this) : actionSource;
         asyncTicker = new AsyncOutputTicker();
         mainNode.addService(IGridTickable.class, asyncTicker);
-        itemStorage = new AsyncOutputResourceStorage<>(effectiveNetworkSupplier,
-                ItemResourceStorage.adapter(), service, effectiveActionSource, this::wakeAsyncTicker);
-        fluidStorage = new AsyncOutputResourceStorage<>(effectiveNetworkSupplier,
-                FluidResourceStorage.adapter(), service, effectiveActionSource, this::wakeAsyncTicker);
+        itemStorage = AE2ResourceFamilies.ITEM.asyncOutputView(effectiveNetworkSupplier,
+                service, effectiveActionSource, this::wakeAsyncTicker);
+        fluidStorage = AE2ResourceFamilies.FLUID.asyncOutputView(effectiveNetworkSupplier,
+                service, effectiveActionSource, this::wakeAsyncTicker);
     }
 
     @Override

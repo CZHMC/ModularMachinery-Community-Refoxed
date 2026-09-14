@@ -64,7 +64,8 @@ class AE2BridgeTest {
                         "ae2_me_input_interface",
                         "ae2_me_stocking_input_interface",
                         "ae2_me_output_interface",
-                        "ae2_me_async_output_interface");
+                        "ae2_me_async_output_interface",
+                        "ae2_me_pattern_interface");
     }
 
     @Test
@@ -73,6 +74,7 @@ class AE2BridgeTest {
 
         assertThat(bridge.isPort("ae2_me_output_interface")).isTrue();
         assertThat(bridge.isPort("ae2_me_async_output_interface")).isTrue();
+        assertThat(bridge.isPort("ae2_me_pattern_interface")).isTrue();
     }
 
     @Test
@@ -91,5 +93,8 @@ class AE2BridgeTest {
         assertThat(bridge.portOverlayTexture(AsyncOutputInterfaceKind.INSTANCE))
                 .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
                         "mmcr", "block/appliedenergistics2/ae2_async_output"));
+        assertThat(bridge.portOverlayTexture(cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind.INSTANCE))
+                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
+                        "mmcr", "block/appliedenergistics2/ae2_pattern_interface"));
     }
 }

@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 
 import appeng.me.helpers.IGridConnectedBlockEntity;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -46,5 +49,17 @@ public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAc
             default -> ChatFormatting.RED;
         };
         tooltip.add(Component.translatable(key)); // .withStyle(color)
+        if (accessor.getTarget() instanceof CapabilityHost host) {
+            host.capabilities().stream()
+                    .filter(capability -> capability.directions().supports(IOType.OUTPUT)
+                            && !capability.directions().supports(IOType.INPUT))
+                    .flatMap(capability -> capability.facet(PresentationFacet.class).stream()
+                            .flatMap(facet -> facet.displays(capability.view()).stream()))
+                    .filter(display -> (display.label().equals("item") || display.label().equals("fluid"))
+                            && !display.value().equals("0"))
+                    .forEach(display -> tooltip.add(Component.translatable("gui.mmcr.port."
+                            + display.label() + "s").append(Component.literal(" " + display.value()
+                            + (display.unit().equals("item") ? "" : " " + display.unit())))));
+        }
     }
 }
