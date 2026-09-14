@@ -228,6 +228,67 @@ class AE2OutputResourceStorageTest {
     }
 
     @Test
+    void patternOutputRetainsNearMaximumItemNetworkShortfallsWithoutOverflow() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        var ironKey = AEItemKey.of(iron);
+        PatternProviderReturnInventory returns = new PatternProviderReturnInventory(() -> {
+        });
+        FakeMEStorage network = new FakeMEStorage(ironKey, Long.MAX_VALUE);
+        network.setModulationLimit(Long.MAX_VALUE - 1L);
+        OutputResourceStorage<ItemResource> storage = AE2ResourceFamilies.ITEM.patternOutputView(returns,
+                () -> network, source(Double.MAX_VALUE), () -> {
+                });
+        var plan = storage.planOutput(iron, Long.MAX_VALUE, new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(Long.MAX_VALUE);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+
+        assertThat(network.amount(ironKey)).isEqualTo(Long.MAX_VALUE - 1L);
+        assertThat(returns.getStack(0)).isEqualTo(new GenericStack(ironKey, 1L));
+    }
+
+    @Test
+    void patternOutputRollsBackNetworkWhenNativeReturnCapacityChangesBeforeRootCommit() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
+        var ironKey = AEItemKey.of(iron);
+        var goldKey = AEItemKey.of(gold);
+        PatternProviderReturnInventory returns = new PatternProviderReturnInventory(() -> {
+        });
+        returns.setStack(0, new GenericStack(ironKey, 59L));
+        for (int slot = 1; slot < returns.size(); slot++) {
+            returns.setStack(slot, new GenericStack(goldKey, 64L));
+        }
+        FakeMEStorage network = new FakeMEStorage(ironKey, 8L);
+        network.setModulationLimit(3L);
+        OutputResourceStorage<ItemResource> storage = AE2ResourceFamilies.ITEM.patternOutputView(returns,
+                () -> network, source(), () -> {
+                });
+        var plan = storage.planOutput(iron, 8L, new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(8L);
+        assertThat(returns.getMaxAmount(ironKey) - returns.getAmount(0)).isEqualTo(5L);
+        returns.setStack(0, new GenericStack(ironKey, 64L));
+
+        assertThatThrownBy(() -> {
+            try (Transaction transaction = Transaction.openRoot()) {
+                assertThat(plan.operation().commit(transaction).success()).isTrue();
+                transaction.commit();
+            }
+        }).hasRootCauseMessage("Unable to retain AE2 output network shortfall");
+
+        assertThat(network.amount(ironKey)).isZero();
+        assertThat(network.extractedAmount()).isEqualTo(3L);
+        assertThat(returns.getStack(0)).isEqualTo(new GenericStack(ironKey, 64L));
+        for (int slot = 1; slot < returns.size(); slot++) {
+            assertThat(returns.getStack(slot)).isEqualTo(new GenericStack(goldKey, 64L));
+        }
+    }
+
+    @Test
     void rootCommitRejectsAnUncompensableNetworkShortfallBeforeModulation() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         GenericStackInv cache = inventory(1);
