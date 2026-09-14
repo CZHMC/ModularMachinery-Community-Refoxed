@@ -2,14 +2,27 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import cn.howxu.mmcr.util.IOType;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -39,6 +52,34 @@ public final class CraftingContext {
 
     public PlanningResult planInputs(MachineRecipe recipe, long parallelism) {
         return planInputs(recipe, parallelism, Set.of(), Set.of());
+    }
+
+    /**
+     * Captures native capability values and prepares a worker-safe requirement descriptor.
+     * This method must be called on the server thread when async-capable capabilities are present.
+     */
+    public AsyncRequirementPlanner.PreparedPlan planAsync(List<MachineRequirement> requirements, long parallelism) {
+        if (requirements == null || parallelism <= 0L) {
+            throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
+        }
+        List<AsyncRequirementPlanner.Capability> asyncCapabilities = new ArrayList<>();
+        for (MachineCapability capability : capabilities) {
+            AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElse(null);
+            if (facet == null) continue;
+            AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();
+            AsyncCapabilityPlanner planner = facet.workerPlanner();
+            asyncCapabilities.add(new AsyncRequirementPlanner.Capability(planner, snapshot,
+                    capability.directions().values()));
+        }
+        List<AsyncRequirementPlanner.Requirement> preparedRequirements = new ArrayList<>();
+        List<Integer> fallback = new ArrayList<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            AsyncRequirementPlanner.Requirement prepared = prepareAsyncRequirement(index, requirements.get(index),
+                    parallelism, asyncCapabilities);
+            if (prepared == null) fallback.add(index);
+            else preparedRequirements.add(prepared);
+        }
+        return new AsyncRequirementPlanner.PreparedPlan(preparedRequirements, asyncCapabilities, fallback);
     }
 
     public PlanningResult planInputs(MachineRecipe recipe, long parallelism,
@@ -149,6 +190,92 @@ public final class CraftingContext {
         List<MachineRequirement> recipeRequirements = recipe.runtimeRequirements(modifiers);
         return plan(recipeRequirements, parallelism, direction, consumedAtStart, retainedInputs,
                 partialOutputPolicies(recipeRequirements, recipe.allowPartialOutputs()));
+    }
+
+    private static AsyncRequirementPlanner.Requirement prepareAsyncRequirement(int index,
+                                                                                MachineRequirement requirement,
+                                                                                long parallelism,
+                                                                                List<AsyncRequirementPlanner.Capability> capabilities) {
+        if (requirement instanceof ItemRequirement item) {
+            long amount = item.io() == RecipeModifier.IOType.INPUT
+                    ? scaled(item.count(), parallelism) : scaled(item.stack(null).getCount(), parallelism);
+            if (amount <= 0L || (item.io() == RecipeModifier.IOType.INPUT && item.item() == null)) return null;
+            List<AsyncCapabilityRequest> requests = new ArrayList<>();
+            if (item.io() == RecipeModifier.IOType.INPUT) {
+                for (AsyncResourceValue value : resources(capabilities, item.type().id(), IOType.INPUT)) {
+                    ItemResource resource;
+                    try {
+                        resource = NativeAsyncResourceValues.item(value);
+                    } catch (IllegalArgumentException exception) {
+                        continue;
+                    }
+                    if (item.item().test(resource.toStack(1)) && item.components().matches(resource.toStack(1))) {
+                        requests.add(resourceRequest(item.type().id(), parallelism, value, amount, false));
+                    }
+                }
+            } else if (!item.stack(null).isEmpty()) {
+                requests.add(resourceRequest(item.type().id(), parallelism,
+                        NativeAsyncResourceValues.item(ItemResource.of(item.stack(null))), amount, true));
+            }
+            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
+                    IOType.valueOf(item.io().name()), requests);
+        }
+        if (requirement instanceof FluidRequirement fluid) {
+            long amount = fluid.io() == RecipeModifier.IOType.INPUT
+                    ? scaled(fluid.amount(), parallelism) : scaled(fluid.stack().getAmount(), parallelism);
+            if (amount <= 0L || (fluid.io() == RecipeModifier.IOType.INPUT && fluid.fluid() == null)) return null;
+            List<AsyncCapabilityRequest> requests = new ArrayList<>();
+            if (fluid.io() == RecipeModifier.IOType.INPUT) {
+                for (AsyncResourceValue value : resources(capabilities, fluid.type().id(), IOType.INPUT)) {
+                    FluidResource resource;
+                    try {
+                        resource = NativeAsyncResourceValues.fluid(value);
+                    } catch (IllegalArgumentException exception) {
+                        continue;
+                    }
+                    if (fluid.fluid().test(resource.toStack(1))) {
+                        requests.add(resourceRequest(fluid.type().id(), parallelism, value, amount, false));
+                    }
+                }
+            } else if (!fluid.stack().isEmpty()) {
+                requests.add(resourceRequest(fluid.type().id(), parallelism,
+                        NativeAsyncResourceValues.fluid(FluidResource.of(fluid.stack())), amount, true));
+            }
+            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
+                    IOType.valueOf(fluid.io().name()), requests);
+        }
+        if (requirement instanceof EnergyRequirement energy && energy.fePerTick() > 0L) {
+            return new AsyncRequirementPlanner.Requirement(index, scaled(energy.fePerTick(), parallelism),
+                    IOType.valueOf(energy.io().name()), List.of(new AsyncCapabilityRequest.Scalar(energy.type().id(),
+                    parallelism, scaled(energy.fePerTick(), parallelism), energy.io() == RecipeModifier.IOType.OUTPUT)));
+        }
+        return null;
+    }
+
+    private static AsyncCapabilityRequest.Resource resourceRequest(net.minecraft.resources.Identifier capabilityId,
+                                                                    long parallelism, AsyncResourceValue resource,
+                                                                    long amount, boolean insert) {
+        return new AsyncCapabilityRequest.Resource(capabilityId, parallelism,
+                List.of(new AsyncResourceAction(resource, amount, insert)));
+    }
+
+    private static List<AsyncResourceValue> resources(List<AsyncRequirementPlanner.Capability> capabilities,
+                                                       net.minecraft.resources.Identifier capabilityId,
+                                                       IOType direction) {
+        List<AsyncResourceValue> values = new ArrayList<>();
+        for (AsyncRequirementPlanner.Capability capability : capabilities) {
+            if (!capability.directions().contains(direction)
+                    || !(capability.snapshot() instanceof AsyncCapabilitySnapshot.Resource snapshot)
+                    || !capabilityId.equals(snapshot.capabilityId())) continue;
+            snapshot.slots().stream().map(AsyncCapabilitySnapshot.ResourceSlot::resource)
+                    .flatMap(java.util.Optional::stream).filter(value -> !values.contains(value)).forEach(values::add);
+        }
+        return values;
+    }
+
+    private static long scaled(long amount, long parallelism) {
+        if (amount <= 0L) return 0L;
+        return amount > Long.MAX_VALUE / parallelism ? Long.MAX_VALUE : amount * parallelism;
     }
 
     private PlanningResult plan(List<MachineRequirement> source, long parallelism, RecipeModifier.IOType direction,

@@ -6,6 +6,8 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
@@ -15,6 +17,9 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -45,6 +50,7 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     private final IOType ioType;
     private final LongValueStorage storage;
     private final CapabilityView view;
+    private final AsyncPlanningFacet asyncPlanning;
 
     public EnergyHatchCapability(LongValueStorage storage, IOType ioType) {
         this(null, storage, ioType);
@@ -56,9 +62,26 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
+        this.asyncPlanning = new AsyncPlanningFacet() {
+            @Override
+            protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
+                return new AsyncCapabilitySnapshot.Scalar(type().id(), storage.amount(), storage.capacity());
+            }
+
+            @Override
+            protected AsyncCapabilityPlanner workerPlannerOnServerThread() {
+                return new AsyncCapabilityPlanner.Scalar(type().id());
+            }
+
+            @Override
+            protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
+                                                             net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
+                return commitAsync(operation, transaction);
+            }
+        };
         this.view = CapabilityFactories.view(type(), directions(),
                 Set.of(ScalarFacet.class, ValueFacet.class, TransferFacet.class, OperationFacet.class,
-                        PresentationFacet.class, SyncFacet.class));
+                        PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
     }
 
     public EnergyHatchCapability(EnergyHatchBlockEntity port) {
@@ -96,6 +119,12 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     @Override
     public CapabilityView view() {
         return view;
+    }
+
+    @Override
+    public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+        if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        return MachineCapability.super.facet(facetType);
     }
 
     @Override
@@ -139,6 +168,18 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         FailureOccurrence occurrence = FailureOccurrence.at(reason, type().id(), FailurePhase.CAPABILITY_COMMIT,
                 null, null, details);
         return CapabilityResult.failure(ExecutionStatus.blocked(type().id(), type().id(), occurrence));
+    }
+
+    private CapabilityResult commitAsync(AsyncCapabilityOperation operation,
+                                         net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
+        if (!(operation instanceof AsyncCapabilityOperation.Scalar scalar)
+                || !type().id().equals(scalar.capabilityId())) {
+            return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        }
+        long moved = scalar.insert() ? storage.insert(scalar.amount(), transaction)
+                : storage.extract(scalar.amount(), transaction);
+        return moved == scalar.amount() ? CapabilityResult.successful()
+                : failure(scalar.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Override

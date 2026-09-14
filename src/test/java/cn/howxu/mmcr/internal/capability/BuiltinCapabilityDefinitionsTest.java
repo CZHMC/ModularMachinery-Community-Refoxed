@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.capability;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
@@ -54,6 +55,9 @@ class BuiltinCapabilityDefinitionsTest {
         assertThat(item.facets()).contains(ResourceFacet.class, OperationFacet.class);
         assertThat(fluid.facets()).contains(ResourceFacet.class, OperationFacet.class);
         assertThat(energy.facets()).contains(ScalarFacet.class, OperationFacet.class);
+        assertThat(item.facets()).contains(AsyncPlanningFacet.class);
+        assertThat(fluid.facets()).contains(AsyncPlanningFacet.class);
+        assertThat(energy.facets()).contains(AsyncPlanningFacet.class);
     }
 
     @Test
