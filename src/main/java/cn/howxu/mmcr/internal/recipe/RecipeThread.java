@@ -10,6 +10,8 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
@@ -300,24 +302,40 @@ public abstract class RecipeThread {
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 snapshot.stateVersion(),
-                () -> {
-                    if (!validateCurrentRuntime(token, domain)) return false;
-                    boolean wasActive = runtime.active();
-                    runtime.tick();
-                    if (runtime.finishPending()) {
-                        if (runtime.shouldRetryFinish()) requestFinish(level, domain, token);
-                        else clearPendingTick();
-                        controller.syncRecipeRuntimeFailure(runtime);
-                        return true;
-                    }
-                    completeIfFinished(wasActive);
-                    controller.syncRecipeRuntimeFailure(runtime);
-                    return true;
-                },
+                 () -> {
+                     if (!validateCurrentRuntime(token, domain)) return false;
+                     AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan();
+                     if (preparedPlan == null) {
+                         completeAsyncTick(new AsyncRequirementPlanner.PlanResult(List.of(), List.of()));
+                         return false;
+                     }
+                     return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
+                             controller.getBlockPos(), level.getGameTime()), AsyncCraftingExecution.tick(this, preparedPlan));
+                 },
                  () -> validateCurrentRuntime(token, domain),
                  () -> controller.currentRuntimeSnapshot().structure().version(),
                  () -> controller.currentRuntimeSnapshot().stateVersion()
          ));
+    }
+
+    /** Runs only from {@link AsyncCraftingExecution}'s explicit main-thread intent commit step. */
+    public void completeAsyncTick(AsyncRequirementPlanner.PlanResult ignoredPlan) {
+        if (!tickPending || !runtime.active()) return;
+        if (!validateCurrentRuntime(pendingTickToken, pendingTickDomain)) return;
+        boolean wasActive = runtime.active();
+        runtime.completeAsyncTick(ignoredPlan);
+        if (runtime.finishPending()) {
+            if (runtime.shouldRetryFinish()) {
+                if (controller.getLevel() instanceof ServerLevel level && pendingTickDomain != null) {
+                    requestFinish(level, pendingTickDomain, pendingTickToken);
+                }
+            } else {
+                clearPendingTick();
+            }
+        } else {
+            completeIfFinished(wasActive);
+        }
+        controller.syncRecipeRuntimeFailure(runtime);
     }
 
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
@@ -426,6 +444,7 @@ public abstract class RecipeThread {
     protected void onPendingStartCatalogChanged() { }
     protected @Nullable RecipeSearchContextKey searchContextKeyForStart() { return null; }
     protected String laneId() { return "base"; }
+    public final String asyncLaneId() { return laneId(); }
 
     private static @Nullable Identifier recipePoolForMachine(ControllerRuntimeSnapshot snapshot) {
         Machine machine = snapshot.structure().machine() == null

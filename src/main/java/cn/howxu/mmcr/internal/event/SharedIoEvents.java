@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
 import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.network.NetworkServerState;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -26,6 +27,7 @@ public final class SharedIoEvents {
         if (event.getLevel() instanceof ServerLevel level) {
             ModuleConnectionCoordinator.tick(level);
             SharedIoCoordinator.get(level).resolve(level);
+            MachineAsyncCoordinator.get(level).completeTick();
             NetworkInterfaceBindingCoordinator.heartbeat(level);
         }
     }
@@ -38,6 +40,7 @@ public final class SharedIoEvents {
     public static void onLevelUnload(LevelEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel level) {
             SharedIoCoordinator.discard(level);
+            MachineAsyncCoordinator.discard(level);
             ModuleConnectionRefreshQueue.discard(level);
             StructureClaimRegistry.discard(level);
             MachineControllerBlockEntity.clearFormedControllerIndex(level);

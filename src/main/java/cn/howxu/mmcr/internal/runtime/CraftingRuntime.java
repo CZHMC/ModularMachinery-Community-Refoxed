@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
@@ -35,6 +36,8 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -47,6 +50,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -54,6 +58,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -85,6 +90,7 @@ public final class CraftingRuntime {
     private boolean patternStartReserved;
     private boolean smartInterfaceChangePending;
     private @Nullable ExecutionStatus capabilityTickFailure;
+    private @Nullable AsyncTickPreparation asyncTickPreparation;
 
     public CraftingRuntime(MachineControllerBlockEntity controller, ComponentRuntime components) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -289,6 +295,66 @@ public final class CraftingRuntime {
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
         if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, machineContext, recipeTickContext)) return status;
+        status = CraftingStatus.working();
+        failure = null;
+        return status;
+    }
+
+    /** Captures the immutable per-tick values consumed by worker-side native requirement planning. */
+    public @Nullable AsyncRequirementPlanner.PreparedPlan prepareAsyncTickPlan() {
+        asyncTickPreparation = null;
+        if (!active()) return null;
+        if (!versionsCurrent()) {
+            invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
+            return null;
+        }
+        if (activeRecipe.isFinishPending()) return null;
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        RecipeBehavior behavior = recipeBehavior(runtime);
+        if (behavior == null) {
+            waiting(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.PER_TICK, Map.of()));
+            return null;
+        }
+        MachineBehaviorContext machineContext = behaviorContext();
+        RecipeTickContext tickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
+                activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
+                MachineRecipeConverter.toPublicRequirements(effectiveRequirements()), activeOutputs(),
+                new CapabilitySnapshot(components.capabilities()));
+        if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, tickContext)) return null;
+        try {
+            behavior.recipeTick().accept(tickContext);
+        } catch (RuntimeException exception) {
+            logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
+        } finally {
+            flushScreenTextReplacements(machineContext.screenText());
+        }
+        asyncTickPreparation = new AsyncTickPreparation(runtime, tickContext);
+        return context(runtime).planAsync(perTickRequirements(), activeRecipe.getParallelism());
+    }
+
+    /** Commits worker-planned native operations, then completes the remaining main-thread tick phases. */
+    public CraftingStatus completeAsyncTick(AsyncRequirementPlanner.PlanResult planned) {
+        AsyncTickPreparation preparation = asyncTickPreparation;
+        asyncTickPreparation = null;
+        if (preparation == null || !active()) return status;
+        if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
+        if (!commitAsyncTickPlan(planned, preparation.runtime())) return status;
+        if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, behaviorContext(), preparation.tickContext())) {
+            if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
+            return status;
+        }
+        int gameTime = currentGameTime();
+        if (activeRecipe.needsFinishCommit()) {
+            if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) {
+                if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
+                return status;
+            }
+            activeRecipe.beginFinishCommit();
+            status = CraftingStatus.working();
+            return status;
+        }
+        activeRecipe.applyTickGrant(true, false, gameTime);
+        if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) return status;
         status = CraftingStatus.working();
         failure = null;
         return status;
@@ -736,8 +802,66 @@ public final class CraftingRuntime {
     }
 
     private PlanningResult planPerTick(CraftingContext context) {
-        List<MachineRequirement> requirements = new ArrayList<>();
+        List<MachineRequirement> requirements = perTickRequirements();
         Map<Integer, OutputPolicy> outputPolicies = new LinkedHashMap<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            MachineRequirement requirement = requirements.get(index);
+            if (isPerTickOutput(requirement)) {
+                outputPolicies.put(index, activeRecipe.getRecipe().allowPartialOutputs()
+                        ? OutputPolicy.ALLOW_PARTIAL : OutputPolicy.REQUIRE_FULL);
+            }
+        }
+        return context.planRequirements(requirements, activeRecipe.getParallelism(), outputPolicies);
+    }
+
+    private boolean commitAsyncTickPlan(AsyncRequirementPlanner.PlanResult planned,
+                                        ControllerRuntimeSnapshot runtime) {
+        if (planned == null || !planned.mainThreadRequirements().isEmpty()) {
+            PlanningResult fallback = planPerTick(context(runtime));
+            CraftingPlan plan = fallback.plan();
+            if (!fallback.successful() || plan == null || plan.parallelism() < activeRecipe.getParallelism()) {
+                waiting(fallback.failure());
+                return false;
+            }
+            try {
+                if (!plan.commit()) {
+                    waiting(plan.failure());
+                    return false;
+                }
+                return true;
+            } catch (RuntimeException exception) {
+                logTickFailure("fallback_commit", runtime, activeRecipe.getRecipe(), exception);
+                waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+                return false;
+            }
+        }
+        List<AsyncPlanningFacet> facets = components.capabilities().stream()
+                .map(capability -> capability.facet(AsyncPlanningFacet.class).orElse(null))
+                .filter(Objects::nonNull).toList();
+        try (Transaction transaction = Transaction.openRoot()) {
+            for (AsyncRequirementPlanner.PlannedOperation operation : planned.operations()) {
+                if (operation.capabilityIndex() >= facets.size()) {
+                    waiting(failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.PER_TICK, Map.of()));
+                    return false;
+                }
+                CapabilityResult result = facets.get(operation.capabilityIndex()).commit(operation.operation(), transaction);
+                if (result == null || !result.success()) {
+                    waiting(result == null ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of())
+                            : result.status());
+                    return false;
+                }
+            }
+            transaction.commit();
+            return true;
+        } catch (RuntimeException exception) {
+            logTickFailure("async_commit", runtime, activeRecipe.getRecipe(), exception);
+            waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+            return false;
+        }
+    }
+
+    private List<MachineRequirement> perTickRequirements() {
+        List<MachineRequirement> requirements = new ArrayList<>();
         List<MachineRequirement> source = effectiveRequirements();
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
@@ -750,12 +874,10 @@ public final class CraftingRuntime {
                 }
                 requirements.add(requirement);
             } else if (isPerTickOutput(requirement)) {
-                outputPolicies.put(requirements.size(), activeRecipe.getRecipe().allowPartialOutputs()
-                        ? OutputPolicy.ALLOW_PARTIAL : OutputPolicy.REQUIRE_FULL);
                 requirements.add(requirement);
             }
         }
-        return context.planRequirements(requirements, activeRecipe.getParallelism(), outputPolicies);
+        return requirements;
     }
 
     private List<MachineRequirement> finishRequirements() {
@@ -901,6 +1023,9 @@ public final class CraftingRuntime {
         return ExecutionStatus.blocked(source, source,
                 FailureOccurrence.at(reason, source, phase,
                         activeRecipe == null ? null : activeRecipe.getRecipe().id(), null, details));
+    }
+
+    private record AsyncTickPreparation(ControllerRuntimeSnapshot runtime, RecipeTickContext tickContext) {
     }
 
     private static String failureUnloc(ExecutionStatus status) {

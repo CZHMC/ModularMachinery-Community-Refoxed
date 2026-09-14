@@ -9,6 +9,21 @@ package cn.howxu.mmcr.internal.async;
 public interface MainThreadStep {
     Result execute();
 
+    default Kind kind() {
+        return Kind.GENERIC;
+    }
+
+    enum Kind {
+        GENERIC,
+        BEFORE_START,
+        RECIPE_TICK,
+        BEFORE_FINISH,
+        CAPABILITY_TICK,
+        UNSUPPORTED_REQUIREMENT,
+        INTENT_COMMIT,
+        SCREEN_TEXT_FLUSH
+    }
+
     sealed interface Result permits Result.Success, Result.Failure {
         record Success() implements Result {
         }
@@ -26,6 +41,14 @@ public interface MainThreadStep {
     }
 
     record TestStep(Runnable action) implements MainThreadStep {
+        @Override
+        public Result execute() {
+            action.run();
+            return Result.success();
+        }
+    }
+
+    record Named(Kind kind, Runnable action) implements MainThreadStep {
         @Override
         public Result execute() {
             action.run();
