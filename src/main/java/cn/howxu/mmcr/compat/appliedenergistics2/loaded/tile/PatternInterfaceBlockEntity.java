@@ -142,6 +142,11 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         return AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv());
     }
 
+    /** Notifies linked controllers after AE2's native return inventory drains. */
+    public void onNativeReturnInventoryDrained() {
+        notifyStorageChanged();
+    }
+
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
         return new CapabilitySnapshot(kind.definition().bindings().stream()
@@ -174,6 +179,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         GridHelper.onFirstTick(this, blockEntity -> {
             if (blockEntity.getLevel() != null) {
                 blockEntity.mainNode.create(blockEntity.getLevel(), blockEntity.getBlockPos());
+                blockEntity.logic.updatePatterns();
             }
         });
     }
@@ -201,7 +207,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     private void onNetworkChanged() {
-        if (!logic.getReturnInv().isEmpty()) logic.onMainNodeStateChanged();
+        if (!logic.getReturnInv().isEmpty() || logic.isBusy()) logic.onMainNodeStateChanged();
     }
 
     private MEStorage networkStorage() {

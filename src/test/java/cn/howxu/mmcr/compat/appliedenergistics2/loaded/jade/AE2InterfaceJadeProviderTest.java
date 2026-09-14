@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 
 import appeng.api.networking.IGridNode;
+import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.AEKeyTypes;
+import appeng.api.stacks.AEKeyTypesInternal;
+import appeng.api.stacks.GenericStack;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
@@ -15,15 +20,31 @@ import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.*;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import com.mojang.serialization.Lifecycle;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.ITooltip;
@@ -35,6 +56,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,6 +66,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class AE2InterfaceJadeProviderTest {
+
+    @BeforeAll
+    static void setup() throws Exception {
+        TestBootstrap.bootstrap();
+        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
+        bindTestPatternInterfaceEntityType();
+    }
 
     @Test
     void registersTheComponentProviderForIoPortBlocks() {
@@ -92,19 +121,94 @@ class AE2InterfaceJadeProviderTest {
     }
 
     @Test
-    void componentProviderRendersOnlyNonEmptyOutputCapabilityContents() {
+    void componentProviderRendersServerSynchronizedOutputCapabilityContentsWithoutInputContents() {
         CompoundTag serverData = new CompoundTag();
-        serverData.putByte(InterfaceJadeDataProvider.STATE, (byte) 3);
+        AtomicReference<List<MachineCapability>> capabilities = new AtomicReference<>(List.of(
+                new PresentedCapability("item", "4", "item", IOType.INPUT),
+                new PresentedCapability("fluid", "1,000", "mB", IOType.OUTPUT)));
         List<Component> added = new ArrayList<>();
-        Object host = capabilityGridHost();
+        Object serverHost = capabilityGridHost(capabilities);
 
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(serverData, accessor(serverHost, new CompoundTag()));
         InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
-                tooltip(added), accessor(host, serverData), null);
+                tooltip(added), accessor(gridHost(), serverData), null);
 
         assertThat(added).contains(
                 Component.translatable("gui.mmcr.port.fluids").append(Component.literal(" 1,000 mB")));
         assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.items")
                 .append(Component.literal(" 4")));
+
+        capabilities.set(List.of(new PresentedCapability("fluid", "0", "mB", IOType.OUTPUT)));
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(serverData, accessor(serverHost, new CompoundTag()));
+        added.clear();
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
+                tooltip(added), accessor(gridHost(), serverData), null);
+
+        assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.fluids")
+                .append(Component.literal(" 1,000 mB")));
+    }
+
+    @Test
+    void dataProviderSynchronizesPatternReturnInventoryMutations() {
+        PatternInterfaceBlockEntity host = patternHost();
+        CompoundTag serverData = new CompoundTag();
+        List<Component> added = new ArrayList<>();
+
+        host.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4L));
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(serverData, accessor(host, new CompoundTag()));
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
+                tooltip(added), accessor(gridHost(), serverData), null);
+
+        assertThat(added).contains(Component.translatable("gui.mmcr.port.items")
+                .append(Component.literal(" 4")));
+
+        host.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(serverData, accessor(host, new CompoundTag()));
+        added.clear();
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
+                tooltip(added), accessor(gridHost(), serverData), null);
+
+        assertThat(added).contains(Component.translatable("gui.mmcr.port.items")
+                .append(Component.literal(" 1")));
+        assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.items")
+                .append(Component.literal(" 4")));
+    }
+
+    private static PatternInterfaceBlockEntity patternHost() {
+        return PatternInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    private static boolean ae2KeyTypesAreInitialized() {
+        try {
+            return !AEKeyTypes.getAll().isEmpty();
+        } catch (IllegalStateException ignored) {
+            return false;
+        }
+    }
+
+    private static void initializeAE2KeyTypes() {
+        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
+        AEKeyTypesInternal.setRegistry(registry);
+        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
+        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
+        registry.freeze();
+    }
+
+    private static void bindTestPatternInterfaceEntityType() {
+        Identifier id = MMCR.id(PatternInterfaceKind.INSTANCE.id());
+        MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        registry.unfreeze(true);
+        try {
+            if (!registry.containsKey(id)) {
+                Registry.register(registry, id,
+                        new BlockEntityType<>(PatternInterfaceKind.INSTANCE.entityFactory(), Blocks.IRON_BLOCK));
+            }
+        } finally {
+            registry.freeze();
+        }
+        ModBlockEntities.BES.put(PatternInterfaceKind.INSTANCE.id(),
+                DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
     }
 
     private static IWailaCommonRegistration commonRegistration(List<Registration> registrations) {
@@ -148,10 +252,7 @@ class AE2InterfaceJadeProviderTest {
                         ? node : defaultValue(method.getReturnType()));
     }
 
-    private static Object capabilityGridHost() {
-        List<MachineCapability> capabilities = List.of(
-                new PresentedCapability("item", "4", "item", IOType.INPUT),
-                new PresentedCapability("fluid", "1,000", "mB", IOType.OUTPUT));
+    private static Object capabilityGridHost(AtomicReference<List<MachineCapability>> capabilities) {
         IGridNode node = (IGridNode) Proxy.newProxyInstance(
                 IGridNode.class.getClassLoader(),
                 new Class<?>[]{IGridNode.class},
@@ -164,8 +265,8 @@ class AE2InterfaceJadeProviderTest {
                 new Class<?>[]{IGridConnectedBlockEntity.class, CapabilityHost.class},
                 (_, method, _) -> switch (method.getName()) {
                     case "getActionableNode" -> node;
-                    case "capabilitySnapshot" -> new CapabilitySnapshot(capabilities);
-                    case "capabilities" -> capabilities;
+                    case "capabilitySnapshot" -> new CapabilitySnapshot(capabilities.get());
+                    case "capabilities" -> capabilities.get();
                     default -> defaultValue(method.getReturnType());
                 });
     }

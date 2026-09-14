@@ -144,6 +144,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                                    @Nullable Orientation orientation, boolean movedByPiston) {
         if (!level.isClientSide() && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             port.markAutoIOCacheDirty();
+            AE2Bridge.get().onPortNeighborChanged(port);
         }
     }
 

@@ -7,7 +7,8 @@
     "AppEngSlotMixin",
     "ConfigInventoryAccessor",
     "InterfaceMenuMixin",
-    "InterfaceLogicMixin"
+    "InterfaceLogicMixin",
+    "PatternProviderLogicMixin"
   ],
   "client": [
     "InterfaceScreenMixin",

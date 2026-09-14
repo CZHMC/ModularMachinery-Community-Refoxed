@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -28,6 +29,9 @@ public interface AE2Bridge {
     boolean isPort(String id);
 
     boolean openMenu(ServerPlayer player, Level level, BlockPos pos);
+
+    default void onPortNeighborChanged(IOPortBlockEntity port) {
+    }
 
     @Nullable
     default Identifier portOverlayTexture(IOPortKind kind) {

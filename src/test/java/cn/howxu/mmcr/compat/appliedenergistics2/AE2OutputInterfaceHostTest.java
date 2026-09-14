@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
@@ -10,8 +11,11 @@ import appeng.api.config.Settings;
 import appeng.api.config.YesNo;
 import appeng.api.networking.GridFlags;
 import appeng.api.networking.IManagedGridNode;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.storage.MEStorage;
 import appeng.api.util.AECableType;
 import appeng.me.ManagedGridNode;
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
@@ -24,6 +28,8 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,6 +38,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
@@ -39,15 +46,19 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -165,6 +176,39 @@ class AE2OutputInterfaceHostTest {
     }
 
     @Test
+    void nativeReturnInventoryDrainNotifiesLinkedOutputCapacitySearches() {
+        PatternInterfaceBlockEntity host = patternHost();
+        RecordingController controller = new RecordingController(new BlockPos(1, 0, 0),
+                ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        var level = LevelStub.create(Map.of(
+                host.getBlockPos(), host.getBlockState().getBlock(),
+                controller.getBlockPos(), controller.getBlockState().getBlock()), List.of(host, controller));
+        host.setLevel(level);
+        controller.setLevel(level);
+        host.linkControllerAppearance(controller.getBlockPos(), null);
+
+        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
+        host.getLogic().getReturnInv().setStack(0, new GenericStack(gold, 2L));
+        controller.notifiedOutputResources.clear();
+
+        assertThat(host.getLogic().getReturnInv().injectIntoNetwork(new MEStorage() {
+            @Override
+            public long insert(AEKey key, long amount, appeng.api.config.Actionable mode, IActionSource source) {
+                return amount;
+            }
+
+            @Override
+            public Component getDescription() {
+                return Component.literal("test");
+            }
+        }, IActionSource.empty(), ignored -> {})).isTrue();
+
+        host.onNativeReturnInventoryDrained();
+
+        assertThat(controller.notifiedOutputResources).containsExactly(ItemResource.of(Items.GOLD_INGOT));
+    }
+
+    @Test
     void patternProviderTitleChangesOnlyForTheMmcrHost() {
         var original = net.minecraft.network.chat.Component.translatable("gui.ae2.PatternProvider");
 
@@ -254,5 +298,25 @@ class AE2OutputInterfaceHostTest {
         Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
         Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
         registry.freeze();
+    }
+
+    /**
+     * Records availability callbacks issued by the pattern port.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class RecordingController extends MachineControllerBlockEntity {
+        private final List<Object> notifiedOutputResources = new ArrayList<>();
+
+        private RecordingController(BlockPos pos, BlockState state) {
+            super(pos, state);
+        }
+
+        @Override
+        public void notifyResourceAvailability(ResourceAvailabilityNotifier.Reason reason, Object resource) {
+            if (reason == ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY) {
+                notifiedOutputResources.add(resource);
+            }
+        }
     }
 }

@@ -21,6 +21,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBloc
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -101,6 +102,11 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     }
 
     @Override
+    public void onPortNeighborChanged(IOPortBlockEntity port) {
+        if (port instanceof PatternInterfaceBlockEntity host) host.getLogic().updateRedstoneState();
+    }
+
+    @Override
     public Identifier portOverlayTexture(IOPortKind kind) {
         if (kind instanceof InputInterfaceKind) return INTERFACE_OVERLAY_TEXTURE;
         if (kind instanceof StockingInterfaceKind) return STOCKING_INTERFACE_OVERLAY_TEXTURE;
@@ -133,6 +139,8 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         BlockEntityType<?> patternInterfaceType = ModBlockEntities.BES.get(PATTERN_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, patternInterfaceType,
                 (be, ignored) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
+        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, patternInterfaceType,
+                (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
     }
 
     @Override

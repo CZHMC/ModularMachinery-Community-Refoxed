@@ -62,7 +62,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private boolean autoIOCacheDirty = true;
     private boolean loadingAdditional;
     private final Map<CapabilityType, AutoIOState> autoIOStates = new LinkedHashMap<>();
-    private final Map<CapabilityType, AvailabilityState> availabilityStates = new LinkedHashMap<>();
+    private final Map<AvailabilityKey, AvailabilityState> availabilityStates = new LinkedHashMap<>();
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -140,23 +140,24 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     }
                 }
             }
-            AvailabilityState previous = availabilityStates.put(capability.type(),
+            AvailabilityState previous = availabilityStates.put(new AvailabilityKey(capability.type(), capability.directions()),
                     new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots)));
             long previousAmount = previous == null ? 0L : previous.amount();
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
             boolean resourceChanged = previous != null && !resources.equals(previousResources);
-            if (amount > previousAmount && ioType() == IOType.INPUT) {
+            if (amount > previousAmount && capability.directions().supports(IOType.INPUT)) {
                 ResourceAvailabilityNotifier.Reason reason = valueStorage != null
                                 ? ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE
                                 : ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE;
                 for (Object available : resources) notifyControllers(reason, available);
-            } else if (resourceChanged && ioType() == IOType.INPUT) {
+            } else if (resourceChanged && capability.directions().supports(IOType.INPUT)) {
                 for (Object available : resources) {
                     if (!previousResources.contains(available)) {
                         notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, available);
                     }
                 }
-            } else if (ioType() == IOType.OUTPUT) {
+            }
+            if (capability.directions().supports(IOType.OUTPUT)) {
                 List<SlotAvailability> previousSlots = previous == null ? List.of() : previous.slots();
                 List<Object> notified = new ArrayList<>();
                 for (int slot = 0; slot < previousSlots.size(); slot++) {
@@ -185,6 +186,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     private record AvailabilityState(long amount, List<Object> resources, List<SlotAvailability> slots) { }
+
+    private record AvailabilityKey(CapabilityType type, CapabilityDirections directions) { }
 
     private record SlotAvailability(@Nullable Object resource, long amount) { }
 

@@ -202,6 +202,8 @@ public final class GameTestRegistry {
                 helper -> new AE2OutputInterfaceGameTest().outputInterfaceDrainsToNetworkAndLocksConfig(helper));
         register(event, "ae2_me_async_output_interface", 200,
                 helper -> new AE2AsyncOutputInterfaceGameTest().asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(helper));
+        register(event, "ae2_me_pattern_interface", 160,
+                helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {

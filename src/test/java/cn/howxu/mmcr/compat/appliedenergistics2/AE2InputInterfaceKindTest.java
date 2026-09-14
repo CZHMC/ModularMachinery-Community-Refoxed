@@ -330,6 +330,19 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
+    void patternEntityExposesItsNativeReturnInventory() {
+        PatternInterfaceBlockEntity entity = newPatternEntity();
+        RegisterCapabilitiesEvent event = capabilityEvent();
+        ModCapabilities.register(event);
+
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var level = LevelStub.create(Blocks.IRON_BLOCK, 1, 1, 1, BlockPos.ZERO);
+
+        assertThat(AECapabilities.GENERIC_INTERNAL_INV.getCapability(level, BlockPos.ZERO, state, entity,
+                Direction.NORTH)).isSameAs(entity.getLogic().getReturnInv());
+    }
+
+    @Test
     void stockingEntityCapabilitiesUseNetworkStorageWithoutTransferFacet() {
         StockingInterfaceBlockEntity entity = newStockingEntity();
 
