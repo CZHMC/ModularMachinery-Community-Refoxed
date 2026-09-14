@@ -49,27 +49,51 @@ class AsyncCraftingExecutionTest {
 
         AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
-        AsyncContinuation.Yield second = ((AsyncContinuation.Yield.MainThread) first).resume()
-                .apply(MainThreadStep.Result.success()).advance(new AsyncExecutionContext(
-                        new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
-
-        assertThat(((AsyncContinuation.Yield.MainThread) first).step().kind())
-                .isEqualTo(MainThreadStep.Kind.UNSUPPORTED_REQUIREMENT);
-        assertThat(((AsyncContinuation.Yield.MainThread) second).step().kind())
-                .isEqualTo(MainThreadStep.Kind.INTENT_COMMIT);
+        assertThat(((AsyncContinuation.Yield.MainThread) first).step())
+                .isInstanceOf(MainThreadStep.UnsupportedRequirement.class);
+        MainThreadStep.UnsupportedRequirement unsupported =
+                (MainThreadStep.UnsupportedRequirement) ((AsyncContinuation.Yield.MainThread) first).step();
+        assertThat(unsupported.requirementIndex()).isEqualTo(3);
+        assertThat(unsupported.intent()).isNotNull();
     }
 
     @Test
     void start_yields_the_shared_io_reservation_without_completing_the_worker() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", 1L);
 
-        AsyncContinuation.Yield yield = execution.advance(new AsyncExecutionContext(
+        AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+        AsyncContinuation.Yield yield = ((AsyncContinuation.Yield.MainThread) first).resume()
+                .apply(MainThreadStep.Result.success()).advance(new AsyncExecutionContext(
+                        new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
 
-        assertThat(yield).isInstanceOf(AsyncContinuation.Yield.MainThread.class);
+        assertThat(((AsyncContinuation.Yield.MainThread) first).step())
+                .isEqualTo(new MainThreadStep.Lifecycle(MainThreadStep.Kind.BEFORE_START, "base", 1L));
         AsyncContinuation.Yield.MainThread mainThread = (AsyncContinuation.Yield.MainThread) yield;
         assertThat(mainThread.step().kind()).isEqualTo(MainThreadStep.Kind.BEFORE_START);
         assertThat(mainThread.step().execute()).isInstanceOf(MainThreadStep.Result.Pending.class);
+    }
+
+    @Test
+    void finish_yields_the_behavior_callback_before_shared_io_commit() {
+        AsyncCraftingExecution execution = AsyncCraftingExecution.finish("base", 1L);
+
+        AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
+                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+
+        assertThat(((AsyncContinuation.Yield.MainThread) first).step())
+                .isEqualTo(new MainThreadStep.Lifecycle(MainThreadStep.Kind.BEFORE_FINISH, "base", 1L));
+    }
+
+    @Test
+    void tick_yields_main_thread_preparation_before_worker_planning() {
+        AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
+
+        AsyncContinuation.Yield yield = execution.advance(new AsyncExecutionContext(
+                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+
+        assertThat(((AsyncContinuation.Yield.MainThread) yield).step())
+                .isEqualTo(new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, "base", 1L));
     }
 
     @Test

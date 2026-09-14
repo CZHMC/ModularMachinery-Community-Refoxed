@@ -26,7 +26,7 @@ public interface MainThreadStep {
         SCREEN_TEXT_FLUSH
     }
 
-    sealed interface Result permits Result.Success, Result.Failure, Result.Pending {
+    sealed interface Result permits Result.Success, Result.Failure, Result.Pending, Result.Value {
         record Success() implements Result {
         }
 
@@ -35,6 +35,9 @@ public interface MainThreadStep {
 
         /** The step registered work that will resume its continuation later. */
         record Pending() implements Result {
+        }
+
+        record Value(Object value) implements Result {
         }
 
         static Success success() {
@@ -47,6 +50,10 @@ public interface MainThreadStep {
 
         static Pending pending() {
             return new Pending();
+        }
+
+        static Value value(Object value) {
+            return new Value(value);
         }
     }
 
@@ -71,6 +78,28 @@ public interface MainThreadStep {
         public Result execute() {
             action.run();
             return Result.pending();
+        }
+    }
+
+    /** Pure lifecycle boundary whose owner performs the matching server-thread callback. */
+    record Lifecycle(Kind kind, String laneId, long catalogVersion) implements MainThreadStep {
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
+    /** Identifies the unsupported requirement that the owning runtime must handle on the server thread. */
+    record UnsupportedRequirement(int requirementIndex, long catalogVersion,
+                                  AsyncRequirementPlanner.PlanResult intent) implements MainThreadStep {
+        @Override
+        public Kind kind() {
+            return Kind.UNSUPPORTED_REQUIREMENT;
+        }
+
+        @Override
+        public Result execute() {
+            return Result.success();
         }
     }
 

@@ -40,7 +40,7 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
-    void base_lane_starts_before_other_lanes_of_the_same_controller() {
+    void round_robin_moves_past_the_last_base_lane_of_the_same_controller() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = domain(A);
         List<String> committed = new ArrayList<>();
@@ -59,7 +59,29 @@ class SharedIoCoordinatorTest {
 
         coordinator.resolve(domain);
 
-        assertThat(committed).containsExactly("base", "factory-0");
+        assertThat(committed).containsExactly("factory-0", "base");
+    }
+
+    @Test
+    void round_robin_rotates_between_all_lanes_of_the_same_controller() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        List<String> committed = new ArrayList<>();
+
+        coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain,
+                new SharedIoCoordinator.LaneKey(A, "factory-0"), 1L, 0L, 1,
+                ignored -> 1, ignored -> committed.add("factory-0"), () -> true, () -> 1L, () -> 0L));
+        coordinator.resolve(domain);
+        committed.clear();
+        for (String laneId : List.of("base", "factory-0", "factory-1")) {
+            coordinator.enqueue(new SharedIoCoordinator.StartRequest(domain,
+                    new SharedIoCoordinator.LaneKey(A, laneId), 1L, 0L, 1,
+                    ignored -> 1, ignored -> committed.add(laneId), () -> true, () -> 1L, () -> 0L));
+        }
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("factory-1", "base", "factory-0");
     }
 
     @Test
@@ -246,6 +268,18 @@ class SharedIoCoordinatorTest {
         coordinator.resolve(domain);
 
         assertThat(starts).hasValue(1);
+    }
+
+    @Test
+    void resolve_reports_completed_work_even_when_a_replacement_request_remains_pending() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        coordinator.enqueue(finish(domain, A, 1L, () -> {
+            coordinator.enqueue(start(domain, A, 1L, 1, ignored -> 0, ignored -> { }, () -> true, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+
+        assertThat(coordinator.resolve(domain)).isEqualTo(1);
     }
 
     @Test

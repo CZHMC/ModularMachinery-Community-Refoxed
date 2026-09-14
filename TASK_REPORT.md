@@ -21,3 +21,11 @@
 - Shared worker intents retain their catalog version and re-enter `SharedIoCoordinator`; its existing LaneKey arbitration is the only path that revalidates and commits shared capability transactions.
 - Behavior callbacks, capability facets, unsupported requirements, intent commits, and screen flushes are named `MainThreadStep` operations on the server thread.
 - Focused continuation/coordinator tests and `compileJava` passed; full test and GameTest runs were intentionally not requested.
+
+## Task 5 Latest P1/P2 Fixes
+
+- The level tick now uses a bounded, progress-observed fence: it pumps yielded main-thread steps, resolves shared IO, and waits only for the next worker yield or completion. Chains with two consecutive no-progress passes are cancelled with a recorded failure.
+- Shared IO round-robin cursors compare the full `LaneKey`, so factory lanes sharing a controller rotate fairly.
+- Start, tick, and finish continuations yield lifecycle steps before shared-IO arbitration. Their callbacks and screen flushes run on the main thread, while start grants, tick intents, unsupported fallback plans, and finish output commits remain in coordinator transactions.
+- Every lifecycle, intent, unsupported fallback, and shared request validates catalog, controller versions, domain, and recipe pool before a worker resume. Failed main steps terminate the chain without resource consumption.
+- Verified with focused async continuation and shared-IO coordinator tests plus `compileJava`; full test and GameTest runs were intentionally not requested.

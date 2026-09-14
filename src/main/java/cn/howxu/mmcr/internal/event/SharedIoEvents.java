@@ -26,9 +26,7 @@ public final class SharedIoEvents {
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
             ModuleConnectionCoordinator.tick(level);
-            MachineAsyncCoordinator.get(level).completeTick();
-            SharedIoCoordinator.get(level).resolve(level);
-            MachineAsyncCoordinator.get(level).completeTick();
+            MachineAsyncCoordinator.get(level).completeTick(() -> SharedIoCoordinator.get(level).resolve(level));
             NetworkInterfaceBindingCoordinator.heartbeat(level);
         }
     }

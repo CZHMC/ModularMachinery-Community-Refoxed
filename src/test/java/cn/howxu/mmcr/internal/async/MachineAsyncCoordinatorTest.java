@@ -1,14 +1,18 @@
 package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -204,6 +208,19 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void tick_fence_cancels_a_worker_that_makes_no_observable_progress() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.complete());
+
+        assertThatCode(coordinator::completeTick).doesNotThrowAnyException();
+        assertThat(coordinator.failureFor(key)).isInstanceOf(MainThreadStep.Result.Failure.class);
+        MainThreadStep.Result.Failure failure = (MainThreadStep.Result.Failure) coordinator.failureFor(key);
+        assertThat(failure.cause()).hasMessage("Async continuation made no tick-fence progress");
+    }
+
+    @Test
     void worker_exceptions_are_captured_without_escaping_the_pump() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
@@ -215,6 +232,55 @@ class MachineAsyncCoordinatorTest {
         assertThat(coordinator.failureFor(key)).isInstanceOf(MainThreadStep.Result.Failure.class);
         MainThreadStep.Result.Failure failure = (MainThreadStep.Result.Failure) coordinator.failureFor(key);
         assertThat(failure.cause()).isInstanceOf(IllegalStateException.class).hasMessage("worker failure");
+    }
+
+    @Test
+    void failed_main_step_does_not_resume_its_worker_continuation() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
+        AtomicBoolean resumed = new AtomicBoolean();
+
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success,
+                result -> context -> {
+                    resumed.set(true);
+                    return AsyncContinuation.Yield.complete();
+                }), (taskKey, step) -> MainThreadStep.Result.failure(new IllegalStateException("stale runtime")));
+
+        coordinator.completeTick();
+
+        assertThat(resumed).isFalse();
+        assertThat(coordinator.failureFor(key)).isInstanceOf(MainThreadStep.Result.Failure.class);
+    }
+
+    @Test
+    void tick_fence_resolves_intents_yielded_after_an_earlier_main_step() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = new StructureClaimRegistry.ResourceDomain(1L, 1L, Set.of(BlockPos.ZERO));
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        AtomicInteger committed = new AtomicInteger();
+
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> { }),
+                result -> context -> AsyncContinuation.Yield.mainThread(new MainThreadStep.IntentCommit("base", 1L,
+                                new cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner.PlanResult(List.of(), List.of())),
+                        ignoredAgain -> finalContext -> AsyncContinuation.Yield.complete())), (taskKey, step) -> {
+            if (step instanceof MainThreadStep.IntentCommit) {
+                sharedIo.enqueue(new SharedIoCoordinator.TickRequest(domain,
+                        new SharedIoCoordinator.LaneKey(BlockPos.ZERO, "base"), 1L, 0L,
+                        () -> {
+                            committed.incrementAndGet();
+                            coordinator.resume(taskKey);
+                            return true;
+                        }, () -> true, () -> 1L, () -> 0L));
+                return MainThreadStep.Result.pending();
+            }
+            return step.execute();
+        });
+
+        coordinator.completeTick(() -> sharedIo.resolve(domain));
+
+        assertThat(committed).hasValue(1);
+        assertThat(coordinator.failureFor(key)).isNull();
     }
 
     private static void await(CountDownLatch latch) {

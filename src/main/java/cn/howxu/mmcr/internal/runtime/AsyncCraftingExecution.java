@@ -20,7 +20,8 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
     private AsyncRequirementPlanner.PlanResult planResult = new AsyncRequirementPlanner.PlanResult(java.util.List.of(),
             java.util.List.of());
     private boolean planned;
-    private int nextMainThreadRequirement;
+    private boolean lifecycleYielded;
+    private boolean unsupportedFallbackYielded;
     private boolean intentCommitYielded;
 
     private AsyncCraftingExecution(AsyncRequirementPlanner.PreparedPlan preparedPlan, String laneId, long catalogVersion) {
@@ -34,6 +35,13 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
         this.preparedPlan = null;
         this.laneId = Objects.requireNonNull(laneId, "laneId");
         this.sharedIoRequest = Objects.requireNonNull(sharedIoRequest, "sharedIoRequest");
+        this.catalogVersion = catalogVersion;
+    }
+
+    private AsyncCraftingExecution(String laneId, long catalogVersion) {
+        this.preparedPlan = null;
+        this.laneId = Objects.requireNonNull(laneId, "laneId");
+        this.sharedIoRequest = null;
         this.catalogVersion = catalogVersion;
     }
 
@@ -55,21 +63,42 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
         return new AsyncCraftingExecution(laneId, MainThreadStep.Kind.BEFORE_FINISH, catalogVersion);
     }
 
+    /** Requests the main-thread tick preparation before worker-side native requirement planning. */
+    public static AsyncCraftingExecution tick(String laneId, long catalogVersion) {
+        return new AsyncCraftingExecution(laneId, catalogVersion);
+    }
+
     @Override
     public AsyncContinuation.Yield advance(AsyncExecutionContext context) {
         if (sharedIoRequest != null) {
+            if (!lifecycleYielded) {
+                lifecycleYielded = true;
+                return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(sharedIoRequest, laneId, catalogVersion),
+                        ignored -> this);
+            }
             return AsyncContinuation.Yield.mainThread(new MainThreadStep.SharedIoRequest(sharedIoRequest, laneId, catalogVersion),
                     ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
+        }
+        if (preparedPlan == null) {
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK,
+                    laneId, catalogVersion), result -> ignored -> {
+                if (result instanceof MainThreadStep.Result.Value value
+                        && value.value() instanceof AsyncRequirementPlanner.PreparedPlan prepared) {
+                    return AsyncCraftingExecution.plan(prepared, laneId, catalogVersion).advance(ignored);
+                }
+                return AsyncContinuation.Yield.complete();
+            });
         }
         if (!planned) {
             planResult = preparedPlan.plan();
             planned = true;
         }
-        if (nextMainThreadRequirement < planResult.mainThreadRequirements().size()) {
-            nextMainThreadRequirement++;
+        if (!planResult.mainThreadRequirements().isEmpty() && !unsupportedFallbackYielded) {
+            unsupportedFallbackYielded = true;
+            int requirementIndex = planResult.mainThreadRequirements().getFirst();
             return AsyncContinuation.Yield.mainThread(
-                    new MainThreadStep.Named(MainThreadStep.Kind.UNSUPPORTED_REQUIREMENT, () -> { }),
-                    ignored -> this);
+                    new MainThreadStep.UnsupportedRequirement(requirementIndex, catalogVersion, planResult),
+                    ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
         }
         if (intentCommitYielded) return AsyncContinuation.Yield.complete();
         intentCommitYielded = true;
