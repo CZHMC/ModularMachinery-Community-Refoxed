@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.async;
 
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+
 /**
  * A state mutation that must execute on the server thread.
  *
@@ -68,6 +70,27 @@ public interface MainThreadStep {
         @Override
         public Result execute() {
             action.run();
+            return Result.pending();
+        }
+    }
+
+    /** Pure worker result that a server-thread owner routes to shared-IO arbitration. */
+    record IntentCommit(String laneId, long catalogVersion, AsyncRequirementPlanner.PlanResult intent) implements MainThreadStep {
+        @Override
+        public Kind kind() {
+            return Kind.INTENT_COMMIT;
+        }
+
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
+    /** Pure lifecycle request whose owning main-thread coordinator performs the live operation. */
+    record SharedIoRequest(Kind kind, String laneId, long catalogVersion) implements MainThreadStep {
+        @Override
+        public Result execute() {
             return Result.pending();
         }
     }

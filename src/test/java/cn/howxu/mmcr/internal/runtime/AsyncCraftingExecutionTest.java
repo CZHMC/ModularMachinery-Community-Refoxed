@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -62,8 +61,7 @@ class AsyncCraftingExecutionTest {
 
     @Test
     void start_yields_the_shared_io_reservation_without_completing_the_worker() {
-        AtomicBoolean reservationRegistered = new AtomicBoolean();
-        AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", () -> reservationRegistered.set(true));
+        AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", 1L);
 
         AsyncContinuation.Yield yield = execution.advance(new AsyncExecutionContext(
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
@@ -72,6 +70,19 @@ class AsyncCraftingExecutionTest {
         AsyncContinuation.Yield.MainThread mainThread = (AsyncContinuation.Yield.MainThread) yield;
         assertThat(mainThread.step().kind()).isEqualTo(MainThreadStep.Kind.BEFORE_START);
         assertThat(mainThread.step().execute()).isInstanceOf(MainThreadStep.Result.Pending.class);
-        assertThat(reservationRegistered).isTrue();
+    }
+
+    @Test
+    void worker_result_is_a_pure_intent_commit_step() {
+        AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
+        AsyncCraftingExecution execution = AsyncCraftingExecution.plan(prepared, "factory-0", 7L);
+
+        AsyncContinuation.Yield yield = execution.advance(new AsyncExecutionContext(
+                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L, MachineWorkMode.ASYNC, "factory-0")));
+
+        AsyncContinuation.Yield.MainThread mainThread = (AsyncContinuation.Yield.MainThread) yield;
+        assertThat(mainThread.step()).isInstanceOf(MainThreadStep.IntentCommit.class);
+        assertThat(((MainThreadStep.IntentCommit) mainThread.step()).laneId()).isEqualTo("factory-0");
+        assertThat(((MainThreadStep.IntentCommit) mainThread.step()).catalogVersion()).isEqualTo(7L);
     }
 }

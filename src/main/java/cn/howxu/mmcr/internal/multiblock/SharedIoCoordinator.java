@@ -283,41 +283,79 @@ public final class SharedIoCoordinator {
     }
 
     public record TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
-                              long controllerStructureVersion, long controllerStateVersion,
-                              BooleanSupplier transaction, BooleanSupplier validator,
-                              LongSupplier controllerStructureVersionSupplier,
-                              LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) implements Request {
+                               long controllerStructureVersion, long controllerStateVersion,
+                               BooleanSupplier transaction, BooleanSupplier validator,
+                               LongSupplier controllerStructureVersionSupplier,
+                               LongSupplier controllerStateVersionSupplier, long catalogVersion,
+                               LongSupplier catalogVersionSupplier, Runnable commitNotifier) implements Request {
         public TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                            long controllerStructureVersion, long controllerStateVersion,
                            BooleanSupplier transaction, BooleanSupplier validator,
                            LongSupplier controllerStructureVersionSupplier,
                            LongSupplier controllerStateVersionSupplier) {
             this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
-                    controllerStructureVersionSupplier, controllerStateVersionSupplier, () -> { });
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, () -> { });
+        }
+
+        public TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                           long controllerStructureVersion, long controllerStateVersion,
+                           BooleanSupplier transaction, BooleanSupplier validator,
+                           LongSupplier controllerStructureVersionSupplier,
+                           LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, commitNotifier);
         }
 
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
+        @Override public boolean isStillValid() {
+            if (catalogVersion != catalogVersionSupplier.getAsLong()) {
+                discard();
+                return false;
+            }
+            return Request.super.isStillValid();
+        }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
         @Override public void onCommitted() { commitNotifier.run(); }
     }
 
     public record FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
-                                long controllerStructureVersion, long controllerStateVersion,
-                                BooleanSupplier transaction, BooleanSupplier validator,
-                                LongSupplier controllerStructureVersionSupplier,
-                                LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) implements Request {
+                                 long controllerStructureVersion, long controllerStateVersion,
+                                 BooleanSupplier transaction, BooleanSupplier validator,
+                                 LongSupplier controllerStructureVersionSupplier,
+                                 LongSupplier controllerStateVersionSupplier, long catalogVersion,
+                                 LongSupplier catalogVersionSupplier, Runnable commitNotifier) implements Request {
         public FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                              long controllerStructureVersion, long controllerStateVersion,
                              BooleanSupplier transaction, BooleanSupplier validator,
                              LongSupplier controllerStructureVersionSupplier,
                              LongSupplier controllerStateVersionSupplier) {
             this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
-                    controllerStructureVersionSupplier, controllerStateVersionSupplier, () -> { });
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, () -> { });
+        }
+
+        public FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                             long controllerStructureVersion, long controllerStateVersion,
+                             BooleanSupplier transaction, BooleanSupplier validator,
+                             LongSupplier controllerStructureVersionSupplier,
+                             LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, commitNotifier);
         }
 
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
+        @Override public boolean isStillValid() {
+            if (catalogVersion != catalogVersionSupplier.getAsLong()) {
+                discard();
+                return false;
+            }
+            return Request.super.isStillValid();
+        }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
         @Override public void onCommitted() { commitNotifier.run(); }
     }

@@ -189,6 +189,30 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void catalog_change_before_shared_tick_or_finish_commit_never_runs_transactions() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        AtomicLong catalogVersion = new AtomicLong(1L);
+        AtomicInteger committed = new AtomicInteger();
+
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, lane(A), 1L, 0L,
+                () -> {
+                    committed.incrementAndGet();
+                    return true;
+                }, () -> true, () -> 1L, () -> 0L, 1L, catalogVersion::get, () -> { }));
+        coordinator.enqueue(new SharedIoCoordinator.FinishRequest(domain, lane(A), 1L, 0L,
+                () -> {
+                    committed.incrementAndGet();
+                    return true;
+                }, () -> true, () -> 1L, () -> 0L, 1L, catalogVersion::get, () -> { }));
+        catalogVersion.incrementAndGet();
+
+        coordinator.resolve(domain);
+
+        assertThat(committed).hasValue(0);
+    }
+
+    @Test
     void stateVersionInvalidationAlsoDiscardsPendingRequests() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = domain(A);

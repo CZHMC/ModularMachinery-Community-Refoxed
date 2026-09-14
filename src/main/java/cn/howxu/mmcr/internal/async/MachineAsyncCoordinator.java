@@ -34,6 +34,7 @@ public final class MachineAsyncCoordinator {
     private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<PendingMainStep> pendingMainSteps = new ConcurrentLinkedQueue<>();
     private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
+    private final Map<TaskKey, MainThreadStepExecutor> mainStepExecutors = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStep.Result.Failure> failures = new ConcurrentHashMap<>();
 
     private MachineAsyncCoordinator(Executor executor) {
@@ -58,10 +59,15 @@ public final class MachineAsyncCoordinator {
     }
 
     public boolean submit(TaskKey key, AsyncContinuation continuation) {
+        return submit(key, continuation, null);
+    }
+
+    public boolean submit(TaskKey key, AsyncContinuation continuation, @Nullable MainThreadStepExecutor mainStepExecutor) {
         Task task = new Task(key);
         if (tasks.putIfAbsent(key, task) != null) {
             return false;
         }
+        if (mainStepExecutor != null) mainStepExecutors.put(key, mainStepExecutor);
         schedule(task, continuation);
         return true;
     }
@@ -88,6 +94,7 @@ public final class MachineAsyncCoordinator {
             }
         }
         tasks.entrySet().removeIf(entry -> entry.getKey().gameTime() == gameTime && entry.getValue().finished);
+        mainStepExecutors.keySet().removeIf(key -> !tasks.containsKey(key));
     }
 
     public void cancel(BlockPos controllerPos) {
@@ -99,6 +106,7 @@ public final class MachineAsyncCoordinator {
             }
             pendingMainSteps.removeIf(pending -> pending.task == task);
             deferredMainSteps.remove(task.key);
+            mainStepExecutors.remove(task.key);
         }
     }
 
@@ -134,7 +142,8 @@ public final class MachineAsyncCoordinator {
                     continue;
                 }
                 try {
-                    result = pending.step.execute();
+                    MainThreadStepExecutor executor = mainStepExecutors.get(pending.task.key);
+                    result = executor == null ? pending.step.execute() : executor.execute(pending.task.key, pending.step);
                 } catch (Throwable throwable) {
                     result = MainThreadStep.Result.failure(throwable);
                 }
@@ -245,6 +254,11 @@ public final class MachineAsyncCoordinator {
     }
 
     private record PendingMainStep(Task task, MainThreadStep step,
-                                   java.util.function.Function<MainThreadStep.Result, AsyncContinuation> resume) {
+                                    java.util.function.Function<MainThreadStep.Result, AsyncContinuation> resume) {
+    }
+
+    @FunctionalInterface
+    public interface MainThreadStepExecutor {
+        MainThreadStep.Result execute(TaskKey key, MainThreadStep step);
     }
 }

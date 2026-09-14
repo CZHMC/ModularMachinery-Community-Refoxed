@@ -41,6 +41,7 @@ import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
 import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
@@ -320,13 +321,14 @@ public final class CraftingRuntime {
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
                 MachineRecipeConverter.toPublicRequirements(effectiveRequirements()), activeOutputs(),
                 new CapabilitySnapshot(components.capabilities()));
-        if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, tickContext)) return null;
+        if (!executeAsyncTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, tickContext)) return null;
         try {
-            behavior.recipeTick().accept(tickContext);
+            executeAsyncMainStep(MainThreadStep.Kind.RECIPE_TICK, () -> behavior.recipeTick().accept(tickContext));
         } catch (RuntimeException exception) {
             logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
         } finally {
-            flushScreenTextReplacements(machineContext.screenText());
+            executeAsyncMainStep(MainThreadStep.Kind.SCREEN_TEXT_FLUSH,
+                    () -> flushScreenTextReplacements(machineContext.screenText()));
         }
         asyncTickPreparation = new AsyncTickPreparation(runtime, tickContext);
         return context(runtime).planAsync(perTickRequirements(), activeRecipe.getParallelism());
@@ -339,13 +341,13 @@ public final class CraftingRuntime {
         if (preparation == null || !active()) return status;
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (!commitAsyncTickPlan(planned, preparation.runtime())) return status;
-        if (!executeTickPhase(CapabilityTickPhase.AFTER_INPUTS, behaviorContext(), preparation.tickContext())) {
+        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_INPUTS, behaviorContext(), preparation.tickContext())) {
             if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
             return status;
         }
         int gameTime = currentGameTime();
         if (activeRecipe.needsFinishCommit()) {
-            if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) {
+            if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) {
                 if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
                 return status;
             }
@@ -354,7 +356,7 @@ public final class CraftingRuntime {
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
-        if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) return status;
+        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) return status;
         status = CraftingStatus.working();
         failure = null;
         return status;
@@ -398,13 +400,14 @@ public final class CraftingRuntime {
                 activeRecipe.getRecipe(), activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(),
                 activeOutputs());
         try {
-            behavior.beforeFinish().accept(finishContext);
+            executeAsyncMainStep(MainThreadStep.Kind.BEFORE_FINISH, () -> behavior.beforeFinish().accept(finishContext));
         } catch (RuntimeException exception) {
             logCallbackFailure("beforeFinish", runtime, activeRecipe.getRecipe(), exception);
             return finishBlocked(failure(BuiltinFailureReasons.BEHAVIOR_BEFORE_FINISH,
                     FailurePhase.FINISH, Map.of()));
         } finally {
-            flushScreenTextReplacements(machineContext.screenText());
+            executeAsyncMainStep(MainThreadStep.Kind.SCREEN_TEXT_FLUSH,
+                    () -> flushScreenTextReplacements(machineContext.screenText()));
         }
         if (finishContext.cancelled()) {
             return finishBlocked(failure(BuiltinFailureReasons.BEHAVIOR_BEFORE_FINISH_CANCELLED,
@@ -492,6 +495,18 @@ public final class CraftingRuntime {
         }
         if (result.failure() == null) return true;
         return false;
+    }
+
+    private boolean executeAsyncTickPhase(CapabilityTickPhase phase, MachineBehaviorContext machineContext,
+                                          RecipeTickContext recipeTickContext) {
+        boolean[] successful = {false};
+        executeAsyncMainStep(MainThreadStep.Kind.CAPABILITY_TICK,
+                () -> successful[0] = executeTickPhase(phase, machineContext, recipeTickContext));
+        return successful[0];
+    }
+
+    private static void executeAsyncMainStep(MainThreadStep.Kind kind, Runnable action) {
+        new MainThreadStep.Named(kind, action).execute();
     }
 
     public void pause() {

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
@@ -53,6 +54,12 @@ public abstract class RecipeThread {
     private record StartSnapshot(ControllerRuntimeSnapshot runtime, long structureVersion, long catalogVersion,
                                  Identifier recipePoolId, @Nullable RecipeSearchContextKey searchContextKey) {
     }
+
+    private record PendingAsyncStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
+                                     MachineRecipe recipe, long parallelism, StartSnapshot snapshot) {
+    }
+
+    private @Nullable PendingAsyncStart pendingAsyncStart;
 
     protected RecipeThread(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -138,6 +145,7 @@ public abstract class RecipeThread {
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
+            if (pendingAsyncStart != null) return false;
             ControllerRuntimeSnapshot startRuntime = context == null ? currentSnapshot : context.snapshot();
             StartSnapshot startSnapshot = new StartSnapshot(startRuntime, structureVersion,
                     context == null ? currentCatalogVersion() : context.catalogVersion(), recipePoolId,
@@ -145,8 +153,9 @@ public abstract class RecipeThread {
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                     serverLevel.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId());
-            return coordinator.submit(taskKey, AsyncCraftingExecution.start(asyncLaneId(), () -> requestStart(serverLevel,
-                    domain, next, requestedParallelism, startSnapshot, () -> coordinator.resume(taskKey))));
+            pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, startSnapshot);
+            return coordinator.submit(taskKey, AsyncCraftingExecution.start(asyncLaneId(), startSnapshot.catalogVersion()),
+                    this::executeAsyncMainStep);
         }
         CraftingStatus state = runtime.start(next, requestedParallelism);
         if (!state.isCrafting()) {
@@ -315,6 +324,7 @@ public abstract class RecipeThread {
         pendingTickToken = token;
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         long structureVersion = snapshot.structure().version();
+        long catalogVersion = currentCatalogVersion();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -327,13 +337,21 @@ public abstract class RecipeThread {
                          completeAsyncTick(new AsyncRequirementPlanner.PlanResult(List.of(), List.of()));
                          return false;
                      }
-                     return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
-                             controller.getBlockPos(), level.getGameTime()), AsyncCraftingExecution.tick(this, preparedPlan));
-                 },
-                 () -> validateCurrentRuntime(token, domain),
-                 () -> controller.currentRuntimeSnapshot().structure().version(),
-                 () -> controller.currentRuntimeSnapshot().stateVersion()
-         ));
+                      return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
+                              controller.getBlockPos(), level.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId()),
+                              AsyncCraftingExecution.plan(preparedPlan, asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
+                  },
+                  () -> {
+                      boolean valid = catalogVersion == currentCatalogVersion() && validateCurrentRuntime(token, domain);
+                      if (!valid) clearPendingTick();
+                      return valid;
+                  },
+                  () -> controller.currentRuntimeSnapshot().structure().version(),
+                  () -> controller.currentRuntimeSnapshot().stateVersion(),
+                  currentCatalogVersion(),
+                  this::currentCatalogVersion,
+                  () -> { }
+          ));
     }
 
     /** Runs only from {@link AsyncCraftingExecution}'s explicit main-thread intent commit step. */
@@ -344,9 +362,7 @@ public abstract class RecipeThread {
         runtime.completeAsyncTick(ignoredPlan);
         if (runtime.finishPending()) {
             if (runtime.shouldRetryFinish()) {
-                if (controller.getLevel() instanceof ServerLevel level && pendingTickDomain != null) {
-                    requestFinish(level, pendingTickDomain, pendingTickToken);
-                }
+                clearPendingTick();
             } else {
                 clearPendingTick();
             }
@@ -359,6 +375,15 @@ public abstract class RecipeThread {
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
         tickPending = true;
         pendingTickDomain = domain;
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        MachineAsyncCoordinator.TaskKey key = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                level.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId());
+        if (!coordinator.submit(key, AsyncCraftingExecution.finish(asyncLaneId(), currentCatalogVersion()),
+                this::executeAsyncMainStep)) clearPendingTick();
+    }
+
+    private void enqueueFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token,
+                               MachineAsyncCoordinator.TaskKey key, long catalogVersion) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         long structureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
@@ -374,11 +399,73 @@ public abstract class RecipeThread {
                     controller.syncRecipeRuntimeFailure(runtime);
                     return true;
                  },
-                 () -> validateCurrentRuntime(token, domain),
-                 () -> controller.currentRuntimeSnapshot().structure().version(),
-                 () -> controller.currentRuntimeSnapshot().stateVersion(),
-                 () -> controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null)
-         ));
+                  () -> {
+                      boolean valid = catalogVersion == currentCatalogVersion() && validateCurrentRuntime(token, domain);
+                      if (!valid) {
+                          clearPendingTick();
+                          MachineAsyncCoordinator.get(level).resume(key);
+                      }
+                      return valid;
+                  },
+                  () -> controller.currentRuntimeSnapshot().structure().version(),
+                  () -> controller.currentRuntimeSnapshot().stateVersion(),
+                   catalogVersion,
+                  this::currentCatalogVersion,
+                  () -> {
+                      controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null);
+                      MachineAsyncCoordinator.get(level).resume(key);
+                  }
+          ));
+    }
+
+    private MainThreadStep.Result executeAsyncMainStep(MachineAsyncCoordinator.TaskKey key, MainThreadStep step) {
+        if (step instanceof MainThreadStep.SharedIoRequest request) {
+            if (request.kind() == MainThreadStep.Kind.BEFORE_START) {
+                PendingAsyncStart pending = pendingAsyncStart;
+                pendingAsyncStart = null;
+                if (pending == null) return MainThreadStep.Result.success();
+                requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(), pending.snapshot(),
+                        () -> MachineAsyncCoordinator.get(pending.level()).resume(key));
+                return MainThreadStep.Result.pending();
+            }
+            if (request.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
+                if (controller.getLevel() instanceof ServerLevel level && pendingTickDomain != null) {
+                    enqueueFinish(level, pendingTickDomain, pendingTickToken, key, request.catalogVersion());
+                    return MainThreadStep.Result.pending();
+                }
+                return MainThreadStep.Result.success();
+            }
+        }
+        if (step instanceof MainThreadStep.IntentCommit intent) {
+            if (controller.getLevel() instanceof ServerLevel level && pendingTickDomain != null) {
+                enqueueAsyncTickIntent(level, pendingTickDomain, pendingTickToken, key, intent.catalogVersion(), intent.intent());
+                return MainThreadStep.Result.pending();
+            }
+            return MainThreadStep.Result.success();
+        }
+        return step.execute();
+    }
+
+    private void enqueueAsyncTickIntent(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token,
+                                        MachineAsyncCoordinator.TaskKey key, long catalogVersion,
+                                        AsyncRequirementPlanner.PlanResult intent) {
+        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()), snapshot.structure().version(),
+                snapshot.stateVersion(), () -> {
+                    if (!validateCurrentRuntime(token, domain)) return false;
+                    new MainThreadStep.Named(MainThreadStep.Kind.INTENT_COMMIT, () -> completeAsyncTick(intent)).execute();
+                    return true;
+                }, () -> {
+                    boolean valid = catalogVersion == currentCatalogVersion() && validateCurrentRuntime(token, domain);
+                    if (!valid) {
+                        clearPendingTick();
+                        MachineAsyncCoordinator.get(level).resume(key);
+                    }
+                    return valid;
+                }, () -> controller.currentRuntimeSnapshot().structure().version(),
+                () -> controller.currentRuntimeSnapshot().stateVersion(), catalogVersion, this::currentCatalogVersion,
+                () -> MachineAsyncCoordinator.get(level).resume(key)));
     }
 
     private boolean validateCurrentRuntime(long token, @Nullable StructureClaimRegistry.ResourceDomain domain) {
