@@ -77,6 +77,7 @@ public final class ModEventRegistration {
         registerDeferredRegisters(modBus);
         MMCR.CREATIVE_TABS.register(modBus);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        modContainer.registerConfig(ModConfig.Type.SERVER, Config.SERVER_SPEC);
         registerListeners(registrar(modBus), registrar(NeoForge.EVENT_BUS), EventHandlers.production());
         MMCR.CREATIVE_TABS.register(MMCR.MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))

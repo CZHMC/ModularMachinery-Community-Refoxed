@@ -6,6 +6,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class Config {
     public static final ModConfigSpec SPEC;
+    public static final ModConfigSpec SERVER_SPEC;
     public static final int DEFAULT_MACHINE_CHECK_INTERVAL_TICKS = 40;
     public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = MultiblockAssemblyService.MAX_BLOCKS_PER_OPERATION;
     public static final int DEFAULT_BUILD_BLOCKS_PER_TICK = 256;
@@ -63,10 +64,13 @@ public final class Config {
         MAX_REQUESTS_PER_TICK = b
                 .comment("Maximum machine network requests processed per server tick")
                 .defineInRange("max_requests_per_tick", DEFAULT_MAX_REQUESTS_PER_TICK, 1, 1_000_000);
-        MACHINE_WORK_MODE = b
+        SPEC = b.build();
+
+        var server = new ModConfigSpec.Builder();
+        MACHINE_WORK_MODE = server
                 .comment("Global machine execution mode")
                 .defineEnum("machine_work_mode", MachineWorkMode.ASYNC);
-        SPEC = b.build();
+        SERVER_SPEC = server.build();
     }
 
     private Config() {

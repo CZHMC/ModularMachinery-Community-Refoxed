@@ -12,15 +12,15 @@ class MachineWorkModeTest {
     @BeforeAll
     static void loadConfig() throws ReflectiveOperationException {
         CommentedConfig config = CommentedConfig.inMemory();
-        Config.SPEC.correct(config);
+        Config.SERVER_SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
                 .getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        Config.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @Test
-    void async_is_the_default_global_machine_work_mode() {
+    void async_is_the_default_server_machine_work_mode() {
         assertThat(Config.MACHINE_WORK_MODE.get()).isEqualTo(MachineWorkMode.ASYNC);
         assertThat(MachineWorkMode.values()).containsExactly(
                 MachineWorkMode.ASYNC, MachineWorkMode.SEMI_SYNC, MachineWorkMode.SYNC);
