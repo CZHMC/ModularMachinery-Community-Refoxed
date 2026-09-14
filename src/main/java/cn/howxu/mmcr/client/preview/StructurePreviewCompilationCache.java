@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -61,7 +62,8 @@ public final class StructurePreviewCompilationCache implements AutoCloseable {
                             .filter(candidate -> candidate.number() == stageNumber)
                             .findFirst()
                             .orElseThrow(() -> new IllegalArgumentException("Unknown machine structure stage: " + stageNumber));
-                    schema = factory.create(stage, machine.registryName());
+                    Direction facing = machine.controller().requireVerticalFacing() ? Direction.UP : Direction.SOUTH;
+                    schema = factory.create(stage, machine.registryName(), facing);
                 }
                 reference[0].complete(schema, null);
             } catch (Throwable throwable) {

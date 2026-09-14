@@ -14,6 +14,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -43,14 +44,22 @@ public final class BlueprintScreen extends Screen {
     private static final int MATERIAL_TO_CANDIDATES_GAP = 10;
     private static final int MATERIAL_CONTENT_LEFT_PADDING = MATERIAL_SLOT_GAP + 4;
     private static final int MATERIAL_CONTENT_TOP_PADDING = MATERIAL_SLOT_GAP + 2;
-    private static final int CANDIDATE_CONTENT_LEFT_PADDING = MATERIAL_SLOT_GAP;
+    private static final int CANDIDATE_CONTENT_LEFT_PADDING = MATERIAL_SLOT_GAP + 5;
+    private static final int CANDIDATE_TITLE_LEFT_OFFSET = 4;
+    private static final int CANDIDATE_TITLE_TOP_OFFSET = 3;
     private static final int SCROLLBAR_WIDTH = 12;
     private static final int SCROLLBAR_HANDLE_HEIGHT = 32;
     private static final int MATERIAL_SCROLLBAR_LEFT_OFFSET = 4;
     private static final int MATERIAL_SCROLLBAR_TOP_OFFSET = 3;
-    private static final int MATERIAL_SCROLLBAR_BOTTOM_INSET = 6;
+    private static final int MATERIAL_SCROLLBAR_BOTTOM_INSET = 9;
+    private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 4;
+    private static final int CANDIDATE_SCROLLBAR_TOP_OFFSET = 6;
+    private static final int CANDIDATE_SCROLLBAR_BOTTOM_INSET = 5;
     private static final int CANDIDATE_COLUMNS = 4;
+    private static final int CANDIDATE_SLOT_SIZE = MATERIAL_SLOT_SIZE - 2;
+    private static final int CANDIDATE_ROW_GAP = MATERIAL_SLOT_GAP + 4;
     private static final int CANDIDATE_TITLE_HEIGHT = 12;
+    private static final int CANDIDATE_CONTENT_TOP_PADDING = CANDIDATE_TITLE_HEIGHT + MATERIAL_SLOT_GAP + 10;
     private static final int SELECTED_BLOCK_LINE_STEP = 12;
     private static final float BLUEPRINT_TITLE_SCALE = 1.2F;
     private static final int BUTTON_HEIGHT = 18;
@@ -58,17 +67,19 @@ public final class BlueprintScreen extends Screen {
     private static final int PANEL_COLOR = 0xFFB6E4F2;
     private static final int OUTER_BORDER_COLOR = 0xFF40798B;
     private static final int INNER_BORDER_COLOR = 0xFFDDF4FA;
-    private static final int GRID_BACKGROUND_COLOR = 0xFF9BC9D5;
     private static final int SLOT_FRAME_DARK = 0xFF373737;
     private static final int SLOT_FRAME_LIGHT = 0xFF8B8B8B;
     private static final int MATERIAL_LIST_TEXTURE_WIDTH = 268;
     private static final int MATERIAL_LIST_TEXTURE_HEIGHT = 118;
+    private static final int SELECTED_LIST_TEXTURE_WIDTH = 126;
+    private static final int SELECTED_LIST_TEXTURE_HEIGHT = 148;
     private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
     private static final Identifier MATERIAL_LIST = MMCR.id("textures/gui/blueprint/material_list.png");
+    private static final Identifier SELECTED_LIST = MMCR.id("textures/gui/blueprint/selected_list.png");
 
     private final Machine machine;
     private final ItemStack blueprint;
-    private final StructurePreviewPanel panel;
+    private StructurePreviewPanel panel;
     private @Nullable BlueprintLayout layout;
     private @Nullable Button previousLayerButton;
     private @Nullable Button nextLayerButton;
@@ -92,8 +103,52 @@ public final class BlueprintScreen extends Screen {
                 blueprint.getOrDefault(ModDataComponents.BLUEPRINT_STAGE.get(), 0));
     }
 
+    public Rect2i guiBounds() {
+        BlueprintLayout currentLayout = layout != null ? layout : layoutFor(width, height, panel.hasMultipleStages());
+        BlueprintRect bounds = scaledRect(currentLayout.left(), currentLayout.top(), 0, 0,
+                BASE_WIDTH, BASE_HEIGHT, currentLayout.scale());
+        return new Rect2i(bounds.x(), bounds.y(), bounds.width(), bounds.height());
+    }
+
+    public @Nullable HoveredIngredient hoveredIngredient(double mouseX, double mouseY) {
+        BlueprintLayout currentLayout = layout;
+        if (currentLayout == null) return null;
+
+        List<Entry> entries = panel.materials().entries();
+        int visibleMaterialRows = visibleMaterialRows(currentLayout);
+        int firstMaterial = clampScrollOffset(materialScrollOffset, materialRows(entries), visibleMaterialRows) * MATERIAL_COLUMNS;
+        for (int visible = 0; visible < visibleMaterialRows * MATERIAL_COLUMNS; visible++) {
+            int index = firstMaterial + visible;
+            if (index >= entries.size()) break;
+            BlueprintRect slot = materialSlotRect(currentLayout, visible);
+            if (slot.contains(mouseX, mouseY)) {
+                return new HoveredIngredient(entries.get(index).stack().copyWithCount(1), rect(slot));
+            }
+        }
+
+        List<Candidate> candidates = panel.selectedPosition() == null ? List.of() : panel.selectedCandidates();
+        int visibleCandidateRows = visibleCandidateRows(currentLayout);
+        int firstCandidate = clampScrollOffset(candidateScrollOffset, candidateRows(candidates), visibleCandidateRows)
+                * CANDIDATE_COLUMNS;
+        for (int visible = 0; visible < visibleCandidateRows * CANDIDATE_COLUMNS; visible++) {
+            int index = firstCandidate + visible;
+            if (index >= candidates.size()) break;
+            BlueprintRect slot = candidateSlotRect(currentLayout, visible);
+            if (slot.contains(mouseX, mouseY)) {
+                return new HoveredIngredient(candidates.get(index).stack().copyWithCount(1), rect(slot));
+            }
+        }
+        return null;
+    }
+
     @Override
     protected void init() {
+        if (closed) {
+            // JEI restores this same screen instance after its recipe page closes.
+            closed = false;
+            panel = new StructurePreviewPanel(machine,
+                    blueprint.getOrDefault(ModDataComponents.BLUEPRINT_STAGE.get(), 0));
+        }
         super.init();
         BlueprintLayout currentLayout = layoutFor(width, height, panel.hasMultipleStages());
         layout = currentLayout;
@@ -248,7 +303,7 @@ public final class BlueprintScreen extends Screen {
         int materialsHeight = BASE_HEIGHT - OUTER_MARGIN - materialsY;
         int titleY = OUTER_MARGIN;
         int selectedBlockY = titleY + BUTTON_HEIGHT + GAP;
-        int selectedBlockHeight = multipleStages ? 2 * SELECTED_BLOCK_LINE_STEP : SELECTED_BLOCK_LINE_STEP;
+        int selectedBlockHeight = SELECTED_BLOCK_LINE_STEP;
         int candidatesY = selectedBlockY + selectedBlockHeight + GAP;
         int candidatesHeight = previewBottom - candidatesY;
         int buttonWidth = (candidatesWidth - GAP) / 2;
@@ -380,16 +435,19 @@ public final class BlueprintScreen extends Screen {
         Component layer = selectedLayer < 0
                 ? Component.translatable("jei.mmcr.structure_preview.all_layers")
                 : Component.literal(Integer.toString(selectedLayer));
-        graphics.text(font, Component.translatable("gui.mmcr.blueprint.y", layer), selectedBlockX + 4, selectedBlockY + 4,
+        Component layerText = Component.translatable("gui.mmcr.blueprint.y", layer);
+        graphics.text(font, layerText, selectedBlockX + 4, selectedBlockY + 4,
                 TEXT_COLOR, false);
         if (panel.hasMultipleStages()) {
             graphics.text(font, Component.translatable("gui.mmcr.blueprint.level", panel.stageNumber()),
-                    selectedBlockX + 4, selectedBlockY + SELECTED_BLOCK_LINE_STEP + 4, TEXT_COLOR, false);
+                    selectedBlockX + 4 + font.width(layerText) + GAP, selectedBlockY + 4, TEXT_COLOR, false);
         }
         if (panel.selectedPosition() != null) {
             int candidatesX = (int) Math.round(localMouse(currentLayout.candidates().x(), currentLayout.left(), currentLayout.scale()));
             int candidatesY = (int) Math.round(localMouse(currentLayout.candidates().y(), currentLayout.top(), currentLayout.scale()));
-            graphics.text(font, Component.translatable("gui.mmcr.blueprint.candidates"), candidatesX + CANDIDATE_CONTENT_LEFT_PADDING, candidatesY + 2,
+            graphics.text(font, Component.translatable("gui.mmcr.blueprint.candidates"),
+                    candidatesX + MATERIAL_SLOT_GAP + CANDIDATE_TITLE_LEFT_OFFSET,
+                    candidatesY + MATERIAL_SLOT_GAP + CANDIDATE_TITLE_TOP_OFFSET,
                     TEXT_COLOR, false);
         }
         graphics.pose().popMatrix();
@@ -496,8 +554,9 @@ public final class BlueprintScreen extends Screen {
                 MATERIAL_LIST_TEXTURE_WIDTH, MATERIAL_LIST_TEXTURE_HEIGHT);
         if (panel.selectedPosition() != null) {
             BlueprintRect candidates = currentLayout.candidates();
-            graphics.fill(candidates.x(), candidates.y(), candidates.x() + candidates.width(),
-                    candidates.y() + candidates.height(), GRID_BACKGROUND_COLOR);
+            graphics.blit(RenderPipelines.GUI_TEXTURED, SELECTED_LIST, candidates.x(), candidates.y(), 0, 0,
+                    candidates.width(), candidates.height(), SELECTED_LIST_TEXTURE_WIDTH, SELECTED_LIST_TEXTURE_HEIGHT,
+                    SELECTED_LIST_TEXTURE_WIDTH, SELECTED_LIST_TEXTURE_HEIGHT);
         }
     }
 
@@ -578,8 +637,8 @@ public final class BlueprintScreen extends Screen {
 
     private static int visibleCandidateRows(BlueprintLayout currentLayout) {
         int height = (int) Math.round(localMouse(currentLayout.candidates().height(), 0, currentLayout.scale()));
-        return Math.max(1, (height - CANDIDATE_TITLE_HEIGHT + MATERIAL_SLOT_GAP * 2)
-                / (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP));
+        return Math.max(1, (height - CANDIDATE_CONTENT_TOP_PADDING + CANDIDATE_ROW_GAP)
+                / (CANDIDATE_SLOT_SIZE + CANDIDATE_ROW_GAP));
     }
 
     private static int materialRows(List<Entry> entries) {
@@ -603,11 +662,11 @@ public final class BlueprintScreen extends Screen {
     private static BlueprintRect candidateSlotRect(BlueprintLayout currentLayout, int visible) {
         BlueprintRect candidates = currentLayout.candidates();
         int x = slotX(currentLayout, candidates) + CANDIDATE_CONTENT_LEFT_PADDING
-                + visible % CANDIDATE_COLUMNS * (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP);
-        int y = slotY(currentLayout, candidates) + CANDIDATE_TITLE_HEIGHT + MATERIAL_SLOT_GAP
-                + visible / CANDIDATE_COLUMNS * (MATERIAL_SLOT_SIZE + MATERIAL_SLOT_GAP);
+                + visible % CANDIDATE_COLUMNS * (CANDIDATE_SLOT_SIZE + MATERIAL_SLOT_GAP);
+        int y = slotY(currentLayout, candidates) + CANDIDATE_CONTENT_TOP_PADDING
+                + visible / CANDIDATE_COLUMNS * (CANDIDATE_SLOT_SIZE + CANDIDATE_ROW_GAP);
         return scaledRect(currentLayout.left(), currentLayout.top(), x, y,
-                MATERIAL_SLOT_SIZE, MATERIAL_SLOT_SIZE, currentLayout.scale());
+                CANDIDATE_SLOT_SIZE, CANDIDATE_SLOT_SIZE, currentLayout.scale());
     }
 
     private static BlueprintRect materialScrollbarRect(BlueprintLayout currentLayout) {
@@ -624,9 +683,11 @@ public final class BlueprintScreen extends Screen {
         BlueprintRect candidates = currentLayout.candidates();
         return scaledRect(currentLayout.left(), currentLayout.top(),
                 slotX(currentLayout, candidates) + (int) Math.round(localMouse(candidates.width(), 0, currentLayout.scale()))
-                        - SCROLLBAR_WIDTH,
-                slotY(currentLayout, candidates) + CANDIDATE_TITLE_HEIGHT, SCROLLBAR_WIDTH,
-                (int) Math.round(localMouse(candidates.height(), 0, currentLayout.scale())) - CANDIDATE_TITLE_HEIGHT,
+                        - SCROLLBAR_WIDTH - CANDIDATE_SCROLLBAR_LEFT_OFFSET,
+                slotY(currentLayout, candidates) + CANDIDATE_TITLE_HEIGHT + CANDIDATE_SCROLLBAR_TOP_OFFSET,
+                SCROLLBAR_WIDTH,
+                (int) Math.round(localMouse(candidates.height(), 0, currentLayout.scale())) - CANDIDATE_TITLE_HEIGHT
+                        - CANDIDATE_SCROLLBAR_TOP_OFFSET - CANDIDATE_SCROLLBAR_BOTTOM_INSET,
                 currentLayout.scale());
     }
 
@@ -660,6 +721,18 @@ public final class BlueprintScreen extends Screen {
         int scaledRight = Math.round(left + (x + width) * scale);
         int scaledBottom = Math.round(top + (y + height) * scale);
         return new BlueprintRect(scaledX, scaledY, Math.max(1, scaledRight - scaledX), Math.max(1, scaledBottom - scaledY));
+    }
+
+    private static Rect2i rect(BlueprintRect rect) {
+        return new Rect2i(rect.x(), rect.y(), rect.width(), rect.height());
+    }
+
+    /**
+     * An item rendered in a blueprint slot with its absolute screen area.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    public record HoveredIngredient(ItemStack stack, Rect2i area) {
     }
 }
 

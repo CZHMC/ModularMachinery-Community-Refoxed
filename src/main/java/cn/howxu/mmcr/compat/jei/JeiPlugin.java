@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.client.gui.BlueprintScreen;
 import cn.howxu.mmcr.registry.ModBlocks;
 import java.util.LinkedHashSet;
 import mezz.jei.api.IModPlugin;
@@ -11,6 +12,7 @@ import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IRecipeTransferRegistration;
+import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -87,6 +89,11 @@ public final class JeiPlugin implements IModPlugin {
             var type = JeiMachineRecipeTypes.forPool(poolId);
             registration.addRecipeTransferHandler(new MachineRecipeTransferHandler(helper, type), type);
         });
+    }
+
+    @Override
+    public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+        registration.addGuiScreenHandler(BlueprintScreen.class, new BlueprintScreenJeiHandler());
     }
 
     static Set<Identifier> machineIds() {
