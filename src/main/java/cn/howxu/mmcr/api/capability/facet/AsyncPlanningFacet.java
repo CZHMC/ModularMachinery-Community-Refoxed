@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability.facet;
 
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import java.util.Objects;
@@ -13,36 +14,53 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  *
  * @author howxu <dev@howxu.cn>
  */
-public interface AsyncPlanningFacet extends CapabilityFacet {
+public abstract class AsyncPlanningFacet implements CapabilityFacet {
     /**
      * Captures an immutable snapshot. This method and all capability storage access are main-thread-only.
      *
      * @return worker-safe capability values
      */
-    default AsyncCapabilitySnapshot captureSnapshot() {
+    public final AsyncCapabilitySnapshot captureSnapshot() {
         requireServerThread("captureSnapshot");
         return captureSnapshotOnServerThread();
     }
 
     /**
-     * Captures capability values after {@link #captureSnapshot()} has checked the server thread.
+     * Exports a worker-safe planner. This method is main-thread-only.
      *
-     * @return worker-safe capability values
+     * @return pure planner that accepts and returns only asynchronous value objects
      */
-    AsyncCapabilitySnapshot captureSnapshotOnServerThread();
+    public final AsyncCapabilityPlanner workerPlanner() {
+        requireServerThread("workerPlanner");
+        return workerPlannerOnServerThread();
+    }
 
     /**
      * Commits an operation against live storage. This method is main-thread-only.
      *
-     * @param operation logical operation produced by {@link #plan(AsyncCapabilitySnapshot, AsyncCapabilityRequest)}
+     * @param operation logical operation produced by {@link AsyncCapabilityPlanner#plan(AsyncCapabilitySnapshot, cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest)}
      * @param transaction transaction used to apply the operation
      * @return the operation result
      */
-    default CapabilityResult commit(AsyncCapabilityOperation operation, TransactionContext transaction) {
+    public final CapabilityResult commit(AsyncCapabilityOperation operation, TransactionContext transaction) {
         requireServerThread("commit");
         return commitOnServerThread(Objects.requireNonNull(operation, "operation"),
                 Objects.requireNonNull(transaction, "transaction"));
     }
+
+    /**
+     * Captures live capability values after {@link #captureSnapshot()} has checked the server thread.
+     *
+     * @return worker-safe capability values
+     */
+    protected abstract AsyncCapabilitySnapshot captureSnapshotOnServerThread();
+
+    /**
+     * Exports the pure worker planner after {@link #workerPlanner()} has checked the server thread.
+     *
+     * @return pure planner that must not retain this facet or live capability state
+     */
+    protected abstract AsyncCapabilityPlanner workerPlannerOnServerThread();
 
     /**
      * Commits an operation after {@link #commit(AsyncCapabilityOperation, TransactionContext)} has checked the server thread.
@@ -51,7 +69,8 @@ public interface AsyncPlanningFacet extends CapabilityFacet {
      * @param transaction transaction used to apply the operation
      * @return the operation result
      */
-    CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation, TransactionContext transaction);
+    protected abstract CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
+                                                             TransactionContext transaction);
 
     private static void requireServerThread(String operation) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
