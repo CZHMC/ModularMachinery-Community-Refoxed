@@ -810,6 +810,7 @@ public final class FactoryRuntime {
         if (!lanes.contains(lane)) return;
         String laneId = lane.laneId();
         lane.setFinishContinuation(null);
+        if (patternStartReservations.remove(lane)) lane.runtime().releasePatternStart();
         lane.invalidate();
         if (controller != null) {
             controller.markRecipeScreenTextRemoved(laneId, controller.recipeScreenText(laneId).revision());
@@ -824,7 +825,6 @@ public final class FactoryRuntime {
         recipeLocks.remove(lane);
         recipeLockUsed.remove(lane);
         startReservations.remove(lane);
-        patternStartReservations.remove(lane);
     }
 
     public void markLaneRuntimeChanged(CraftingRuntime runtime) {

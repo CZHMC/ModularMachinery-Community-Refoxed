@@ -7,14 +7,17 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -31,11 +34,15 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
@@ -110,6 +117,7 @@ class PatternStartReservationTest {
         PatternStartReservation firstStart = MachineControllerBlockEntity.reserveNextPatternStart(
                 List.of(first, second), cursor, PATTERN_PORT, List.of(), List.of());
         assertThat(firstStart.commit()).isTrue();
+        assertThat(cursor).hasValue(1);
         PatternStartReservation secondStart = MachineControllerBlockEntity.reserveNextPatternStart(
                 List.of(first, second), cursor, PATTERN_PORT, List.of(), List.of());
 
@@ -134,6 +142,82 @@ class PatternStartReservationTest {
         assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
         assertThat(reservation.recipe()).isEqualTo(compatible);
         reservation.rollback();
+    }
+
+    @Test
+    void output_matching_rejects_differences_in_amount_components_fluid_and_probability() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        formForPattern(controller, true);
+        ItemStack componentOutput = stack(Items.IRON_NUGGET, 1);
+        componentOutput.set(DataComponents.CUSTOM_NAME, Component.literal("recipe"));
+        MachineRecipe exact = recipeWithOutputs("reservation_output_strict", List.of(
+                new MachineOutput.ItemOutput(componentOutput, 1F),
+                new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 1_000), 1F)));
+        MachineRecipe probabilistic = recipeWithOutputs("reservation_output_probability", List.of(
+                new MachineOutput.ItemOutput(stack(Items.GOLD_NUGGET, 1), 0.5F)));
+        RecipeRegistry.registerStatic(exact);
+        RecipeRegistry.registerStatic(probabilistic);
+
+        assertThat(controller.reservePatternStart(PATTERN_PORT,
+                List.of(new MachineOutput.ItemOutput(stack(Items.IRON_NUGGET, 2), 1F),
+                        new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 1_000), 1F)), List.of()).status())
+                .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(controller.reservePatternStart(PATTERN_PORT,
+                List.of(new MachineOutput.ItemOutput(stack(Items.IRON_NUGGET, 1), 1F),
+                        new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 1_000), 1F)), List.of()).status())
+                .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(controller.reservePatternStart(PATTERN_PORT,
+                List.of(new MachineOutput.ItemOutput(componentOutput, 1F),
+                        new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 500), 1F)), List.of()).status())
+                .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(controller.reservePatternStart(PATTERN_PORT,
+                List.of(new MachineOutput.ItemOutput(stack(Items.GOLD_NUGGET, 1), 0.5F)), List.of()).status())
+                .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+    }
+
+    @Test
+    void output_matching_uses_the_runtime_modifier_context() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        formForPattern(controller, true);
+        controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
+                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT,
+                        2F, RecipeModifier.Operation.MULTIPLY, false))));
+        MachineRecipe recipe = recipeWithOutputs("reservation_output_context",
+                List.of(new MachineOutput.ItemOutput(stack(Items.IRON_NUGGET, 1), 1F)));
+        RecipeRegistry.registerStatic(recipe);
+
+        PatternStartReservation reservation = controller.reservePatternStart(PATTERN_PORT,
+                List.of(new MachineOutput.ItemOutput(stack(Items.IRON_NUGGET, 2), 1F)), List.of());
+
+        assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+        reservation.rollback();
+    }
+
+    @Test
+    void redstone_paused_controller_rejects_admission() {
+        MachineControllerBlockEntity controller = factoryController();
+        controller.componentRuntime().replaceLinkedPortPositions(Set.of(PATTERN_PORT));
+        RuntimeTestFixtures.republish(controller);
+        RecipeRegistry.registerStatic(recipe("reservation_redstone_paused", List.of()));
+        RuntimeTestFixtures.setDirectSignal(controller.getLevel(), controller.getBlockPos(), 15);
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(controller.isRedstonePaused()).isTrue();
+        assertThat(controller.reservePatternStart(PATTERN_PORT, List.of(), List.of()).status())
+                .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+    }
+
+    @Test
+    void ordinary_start_cannot_preempt_a_live_reservation() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("reservation_ordinary_preemption", List.of());
+        CraftingRuntime.PreparedStart prepared = runtime.preparePatternStart(recipe, 1L, List.of());
+
+        assertThat(prepared).isNotNull();
+        assertThat(runtime.reservePatternStart()).isTrue();
+        assertThat(runtime.start(recipe, 1).isCrafting()).isFalse();
+        assertThat(runtime.commitPatternStart(prepared)).isTrue();
     }
 
     @Test
@@ -204,6 +288,41 @@ class PatternStartReservationTest {
         assertThat(retried.laneId()).isEqualTo("base");
     }
 
+    @Test
+    void factory_scheduler_cannot_preempt_a_live_reservation() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        MachineRecipe recipe = recipe("reservation_factory_preemption", List.of());
+        FactoryRuntime.PatternLane lane = factory.reservePatternStart(recipe, 1L, List.of());
+        assertThat(lane).isNotNull();
+        PatternStartReservation reservation = reservation(recipe, factory, lane);
+        factory.tick(List.of(recipe), 1, 0L);
+
+        assertThat(factory.activeRuntimes()).isEmpty();
+        assertThat(reservation.commit()).isTrue();
+    }
+
+    @Test
+    void removing_a_factory_lane_invalidates_its_live_reservation() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(2);
+        MachineRecipe recipe = recipe("reservation_factory_removal", List.of());
+        FactoryRuntime.PatternLane base = factory.reservePatternStart(recipe, 1L, List.of());
+        FactoryRuntime.PatternLane removable = factory.reservePatternStart(recipe, 1L, List.of());
+        assertThat(base).isNotNull();
+        assertThat(removable).isNotNull();
+        PatternStartReservation removedReservation = reservation(recipe, factory, removable);
+        PatternStartReservation baseReservation = reservation(recipe, factory, base);
+        factory.setLaneLimit(1);
+        assertThat(removedReservation.commit()).isFalse();
+
+        factory.clear();
+        assertThat(baseReservation.commit()).isFalse();
+    }
+
     private static void formForPattern(MachineControllerBlockEntity controller, boolean linked) {
         controller.setFormed(true);
         controller.componentRuntime().replaceLinkedPortPositions(linked ? Set.of(PATTERN_PORT) : Set.of());
@@ -213,6 +332,20 @@ class PatternStartReservationTest {
     private static MachineRecipe recipe(String path, List<ItemRequirement> requirements) {
         return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), requirements);
+    }
+
+    private static MachineRecipe recipeWithOutputs(String path, List<MachineOutput> outputs) {
+        List<MachineRequirement> requirements = outputs.stream()
+                .map(output -> OutputRegistry.tryToRequirement(output, List.of()))
+                .toList();
+        return MachineRecipe.fromCanonical(MMCR.id(path), MMCR.id("test_cube"), 20, requirements, outputs,
+                List.of(), 0, 1, false, false, false, Set.of());
+    }
+
+    private static PatternStartReservation reservation(MachineRecipe recipe, FactoryRuntime factory,
+                                                        FactoryRuntime.PatternLane lane) {
+        return PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(), lane.preparedStart(),
+                () -> factory.releasePatternStart(lane));
     }
 
     private static ItemRequirement input(Item item, int count) {

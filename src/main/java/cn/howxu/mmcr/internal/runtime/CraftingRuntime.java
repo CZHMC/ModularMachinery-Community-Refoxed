@@ -107,7 +107,7 @@ public final class CraftingRuntime {
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
         List<RecipeModifier> contextModifiers = contextModifiers(runtime);
         List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers);
-        List<MachineOutput> outputs = recipe.runtimeMachineOutputs(contextModifiers);
+        List<MachineOutput> outputs = runtimeMachineOutputs(recipe, runtime);
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, duration(recipe, runtime),
@@ -184,7 +184,7 @@ public final class CraftingRuntime {
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
         List<RecipeModifier> contextModifiers = contextModifiers(runtime);
         List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers);
-        List<MachineOutput> outputs = recipe.runtimeMachineOutputs(contextModifiers);
+        List<MachineOutput> outputs = runtimeMachineOutputs(recipe, runtime);
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, duration(recipe, runtime),
@@ -811,6 +811,11 @@ public final class CraftingRuntime {
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {
         return components.modifierList();
+    }
+
+    /** Returns outputs using the same runtime modifier context as pattern-start preparation. */
+    public List<MachineOutput> runtimeMachineOutputs(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
+        return recipe.runtimeMachineOutputs(contextModifiers(runtime));
     }
 
     private @Nullable HolderLookup.Provider registryAccess() {

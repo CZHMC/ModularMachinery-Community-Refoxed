@@ -267,7 +267,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return PatternStartReservation.unavailable();
         }
         for (MachineRecipe recipe : recipesForMachine()) {
-            if (!patternOutputsMatch(recipe, patternOutputs)) continue;
+            if (!patternOutputsMatch(recipe, snapshot, patternOutputs)) continue;
             if (!hasFactoryController()) {
                 CraftingRuntime crafting = runtime.craftingRuntime();
                 CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, 1L, requestCapabilities);
@@ -3832,8 +3832,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return cachedCandidates;
     }
 
-    private boolean patternOutputsMatch(MachineRecipe recipe, List<MachineOutput> patternOutputs) {
-        List<MachineOutput> remaining = new ArrayList<>(recipe.runtimeMachineOutputs(runtime.componentRuntime().modifierList()));
+    private boolean patternOutputsMatch(MachineRecipe recipe, ControllerRuntimeSnapshot snapshot,
+                                        List<MachineOutput> patternOutputs) {
+        List<MachineOutput> remaining = new ArrayList<>(runtime.craftingRuntime()
+                .runtimeMachineOutputs(recipe, snapshot));
         for (MachineOutput expected : patternOutputs) {
             int match = -1;
             for (int index = 0; index < remaining.size(); index++) {
