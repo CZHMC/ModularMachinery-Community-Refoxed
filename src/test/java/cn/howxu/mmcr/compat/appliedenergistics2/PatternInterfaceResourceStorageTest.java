@@ -112,6 +112,29 @@ class PatternInterfaceResourceStorageTest {
     }
 
     @Test
+    void multiCounterNearMaximumRequestRejectsNativeReturnCapacityWithoutWrapping() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        AEItemKey ironKey = AEItemKey.of(iron);
+        KeyCounter firstPath = counter(ironKey, Long.MAX_VALUE - 2L);
+        KeyCounter secondPath = counter(ironKey, 1L);
+        PatternRequestResourceStorage<ItemResource> request = AE2ResourceFamilies.ITEM.patternRequestView(
+                new KeyCounter[]{firstPath, secondPath});
+        PatternProviderReturnInventory inventory = new PatternProviderReturnInventory(() -> {
+        });
+
+        assertThat(request.amount(0)).isEqualTo(Long.MAX_VALUE - 1L).isPositive();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(request.accept(AE2ResourceFamilies.ITEM.patternReturnView(inventory), transaction)).isFalse();
+            transaction.commit();
+        }
+
+        assertThat(firstPath.get(ironKey)).isEqualTo(Long.MAX_VALUE - 2L);
+        assertThat(secondPath.get(ironKey)).isOne();
+        assertThat(inventory.isEmpty()).isTrue();
+        assertThatIllegalStateException().isThrownBy(request::size);
+    }
+
+    @Test
     void committedRequestConsumptionStaysNonnegativeAndRejectInvalidatesTheView() {
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
         PatternRequestResourceStorage<ItemResource> request = AE2ResourceFamilies.ITEM.patternRequestView(
@@ -181,6 +204,55 @@ class PatternInterfaceResourceStorageTest {
         assertThat(wakeCount).hasPositiveValue();
         assertThat(returns.extract(0, iron, 1L, null)).isZero();
         assertThatIllegalStateException().isThrownBy(request::size);
+    }
+
+    @Test
+    void fluidReturnViewUsesNativeInventoryForExactReturnsAndCapacityRejection() {
+        FluidResource water = FluidResource.of(net.minecraft.world.level.material.Fluids.WATER);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        appeng.api.stacks.AEFluidKey waterKey = appeng.api.stacks.AEFluidKey.of(water);
+        PatternProviderReturnInventory returnedInventory = new PatternProviderReturnInventory(() -> {
+        });
+        returnedInventory.setCapacity(AEKeyType.fluids(), 1_000L);
+        PatternReturnResourceStorage<FluidResource> fluidReturns = AE2ResourceFamilies.FLUID.patternReturnView(
+                returnedInventory);
+        PatternReturnResourceStorage<ItemResource> itemReturns = AE2ResourceFamilies.ITEM.patternReturnView(
+                returnedInventory);
+        PatternRequestResourceStorage<FluidResource> request = AE2ResourceFamilies.FLUID.patternRequestView(
+                new KeyCounter[]{counter(waterKey, 1_000L)});
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(request.extract(0, water, 400L, transaction)).isEqualTo(400L);
+            assertThat(request.accept(fluidReturns, transaction)).isTrue();
+            transaction.commit();
+        }
+
+        assertThat(returnedInventory.getStack(0)).isEqualTo(new GenericStack(waterKey, 600L));
+        assertThat(fluidReturns.resource(0)).isEqualTo(water);
+        assertThat(itemReturns.resource(0)).isNull();
+        assertThat(itemReturns.isValid(0, iron)).isFalse();
+
+        KeyCounter insufficientInput = counter(waterKey, 1L);
+        PatternProviderReturnInventory fullInventory = new PatternProviderReturnInventory(() -> {
+        });
+        fullInventory.setCapacity(AEKeyType.fluids(), 1L);
+        for (int slot = 0; slot < fullInventory.size(); slot++) {
+            fullInventory.setStack(slot, new GenericStack(waterKey, 1L));
+        }
+        PatternRequestResourceStorage<FluidResource> insufficientRequest = AE2ResourceFamilies.FLUID.patternRequestView(
+                new KeyCounter[]{insufficientInput});
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(insufficientRequest.accept(AE2ResourceFamilies.FLUID.patternReturnView(fullInventory), transaction))
+                    .isFalse();
+            transaction.commit();
+        }
+
+        assertThat(insufficientInput.get(waterKey)).isOne();
+        for (int slot = 0; slot < fullInventory.size(); slot++) {
+            assertThat(fullInventory.getStack(slot)).isEqualTo(new GenericStack(waterKey, 1L));
+        }
+        assertThatIllegalStateException().isThrownBy(insufficientRequest::size);
     }
 
     @Test
