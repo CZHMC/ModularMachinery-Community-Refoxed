@@ -14,9 +14,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(targets = "mezz.jei.gui.recipes.RecipeGuiLogic")
 abstract class JeiRecipeGuiLogicMixin {
-    @Inject(method = "setState", at = @At("RETURN"))
+    @Inject(method = "setState", at = @At(value = "INVOKE",
+            target = "Lmezz/jei/gui/recipes/IRecipeLogicStateListener;onStateChange()V"))
     private void mmcr$closeDiscardedPreviews(ILookupState state, boolean addToHistory,
             CallbackInfoReturnable<Boolean> callback) {
-        if (callback.getReturnValueZ()) JeiPreviewLifecycle.closeActive();
+        JeiPreviewLifecycle.closeActive();
     }
 }

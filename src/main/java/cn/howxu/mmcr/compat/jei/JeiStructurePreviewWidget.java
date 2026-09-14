@@ -130,9 +130,11 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private StructurePreviewSchema.@Nullable Candidate candidateForSlot(
             List<StructurePreviewSchema.Candidate> candidates, int slot, long timeMillis) {
         if (panel == null) return null;
-        if (slot < StructurePreviewPanel.VISIBLE_SLOT_COUNT) return panel.candidateAt(slot, timeMillis);
-        int offset = (int) Math.floorDiv(timeMillis, 1_000L) % candidates.size();
-        return candidates.get(Math.floorMod(slot + offset, candidates.size()));
+        if (slot == 0) return candidates.getFirst();
+        int remainingCandidates = candidates.size() - 1;
+        if (remainingCandidates == 0) return null;
+        int offset = (int) Math.floorDiv(timeMillis, 1_000L) % remainingCandidates;
+        return candidates.get(1 + Math.floorMod(slot - 1 + offset, remainingCandidates));
     }
 
     static ScreenPosition absoluteGuiOrigin(int absoluteMouseX, int absoluteMouseY, double localMouseX, double localMouseY) {

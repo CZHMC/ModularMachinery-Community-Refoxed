@@ -23,7 +23,7 @@ class BlueprintScreenTest {
         BlueprintLayout layout = BlueprintScreen.layoutFor(640, 480, true);
 
         assertThat(layout.materialSlotSize()).isEqualTo(25);
-        assertThat(layout.materialColumns()).isEqualTo(10);
+        assertThat(layout.materialColumns()).isEqualTo(9);
         assertThat(layout.materialSlotGap()).isEqualTo(2);
         assertThat(layout.candidates().y() + layout.candidates().height())
                 .isLessThanOrEqualTo(layout.preview().y() + layout.preview().height());
