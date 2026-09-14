@@ -1,0 +1,32 @@
+package cn.howxu.mmcr.internal.async;
+
+import java.util.function.Function;
+
+/**
+ * A worker continuation which can yield a step for the server thread.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+@FunctionalInterface
+public interface AsyncContinuation {
+    Yield advance(AsyncExecutionContext context);
+
+    sealed interface Yield permits Yield.Complete, Yield.MainThread {
+        record Complete() implements Yield {
+        }
+
+        record MainThread(MainThreadStep step, Function<MainThreadStep.Result, Yield> resume) implements Yield {
+        }
+
+        static Complete complete() {
+            return new Complete();
+        }
+
+        static MainThread mainThread(MainThreadStep step, Function<MainThreadStep.Result, Yield> resume) {
+            return new MainThread(step, resume);
+        }
+    }
+}
+
+record AsyncExecutionContext(MachineAsyncCoordinator.TaskKey key) {
+}
