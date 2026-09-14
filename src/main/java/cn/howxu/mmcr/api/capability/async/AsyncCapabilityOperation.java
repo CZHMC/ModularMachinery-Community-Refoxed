@@ -13,7 +13,7 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
 
     int slot();
 
-    Object resource();
+    AsyncResourceValue resource();
 
     long amount();
 
@@ -28,7 +28,7 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
      * @param amount resource amount
      * @param insert whether the resource is inserted rather than extracted
      */
-    record Resource(Identifier capabilityId, int slot, Object resource, long amount, boolean insert)
+    record Resource(Identifier capabilityId, int slot, AsyncResourceValue resource, long amount, boolean insert)
             implements AsyncCapabilityOperation {
         public Resource {
             if (slot < 0 || amount <= 0L) throw new IllegalArgumentException("slot and amount must be positive");

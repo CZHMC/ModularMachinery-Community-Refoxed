@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.capability.facet;
 
-import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import java.util.Optional;
@@ -24,15 +24,15 @@ public interface AsyncPlanningFacet extends CapabilityFacet {
      * Plans a worker-safe operation from an immutable snapshot.
      *
      * @param snapshot captured capability values
-     * @param request requested capability operation
+     * @param request worker-safe requested capability operation
      * @return a logical operation when this request is supported
      */
-    Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot, CapabilityRequest request);
+    Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot, AsyncCapabilityRequest request);
 
     /**
      * Commits an operation against live storage. This method is main-thread-only.
      *
-     * @param operation logical operation produced by {@link #plan(AsyncCapabilitySnapshot, CapabilityRequest)}
+     * @param operation logical operation produced by {@link #plan(AsyncCapabilitySnapshot, AsyncCapabilityRequest)}
      * @param transaction transaction used to apply the operation
      * @return the operation result
      */

@@ -15,9 +15,8 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
      *
      * @param capabilityId capability type identifier
      * @param slots immutable slot contents
-     * @param <R> immutable resource value type
      */
-    record Resource<R>(Identifier capabilityId, List<ResourceSlot<R>> slots) implements AsyncCapabilitySnapshot {
+    record Resource(Identifier capabilityId, List<ResourceSlot> slots) implements AsyncCapabilitySnapshot {
         public Resource {
             Objects.requireNonNull(capabilityId, "capabilityId");
             slots = List.copyOf(Objects.requireNonNull(slots, "slots"));
@@ -30,9 +29,8 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
      * @param resource resource value
      * @param amount stored amount
      * @param capacity slot capacity
-     * @param <R> immutable resource value type
      */
-    record ResourceSlot<R>(R resource, long amount, long capacity) {
+    record ResourceSlot(AsyncResourceValue resource, long amount, long capacity) {
         public ResourceSlot {
             Objects.requireNonNull(resource, "resource");
             if (amount < 0L || capacity < 0L || amount > capacity) {
