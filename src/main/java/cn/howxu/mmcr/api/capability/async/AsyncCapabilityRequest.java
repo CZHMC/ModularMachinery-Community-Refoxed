@@ -15,7 +15,7 @@ public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Re
     long parallelism();
 
     /**
-     * A resource request expressed as immutable resource actions.
+     * A resource request expressed as immutable, ordered resource actions that are planned atomically.
      *
      * @param capabilityId capability type identifier
      * @param parallelism requested parallelism
@@ -27,6 +27,7 @@ public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Re
             Objects.requireNonNull(capabilityId, "capabilityId");
             if (parallelism <= 0L) throw new IllegalArgumentException("parallelism must be positive");
             actions = List.copyOf(Objects.requireNonNull(actions, "actions"));
+            if (actions.isEmpty()) throw new IllegalArgumentException("resource actions must not be empty");
         }
     }
 

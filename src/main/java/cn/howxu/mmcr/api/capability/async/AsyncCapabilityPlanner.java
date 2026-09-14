@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.async;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
 import net.minecraft.resources.Identifier;
@@ -34,27 +36,44 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
             if (!(snapshot instanceof AsyncCapabilitySnapshot.Resource resourceSnapshot)
                     || !(request instanceof AsyncCapabilityRequest.Resource resourceRequest)
                     || !capabilityId.equals(resourceSnapshot.capabilityId())
-                    || !capabilityId.equals(resourceRequest.capabilityId())
-                    || resourceRequest.actions().size() != 1) {
+                    || !capabilityId.equals(resourceRequest.capabilityId())) {
                 return Optional.empty();
             }
 
-            AsyncResourceAction action = resourceRequest.actions().getFirst();
-            for (int slot = 0; slot < resourceSnapshot.slots().size(); slot++) {
-                AsyncCapabilitySnapshot.ResourceSlot stored = resourceSnapshot.slots().get(slot);
+            List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(resourceSnapshot.slots());
+            List<AsyncCapabilityOperation> operations = new ArrayList<>(resourceRequest.actions().size());
+            for (AsyncResourceAction action : resourceRequest.actions()) {
+                AsyncCapabilityOperation.Resource operation = planAction(slots, action);
+                if (operation == null) {
+                    return Optional.empty();
+                }
+                operations.add(operation);
+            }
+            return Optional.of(new AsyncCapabilityOperation.Group(operations));
+        }
+
+        private AsyncCapabilityOperation.Resource planAction(List<AsyncCapabilitySnapshot.ResourceSlot> slots,
+                                                              AsyncResourceAction action) {
+            for (int slot = 0; slot < slots.size(); slot++) {
+                AsyncCapabilitySnapshot.ResourceSlot stored = slots.get(slot);
                 if (action.insert() && (stored.resource().isEmpty() || stored.resource().get().equals(action.resource()))) {
                     long amount = Math.min(action.amount(), stored.capacity() - stored.amount());
                     if (amount > 0L) {
-                        return Optional.of(new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount, true));
+                        slots.set(slot, new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(action.resource()),
+                                stored.amount() + amount, stored.capacity()));
+                        return new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount, true);
                     }
                 } else if (!action.insert() && stored.resource().filter(action.resource()::equals).isPresent()) {
                     long amount = Math.min(action.amount(), stored.amount());
                     if (amount > 0L) {
-                        return Optional.of(new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount, false));
+                        long remaining = stored.amount() - amount;
+                        slots.set(slot, new AsyncCapabilitySnapshot.ResourceSlot(
+                                remaining == 0L ? Optional.empty() : stored.resource(), remaining, stored.capacity()));
+                        return new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount, false);
                     }
                 }
             }
-            return Optional.empty();
+            return null;
         }
     }
 

@@ -94,6 +94,81 @@ class AsyncPlanningFacetTest {
     }
 
     @Test
+    void resource_planner_returns_a_complete_ordered_group_for_cross_slot_actions() {
+        AsyncResourceValue iron = new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}");
+        AsyncResourceValue gold = new AsyncResourceValue(MMCR.id("gold_ingot"), "components={}");
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Resource(MMCR.id("item"));
+        var snapshot = new AsyncCapabilitySnapshot.Resource(MMCR.id("item"), List.of(
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.empty(), 0L, 64L),
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.empty(), 0L, 64L)));
+        var request = new AsyncCapabilityRequest.Resource(MMCR.id("item"), 1L, List.of(
+                new AsyncResourceAction(iron, 3L, true),
+                new AsyncResourceAction(gold, 2L, true)));
+
+        Optional<AsyncCapabilityOperation> planned = planner.plan(snapshot, request);
+
+        assertThat(planned).hasValueSatisfying(operation -> {
+            assertThat(operation.getClass().getSimpleName()).isEqualTo("Group");
+            assertThat(groupOperations(operation)).containsExactly(
+                    new AsyncCapabilityOperation.Resource(MMCR.id("item"), 0, iron, 3L, true),
+                    new AsyncCapabilityOperation.Resource(MMCR.id("item"), 1, gold, 2L, true));
+        });
+    }
+
+    @Test
+    void resource_planner_simulates_actions_in_request_order() {
+        AsyncResourceValue iron = new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}");
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Resource(MMCR.id("item"));
+        var snapshot = new AsyncCapabilitySnapshot.Resource(MMCR.id("item"), List.of(
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.empty(), 0L, 64L)));
+        var request = new AsyncCapabilityRequest.Resource(MMCR.id("item"), 1L, List.of(
+                new AsyncResourceAction(iron, 3L, true),
+                new AsyncResourceAction(iron, 2L, false)));
+
+        Optional<AsyncCapabilityOperation> planned = planner.plan(snapshot, request);
+
+        assertThat(planned).hasValueSatisfying(operation -> assertThat(groupOperations(operation)).containsExactly(
+                new AsyncCapabilityOperation.Resource(MMCR.id("item"), 0, iron, 3L, true),
+                new AsyncCapabilityOperation.Resource(MMCR.id("item"), 0, iron, 2L, false)));
+    }
+
+    @Test
+    void resource_planner_returns_no_prefix_when_a_later_action_cannot_be_planned() {
+        AsyncResourceValue iron = new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}");
+        AsyncResourceValue gold = new AsyncResourceValue(MMCR.id("gold_ingot"), "components={}");
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Resource(MMCR.id("item"));
+        var snapshot = new AsyncCapabilitySnapshot.Resource(MMCR.id("item"), List.of(
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.empty(), 0L, 64L)));
+        var request = new AsyncCapabilityRequest.Resource(MMCR.id("item"), 1L, List.of(
+                new AsyncResourceAction(iron, 3L, true),
+                new AsyncResourceAction(gold, 2L, false)));
+
+        assertThat(planner.plan(snapshot, request)).isEmpty();
+    }
+
+    @Test
+    void operation_group_is_immutable_and_rejects_empty_or_nested_groups() throws Exception {
+        Class<?> groupType = Arrays.stream(AsyncCapabilityOperation.class.getPermittedSubclasses())
+                .filter(type -> type.getSimpleName().equals("Group"))
+                .findFirst()
+                .orElse(null);
+
+        assertThat(groupType).isNotNull();
+        assertThat(groupType.getRecordComponents()).extracting(RecordComponent::getType).containsExactly(List.class);
+        assertThatThrownBy(() -> groupType.getConstructor(List.class).newInstance(List.of()))
+                .hasCauseInstanceOf(IllegalArgumentException.class);
+
+        AsyncCapabilityOperation.Resource operation = new AsyncCapabilityOperation.Resource(
+                MMCR.id("item"), 0, new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}"), 1L, true);
+        Object group = groupType.getConstructor(List.class).newInstance(List.of(operation));
+        assertThatThrownBy(() -> groupType.getConstructor(List.class).newInstance(List.of(group)))
+                .hasCauseInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> groupType.getConstructor(List.class).newInstance(List.of(operation,
+                new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 1L, true))))
+                .hasCauseInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void public_facet_entries_are_final_and_live_hooks_cannot_be_called_directly() throws Exception {
         assertThat(AsyncPlanningFacet.class.isInterface()).isFalse();
         assertThat(Modifier.isFinal(AsyncPlanningFacet.class.getMethod("captureSnapshot").getModifiers())).isTrue();
@@ -149,6 +224,15 @@ class AsyncPlanningFacetTest {
                                                          TransactionContext transaction) {
             committed.set(true);
             throw new AssertionError("commit should not run");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<AsyncCapabilityOperation> groupOperations(AsyncCapabilityOperation operation) {
+        try {
+            return (List<AsyncCapabilityOperation>) operation.getClass().getMethod("operations").invoke(operation);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
         }
     }
 }

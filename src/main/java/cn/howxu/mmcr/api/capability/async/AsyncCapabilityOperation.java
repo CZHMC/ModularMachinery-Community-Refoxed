@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.capability.async;
 
+import java.util.List;
 import java.util.Objects;
 import net.minecraft.resources.Identifier;
 
@@ -8,7 +9,8 @@ import net.minecraft.resources.Identifier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperation.Resource, AsyncCapabilityOperation.Scalar {
+public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperation.Resource, AsyncCapabilityOperation.Scalar,
+        AsyncCapabilityOperation.Group {
     Identifier capabilityId();
 
     /**
@@ -23,9 +25,36 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
     record Resource(Identifier capabilityId, int slot, AsyncResourceValue resource, long amount, boolean insert)
             implements AsyncCapabilityOperation {
         public Resource {
-            if (slot < 0 || amount <= 0L) throw new IllegalArgumentException("slot and amount must be positive");
+            if (slot < 0 || amount <= 0L) {
+                throw new IllegalArgumentException("slot must be non-negative and amount must be positive");
+            }
             Objects.requireNonNull(capabilityId, "capabilityId");
             Objects.requireNonNull(resource, "resource");
+        }
+    }
+
+    /**
+     * An ordered, atomic group of logical operations.
+     *
+     * @param operations immutable operations for one capability to commit in order
+     */
+    record Group(List<AsyncCapabilityOperation> operations) implements AsyncCapabilityOperation {
+        public Group {
+            operations = List.copyOf(Objects.requireNonNull(operations, "operations"));
+            if (operations.isEmpty()) throw new IllegalArgumentException("operation group must not be empty");
+            if (operations.stream().anyMatch(Group.class::isInstance)) {
+                throw new IllegalArgumentException("operation groups must not be nested");
+            }
+            Identifier groupCapabilityId = operations.getFirst().capabilityId();
+            if (operations.stream().map(AsyncCapabilityOperation::capabilityId)
+                    .anyMatch(capabilityId -> !capabilityId.equals(groupCapabilityId))) {
+                throw new IllegalArgumentException("operation group capabilities must match");
+            }
+        }
+
+        @Override
+        public Identifier capabilityId() {
+            return operations.getFirst().capabilityId();
         }
     }
 

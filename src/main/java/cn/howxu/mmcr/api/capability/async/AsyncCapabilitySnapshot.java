@@ -15,7 +15,7 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
      * A resource capability snapshot.
      *
      * @param capabilityId capability type identifier
-     * @param slots immutable slot contents
+      * @param slots immutable slot contents in planning order
      */
     record Resource(Identifier capabilityId, List<ResourceSlot> slots) implements AsyncCapabilitySnapshot {
         public Resource {
