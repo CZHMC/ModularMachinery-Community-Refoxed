@@ -10,7 +10,9 @@ import appeng.api.stacks.KeyCounter;
 import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestState;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -47,8 +49,9 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         if (outputs == null || !hasSupportedInputs(pattern)) return false;
 
         try {
-            PatternRequestResourceStorage<ItemResource> itemRequest = host.itemRequestStorage(inputHolders);
-            PatternRequestResourceStorage<FluidResource> fluidRequest = host.fluidRequestStorage(inputHolders);
+            PatternRequestState requestState = new PatternRequestState(inputHolders, 2);
+            PatternRequestResourceStorage<ItemResource> itemRequest = AE2ResourceFamilies.ITEM.patternRequestView(requestState);
+            PatternRequestResourceStorage<FluidResource> fluidRequest = AE2ResourceFamilies.FLUID.patternRequestView(requestState);
             List<MachineCapability> requestCapabilities = List.of(
                     new ItemBusCapability(itemRequest, IOType.INPUT),
                     new FluidHatchCapability(fluidRequest, IOType.INPUT));

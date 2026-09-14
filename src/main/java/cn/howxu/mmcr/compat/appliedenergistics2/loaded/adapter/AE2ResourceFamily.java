@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.AsyncOutputResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestState;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
@@ -108,6 +109,10 @@ public final class AE2ResourceFamily<R> {
 
     public PatternRequestResourceStorage<R> patternRequestView(KeyCounter[] inputHolders) {
         return new PatternRequestResourceStorage<>(inputHolders, adapter);
+    }
+
+    public PatternRequestResourceStorage<R> patternRequestView(PatternRequestState state) {
+        return new PatternRequestResourceStorage<>(state, adapter);
     }
 
     public PatternReturnResourceStorage<R> patternReturnView(PatternProviderReturnInventory inventory) {

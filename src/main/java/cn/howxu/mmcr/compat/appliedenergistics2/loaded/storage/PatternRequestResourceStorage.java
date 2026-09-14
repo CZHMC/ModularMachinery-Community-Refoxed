@@ -24,15 +24,19 @@ import java.util.Objects;
 public final class PatternRequestResourceStorage<R> extends SnapshotJournal<PatternRequestResourceStorage.Snapshot>
         implements ResourceStorage<R> {
     private final AE2KeyAdapter<R> adapter;
-    private final KeyCounter[] inputHolders;
+    private final PatternRequestState state;
     private final List<AEKey> keys;
     private final long[] amounts;
     private boolean active = true;
 
     public PatternRequestResourceStorage(KeyCounter[] inputHolders, AE2KeyAdapter<R> adapter) {
+        this(new PatternRequestState(inputHolders, 1), adapter);
+    }
+
+    public PatternRequestResourceStorage(PatternRequestState state, AE2KeyAdapter<R> adapter) {
         this.adapter = Objects.requireNonNull(adapter, "adapter");
-        this.inputHolders = Objects.requireNonNull(inputHolders, "inputHolders").clone();
-        Map<AEKey, Long> totals = aggregate(inputHolders);
+        this.state = Objects.requireNonNull(state, "state");
+        Map<AEKey, Long> totals = aggregate(state.inputHolders());
         List<AEKey> selectedKeys = new ArrayList<>();
         List<Long> selectedAmounts = new ArrayList<>();
         for (Map.Entry<AEKey, Long> entry : totals.entrySet()) {
@@ -104,6 +108,7 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
     public void reject(TransactionContext transaction) {
         requireActive();
         updateSnapshots(Objects.requireNonNull(transaction, "transaction"));
+        state.reject(transaction);
         active = false;
     }
 
@@ -133,29 +138,20 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
             }
         }
         updateSnapshots(transaction);
-        removeAcceptedInputs();
+        state.accept(keys, transaction);
         active = false;
         return true;
     }
 
     @Override
     protected Snapshot createSnapshot() {
-        KeyCounter[] counters = new KeyCounter[inputHolders.length];
-        for (int index = 0; index < inputHolders.length; index++) {
-            counters[index] = new KeyCounter();
-            counters[index].addAll(inputHolders[index]);
-        }
-        return new Snapshot(amounts.clone(), active, counters);
+        return new Snapshot(amounts.clone(), active);
     }
 
     @Override
     protected void revertToSnapshot(Snapshot snapshot) {
         System.arraycopy(snapshot.amounts(), 0, amounts, 0, amounts.length);
         active = snapshot.active();
-        for (int index = 0; index < inputHolders.length; index++) {
-            inputHolders[index].clear();
-            inputHolders[index].addAll(snapshot.counters()[index]);
-        }
     }
 
     private static Map<AEKey, Long> aggregate(KeyCounter[] inputHolders) {
@@ -268,18 +264,10 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
 
     private void requireActive() {
         if (!active) throw new IllegalStateException("Pattern request view is no longer active");
+        state.requireActive();
     }
 
-    private void removeAcceptedInputs() {
-        for (AEKey key : keys) {
-            for (KeyCounter inputHolder : inputHolders) {
-                long amount = inputHolder.get(key);
-                if (amount > 0L) inputHolder.remove(key, amount);
-            }
-        }
-    }
-
-    protected record Snapshot(long[] amounts, boolean active, KeyCounter[] counters) {
+    protected record Snapshot(long[] amounts, boolean active) {
     }
 
     private record ReturnAllocation<R>(int slot, R resource, long amount) {

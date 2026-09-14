@@ -5,6 +5,7 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
@@ -50,7 +51,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import com.mojang.serialization.Lifecycle;
@@ -239,6 +242,33 @@ class PatternInterfaceCraftingMachineTest {
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isNull();
     }
 
+    @Test
+    void rolls_back_mixed_request_when_fluid_return_capacity_rejects_after_item_return() {
+        PatternInterfaceBlockEntity host = patternHost();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
+        host.linkControllerAppearance(controller.getBlockPos(), null);
+        formForPattern(controller, true);
+        RecipeRegistry.registerStatic(mixedRecipe("bridge_mixed_return_capacity"));
+        for (int slot = 1; slot < host.getLogic().getReturnInv().size(); slot++) {
+            host.getLogic().getReturnInv().setStack(slot,
+                    new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 64L));
+        }
+        KeyCounter request = counter(Items.IRON_INGOT, 5L);
+        request.add(AEFluidKey.of(FluidResource.of(Fluids.WATER)), 1_000L);
+
+        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
+                mixedProcessingPattern(), new KeyCounter[]{request}, null)).isFalse();
+
+        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
+        assertThat(request.get(AEFluidKey.of(FluidResource.of(Fluids.WATER)))).isEqualTo(1_000L);
+        assertThat(host.getLogic().getReturnInv().getStack(0)).isNull();
+        for (int slot = 1; slot < host.getLogic().getReturnInv().size(); slot++) {
+            assertThat(host.getLogic().getReturnInv().getStack(slot))
+                    .isEqualTo(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 64L));
+        }
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isNull();
+    }
+
     private static PatternInterfaceBlockEntity patternHost() {
         return PatternInterfaceKind.INSTANCE.entityFactory().create(PATTERN_PORT, Blocks.IRON_BLOCK.defaultBlockState());
     }
@@ -328,11 +358,29 @@ class PatternInterfaceCraftingMachineTest {
                 List.of(machineOutput), List.of(), 0, 1, false, false, false, Set.of());
     }
 
+    private static MachineRecipe mixedRecipe(String path) {
+        MachineOutput output = new MachineOutput.ItemOutput(stack(Items.IRON_NUGGET, 2), 1F);
+        return MachineRecipe.fromCanonical(MMCR.id(path), MMCR.id("test_cube"), 20,
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
+                                ItemStack.EMPTY),
+                        OutputRegistry.tryToRequirement(output, List.of())),
+                List.of(output), List.of(), 0, 1, false, false, false, Set.of());
+    }
+
     private static AEProcessingPattern processingPattern(Item input, Item output, int amount) {
         ItemStack definition = new ItemStack(Items.PAPER);
         AEProcessingPattern.encode(definition,
                 List.of(new GenericStack(AEItemKey.of(input), 1L)),
                 List.of(new GenericStack(AEItemKey.of(output), amount)));
+        return new AEProcessingPattern(AEItemKey.of(definition));
+    }
+
+    private static AEProcessingPattern mixedProcessingPattern() {
+        ItemStack definition = new ItemStack(Items.PAPER);
+        AEProcessingPattern.encode(definition,
+                List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L),
+                        new GenericStack(AEFluidKey.of(FluidResource.of(Fluids.WATER)), 1_000L)),
+                List.of(new GenericStack(AEItemKey.of(Items.IRON_NUGGET), 2L)));
         return new AEProcessingPattern(AEItemKey.of(definition));
     }
 
