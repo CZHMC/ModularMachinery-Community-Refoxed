@@ -13,6 +13,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -27,12 +28,18 @@ public final class MachineAsyncCoordinator {
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
 
     private final Executor executor;
+    private final @Nullable Runnable beforePendingMainStep;
     private final Map<BlockPos, Task> tasksByController = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<PendingMainStep> pendingMainSteps = new ConcurrentLinkedQueue<>();
     private final Map<TaskKey, MainThreadStep.Result.Failure> failures = new ConcurrentHashMap<>();
 
     private MachineAsyncCoordinator(Executor executor) {
+        this(executor, null);
+    }
+
+    private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep) {
         this.executor = executor;
+        this.beforePendingMainStep = beforePendingMainStep;
     }
 
     public static synchronized MachineAsyncCoordinator get(ServerLevel level) {
@@ -41,6 +48,10 @@ public final class MachineAsyncCoordinator {
 
     public static MachineAsyncCoordinator forTesting(Executor executor) {
         return new MachineAsyncCoordinator(executor);
+    }
+
+    static MachineAsyncCoordinator forTesting(Executor executor, Runnable beforePendingMainStep) {
+        return new MachineAsyncCoordinator(executor, beforePendingMainStep);
     }
 
     public boolean submit(TaskKey key, AsyncContinuation continuation) {
@@ -78,7 +89,9 @@ public final class MachineAsyncCoordinator {
         if (task == null) {
             return;
         }
-        task.cancelled = true;
+        synchronized (task) {
+            task.cancelled = true;
+        }
         pendingMainSteps.removeIf(pending -> pending.task == task);
     }
 
@@ -101,14 +114,17 @@ public final class MachineAsyncCoordinator {
                 pendingMainSteps.add(pending);
                 continue;
             }
-            if (pending.task.cancelled) {
-                continue;
-            }
+            if (beforePendingMainStep != null) beforePendingMainStep.run();
             MainThreadStep.Result result;
-            try {
-                result = pending.step.execute();
-            } catch (Throwable throwable) {
-                result = MainThreadStep.Result.failure(throwable);
+            synchronized (pending.task) {
+                if (pending.task.cancelled) {
+                    continue;
+                }
+                try {
+                    result = pending.step.execute();
+                } catch (Throwable throwable) {
+                    result = MainThreadStep.Result.failure(throwable);
+                }
             }
             scheduleResume(pending.task, pending.resume, result);
         }
@@ -116,7 +132,7 @@ public final class MachineAsyncCoordinator {
 
     private void scheduleResume(Task task, java.util.function.Function<MainThreadStep.Result, AsyncContinuation.Yield> resume,
                                 MainThreadStep.Result result) {
-        task.activeWorkers++;
+        task.activeWorkers.incrementAndGet();
         executor.execute(() -> {
             try {
                 if (!task.cancelled) {
@@ -125,27 +141,29 @@ public final class MachineAsyncCoordinator {
             } catch (Throwable throwable) {
                 fail(task, throwable);
             } finally {
-                task.activeWorkers--;
+                task.activeWorkers.decrementAndGet();
             }
         });
     }
 
     private void schedule(Task task, AsyncContinuation continuation) {
-        task.activeWorkers++;
+        task.activeWorkers.incrementAndGet();
         executor.execute(() -> {
             try {
                 scheduleResult(task, continuation);
             } catch (Throwable throwable) {
                 fail(task, throwable);
             } finally {
-                task.activeWorkers--;
+                task.activeWorkers.decrementAndGet();
             }
         });
     }
 
     private void scheduleResult(Task task, AsyncContinuation continuation) {
-        if (task.cancelled) {
-            return;
+        synchronized (task) {
+            if (task.cancelled) {
+                return;
+            }
         }
         handleYield(task, continuation.advance(new AsyncExecutionContext(task.key)));
     }
@@ -154,7 +172,11 @@ public final class MachineAsyncCoordinator {
         if (yielded instanceof AsyncContinuation.Yield.Complete) {
             task.finished = true;
         } else if (yielded instanceof AsyncContinuation.Yield.MainThread mainThread) {
-            pendingMainSteps.add(new PendingMainStep(task, mainThread.step(), mainThread.resume()));
+            synchronized (task) {
+                if (!task.cancelled) {
+                    pendingMainSteps.add(new PendingMainStep(task, mainThread.step(), mainThread.resume()));
+                }
+            }
         }
     }
 
@@ -169,7 +191,8 @@ public final class MachineAsyncCoordinator {
     }
 
     private boolean hasActiveWorkerFor(long gameTime) {
-        return tasksByController.values().stream().anyMatch(task -> task.key.gameTime() == gameTime && task.activeWorkers > 0);
+        return tasksByController.values().stream().anyMatch(task -> task.key.gameTime() == gameTime
+                && task.activeWorkers.get() > 0);
     }
 
     public record TaskKey(BlockPos controllerPos, long gameTime) {
@@ -182,7 +205,7 @@ public final class MachineAsyncCoordinator {
         private final TaskKey key;
         private volatile boolean cancelled;
         private volatile boolean finished;
-        private volatile int activeWorkers;
+        private final AtomicInteger activeWorkers = new AtomicInteger();
 
         private Task(TaskKey key) {
             this.key = key;

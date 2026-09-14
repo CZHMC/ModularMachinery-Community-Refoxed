@@ -4,7 +4,9 @@ import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -92,6 +94,55 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void cancellation_wins_when_it_interleaves_after_a_main_step_is_dequeued() throws InterruptedException {
+        CountDownLatch dequeued = new CountDownLatch(1);
+        CountDownLatch allowPump = new CountDownLatch(1);
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, () -> {
+            dequeued.countDown();
+            await(allowPump);
+        });
+        AtomicBoolean committed = new AtomicBoolean();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                        result -> AsyncContinuation.Yield.complete()));
+
+        Thread pump = new Thread(coordinator::pumpMainThreadSteps);
+        pump.start();
+        assertThat(dequeued.await(1, TimeUnit.SECONDS)).isTrue();
+
+        coordinator.cancel(BlockPos.ZERO);
+        allowPump.countDown();
+        pump.join(1_000L);
+
+        assertThat(pump.isAlive()).isFalse();
+        assertThat(committed).isFalse();
+    }
+
+    @Test
+    void complete_tick_waits_for_a_worker_resumed_after_a_main_step() throws InterruptedException {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor);
+        AtomicBoolean resumed = new AtomicBoolean();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success, result -> {
+                    resumed.set(true);
+                    return AsyncContinuation.Yield.complete();
+                }));
+        executor.runNext();
+
+        Thread completeTick = new Thread(coordinator::completeTick);
+        completeTick.start();
+        assertThat(executor.awaitTask()).isTrue();
+        assertThat(completeTick.isAlive()).isTrue();
+
+        executor.runNext();
+        completeTick.join(1_000L);
+
+        assertThat(completeTick.isAlive()).isFalse();
+        assertThat(resumed).isTrue();
+    }
+
+    @Test
     void worker_exceptions_are_captured_without_escaping_the_pump() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
@@ -103,5 +154,46 @@ class MachineAsyncCoordinatorTest {
         assertThat(coordinator.failureFor(key)).isInstanceOf(MainThreadStep.Result.Failure.class);
         MainThreadStep.Result.Failure failure = (MainThreadStep.Result.Failure) coordinator.failureFor(key);
         assertThat(failure.cause()).isInstanceOf(IllegalStateException.class).hasMessage("worker failure");
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(1, TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting for test interleaving");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting for test interleaving", exception);
+        }
+    }
+
+    private static final class ManualExecutor implements java.util.concurrent.Executor {
+        private final java.util.concurrent.BlockingQueue<Runnable> tasks = new java.util.concurrent.LinkedBlockingQueue<>();
+        private final java.util.concurrent.Semaphore available = new java.util.concurrent.Semaphore(0);
+
+        @Override
+        public void execute(Runnable command) {
+            tasks.add(command);
+            available.release();
+        }
+
+        boolean awaitTask() throws InterruptedException {
+            if (!available.tryAcquire(1, TimeUnit.SECONDS)) {
+                return false;
+            }
+            available.release();
+            return true;
+        }
+
+        void runNext() {
+            if (!available.tryAcquire()) {
+                throw new AssertionError("Expected a queued worker task");
+            }
+            Runnable task = tasks.poll();
+            if (task == null) {
+                throw new AssertionError("Expected a queued worker task");
+            }
+            task.run();
+        }
     }
 }
