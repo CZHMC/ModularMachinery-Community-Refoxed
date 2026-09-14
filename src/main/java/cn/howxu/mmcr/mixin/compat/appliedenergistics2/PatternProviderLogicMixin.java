@@ -2,13 +2,18 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 
 import appeng.helpers.patternprovider.PatternProviderLogic;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
+import appeng.api.implementations.blockentities.ICraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -54,5 +59,13 @@ public abstract class PatternProviderLogicMixin {
             if (logic.getReturnInv().getAmount(slot) < mmcr$returnInventoryAmounts[slot]) return true;
         }
         return false;
+    }
+
+    @Redirect(method = "pushPattern", at = @At(value = "INVOKE",
+            target = "Lappeng/api/implementations/blockentities/ICraftingMachine;of(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Lappeng/api/implementations/blockentities/ICraftingMachine;"))
+    private ICraftingMachine mmcr$findCraftingMachine(Level level, BlockPos pos, Direction side) {
+        return host instanceof PatternInterfaceBlockEntity patternHost
+                ? patternHost.craftingMachine()
+                : ICraftingMachine.of(level, pos, side);
     }
 }

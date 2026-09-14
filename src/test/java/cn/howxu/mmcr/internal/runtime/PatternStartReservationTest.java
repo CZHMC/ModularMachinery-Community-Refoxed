@@ -128,6 +128,23 @@ class PatternStartReservationTest {
     }
 
     @Test
+    void linked_rotation_skips_an_unavailable_candidate_before_committing_the_next_controller() {
+        MachineControllerBlockEntity unavailable = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineControllerBlockEntity available = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        formForPattern(available, true);
+        MachineRecipe recipe = recipe("reservation_skip_unavailable", List.of());
+        RecipeRegistry.registerStatic(recipe);
+        AtomicInteger cursor = new AtomicInteger();
+
+        PatternStartReservation reservation = MachineControllerBlockEntity.reserveNextPatternStart(
+                List.of(unavailable, available), cursor, PATTERN_PORT, List.of(), List.of());
+
+        assertThat(reservation.commit()).isTrue();
+        assertThat(available.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(cursor).hasValue(0);
+    }
+
+    @Test
     void output_matching_selects_only_the_compatible_recipe() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         formForPattern(controller, true);

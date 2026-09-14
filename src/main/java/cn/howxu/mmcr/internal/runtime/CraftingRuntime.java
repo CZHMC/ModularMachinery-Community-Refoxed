@@ -46,6 +46,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -54,6 +55,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Owns one recipe lifecycle. Capability plans are the only mutable-resource boundary.
@@ -141,8 +143,13 @@ public final class CraftingRuntime {
     }
 
     public boolean commitPatternStart(PreparedStart prepared) {
+        return commitPatternStart(prepared, ignored -> { });
+    }
+
+    /** Commits a prepared pattern start with related storage writes in the same input transaction. */
+    public boolean commitPatternStart(PreparedStart prepared, Consumer<TransactionContext> transactionWrites) {
         if (!patternStartReserved || active() || prepared == null) return false;
-        if (!prepared.plan().commitInputs()) return false;
+        if (!prepared.plan().commit(transactionWrites)) return false;
         activeRecipe = new ActiveMachineRecipe(prepared.recipe(), prepared.plan().parallelism(), prepared.effective());
         activeRecipe.setParallelism(prepared.plan().parallelism());
         startPlan = prepared.plan();

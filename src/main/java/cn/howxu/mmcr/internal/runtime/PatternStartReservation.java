@@ -1,7 +1,10 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * Owns one admitted pattern start until it is committed or released.
@@ -62,8 +65,14 @@ public final class PatternStartReservation implements AutoCloseable {
     }
 
     public boolean commit() {
+        return commit(ignored -> { });
+    }
+
+    /** Commits the reserved start with additional storage mutations in the input transaction. */
+    public boolean commit(Consumer<TransactionContext> transactionWrites) {
+        Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (status != Status.RESERVED || rolledBack) return false;
-        if (!runtime.commitPatternStart(preparedStart)) {
+        if (!runtime.commitPatternStart(preparedStart, transactionWrites)) {
             rollback();
             return false;
         }

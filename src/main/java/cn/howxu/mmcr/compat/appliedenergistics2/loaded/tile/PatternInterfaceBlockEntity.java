@@ -16,12 +16,17 @@ import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.me.storage.NullInventory;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -38,6 +43,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * MMCR IO port hosting AE2's native pattern-provider logic.
@@ -58,6 +64,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
             .setInWorldNode(true);
     private final PatternProviderLogic logic = new PatternProviderLogic(mainNode, this);
+    private final PatternInterfaceCraftingMachine craftingMachine = new PatternInterfaceCraftingMachine(this);
+    private final AtomicInteger nextPatternController = new AtomicInteger();
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -82,6 +90,24 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public PatternProviderLogic getLogic() {
         return logic;
+    }
+
+    public PatternInterfaceCraftingMachine craftingMachine() {
+        return craftingMachine;
+    }
+
+    /** Reserves the next eligible linked controller without participating in AE2 provider priority. */
+    public PatternStartReservation reservePatternStart(List<MachineOutput> patternOutputs,
+                                                       List<MachineCapability> requestCapabilities) {
+        if (level == null) return PatternStartReservation.unavailable();
+        List<MachineControllerBlockEntity> controllers = linkedControllerPositions().stream()
+                .sorted(BlockPos::compareTo)
+                .map(level::getBlockEntity)
+                .filter(MachineControllerBlockEntity.class::isInstance)
+                .map(MachineControllerBlockEntity.class::cast)
+                .toList();
+        return MachineControllerBlockEntity.reserveNextPatternStart(controllers, nextPatternController,
+                getBlockPos(), patternOutputs, requestCapabilities);
     }
 
     @Override
