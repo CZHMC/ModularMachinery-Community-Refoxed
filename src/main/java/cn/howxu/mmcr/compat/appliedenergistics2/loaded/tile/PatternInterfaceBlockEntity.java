@@ -5,6 +5,7 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
@@ -21,6 +22,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -66,10 +68,16 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final PatternProviderLogic logic = new PatternProviderLogic(mainNode, this);
     private final PatternInterfaceCraftingMachine craftingMachine = new PatternInterfaceCraftingMachine(this);
     private final AtomicInteger nextPatternController = new AtomicInteger();
+    private final OutputResourceStorage<ItemResource> itemOutputStorage;
+    private final OutputResourceStorage<FluidResource> fluidOutputStorage;
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
+        itemOutputStorage = AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv(), this::networkStorage,
+                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
+        fluidOutputStorage = AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv(), this::networkStorage,
+                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
     }
 
     @Override
@@ -171,11 +179,19 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         return AE2ResourceFamilies.FLUID.patternRequestView(inputHolders);
     }
 
-    public PatternReturnResourceStorage<ItemResource> itemOutputStorage() {
+    public OutputResourceStorage<ItemResource> itemOutputStorage() {
+        return itemOutputStorage;
+    }
+
+    public OutputResourceStorage<FluidResource> fluidOutputStorage() {
+        return fluidOutputStorage;
+    }
+
+    public PatternReturnResourceStorage<ItemResource> itemReturnStorage() {
         return AE2ResourceFamilies.ITEM.patternReturnView(logic.getReturnInv());
     }
 
-    public PatternReturnResourceStorage<FluidResource> fluidOutputStorage() {
+    public PatternReturnResourceStorage<FluidResource> fluidReturnStorage() {
         return AE2ResourceFamilies.FLUID.patternReturnView(logic.getReturnInv());
     }
 

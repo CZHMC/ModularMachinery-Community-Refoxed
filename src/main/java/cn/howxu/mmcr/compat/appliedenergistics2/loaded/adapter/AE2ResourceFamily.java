@@ -20,6 +20,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkRe
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
@@ -121,6 +122,12 @@ public final class AE2ResourceFamily<R> {
 
     public PatternReturnResourceStorage<R> patternOutputView(PatternProviderReturnInventory inventory) {
         return patternReturnView(inventory);
+    }
+
+    public OutputResourceStorage<R> patternOutputView(PatternProviderReturnInventory inventory,
+                                                       Supplier<@Nullable MEStorage> networkSupplier,
+                                                       IActionSource actionSource, Runnable changeCallback) {
+        return outputView(inventory, networkSupplier, actionSource, changeCallback);
     }
 
     public CapabilityBinding inputBinding(Function<IOPortBlockEntity, ResourceStorage<R>> storageFactory,

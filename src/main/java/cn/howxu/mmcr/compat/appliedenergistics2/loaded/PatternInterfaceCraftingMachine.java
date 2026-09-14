@@ -60,8 +60,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
             try (reservation) {
                 return reservation.commit(transaction -> {
-                    boolean itemsAccepted = itemRequest.accept(host.itemOutputStorage(), transaction);
-                    boolean fluidsAccepted = fluidRequest.accept(host.fluidOutputStorage(), transaction);
+                    boolean itemsAccepted = itemRequest.accept(host.itemReturnStorage(), transaction);
+                    boolean fluidsAccepted = fluidRequest.accept(host.fluidReturnStorage(), transaction);
                     if (!itemsAccepted || !fluidsAccepted) throw ReturnCapacityException.INSTANCE;
                 });
             }

@@ -8,16 +8,24 @@ import appeng.api.networking.energy.IEnergyService;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.AEKeyTypes;
+import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
+import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
@@ -30,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.mojang.serialization.Lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,6 +52,7 @@ class AE2OutputResourceStorageTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
+        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
     }
 
     @Test
@@ -99,6 +109,122 @@ class AE2OutputResourceStorageTest {
         assertThat(network.calls()).extracting(FakeMEStorage.InsertCall::amount)
                 .containsExactly(8L, 8L, 8L);
         assertThat(network.calls()).allSatisfy(call -> assertThat(call.source()).isNotNull());
+    }
+
+    @Test
+    void patternOutputCommitsFullyAcceptedNetworkOutputOnlyAtRootCommit() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        PatternProviderReturnInventory returns = new PatternProviderReturnInventory(() -> {
+        });
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 8L);
+        OutputResourceStorage<ItemResource> storage = AE2ResourceFamilies.ITEM.patternOutputView(returns,
+                () -> network, source(), () -> {
+                });
+        var plan = storage.planOutput(iron, 8L, new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(8L);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            assertThat(network.amount(AEItemKey.of(iron))).isZero();
+            assertThat(returns.isEmpty()).isTrue();
+            transaction.commit();
+        }
+
+        assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(8L);
+        assertThat(returns.isEmpty()).isTrue();
+    }
+
+    @Test
+    void patternOutputStoresAnItemNetworkShortfallInTheNativeReturnInventory() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        PatternProviderReturnInventory returns = new PatternProviderReturnInventory(() -> {
+        });
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 8L);
+        network.setModulationLimit(3L);
+        OutputResourceStorage<ItemResource> storage = AE2ResourceFamilies.ITEM.patternOutputView(returns,
+                () -> network, source(), () -> {
+                });
+        var plan = storage.planOutput(iron, 8L, new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(8L);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+
+        assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(3L);
+        assertThat(returns.getStack(0)).isEqualTo(new GenericStack(AEItemKey.of(iron), 5L));
+    }
+
+    @Test
+    void patternOutputKeepsFluidShortfallForTheNativeReturnInventoryRetry() {
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        var waterKey = appeng.api.stacks.AEFluidKey.of(water);
+        PatternProviderReturnInventory returns = new PatternProviderReturnInventory(() -> {
+        });
+        returns.setCapacity(AEKeyType.fluids(), 1_000L);
+        FakeMEStorage network = new FakeMEStorage(waterKey, 0L);
+        OutputResourceStorage<FluidResource> storage = AE2ResourceFamilies.FLUID.patternOutputView(returns,
+                () -> network, source(), () -> {
+                });
+        var plan = storage.planOutput(water, 1_000L, new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(1_000L);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(returns.getStack(0)).isEqualTo(new GenericStack(waterKey, 1_000L));
+
+        network.setCapacity(waterKey, 1_000L);
+        assertThat(returns.injectIntoNetwork(network, source(), ignored -> {
+        })).isTrue();
+
+        assertThat(network.amount(waterKey)).isEqualTo(1_000L);
+        assertThat(returns.isEmpty()).isTrue();
+    }
+
+    @Test
+    void patternOutputRejectsWhenTheNetworkAndNativeReturnInventoryAreFull() {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
+        PatternProviderReturnInventory returns = new PatternProviderReturnInventory(() -> {
+        });
+        for (int slot = 0; slot < returns.size(); slot++) {
+            returns.setStack(slot, new GenericStack(AEItemKey.of(gold), 64L));
+        }
+        FakeMEStorage network = new FakeMEStorage(AEItemKey.of(iron), 0L);
+        OutputResourceStorage<ItemResource> storage = AE2ResourceFamilies.ITEM.patternOutputView(returns,
+                () -> network, source(), () -> {
+                });
+
+        assertThat(storage.planOutput(iron, 1L, new PlanningReservations(), true).accepted()).isZero();
+        assertThat(network.amount(AEItemKey.of(iron))).isZero();
+        assertThat(returns.getStack(0)).isEqualTo(new GenericStack(AEItemKey.of(gold), 64L));
+    }
+
+    @Test
+    void patternOutputRetainsNearMaximumFluidNetworkShortfallsWithoutOverflow() {
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        var waterKey = appeng.api.stacks.AEFluidKey.of(water);
+        PatternProviderReturnInventory returns = new PatternProviderReturnInventory(() -> {
+        });
+        returns.setCapacity(AEKeyType.fluids(), Long.MAX_VALUE);
+        FakeMEStorage network = new FakeMEStorage(waterKey, Long.MAX_VALUE);
+        network.setModulationLimit(Long.MAX_VALUE - 1L);
+        OutputResourceStorage<FluidResource> storage = AE2ResourceFamilies.FLUID.patternOutputView(returns,
+                () -> network, source(Double.MAX_VALUE), () -> {
+                });
+        var plan = storage.planOutput(water, Long.MAX_VALUE, new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(Long.MAX_VALUE);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+
+        assertThat(network.amount(waterKey)).isEqualTo(Long.MAX_VALUE - 1L);
+        assertThat(returns.getStack(0)).isEqualTo(new GenericStack(waterKey, 1L));
     }
 
     @Test
@@ -440,9 +566,13 @@ class AE2OutputResourceStorageTest {
     }
 
     private static IActionSource source() {
+        return source(1_000_000D);
+    }
+
+    private static IActionSource source(double availableEnergy) {
         IEnergyService energy = (IEnergyService) Proxy.newProxyInstance(
                 IEnergyService.class.getClassLoader(), new Class<?>[]{IEnergyService.class},
-                (_, method, _) -> method.getName().equals("extractAEPower") ? 1_000_000D
+                (_, method, _) -> method.getName().equals("extractAEPower") ? availableEnergy
                         : defaultValue(method.getReturnType()));
         IGrid[] grid = new IGrid[1];
         IGridNode node = (IGridNode) Proxy.newProxyInstance(
@@ -467,6 +597,22 @@ class AE2OutputResourceStorageTest {
         if (type == float.class) return 0F;
         if (type == double.class) return 0D;
         return null;
+    }
+
+    private static boolean ae2KeyTypesAreInitialized() {
+        try {
+            return !AEKeyTypes.getAll().isEmpty();
+        } catch (IllegalStateException ignored) {
+            return false;
+        }
+    }
+
+    private static void initializeAE2KeyTypes() {
+        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
+        AEKeyTypesInternal.setRegistry(registry);
+        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
+        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
+        registry.freeze();
     }
 
     private static final class RejectedInventory extends GenericStackInv {
@@ -521,6 +667,10 @@ class AE2OutputResourceStorageTest {
 
         private void setModulationLimit(long limit) {
             modulationLimit = limit;
+        }
+
+        private void setCapacity(AEKey key, long capacity) {
+            capacities.put(key, capacity);
         }
 
         @Override
