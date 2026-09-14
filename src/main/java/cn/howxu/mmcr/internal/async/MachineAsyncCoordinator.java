@@ -132,13 +132,13 @@ public final class MachineAsyncCoordinator {
         }
     }
 
-    private void scheduleResume(Task task, java.util.function.Function<MainThreadStep.Result, AsyncContinuation.Yield> resume,
-                                MainThreadStep.Result result) {
+    private void scheduleResume(Task task, java.util.function.Function<MainThreadStep.Result, AsyncContinuation> resume,
+                                 MainThreadStep.Result result) {
         task.activeWorkers.incrementAndGet();
         executor.execute(() -> {
             try {
                 if (!task.cancelled) {
-                    handleYield(task, resume.apply(result));
+                    scheduleResult(task, resume.apply(result));
                 }
             } catch (Throwable throwable) {
                 fail(task, throwable);
@@ -220,6 +220,6 @@ public final class MachineAsyncCoordinator {
     }
 
     private record PendingMainStep(Task task, MainThreadStep step,
-                                   java.util.function.Function<MainThreadStep.Result, AsyncContinuation.Yield> resume) {
+                                   java.util.function.Function<MainThreadStep.Result, AsyncContinuation> resume) {
     }
 }

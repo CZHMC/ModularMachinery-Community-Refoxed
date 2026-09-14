@@ -35,7 +35,7 @@ class MachineAsyncCoordinatorTest {
         coordinator.submit(key, context -> {
             phases.add("worker-before");
             return AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("main")),
-                    ignored -> {
+                    ignored -> resumeContext -> {
                         phases.add("worker-after");
                         return AsyncContinuation.Yield.complete();
                     });
@@ -45,6 +45,21 @@ class MachineAsyncCoordinatorTest {
         coordinator.completeTick();
 
         assertThat(phases).containsExactly("worker-before", "main", "worker-after");
+    }
+
+    @Test
+    void resumed_continuation_receives_the_work_mode_from_its_task_key() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L, MachineWorkMode.SEMI_SYNC);
+
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success,
+                result -> context -> {
+                    assertThat(context.workMode()).isEqualTo(MachineWorkMode.SEMI_SYNC);
+                    return AsyncContinuation.Yield.complete();
+                }));
+
+        coordinator.pumpMainThreadSteps();
+        coordinator.completeTick();
     }
 
     @Test
@@ -62,9 +77,9 @@ class MachineAsyncCoordinatorTest {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
 
         coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L), ignored ->
-                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("first-main")), result ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("first-main")), result -> context ->
                         AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("second-main")),
-                                ignoredAgain -> {
+                                ignoredAgain -> contextAgain -> {
                                     phases.add("complete");
                                     return AsyncContinuation.Yield.complete();
                                 })));
@@ -81,10 +96,10 @@ class MachineAsyncCoordinatorTest {
 
         coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L), ignored ->
                 AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("current")),
-                        result -> AsyncContinuation.Yield.complete()));
+                        result -> context -> AsyncContinuation.Yield.complete()));
         coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 41L), ignored ->
                 AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> phases.add("later")),
-                        result -> AsyncContinuation.Yield.complete()));
+                        result -> context -> AsyncContinuation.Yield.complete()));
 
         coordinator.completeTick();
 
@@ -97,7 +112,7 @@ class MachineAsyncCoordinatorTest {
         AtomicBoolean committed = new AtomicBoolean();
         coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
                 AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
-                        result -> AsyncContinuation.Yield.complete()));
+                        result -> context -> AsyncContinuation.Yield.complete()));
 
         coordinator.cancel(BlockPos.ZERO);
         coordinator.pumpMainThreadSteps();
@@ -116,7 +131,7 @@ class MachineAsyncCoordinatorTest {
         AtomicBoolean committed = new AtomicBoolean();
         coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
                 AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
-                        result -> AsyncContinuation.Yield.complete()));
+                        result -> context -> AsyncContinuation.Yield.complete()));
 
         Thread pump = new Thread(coordinator::pumpMainThreadSteps);
         pump.start();
@@ -136,7 +151,7 @@ class MachineAsyncCoordinatorTest {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor);
         AtomicBoolean resumed = new AtomicBoolean();
         coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
-                AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success, result -> {
+                AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success, result -> context -> {
                     resumed.set(true);
                     return AsyncContinuation.Yield.complete();
                 }));

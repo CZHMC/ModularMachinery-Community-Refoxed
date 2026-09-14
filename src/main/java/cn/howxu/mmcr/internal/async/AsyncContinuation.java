@@ -15,14 +15,14 @@ public interface AsyncContinuation {
         record Complete() implements Yield {
         }
 
-        record MainThread(MainThreadStep step, Function<MainThreadStep.Result, Yield> resume) implements Yield {
+        record MainThread(MainThreadStep step, Function<MainThreadStep.Result, AsyncContinuation> resume) implements Yield {
         }
 
         static Complete complete() {
             return new Complete();
         }
 
-        static MainThread mainThread(MainThreadStep step, Function<MainThreadStep.Result, Yield> resume) {
+        static MainThread mainThread(MainThreadStep step, Function<MainThreadStep.Result, AsyncContinuation> resume) {
             return new MainThread(step, resume);
         }
     }
