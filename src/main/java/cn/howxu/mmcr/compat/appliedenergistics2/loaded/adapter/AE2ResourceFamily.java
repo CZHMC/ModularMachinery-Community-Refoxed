@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
 
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
@@ -12,6 +13,8 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.AsyncOutputResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -103,8 +106,16 @@ public final class AE2ResourceFamily<R> {
         return view;
     }
 
-    public ResourceStorage<R> patternOutputView(PatternProviderReturnInventory inventory) {
-        return standardInputView(inventory);
+    public PatternRequestResourceStorage<R> patternRequestView(KeyCounter[] inputHolders) {
+        return new PatternRequestResourceStorage<>(inputHolders, adapter);
+    }
+
+    public PatternReturnResourceStorage<R> patternReturnView(PatternProviderReturnInventory inventory) {
+        return new PatternReturnResourceStorage<>(inventory, adapter);
+    }
+
+    public PatternReturnResourceStorage<R> patternOutputView(PatternProviderReturnInventory inventory) {
+        return patternReturnView(inventory);
     }
 
     public CapabilityBinding inputBinding(Function<IOPortBlockEntity, ResourceStorage<R>> storageFactory,

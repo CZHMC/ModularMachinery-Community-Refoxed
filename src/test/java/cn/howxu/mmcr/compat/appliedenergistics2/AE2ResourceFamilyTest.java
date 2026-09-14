@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.AEKeyTypes;
+import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import appeng.me.storage.NullInventory;
@@ -15,6 +17,9 @@ import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import com.mojang.serialization.Lifecycle;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -36,6 +41,7 @@ class AE2ResourceFamilyTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
+        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
     }
 
     @Test
@@ -96,5 +102,21 @@ class AE2ResourceFamilyTest {
                 .isEqualTo(ItemResource.class);
         assertThat(AE2ResourceFamilies.FLUID.patternOutputView(returnInventory).resourceType())
                 .isEqualTo(FluidResource.class);
+    }
+
+    private static boolean ae2KeyTypesAreInitialized() {
+        try {
+            return !AEKeyTypes.getAll().isEmpty();
+        } catch (IllegalStateException ignored) {
+            return false;
+        }
+    }
+
+    private static void initializeAE2KeyTypes() {
+        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
+        AEKeyTypesInternal.setRegistry(registry);
+        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
+        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
+        registry.freeze();
     }
 }

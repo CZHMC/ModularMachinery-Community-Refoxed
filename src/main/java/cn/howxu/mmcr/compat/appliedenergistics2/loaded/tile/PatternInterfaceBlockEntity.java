@@ -6,6 +6,7 @@ import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.api.util.AECableType;
 import appeng.core.definitions.AEBlocks;
@@ -17,6 +18,8 @@ import appeng.me.storage.NullInventory;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -134,12 +137,20 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         return AE2ResourceFamilies.FLUID.patternInputView(networkStorage());
     }
 
-    public ResourceStorage<ItemResource> itemOutputStorage() {
-        return AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv());
+    public PatternRequestResourceStorage<ItemResource> itemRequestStorage(KeyCounter[] inputHolders) {
+        return AE2ResourceFamilies.ITEM.patternRequestView(inputHolders);
     }
 
-    public ResourceStorage<FluidResource> fluidOutputStorage() {
-        return AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv());
+    public PatternRequestResourceStorage<FluidResource> fluidRequestStorage(KeyCounter[] inputHolders) {
+        return AE2ResourceFamilies.FLUID.patternRequestView(inputHolders);
+    }
+
+    public PatternReturnResourceStorage<ItemResource> itemOutputStorage() {
+        return AE2ResourceFamilies.ITEM.patternReturnView(logic.getReturnInv());
+    }
+
+    public PatternReturnResourceStorage<FluidResource> fluidOutputStorage() {
+        return AE2ResourceFamilies.FLUID.patternReturnView(logic.getReturnInv());
     }
 
     /** Notifies linked controllers after AE2's native return inventory drains. */
