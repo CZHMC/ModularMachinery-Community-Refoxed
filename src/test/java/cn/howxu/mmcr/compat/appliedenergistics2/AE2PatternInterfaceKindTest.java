@@ -44,7 +44,7 @@ class AE2PatternInterfaceKindTest {
                         List.of("fluid_output_hatch")));
         assertThat(kind.definition().bindings())
                 .extracting(binding -> binding.type().id())
-                .containsExactly(PortFamilyIds.ITEM, PortFamilyIds.FLUID, PortFamilyIds.ITEM, PortFamilyIds.FLUID);
+                .containsExactly(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
         assertThat(kind.definition().bindings())
                 .allSatisfy(binding -> assertThat(binding.directions()).isEqualTo(CapabilityDirections.bidirectional()));
         assertThat(bridge.portOverlayTexture(kind)).isEqualTo(Identifier.fromNamespaceAndPath(

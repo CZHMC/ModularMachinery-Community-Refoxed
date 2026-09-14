@@ -21,7 +21,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.util.InterfaceMenuPolicy;
-import cn.howxu.mmcr.mixin.compat.appliedenergistics2.PatternProviderScreenMixin;
+import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -161,14 +161,14 @@ class AE2OutputInterfaceHostTest {
     }
 
     @Test
-    void patternHostExposesSeparateInputAndOutputCapabilityViews() {
+    void patternHostExposesOnlyPatternReturnOutputViews() {
         PatternInterfaceBlockEntity host = patternHost();
 
-        assertThat(host.capabilitySnapshot().capabilities()).hasSize(4);
+        assertThat(host.capabilitySnapshot().capabilities()).hasSize(2);
         assertThat(host.capabilitySnapshot().capabilities())
                 .filteredOn(capability -> capability.directions().supports(IOType.INPUT)
                         && !capability.directions().supports(IOType.OUTPUT))
-                .hasSize(2);
+                .isEmpty();
         assertThat(host.capabilitySnapshot().capabilities())
                 .filteredOn(capability -> capability.directions().supports(IOType.OUTPUT)
                         && !capability.directions().supports(IOType.INPUT))
@@ -212,10 +212,10 @@ class AE2OutputInterfaceHostTest {
     void patternProviderTitleChangesOnlyForTheMmcrHost() {
         var original = net.minecraft.network.chat.Component.translatable("gui.ae2.PatternProvider");
 
-        assertThat(PatternProviderScreenMixin.titleFor(patternHost(), original))
+        assertThat(InterfaceScreenTitles.titleFor(patternHost(), original))
                 .isEqualTo(net.minecraft.network.chat.Component.translatable(
                         "container.mmcr.ae2_me_pattern_interface"));
-        assertThat(PatternProviderScreenMixin.titleFor(new Object(), original)).isSameAs(original);
+        assertThat(InterfaceScreenTitles.titleFor(new Object(), original)).isSameAs(original);
     }
 
     private static final class TestOutputHost extends OutputInterfaceBaseBlockEntity {

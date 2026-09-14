@@ -74,10 +74,11 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
-        itemOutputStorage = AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv(), this::networkStorage,
-                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
-        fluidOutputStorage = AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv(), this::networkStorage,
-                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
+        // PatternProviderLogic must return completed pattern outputs to the grid itself so AE2 can settle the craft.
+        itemOutputStorage = AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv(), () -> null,
+                IActionSource.ofMachine(this), () -> { });
+        fluidOutputStorage = AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv(), () -> null,
+                IActionSource.ofMachine(this), () -> { });
     }
 
     @Override

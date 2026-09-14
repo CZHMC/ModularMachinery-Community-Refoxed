@@ -1,6 +1,8 @@
 package cn.howxu.mmcr;
 
 import appeng.api.config.Actionable;
+import appeng.api.config.LockCraftingMode;
+import appeng.api.config.Settings;
 import appeng.api.networking.GridHelper;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
@@ -130,14 +132,19 @@ public class AE2PatternInterfaceGameTest {
             var pattern = patternPort.getLogic().getAvailablePatterns().getFirst();
             KeyCounter requestItems = new KeyCounter();
             requestItems.add(AEItemKey.of(Items.IRON_INGOT), 1L);
+            patternPort.getLogic().getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE,
+                    LockCraftingMode.LOCK_UNTIL_RESULT);
             helper.assertTrue(patternPort.getLogic().pushPattern(pattern, new KeyCounter[]{requestItems}),
                     "Native PatternProviderLogic accepts the encoded pattern through the MMCR crafting bridge");
         });
 
         helper.runAtTickTime(50, () -> {
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
             helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
                             Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 1L,
                     "Pattern-started MMCR recipe sends its output to ME storage");
+            helper.assertTrue(patternPort.getLogic().getCraftingLockedReason() == LockCraftingMode.NONE,
+                    "Pattern output returns through native logic and releases AE2's result lock");
             helper.succeed();
         });
     }

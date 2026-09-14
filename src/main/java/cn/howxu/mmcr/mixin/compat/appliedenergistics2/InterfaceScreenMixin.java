@@ -3,9 +3,9 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 import appeng.client.gui.AEBaseScreen;
 import appeng.client.gui.implementations.InterfaceScreen;
 import appeng.menu.implementations.InterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -31,7 +31,7 @@ public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
     private static void mmcr$replaceTitle(Args args) {
         InterfaceMenu menu = args.get(0);
         var host = menu.getHost();
-        Component title = titleFor(host, null);
+        Component title = InterfaceScreenTitles.titleFor(host, null);
         if (title != null) args.set(2, title);
     }
 
@@ -39,7 +39,7 @@ public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
     private void mmcr$replaceStyleTitle(CallbackInfo ci) {
         InterfaceMenu menu = (InterfaceMenu) ((AbstractContainerScreen<?>) (Object) this).getMenu();
         var host = menu.getHost();
-        Component displayTitle = titleFor(host, Component.translatable("gui.ae2.Interface"));
+        Component displayTitle = InterfaceScreenTitles.titleFor(host, Component.translatable("gui.ae2.Interface"));
         ((AEBaseScreen<?>) (Object) this).getStyle().getText()
                 .get(AEBaseScreen.TEXT_ID_DIALOG_TITLE)
                 .setText(displayTitle);
@@ -52,11 +52,5 @@ public abstract class InterfaceScreenMixin<C extends InterfaceMenu> {
         boolean lockedInterface = menu.getHost() instanceof OutputInterfaceBaseBlockEntity
                 || menu.getHost() instanceof StockingInterfaceBlockEntity;
         button.visible = !lockedInterface && visible;
-    }
-
-    public static Component titleFor(Object host, Component fallback) {
-        return host instanceof IOPortBlockEntity port
-                ? Component.translatable("container.mmcr." + port.kind().id())
-                : fallback;
     }
 }

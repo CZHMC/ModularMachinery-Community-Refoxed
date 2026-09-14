@@ -3,6 +3,7 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 import appeng.client.gui.AEBaseScreen;
 import appeng.client.gui.implementations.PatternProviderScreen;
 import appeng.menu.implementations.PatternProviderMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -41,7 +42,7 @@ public abstract class PatternProviderScreenMixin {
         }
     }
 
-    public static Component titleFor(Object host, Component fallback) {
-        return host instanceof PatternInterfaceBlockEntity ? InterfaceScreenMixin.titleFor(host, fallback) : fallback;
+    private static Component titleFor(Object host, Component fallback) {
+        return host instanceof PatternInterfaceBlockEntity ? InterfaceScreenTitles.titleFor(host, fallback) : fallback;
     }
 }
