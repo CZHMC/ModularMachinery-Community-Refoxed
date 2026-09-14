@@ -50,6 +50,7 @@ public final class FactoryRuntime {
     private final Map<FactoryRecipeThread, Identifier> recipeLocks = new IdentityHashMap<>();
     private final Set<FactoryRecipeThread> recipeLockUsed = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, Identifier> startReservations = new IdentityHashMap<>();
+    private final Set<FactoryRecipeThread> patternStartReservations = Collections.newSetFromMap(new IdentityHashMap<>());
     private int laneLimit = 1;
     private long perThreadParallelLimit = 1L;
     private boolean paused;
@@ -143,7 +144,7 @@ public final class FactoryRuntime {
         Map<Identifier, Integer> activeCounts = activeRecipeCounts();
         if (!context.orderedCandidates().isEmpty()) {
             for (FactoryRecipeThread lane : laneSnapshot) {
-                if (!lane.isIdle()) continue;
+                if (patternStartReservations.contains(lane) || !lane.isIdle()) continue;
                 List<MachineRecipe> available = filterAvailableCandidates(context.orderedCandidates(), activeCounts);
                 if (available.isEmpty()) break;
                 Identifier lock = recipeLocks.get(lane);
@@ -416,6 +417,33 @@ public final class FactoryRuntime {
         return lanes.stream().anyMatch(lane -> lane.runtime() == runtime);
     }
 
+    /** Reserves an idle lane after its runtime has successfully planned the requested pattern inputs. */
+    public @Nullable PatternLane reservePatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                     List<MachineCapability> requestCapabilities) {
+        if (recipe == null || controller == null || paused) return null;
+        for (FactoryRecipeThread lane : lanes) {
+            PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities);
+            if (reservation != null) return reservation;
+        }
+        if (lanes.size() >= laneLimit) return null;
+        FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
+        PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities);
+        if (reservation == null) return null;
+        addLane(lane);
+        return reservation;
+    }
+
+    public void releasePatternStart(PatternLane reservation) {
+        if (reservation == null) return;
+        for (FactoryRecipeThread lane : lanes) {
+            if (lane.runtime() != reservation.runtime()) continue;
+            patternStartReservations.remove(lane);
+            lane.runtime().releasePatternStart();
+            markLaneStateChanged();
+            return;
+        }
+    }
+
     public boolean setLaneLimit(int laneLimit) {
         int normalized = Math.min(MAX_LANES, Math.max(1, laneLimit));
         if (this.laneLimit == normalized) return false;
@@ -442,11 +470,13 @@ public final class FactoryRuntime {
 
     public void clear() {
         boolean changed = !lanes.isEmpty() || !recipeLocks.isEmpty() || !recipeLockUsed.isEmpty()
-                || !startReservations.isEmpty() || coreCatalogVersion != Long.MIN_VALUE || failure != null;
+                || !startReservations.isEmpty() || !patternStartReservations.isEmpty()
+                || coreCatalogVersion != Long.MIN_VALUE || failure != null;
         for (FactoryRecipeThread lane : List.copyOf(lanes)) removeLane(lane);
         recipeLocks.clear();
         recipeLockUsed.clear();
         startReservations.clear();
+        patternStartReservations.clear();
         readyLanes.clear();
         coreCatalogVersion = Long.MIN_VALUE;
         clearCandidateCaches();
@@ -794,6 +824,7 @@ public final class FactoryRuntime {
         recipeLocks.remove(lane);
         recipeLockUsed.remove(lane);
         startReservations.remove(lane);
+        patternStartReservations.remove(lane);
     }
 
     public void markLaneRuntimeChanged(CraftingRuntime runtime) {
@@ -837,6 +868,23 @@ public final class FactoryRuntime {
         activeCountDirty = true;
         failureDirty = true;
         factoryStateEpoch++;
+    }
+
+    private @Nullable PatternLane reservePatternStart(FactoryRecipeThread lane, MachineRecipe recipe,
+                                                      long requestedParallelism,
+                                                      List<MachineCapability> requestCapabilities) {
+        if (patternStartReservations.contains(lane) || !lane.isIdle()
+                || !lane.candidatesFor(List.of(recipe)).contains(recipe)) return null;
+        CraftingRuntime.PreparedStart prepared = lane.runtime()
+                .preparePatternStart(recipe, requestedParallelism, requestCapabilities);
+        if (prepared == null || !lane.runtime().reservePatternStart()) return null;
+        patternStartReservations.add(lane);
+        markLaneStateChanged();
+        return new PatternLane(lane.runtime(), lane.laneId(), prepared);
+    }
+
+    /** Concrete factory lane selected for one admitted pattern start. */
+    public record PatternLane(CraftingRuntime runtime, String laneId, CraftingRuntime.PreparedStart preparedStart) {
     }
 
     private LaneObservation observe(FactoryRecipeThread lane) {

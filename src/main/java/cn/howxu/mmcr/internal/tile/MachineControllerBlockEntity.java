@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
@@ -91,6 +92,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryTickResult;
 import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
+import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.StructureRuntime.StructureWorkSnapshot;
@@ -251,6 +253,71 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public ComponentRuntime componentRuntime() {
         return runtime.componentRuntime();
+    }
+
+    /**
+     * Admits one AE2 pattern request against this controller without creating an intermediate inventory.
+     */
+    public PatternStartReservation reservePatternStart(BlockPos sourcePort, List<MachineOutput> patternOutputs,
+                                                       List<MachineCapability> requestCapabilities) {
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        if (sourcePort == null || patternOutputs == null || requestCapabilities == null
+                || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
+                || redstonePaused || !snapshot.linkedPortPositions().contains(sourcePort)) {
+            return PatternStartReservation.unavailable();
+        }
+        for (MachineRecipe recipe : recipesForMachine()) {
+            if (!patternOutputsMatch(recipe, patternOutputs)) continue;
+            if (!hasFactoryController()) {
+                CraftingRuntime crafting = runtime.craftingRuntime();
+                CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, 1L, requestCapabilities);
+                if (prepared == null || !crafting.reservePatternStart()) continue;
+                return PatternStartReservation.reserved(recipe, "", crafting, prepared, crafting::releasePatternStart);
+            }
+            FactoryRecipeScheduler scheduler = factoryScheduler();
+            scheduler.setThreadLimit(effectiveFactoryThreadLimit());
+            FactoryRuntime factory = runtime.factoryRuntime();
+            Machine machine = snapshot.structure().machine() == null
+                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+            factory.syncCoreLanes(this, machine, recipesForMachine());
+            FactoryRuntime.PatternLane lane = factory.reservePatternStart(recipe, 1L, requestCapabilities);
+            if (lane == null) continue;
+            return PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(), lane.preparedStart(),
+                    () -> factory.releasePatternStart(lane));
+        }
+        return PatternStartReservation.unavailable();
+    }
+
+    /**
+     * Rotates only the already selected linked-controller group; AE2 remains responsible for provider priority.
+     */
+    public static PatternStartReservation reserveNextPatternStart(List<MachineControllerBlockEntity> controllers,
+                                                                   AtomicInteger nextController,
+                                                                   BlockPos sourcePort,
+                                                                   List<MachineOutput> patternOutputs,
+                                                                   List<MachineCapability> requestCapabilities) {
+        if (controllers == null || controllers.isEmpty() || nextController == null) {
+            return PatternStartReservation.unavailable();
+        }
+        int first = Math.floorMod(nextController.get(), controllers.size());
+        for (int offset = 0; offset < controllers.size(); offset++) {
+            int index = (first + offset) % controllers.size();
+            MachineControllerBlockEntity controller = controllers.get(index);
+            if (controller == null) continue;
+            PatternStartReservation reservation = controller.reservePatternStart(sourcePort, patternOutputs,
+                    requestCapabilities);
+            if (reservation.status() != PatternStartReservation.Status.RESERVED) continue;
+            int successor = (index + 1) % controllers.size();
+            return reservation.afterCommit(() -> nextController.set(successor));
+        }
+        return PatternStartReservation.unavailable();
+    }
+
+    public void onPatternStartCommitted() {
+        setActiveState(true);
+        syncRuntimeStateIfChanged();
+        publishRuntimeState();
+        setChanged();
     }
 
     public MachineBehaviorContext behaviorContext() {
@@ -3763,6 +3830,39 @@ public class MachineControllerBlockEntity extends BlockEntity {
         cachedCandidatesCatalogVersion = catalog.version();
         cachedCandidates = catalog.recipes();
         return cachedCandidates;
+    }
+
+    private boolean patternOutputsMatch(MachineRecipe recipe, List<MachineOutput> patternOutputs) {
+        List<MachineOutput> remaining = new ArrayList<>(recipe.runtimeMachineOutputs(runtime.componentRuntime().modifierList()));
+        for (MachineOutput expected : patternOutputs) {
+            int match = -1;
+            for (int index = 0; index < remaining.size(); index++) {
+                if (samePatternOutput(expected, remaining.get(index))) {
+                    match = index;
+                    break;
+                }
+            }
+            if (match < 0) return false;
+            remaining.remove(match);
+        }
+        return remaining.isEmpty();
+    }
+
+    private static boolean samePatternOutput(MachineOutput expected, MachineOutput actual) {
+        if (expected instanceof MachineOutput.ItemOutput expectedItem
+                && actual instanceof MachineOutput.ItemOutput actualItem) {
+            return expectedItem.chance() == 1F && actualItem.chance() == 1F
+                    && expectedItem.stack().getCount() == actualItem.stack().getCount()
+                    && net.minecraft.world.item.ItemStack.isSameItemSameComponents(expectedItem.stack(), actualItem.stack());
+        }
+        if (expected instanceof MachineOutput.FluidOutput expectedFluid
+                && actual instanceof MachineOutput.FluidOutput actualFluid) {
+            return expectedFluid.chance() == 1F && actualFluid.chance() == 1F
+                    && expectedFluid.stack().getAmount() == actualFluid.stack().getAmount()
+                    && expectedFluid.stack().getFluid() == actualFluid.stack().getFluid()
+                    && Objects.equals(expectedFluid.stack().getComponents(), actualFluid.stack().getComponents());
+        }
+        return false;
     }
 
     private void clearCandidateCache() {

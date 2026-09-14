@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
@@ -79,6 +80,7 @@ public final class CraftingRuntime {
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private CraftingStatus status = CraftingStatus.IDLE;
     private boolean finishCommitInProgress;
+    private boolean patternStartReserved;
     private boolean smartInterfaceChangePending;
     private @Nullable ExecutionStatus capabilityTickFailure;
 
@@ -93,11 +95,79 @@ public final class CraftingRuntime {
         this.screenText = screenText;
     }
 
+    /** Prepares a pattern start without consuming resources or occupying this runtime. */
+    public @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                       List<MachineCapability> requestCapabilities) {
+        if (recipe == null || requestedParallelism <= 0 || active() || patternStartReserved) return null;
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        if (!recipeBelongsToMachine(recipe, runtime)
+                || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
+        RecipeBehavior behavior = recipeBehavior(runtime);
+        if (behavior == null) return null;
+        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
+        List<RecipeModifier> contextModifiers = contextModifiers(runtime);
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers);
+        List<MachineOutput> outputs = recipe.runtimeMachineOutputs(contextModifiers);
+        MachineBehaviorContext machineContext = behaviorContext();
+        RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
+                effectiveParallelism, duration(recipe, runtime),
+                MachineRecipeConverter.toPublicRequirements(requirements), outputs);
+        try {
+            behavior.beforeStart().accept(startContext);
+        } catch (RuntimeException exception) {
+            logCallbackFailure("beforeStart", runtime, recipe, exception);
+            return null;
+        } finally {
+            flushScreenTextReplacements(machineContext.screenText());
+        }
+        if (startContext.cancelled()) return null;
+        RecipeStartContext.ExecutionSnapshot effective = startContext.snapshot();
+        PlanningResult result = context(runtime, requestCapabilities).planInputs(effective.requirements().stream()
+                        .map(MachineRecipeConverter::toRequirement).toList(), requestedParallelism,
+                Set.of(), Set.of());
+        CraftingPlan plan = result.plan();
+        if (!result.successful() || plan == null) return null;
+        return new PreparedStart(recipe, runtime, effective, plan);
+    }
+
+    public boolean reservePatternStart() {
+        if (active() || patternStartReserved) return false;
+        patternStartReserved = true;
+        return true;
+    }
+
+    public void releasePatternStart() {
+        patternStartReserved = false;
+    }
+
+    public boolean commitPatternStart(PreparedStart prepared) {
+        if (!patternStartReserved || active() || prepared == null) return false;
+        if (!prepared.plan().commitInputs()) return false;
+        activeRecipe = new ActiveMachineRecipe(prepared.recipe(), prepared.plan().parallelism(), prepared.effective());
+        activeRecipe.setParallelism(prepared.plan().parallelism());
+        startPlan = prepared.plan();
+        finishPlan = null;
+        effectiveRequirements = MachineRequirement.copyList(prepared.effective().requirements().stream()
+                .map(MachineRecipeConverter::toRequirement).toList());
+        effectiveOutputs = MachineOutput.copyList(prepared.effective().outputs());
+        captureInputState(effectiveRequirements, prepared.plan());
+        captureVersions(prepared.runtime());
+        patternStartReserved = false;
+        status = CraftingStatus.working();
+        failure = null;
+        controller.onPatternStartCommitted();
+        return true;
+    }
+
+    public record PreparedStart(MachineRecipe recipe, ControllerRuntimeSnapshot runtime,
+                                RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan) {
+    }
+
     public CraftingStatus start(MachineRecipe recipe, long requestedParallelism) {
         if (recipe == null || requestedParallelism <= 0) {
             return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
         }
-        if (active()) return status;
+        if (active() || patternStartReserved) return status;
 
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         if (!recipeBelongsToMachine(recipe, runtime)) {
@@ -444,6 +514,7 @@ public final class CraftingRuntime {
         retainedInputs = Set.of();
         resourceDomain = null;
         smartInterfaceChangePending = false;
+        patternStartReserved = false;
         failure = null;
         status = CraftingStatus.IDLE;
     }
@@ -649,6 +720,12 @@ public final class CraftingRuntime {
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime) {
         return new CraftingContext(new CapabilitySnapshot(components.capabilities()), contextModifiers(runtime));
+    }
+
+    private CraftingContext context(ControllerRuntimeSnapshot runtime, List<MachineCapability> requestCapabilities) {
+        List<MachineCapability> capabilities = new ArrayList<>(components.capabilities());
+        if (requestCapabilities != null) capabilities.addAll(requestCapabilities);
+        return new CraftingContext(new CapabilitySnapshot(capabilities), contextModifiers(runtime));
     }
 
     private PlanningResult planPerTick(CraftingContext context) {

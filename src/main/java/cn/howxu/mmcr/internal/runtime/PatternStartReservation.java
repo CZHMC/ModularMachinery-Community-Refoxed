@@ -1,0 +1,97 @@
+package cn.howxu.mmcr.internal.runtime;
+
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import java.util.Objects;
+
+/**
+ * Owns one admitted pattern start until it is committed or released.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public final class PatternStartReservation implements AutoCloseable {
+    public enum Status {
+        UNAVAILABLE,
+        RESERVED,
+        COMMITTED
+    }
+
+    private final MachineRecipe recipe;
+    private final String laneId;
+    private final CraftingRuntime runtime;
+    private final CraftingRuntime.PreparedStart preparedStart;
+    private final Runnable release;
+    private Runnable afterCommit = () -> { };
+    private boolean rolledBack;
+    private Status status;
+
+    private PatternStartReservation(Status status, MachineRecipe recipe, String laneId, CraftingRuntime runtime,
+                                    CraftingRuntime.PreparedStart preparedStart, Runnable release) {
+        this.status = status;
+        this.recipe = recipe;
+        this.laneId = laneId == null ? "" : laneId;
+        this.runtime = runtime;
+        this.preparedStart = preparedStart;
+        this.release = release;
+    }
+
+    public static PatternStartReservation unavailable() {
+        return new PatternStartReservation(Status.UNAVAILABLE, null, "", null, null, () -> { });
+    }
+
+    public static PatternStartReservation reserved(MachineRecipe recipe, String laneId, CraftingRuntime runtime,
+                                                   CraftingRuntime.PreparedStart preparedStart, Runnable release) {
+        return new PatternStartReservation(Status.RESERVED, Objects.requireNonNull(recipe, "recipe"), laneId,
+                Objects.requireNonNull(runtime, "runtime"), Objects.requireNonNull(preparedStart, "preparedStart"),
+                Objects.requireNonNull(release, "release"));
+    }
+
+    public Status status() {
+        return status;
+    }
+
+    public MachineRecipe recipe() {
+        return recipe;
+    }
+
+    public String laneId() {
+        return laneId;
+    }
+
+    public boolean rolledBack() {
+        return rolledBack;
+    }
+
+    public boolean commit() {
+        if (status != Status.RESERVED || rolledBack) return false;
+        if (!runtime.commitPatternStart(preparedStart)) {
+            rollback();
+            return false;
+        }
+        release.run();
+        status = Status.COMMITTED;
+        afterCommit.run();
+        return true;
+    }
+
+    public PatternStartReservation afterCommit(Runnable action) {
+        Objects.requireNonNull(action, "action");
+        if (status != Status.RESERVED || rolledBack) throw new IllegalStateException("Reservation is no longer pending");
+        Runnable previous = afterCommit;
+        afterCommit = () -> {
+            previous.run();
+            action.run();
+        };
+        return this;
+    }
+
+    public void rollback() {
+        if (status != Status.RESERVED || rolledBack) return;
+        rolledBack = true;
+        release.run();
+    }
+
+    @Override
+    public void close() {
+        rollback();
+    }
+}
