@@ -1,11 +1,13 @@
 package cn.howxu.mmcr.internal.async;
 
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -195,9 +197,14 @@ public final class MachineAsyncCoordinator {
                 && task.activeWorkers.get() > 0);
     }
 
-    public record TaskKey(BlockPos controllerPos, long gameTime) {
+    public record TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode) {
+        public TaskKey(BlockPos controllerPos, long gameTime) {
+            this(controllerPos, gameTime, MachineWorkMode.ASYNC);
+        }
+
         public TaskKey {
             controllerPos = controllerPos.immutable();
+            workMode = Objects.requireNonNull(workMode);
         }
     }
 

@@ -27,6 +27,3 @@ public interface AsyncContinuation {
         }
     }
 }
-
-record AsyncExecutionContext(MachineAsyncCoordinator.TaskKey key) {
-}
