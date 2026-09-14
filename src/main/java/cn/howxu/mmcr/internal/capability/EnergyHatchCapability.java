@@ -65,7 +65,8 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
-                return new AsyncCapabilitySnapshot.Scalar(type().id(), storage.amount(), storage.capacity());
+                return new AsyncCapabilitySnapshot.Scalar(type().id(), storage.amount(), storage.capacity(),
+                        storage.transferLimit());
             }
 
             @Override
@@ -171,7 +172,18 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     }
 
     private CapabilityResult commitAsync(AsyncCapabilityOperation operation,
-                                         net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
+                                          net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
+        if (operation instanceof AsyncCapabilityOperation.Group group) {
+            try (net.neoforged.neoforge.transfer.transaction.Transaction nested =
+                         net.neoforged.neoforge.transfer.transaction.Transaction.open(transaction)) {
+                for (AsyncCapabilityOperation child : group.operations()) {
+                    CapabilityResult result = commitAsync(child, nested);
+                    if (!result.success()) return result;
+                }
+                nested.commit();
+            }
+            return CapabilityResult.successful();
+        }
         if (!(operation instanceof AsyncCapabilityOperation.Scalar scalar)
                 || !type().id().equals(scalar.capabilityId())) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);

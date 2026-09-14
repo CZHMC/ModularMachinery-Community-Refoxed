@@ -117,6 +117,24 @@ class AsyncRequirementPlannerTest {
         assertThat(storage.resource(0)).isEqualTo(iron);
     }
 
+    @Test
+    void batch_limited_energy_groups_revalidate_and_roll_back_when_storage_changes() throws Exception {
+        LongValueStorage storage = new LongValueStorage(100L, 20L, null);
+        storage.setAmount(60L);
+        EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.INPUT);
+        AsyncCapabilityOperation operation = new AsyncCapabilityPlanner.Scalar(capability.type().id()).plan(
+                new AsyncCapabilitySnapshot.Scalar(capability.type().id(), 60L, 100L, 20L),
+                new AsyncCapabilityRequest.Scalar(capability.type().id(), 3L, 60L, false)).orElseThrow();
+        storage.setAmount(40L);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(commit(capability, operation, transaction).success()).isFalse();
+            transaction.commit();
+        }
+
+        assertThat(storage.amount()).isEqualTo(40L);
+    }
+
     private static AsyncRequirementPlanner.Requirement resourceRequirement(int index,
                                                                             net.minecraft.resources.Identifier capabilityId,
                                                                             AsyncResourceValue resource,
@@ -135,8 +153,16 @@ class AsyncRequirementPlannerTest {
     }
 
     private static CapabilityResult commit(ItemBusCapability capability, AsyncCapabilityOperation operation,
-                                           TransactionContext transaction) throws Exception {
+                                            TransactionContext transaction) throws Exception {
         Method method = ItemBusCapability.class.getDeclaredMethod("commitAsync", AsyncCapabilityOperation.class,
+                TransactionContext.class);
+        method.setAccessible(true);
+        return (CapabilityResult) method.invoke(capability, operation, transaction);
+    }
+
+    private static CapabilityResult commit(EnergyHatchCapability capability, AsyncCapabilityOperation operation,
+                                            TransactionContext transaction) throws Exception {
+        Method method = EnergyHatchCapability.class.getDeclaredMethod("commitAsync", AsyncCapabilityOperation.class,
                 TransactionContext.class);
         method.setAccessible(true);
         return (CapabilityResult) method.invoke(capability, operation, transaction);

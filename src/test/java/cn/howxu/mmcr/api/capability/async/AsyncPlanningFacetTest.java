@@ -56,12 +56,13 @@ class AsyncPlanningFacetTest {
 
     @Test
     void scalar_energy_values_do_not_use_a_resource_identifier() {
-        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 120L, 1_000L);
+        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 120L, 1_000L, 20L);
         var request = new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), 1L, 32L, false);
         var operation = new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 32L, false);
 
         assertThat(snapshot.amount()).isEqualTo(120L);
         assertThat(snapshot.capacity()).isEqualTo(1_000L);
+        assertThat(snapshot.transferLimit()).isEqualTo(20L);
         assertThat(request.amount()).isEqualTo(32L);
         assertThat(operation.amount()).isEqualTo(32L);
         assertThat(AsyncCapabilityOperation.Scalar.class.getRecordComponents())
@@ -73,11 +74,24 @@ class AsyncPlanningFacetTest {
     void worker_planner_accepts_and_returns_only_async_value_objects() throws Exception {
         AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Scalar(MMCR.id("energy"));
 
-        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 120L, 1_000L);
+        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 120L, 1_000L, 1_000L);
         var request = new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), 1L, 32L, false);
         Optional<AsyncCapabilityOperation> planned = CompletableFuture.supplyAsync(() -> planner.plan(snapshot, request)).get();
 
         assertThat(planned).contains(new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 32L, false));
+    }
+
+    @Test
+    void scalar_planner_splits_the_batch_limited_amount_into_committable_operations() {
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Scalar(MMCR.id("energy"));
+        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 100L, 1_000L, 20L);
+        var request = new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), 3L, 100L, false);
+
+        assertThat(planner.plan(snapshot, request)).hasValueSatisfying(operation ->
+                assertThat(groupOperations(operation)).containsExactly(
+                        new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 20L, false),
+                        new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 20L, false),
+                        new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 20L, false)));
     }
 
     @Test
@@ -113,6 +127,51 @@ class AsyncPlanningFacetTest {
                     new AsyncCapabilityOperation.Resource(MMCR.id("item"), 0, iron, 3L, true),
                     new AsyncCapabilityOperation.Resource(MMCR.id("item"), 1, gold, 2L, true));
         });
+    }
+
+    @Test
+    void resource_planner_combines_one_action_across_matching_slots_in_order() {
+        AsyncResourceValue iron = new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}");
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Resource(MMCR.id("item"));
+        var snapshot = new AsyncCapabilitySnapshot.Resource(MMCR.id("item"), List.of(
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(iron), 2L, 64L),
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(iron), 3L, 64L)));
+        var request = new AsyncCapabilityRequest.Resource(MMCR.id("item"), 1L, List.of(
+                new AsyncResourceAction(iron, 5L, false)));
+
+        assertThat(planner.plan(snapshot, request)).hasValueSatisfying(operation ->
+                assertThat(groupOperations(operation)).containsExactly(
+                        new AsyncCapabilityOperation.Resource(MMCR.id("item"), 0, iron, 2L, false),
+                        new AsyncCapabilityOperation.Resource(MMCR.id("item"), 1, iron, 3L, false)));
+    }
+
+    @Test
+    void resource_planner_distributes_one_insert_across_compatible_slots_in_order() {
+        AsyncResourceValue iron = new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}");
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Resource(MMCR.id("item"));
+        var snapshot = new AsyncCapabilitySnapshot.Resource(MMCR.id("item"), List.of(
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(iron), 62L, 64L),
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.empty(), 0L, 64L)));
+        var request = new AsyncCapabilityRequest.Resource(MMCR.id("item"), 1L, List.of(
+                new AsyncResourceAction(iron, 5L, true)));
+
+        assertThat(planner.plan(snapshot, request)).hasValueSatisfying(operation ->
+                assertThat(groupOperations(operation)).containsExactly(
+                        new AsyncCapabilityOperation.Resource(MMCR.id("item"), 0, iron, 2L, true),
+                        new AsyncCapabilityOperation.Resource(MMCR.id("item"), 1, iron, 3L, true)));
+    }
+
+    @Test
+    void resource_planner_rejects_an_action_that_cannot_be_fully_combined() {
+        AsyncResourceValue iron = new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}");
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Resource(MMCR.id("item"));
+        var snapshot = new AsyncCapabilitySnapshot.Resource(MMCR.id("item"), List.of(
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(iron), 2L, 64L),
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(iron), 2L, 64L)));
+        var request = new AsyncCapabilityRequest.Resource(MMCR.id("item"), 1L, List.of(
+                new AsyncResourceAction(iron, 5L, false)));
+
+        assertThat(planner.plan(snapshot, request)).isEmpty();
     }
 
     @Test
@@ -210,7 +269,7 @@ class AsyncPlanningFacetTest {
         @Override
         protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
             captured.set(true);
-            return new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 0L, 1_000L);
+            return new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 0L, 1_000L, 1_000L);
         }
 
         @Override

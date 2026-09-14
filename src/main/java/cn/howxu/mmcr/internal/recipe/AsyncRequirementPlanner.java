@@ -84,7 +84,15 @@ public final class AsyncRequirementPlanner {
         if (snapshot instanceof AsyncCapabilitySnapshot.Scalar scalar
                 && operation instanceof AsyncCapabilityOperation.Scalar value) {
             long amount = value.insert() ? scalar.amount() + value.amount() : scalar.amount() - value.amount();
-            return new AsyncCapabilitySnapshot.Scalar(scalar.capabilityId(), amount, scalar.capacity());
+            return new AsyncCapabilitySnapshot.Scalar(scalar.capabilityId(), amount, scalar.capacity(),
+                    scalar.transferLimit());
+        }
+        if (snapshot instanceof AsyncCapabilitySnapshot.Scalar && operation instanceof AsyncCapabilityOperation.Group group) {
+            AsyncCapabilitySnapshot planned = snapshot;
+            for (AsyncCapabilityOperation child : group.operations()) {
+                planned = apply(planned, child);
+            }
+            return planned;
         }
         throw new IllegalArgumentException("operation does not match capability snapshot");
     }

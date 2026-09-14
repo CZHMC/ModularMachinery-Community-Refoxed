@@ -30,12 +30,14 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
      * @param capabilityId capability type identifier
      * @param amount stored scalar amount
      * @param capacity scalar capacity
+     * @param transferLimit maximum scalar amount transferable in one storage operation
      */
-    record Scalar(Identifier capabilityId, long amount, long capacity) implements AsyncCapabilitySnapshot {
+    record Scalar(Identifier capabilityId, long amount, long capacity, long transferLimit)
+            implements AsyncCapabilitySnapshot {
         public Scalar {
             Objects.requireNonNull(capabilityId, "capabilityId");
-            if (amount < 0L || capacity < 0L || amount > capacity) {
-                throw new IllegalArgumentException("scalar amount must be within capacity");
+            if (amount < 0L || capacity < 0L || amount > capacity || transferLimit < 0L) {
+                throw new IllegalArgumentException("scalar amount must be within capacity and transfer limit non-negative");
             }
         }
     }

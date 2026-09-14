@@ -43,35 +43,43 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
             List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(resourceSnapshot.slots());
             List<AsyncCapabilityOperation> operations = new ArrayList<>(resourceRequest.actions().size());
             for (AsyncResourceAction action : resourceRequest.actions()) {
-                AsyncCapabilityOperation.Resource operation = planAction(slots, action);
-                if (operation == null) {
+                List<AsyncCapabilityOperation.Resource> actionOperations = planAction(slots, action);
+                if (actionOperations == null) {
                     return Optional.empty();
                 }
-                operations.add(operation);
+                operations.addAll(actionOperations);
             }
             return Optional.of(new AsyncCapabilityOperation.Group(operations));
         }
 
-        private AsyncCapabilityOperation.Resource planAction(List<AsyncCapabilitySnapshot.ResourceSlot> slots,
-                                                              AsyncResourceAction action) {
+        private List<AsyncCapabilityOperation.Resource> planAction(List<AsyncCapabilitySnapshot.ResourceSlot> slots,
+                                                                     AsyncResourceAction action) {
+            long remaining = action.amount();
+            List<AsyncCapabilityOperation.Resource> operations = new ArrayList<>();
             for (int slot = 0; slot < slots.size(); slot++) {
                 AsyncCapabilitySnapshot.ResourceSlot stored = slots.get(slot);
                 if (action.insert() && (stored.resource().isEmpty() || stored.resource().get().equals(action.resource()))) {
-                    long amount = Math.min(action.amount(), stored.capacity() - stored.amount());
+                    long amount = Math.min(remaining, stored.capacity() - stored.amount());
                     if (amount > 0L) {
                         slots.set(slot, new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(action.resource()),
                                 stored.amount() + amount, stored.capacity()));
-                        return new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount, true);
+                        operations.add(new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount,
+                                true));
+                        remaining -= amount;
                     }
                 } else if (!action.insert() && stored.resource().filter(action.resource()::equals).isPresent()) {
-                    long amount = Math.min(action.amount(), stored.amount());
+                    long amount = Math.min(remaining, stored.amount());
                     if (amount > 0L) {
-                        long remaining = stored.amount() - amount;
+                        long storedRemaining = stored.amount() - amount;
                         slots.set(slot, new AsyncCapabilitySnapshot.ResourceSlot(
-                                remaining == 0L ? Optional.empty() : stored.resource(), remaining, stored.capacity()));
-                        return new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount, false);
+                                storedRemaining == 0L ? Optional.empty() : stored.resource(), storedRemaining,
+                                stored.capacity()));
+                        operations.add(new AsyncCapabilityOperation.Resource(capabilityId, slot, action.resource(), amount,
+                                false));
+                        remaining -= amount;
                     }
                 }
+                if (remaining == 0L) return operations;
             }
             return null;
         }
@@ -99,10 +107,21 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
             long available = scalarRequest.insert()
                     ? scalarSnapshot.capacity() - scalarSnapshot.amount()
                     : scalarSnapshot.amount();
-            long amount = Math.min(scalarRequest.amount(), available);
-            return amount > 0L
-                    ? Optional.of(new AsyncCapabilityOperation.Scalar(capabilityId, amount, scalarRequest.insert()))
-                    : Optional.empty();
+            long maximum = scaled(scalarSnapshot.transferLimit(), scalarRequest.parallelism());
+            long amount = Math.min(scalarRequest.amount(), Math.min(available, maximum));
+            if (amount <= 0L) return Optional.empty();
+
+            List<AsyncCapabilityOperation> operations = new ArrayList<>();
+            while (amount > 0L) {
+                long operationAmount = Math.min(amount, scalarSnapshot.transferLimit());
+                operations.add(new AsyncCapabilityOperation.Scalar(capabilityId, operationAmount, scalarRequest.insert()));
+                amount -= operationAmount;
+            }
+            return Optional.of(operations.size() == 1 ? operations.getFirst() : new AsyncCapabilityOperation.Group(operations));
+        }
+
+        private static long scaled(long amount, long multiplier) {
+            return amount > Long.MAX_VALUE / multiplier ? Long.MAX_VALUE : amount * multiplier;
         }
     }
 }
