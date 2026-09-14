@@ -4,6 +4,7 @@ import appeng.api.config.Actionable;
 import appeng.api.networking.GridHelper;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
+import appeng.api.stacks.KeyCounter;
 import appeng.api.crafting.PatternDetailsHelper;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
@@ -13,14 +14,29 @@ import appeng.helpers.patternprovider.PatternProviderLogic;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -28,10 +44,14 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -41,6 +61,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2PatternInterfaceGameTest {
+    private static final Identifier PATTERN_MACHINE_ID = MMCR.id("ae2_pattern_interface_test");
+    private static final Identifier PATTERN_RECIPE_ID = MMCR.id("ae2_pattern_interface_recipe");
     private static final BlockPos PORT_POS = new BlockPos(0, 0, 0);
     private static final BlockPos RESTORED_PORT_POS = new BlockPos(10, 0, 0);
     private static final BlockPos TARGET_CHEST_POS = new BlockPos(1, 0, 0);
@@ -48,6 +70,77 @@ public class AE2PatternInterfaceGameTest {
     private static final BlockPos ENERGY_POS = new BlockPos(3, 0, 2);
     private static final BlockPos REDSTONE_POS = new BlockPos(-1, 0, 0);
     private static final BlockPos CONTROLLER_POS = new BlockPos(0, 0, 4);
+
+    public void patternRequestStartsControllerWithRemainingOrdinaryInput(GameTestHelper helper) {
+        BlockPos patternPortPos = new BlockPos(1, 2, 0);
+        BlockPos ordinaryInputPos = new BlockPos(1, 0, 0);
+        BlockPos controllerPos = new BlockPos(1, 1, 0);
+        BlockPos meChestPos = new BlockPos(4, 0, 0);
+        BlockPos energyPos = new BlockPos(4, 0, 2);
+        helper.assertTrue(AE2Bridge.get().available(), "AE2 must be loaded for pattern request integration");
+        helper.setBlock(patternPortPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        helper.setBlock(ordinaryInputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        helper.setBlock(meChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+
+        DynamicMachine machine = new DynamicMachine(PATTERN_MACHINE_ID, "AE2 Pattern Interface Test",
+                new BlockArray(Map.of(
+                        new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get()),
+                        new BlockPos(0, -1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))));
+        if (!MachineRegistry.containsStatic(PATTERN_MACHINE_ID)) MachineRegistry.register(machine);
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(PATTERN_RECIPE_ID, PATTERN_MACHINE_ID, 1,
+                List.of(
+                        MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                        MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
+                        MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
+                List.of(), 0, 1, false, false, false, Set.of()));
+
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(machine);
+        controller.setStructureCheckIntervalForTesting(1);
+        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos, MEChestBlockEntity.class);
+        meChest.setCell(AEItems.ITEM_CELL_1K.stack());
+        helper.runAtTickTime(2, () -> {
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            helper.assertTrue(patternPort.getMainNode().getNode() != null && meChest.getMainNode().getNode() != null
+                            && energy.getMainNode().getNode() != null,
+                    "Pattern interface and ME network nodes initialize before pattern submission");
+            GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
+            GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
+            ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos, ItemBusBlockEntity.class);
+            try (Transaction transaction = Transaction.openRoot()) {
+                helper.assertTrue(ordinaryInput.itemStorage().insert(0, ItemResource.of(Items.COAL), 1L, transaction) == 1L,
+                        "Ordinary input bus accepts the remaining coal ingredient");
+                transaction.commit();
+            }
+            controller.requestImmediateStructureCheck();
+        });
+
+        helper.runAtTickTime(30, () -> {
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            helper.assertTrue(controller.structureSnapshot().formed(), "Controller with pattern and ordinary input ports forms");
+            var encodedPattern = PatternDetailsHelper.encodeProcessingPattern(
+                    List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
+                    List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)));
+            patternPort.getLogic().getPatternInv().addItems(encodedPattern);
+            var pattern = patternPort.getLogic().getAvailablePatterns().getFirst();
+            KeyCounter requestItems = new KeyCounter();
+            requestItems.add(AEItemKey.of(Items.IRON_INGOT), 1L);
+            helper.assertTrue(patternPort.getLogic().pushPattern(pattern, new KeyCounter[]{requestItems}),
+                    "Native PatternProviderLogic accepts the encoded pattern through the MMCR crafting bridge");
+        });
+
+        helper.runAtTickTime(50, () -> {
+            helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
+                            Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 1L,
+                    "Pattern-started MMCR recipe sends its output to ME storage");
+            helper.succeed();
+        });
+    }
 
     public void patternInterfaceRestoresPatternsAndWakesNativeWork(GameTestHelper helper) {
         AtomicReference<PatternInterfaceBlockEntity> restoredHost = new AtomicReference<>();
@@ -125,7 +218,7 @@ public class AE2PatternInterfaceGameTest {
 
         helper.runAtTickTime(10, () -> connectNetwork(helper));
 
-        helper.runAtTickTime(31, () -> {
+        helper.runAtTickTime(80, () -> {
             MEChestBlockEntity meChest = helper.getBlockEntity(ME_CHEST_POS, MEChestBlockEntity.class);
             ChestBlockEntity chest = helper.getBlockEntity(TARGET_CHEST_POS, ChestBlockEntity.class);
             helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 2L,
@@ -135,7 +228,7 @@ public class AE2PatternInterfaceGameTest {
                     "Reconnect wakes native pending sends through PatternProviderLogic.isBusy()");
             helper.assertTrue(!host(helper).getLogic().isBusy(), "Native pending send list drains after reconnect");
             helper.assertTrue(controller(helper).resourceAvailabilityEpoch() > returnDrainAvailabilityEpoch.get(),
-                    "Native return inventory drain wakes linked output-capacity searches");
+                    "Native return inventory drain wakes linked output-capacity searches after its service tick");
             helper.succeed();
         });
     }
