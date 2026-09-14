@@ -9,7 +9,9 @@ import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArgs;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
 /**
  * Applies the MMCR title only to pattern-provider screens hosted by the MMCR pattern interface.
@@ -18,6 +20,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(value = PatternProviderScreen.class, remap = false)
 public abstract class PatternProviderScreenMixin {
+    @ModifyArgs(method = "<init>", at = @At(value = "INVOKE", target =
+            "Lappeng/client/gui/AEBaseScreen;<init>(Lappeng/menu/AEBaseMenu;"
+                    + "Lnet/minecraft/world/entity/player/Inventory;Lnet/minecraft/network/chat/Component;"
+                    + "Lappeng/client/gui/style/ScreenStyle;)V"))
+    private static void mmcr$replaceTitle(Args args) {
+        PatternProviderMenu menu = args.get(0);
+        Component title = titleFor(menu.getTarget(), null);
+        if (title != null) args.set(2, title);
+    }
+
     @Inject(method = "updateBeforeRender", at = @At("TAIL"))
     private void mmcr$replaceStyleTitle(CallbackInfo ci) {
         PatternProviderMenu menu = (PatternProviderMenu) ((AbstractContainerScreen<?>) (Object) this).getMenu();
