@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade;
 
 import appeng.api.networking.IGridNode;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
@@ -43,6 +44,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -172,6 +174,34 @@ class AE2InterfaceJadeProviderTest {
                 .append(Component.literal(" 1")));
         assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.items")
                 .append(Component.literal(" 4")));
+    }
+
+    @Test
+    void dataProviderKeepsReturnStacksInTheirOwnOutputFamily() {
+        PatternInterfaceBlockEntity host = patternHost();
+        CompoundTag serverData = new CompoundTag();
+        List<Component> added = new ArrayList<>();
+
+        host.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4L));
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(serverData, accessor(host, new CompoundTag()));
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
+                tooltip(added), accessor(gridHost(), serverData), null);
+
+        assertThat(added).contains(Component.translatable("gui.mmcr.port.items")
+                .append(Component.literal(" 4")));
+        assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.fluids")
+                .append(Component.literal(" 4 mB")));
+
+        host.getLogic().getReturnInv().setStack(0, new GenericStack(AEFluidKey.of(Fluids.WATER), 1000L));
+        InterfaceJadeDataProvider.INSTANCE.appendServerData(serverData, accessor(host, new CompoundTag()));
+        added.clear();
+        InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
+                tooltip(added), accessor(gridHost(), serverData), null);
+
+        assertThat(added).contains(Component.translatable("gui.mmcr.port.fluids")
+                .append(Component.literal(" 1000 mB")));
+        assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.items")
+                .append(Component.literal(" 1000")));
     }
 
     private static PatternInterfaceBlockEntity patternHost() {
