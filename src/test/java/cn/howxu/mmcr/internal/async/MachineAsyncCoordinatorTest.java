@@ -48,6 +48,30 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void deferred_main_step_resumes_only_after_the_shared_io_grant() {
+        List<String> phases = new CopyOnWriteArrayList<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
+
+        coordinator.submit(key, context -> {
+            phases.add("worker-before");
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.Deferred(
+                    MainThreadStep.Kind.BEFORE_START, () -> phases.add("main")), result -> resumeContext -> {
+                phases.add("worker-after");
+                return AsyncContinuation.Yield.complete();
+            });
+        });
+
+        coordinator.pumpMainThreadSteps();
+
+        assertThat(phases).containsExactly("worker-before", "main");
+        coordinator.resume(key);
+        coordinator.completeTick();
+
+        assertThat(phases).containsExactly("worker-before", "main", "worker-after");
+    }
+
+    @Test
     void resumed_continuation_receives_the_work_mode_from_its_task_key() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L, MachineWorkMode.SEMI_SYNC);
@@ -69,6 +93,16 @@ class MachineAsyncCoordinatorTest {
 
         assertThat(coordinator.submit(key, ignored -> AsyncContinuation.Yield.complete())).isTrue();
         assertThat(coordinator.submit(key, ignored -> AsyncContinuation.Yield.complete())).isFalse();
+    }
+
+    @Test
+    void separate_lanes_of_one_controller_can_wait_for_their_own_shared_io_grants() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var base = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L, MachineWorkMode.ASYNC, "base");
+        var factory = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L, MachineWorkMode.ASYNC, "factory-0");
+
+        assertThat(coordinator.submit(base, ignored -> AsyncContinuation.Yield.complete())).isTrue();
+        assertThat(coordinator.submit(factory, ignored -> AsyncContinuation.Yield.complete())).isTrue();
     }
 
     @Test

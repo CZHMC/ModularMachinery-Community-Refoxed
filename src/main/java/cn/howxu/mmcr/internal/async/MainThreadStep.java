@@ -24,11 +24,15 @@ public interface MainThreadStep {
         SCREEN_TEXT_FLUSH
     }
 
-    sealed interface Result permits Result.Success, Result.Failure {
+    sealed interface Result permits Result.Success, Result.Failure, Result.Pending {
         record Success() implements Result {
         }
 
         record Failure(Throwable cause) implements Result {
+        }
+
+        /** The step registered work that will resume its continuation later. */
+        record Pending() implements Result {
         }
 
         static Success success() {
@@ -37,6 +41,10 @@ public interface MainThreadStep {
 
         static Failure failure(Throwable cause) {
             return new Failure(cause);
+        }
+
+        static Pending pending() {
+            return new Pending();
         }
     }
 
@@ -53,6 +61,14 @@ public interface MainThreadStep {
         public Result execute() {
             action.run();
             return Result.success();
+        }
+    }
+
+    record Deferred(Kind kind, Runnable action) implements MainThreadStep {
+        @Override
+        public Result execute() {
+            action.run();
+            return Result.pending();
         }
     }
 }

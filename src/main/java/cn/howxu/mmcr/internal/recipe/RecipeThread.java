@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
@@ -48,6 +49,10 @@ public abstract class RecipeThread {
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
     private long nextTickToken;
     private long pendingTickToken;
+
+    private record StartSnapshot(ControllerRuntimeSnapshot runtime, long structureVersion, long catalogVersion,
+                                 Identifier recipePoolId, @Nullable RecipeSearchContextKey searchContextKey) {
+    }
 
     protected RecipeThread(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -133,7 +138,15 @@ public abstract class RecipeThread {
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
-            return requestStart(serverLevel, domain, next, requestedParallelism, structureVersion, context);
+            ControllerRuntimeSnapshot startRuntime = context == null ? currentSnapshot : context.snapshot();
+            StartSnapshot startSnapshot = new StartSnapshot(startRuntime, structureVersion,
+                    context == null ? currentCatalogVersion() : context.catalogVersion(), recipePoolId,
+                    searchContextKeyForStart());
+            MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
+            MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                    serverLevel.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId());
+            return coordinator.submit(taskKey, AsyncCraftingExecution.start(asyncLaneId(), () -> requestStart(serverLevel,
+                    domain, next, requestedParallelism, startSnapshot, () -> coordinator.resume(taskKey))));
         }
         CraftingStatus state = runtime.start(next, requestedParallelism);
         if (!state.isCrafting()) {
@@ -146,26 +159,25 @@ public abstract class RecipeThread {
     }
 
     private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                  MachineRecipe next, long requestedParallelism, long structureVersion,
-                                 @Nullable FactorySearchContext context) {
+                                  MachineRecipe next, long requestedParallelism,
+                                  StartSnapshot startSnapshot, Runnable completion) {
         long token = ++nextStartToken;
         startPending = true;
         pendingStartRecipe = next;
         pendingStartDomain = domain;
         pendingStartToken = token;
-        ControllerRuntimeSnapshot snapshot = context == null ? controller.currentRuntimeSnapshot() : context.snapshot();
-        pendingStartStructureVersion = structureVersion;
-        pendingStartCapabilityVersion = snapshot.capabilityVersion();
-        pendingStartModifierVersion = snapshot.modifierVersion();
-        pendingStartComponentStateVersion = snapshot.stateVersion();
-        pendingStartCatalogVersion = context == null ? currentCatalogVersion() : context.catalogVersion();
-        pendingStartRecipePoolId = recipePoolForMachine(controller.currentRuntimeSnapshot());
-        pendingStartSearchContextKey = searchContextKeyForStart();
+        pendingStartStructureVersion = startSnapshot.structureVersion();
+        pendingStartCapabilityVersion = startSnapshot.runtime().capabilityVersion();
+        pendingStartModifierVersion = startSnapshot.runtime().modifierVersion();
+        pendingStartComponentStateVersion = startSnapshot.runtime().stateVersion();
+        pendingStartCatalogVersion = startSnapshot.catalogVersion();
+        pendingStartRecipePoolId = startSnapshot.recipePoolId();
+        pendingStartSearchContextKey = startSnapshot.searchContextKey();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
-                structureVersion,
-                snapshot.stateVersion(),
+                startSnapshot.structureVersion(),
+                startSnapshot.runtime().stateVersion(),
                 requestedParallelism,
                 requested -> {
                     if (!isPendingStart(token, next) || runtime.active()) return 0L;
@@ -176,6 +188,7 @@ public abstract class RecipeThread {
                         clearPendingStart(token, next);
                         onStartFailed(failureKey);
                         controller.syncRecipeRuntimeFailure(runtime);
+                        completion.run();
                         return 0L;
                     }
                     return runtime.parallelism();
@@ -185,13 +198,18 @@ public abstract class RecipeThread {
                     clearPendingStart(token, next);
                     onStarted();
                     controller.syncRecipeRuntimeFailure(runtime);
-                 },
-                 () -> isPendingStart(token, next) && domain.equals(controller.resourceDomain()),
-                 () -> controller.currentRuntimeSnapshot().structure().version(),
-                 () -> controller.currentRuntimeSnapshot().stateVersion(),
-                 pendingStartCatalogVersion,
-                 this::currentCatalogVersion
-         ));
+                },
+                () -> {
+                    boolean valid = isPendingStart(token, next) && domain.equals(controller.resourceDomain());
+                    if (!valid) completion.run();
+                    return valid;
+                },
+                () -> controller.currentRuntimeSnapshot().structure().version(),
+                () -> controller.currentRuntimeSnapshot().stateVersion(),
+                pendingStartCatalogVersion,
+                this::currentCatalogVersion,
+                completion
+        ));
         return true;
     }
 

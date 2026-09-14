@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,5 +58,20 @@ class AsyncCraftingExecutionTest {
                 .isEqualTo(MainThreadStep.Kind.UNSUPPORTED_REQUIREMENT);
         assertThat(((AsyncContinuation.Yield.MainThread) second).step().kind())
                 .isEqualTo(MainThreadStep.Kind.INTENT_COMMIT);
+    }
+
+    @Test
+    void start_yields_the_shared_io_reservation_without_completing_the_worker() {
+        AtomicBoolean reservationRegistered = new AtomicBoolean();
+        AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", () -> reservationRegistered.set(true));
+
+        AsyncContinuation.Yield yield = execution.advance(new AsyncExecutionContext(
+                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+
+        assertThat(yield).isInstanceOf(AsyncContinuation.Yield.MainThread.class);
+        AsyncContinuation.Yield.MainThread mainThread = (AsyncContinuation.Yield.MainThread) yield;
+        assertThat(mainThread.step().kind()).isEqualTo(MainThreadStep.Kind.BEFORE_START);
+        assertThat(mainThread.step().execute()).isInstanceOf(MainThreadStep.Result.Pending.class);
+        assertThat(reservationRegistered).isTrue();
     }
 }

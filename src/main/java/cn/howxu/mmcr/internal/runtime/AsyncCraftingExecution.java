@@ -18,6 +18,7 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
     private final AsyncRequirementPlanner.PreparedPlan preparedPlan;
     private final String laneId;
     private final Consumer<AsyncRequirementPlanner.PlanResult> intentCommit;
+    private final Runnable startReservation;
     private AsyncRequirementPlanner.PlanResult planResult = new AsyncRequirementPlanner.PlanResult(java.util.List.of(),
             java.util.List.of());
     private boolean planned;
@@ -29,6 +30,14 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
         this.preparedPlan = Objects.requireNonNull(preparedPlan, "preparedPlan");
         this.laneId = Objects.requireNonNull(laneId, "laneId");
         this.intentCommit = Objects.requireNonNull(intentCommit, "intentCommit");
+        this.startReservation = null;
+    }
+
+    private AsyncCraftingExecution(String laneId, Runnable startReservation) {
+        this.preparedPlan = null;
+        this.laneId = Objects.requireNonNull(laneId, "laneId");
+        this.intentCommit = ignored -> { };
+        this.startReservation = Objects.requireNonNull(startReservation, "startReservation");
     }
 
     public static AsyncCraftingExecution plan(AsyncRequirementPlanner.PreparedPlan preparedPlan, String laneId) {
@@ -41,8 +50,18 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
         return new AsyncCraftingExecution(preparedPlan, lane.asyncLaneId(), lane::completeAsyncTick);
     }
 
+    /** Defers shared-IO start arbitration to the server thread and awaits its coordinator grant. */
+    public static AsyncCraftingExecution start(String laneId, Runnable startReservation) {
+        return new AsyncCraftingExecution(laneId, startReservation);
+    }
+
     @Override
     public AsyncContinuation.Yield advance(AsyncExecutionContext context) {
+        if (startReservation != null) {
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.Deferred(MainThreadStep.Kind.BEFORE_START,
+                            startReservation),
+                    ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
+        }
         if (!planned) {
             planResult = preparedPlan.plan();
             planned = true;

@@ -31,8 +31,9 @@ public final class MachineAsyncCoordinator {
 
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
-    private final Map<BlockPos, Task> tasksByController = new ConcurrentHashMap<>();
+    private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<PendingMainStep> pendingMainSteps = new ConcurrentLinkedQueue<>();
+    private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStep.Result.Failure> failures = new ConcurrentHashMap<>();
 
     private MachineAsyncCoordinator(Executor executor) {
@@ -58,7 +59,7 @@ public final class MachineAsyncCoordinator {
 
     public boolean submit(TaskKey key, AsyncContinuation continuation) {
         Task task = new Task(key);
-        if (tasksByController.putIfAbsent(key.controllerPos(), task) != null) {
+        if (tasks.putIfAbsent(key, task) != null) {
             return false;
         }
         schedule(task, continuation);
@@ -70,7 +71,7 @@ public final class MachineAsyncCoordinator {
     }
 
     public void completeTick() {
-        Long gameTime = tasksByController.values().stream()
+        Long gameTime = tasks.values().stream()
                 .map(task -> task.key.gameTime())
                 .min(Comparator.naturalOrder())
                 .orElse(null);
@@ -79,22 +80,32 @@ public final class MachineAsyncCoordinator {
         }
         while (hasTaskFor(gameTime)) {
             pumpMainThreadSteps(gameTime);
+            if (hasDeferredMainStepFor(gameTime)) {
+                return;
+            }
             if (hasActiveWorkerFor(gameTime)) {
                 LockSupport.parkNanos(1_000_000L);
             }
         }
-        tasksByController.values().removeIf(task -> task.key.gameTime() == gameTime && task.finished);
+        tasks.entrySet().removeIf(entry -> entry.getKey().gameTime() == gameTime && entry.getValue().finished);
     }
 
     public void cancel(BlockPos controllerPos) {
-        Task task = tasksByController.remove(controllerPos);
-        if (task == null) {
-            return;
+        for (Task task : tasks.values()) {
+            if (!task.key.controllerPos().equals(controllerPos)) continue;
+            if (!tasks.remove(task.key, task)) continue;
+            synchronized (task) {
+                task.cancelled = true;
+            }
+            pendingMainSteps.removeIf(pending -> pending.task == task);
+            deferredMainSteps.remove(task.key);
         }
-        synchronized (task) {
-            task.cancelled = true;
-        }
-        pendingMainSteps.removeIf(pending -> pending.task == task);
+    }
+
+    /** Resumes a continuation whose main-thread step deferred to an external main-thread arbiter. */
+    public void resume(TaskKey key) {
+        PendingMainStep pending = deferredMainSteps.remove(key);
+        if (pending != null) scheduleResume(pending.task, pending.resume, MainThreadStep.Result.success());
     }
 
     public static synchronized void discard(ServerLevel level) {
@@ -128,7 +139,11 @@ public final class MachineAsyncCoordinator {
                     result = MainThreadStep.Result.failure(throwable);
                 }
             }
-            scheduleResume(pending.task, pending.resume, result);
+            if (result instanceof MainThreadStep.Result.Pending) {
+                deferredMainSteps.put(pending.task.key, pending);
+            } else {
+                scheduleResume(pending.task, pending.resume, result);
+            }
         }
     }
 
@@ -188,23 +203,33 @@ public final class MachineAsyncCoordinator {
     }
 
     private boolean hasTaskFor(long gameTime) {
-        return tasksByController.values().stream().anyMatch(task -> task.key.gameTime() == gameTime
+        return tasks.values().stream().anyMatch(task -> task.key.gameTime() == gameTime
                 && !task.cancelled && !task.finished);
     }
 
     private boolean hasActiveWorkerFor(long gameTime) {
-        return tasksByController.values().stream().anyMatch(task -> task.key.gameTime() == gameTime
+        return tasks.values().stream().anyMatch(task -> task.key.gameTime() == gameTime
                 && task.activeWorkers.get() > 0);
     }
 
-    public record TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode) {
+    private boolean hasDeferredMainStepFor(long gameTime) {
+        return deferredMainSteps.values().stream().anyMatch(pending -> pending.task.key.gameTime() == gameTime
+                && !pending.task.cancelled);
+    }
+
+    public record TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode, String laneId) {
         public TaskKey(BlockPos controllerPos, long gameTime) {
-            this(controllerPos, gameTime, MachineWorkMode.ASYNC);
+            this(controllerPos, gameTime, MachineWorkMode.ASYNC, "base");
+        }
+
+        public TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode) {
+            this(controllerPos, gameTime, workMode, "base");
         }
 
         public TaskKey {
             controllerPos = controllerPos.immutable();
             workMode = Objects.requireNonNull(workMode);
+            laneId = Objects.requireNonNull(laneId);
         }
     }
 
