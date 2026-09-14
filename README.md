@@ -45,9 +45,9 @@ Include the Minecraft and NeoForge versions, MMCR version, installed mods, logs 
 ### Building
 
 ```bash
-chmod u+x run_data.sh
-./run_data.sh
-gradle build --no-daemon
+gradle runClientData
+gradle runServerData
+gradle build
 ```
 
 The built JARs are written to `build/libs`.
@@ -57,21 +57,21 @@ The built JARs are written to `build/libs`.
 Run the full validation sequence before submitting significant changes:
 
 ```bash
-gradle test --no-daemon
-gradle runGameTestServer --no-daemon
+gradle test
+gradle runGameTestServer
 ```
 
 ### KubeJS Development
 
 MMCR **fully** supports `KubeJS` modifications, you can see `example` folder and learn how to use `KubeJS` to build your machine
 
-The API usage and some examples are available on the MMCR wiki.
+The API usage and some examples are available on the [MMCR Wiki](https://mmcr-wiki.howxu.cn/).
 
 ### Java API Development
 
 The API is published to [HowXu's Maven repository](https://maven.howxu.cn/#/cn/howxu/ModularMachinery-Community-Refoxed) as part of release builds.
 
-The API usage and some examples are available on the MMCR wiki.
+The API usage and some examples are available on the [MMCR Wiki](https://mmcr-wiki.howxu.cn/).
 
 ## Contributing
 
