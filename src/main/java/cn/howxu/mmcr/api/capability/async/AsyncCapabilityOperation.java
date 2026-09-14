@@ -8,16 +8,8 @@ import net.minecraft.resources.Identifier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperation.Resource {
+public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperation.Resource, AsyncCapabilityOperation.Scalar {
     Identifier capabilityId();
-
-    int slot();
-
-    AsyncResourceValue resource();
-
-    long amount();
-
-    boolean insert();
 
     /**
      * A resource insertion or extraction for one storage slot.
@@ -34,6 +26,20 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
             if (slot < 0 || amount <= 0L) throw new IllegalArgumentException("slot and amount must be positive");
             Objects.requireNonNull(capabilityId, "capabilityId");
             Objects.requireNonNull(resource, "resource");
+        }
+    }
+
+    /**
+     * A scalar insertion or extraction, such as energy.
+     *
+     * @param capabilityId capability type identifier
+     * @param amount scalar amount
+     * @param insert whether the scalar is inserted rather than extracted
+     */
+    record Scalar(Identifier capabilityId, long amount, boolean insert) implements AsyncCapabilityOperation {
+        public Scalar {
+            Objects.requireNonNull(capabilityId, "capabilityId");
+            if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
         }
     }
 }

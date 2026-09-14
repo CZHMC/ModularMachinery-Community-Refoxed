@@ -2,12 +2,18 @@ package cn.howxu.mmcr.api.capability.async;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies immutable values used to plan capability work asynchronously.
@@ -18,7 +24,7 @@ class AsyncPlanningFacetTest {
     @Test
     void resource_operation_is_a_value_object_without_a_live_storage_reference() {
         AsyncResourceValue resource = new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}");
-        AsyncCapabilityOperation operation = new AsyncCapabilityOperation.Resource(
+        AsyncCapabilityOperation.Resource operation = new AsyncCapabilityOperation.Resource(
                 MMCR.id("item"), 2, resource, 4L, false);
 
         assertThat(operation.capabilityId()).isEqualTo(MMCR.id("item"));
@@ -33,27 +39,60 @@ class AsyncPlanningFacetTest {
     @Test
     void snapshot_slots_are_worker_values_after_capture() {
         var slots = new ArrayList<>(List.of(
-                new AsyncCapabilitySnapshot.ResourceSlot(new AsyncResourceValue(MMCR.id("empty"), ""), 0L, 64L)));
+                new AsyncCapabilitySnapshot.ResourceSlot(Optional.empty(), 0L, 64L)));
         AsyncCapabilitySnapshot.Resource snapshot = new AsyncCapabilitySnapshot.Resource(
                 MMCR.id("item"), slots);
         slots.clear();
 
         assertThat(snapshot.slots()).hasSize(1);
-        assertThat(snapshot.slots().getFirst().resource()).isInstanceOf(AsyncResourceValue.class);
+        assertThat(snapshot.slots().getFirst().resource()).isEmpty();
         assertThat(AsyncCapabilitySnapshot.ResourceSlot.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
-                .containsExactly(AsyncResourceValue.class, long.class, long.class);
+                .containsExactly(Optional.class, long.class, long.class);
     }
 
     @Test
-    void planning_accepts_only_the_worker_safe_request_contract() throws NoSuchMethodException {
-        var request = new AsyncCapabilityRequest.Resource(MMCR.id("item"), 1L, List.of(
-                new AsyncResourceAction(new AsyncResourceValue(MMCR.id("iron_ingot"), "components={}"), 4L, false)));
+    void scalar_energy_values_do_not_use_a_resource_identifier() {
+        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 120L, 1_000L);
+        var request = new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), 1L, 32L, false);
+        var operation = new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 32L, false);
 
-        assertThat(request.actions()).singleElement().satisfies(action ->
-                assertThat(action.resource()).isInstanceOf(AsyncResourceValue.class));
-        assertThat(AsyncPlanningFacet.class
-                .getMethod("plan", AsyncCapabilitySnapshot.class, AsyncCapabilityRequest.class)
-                .getParameterTypes()[1]).isEqualTo(AsyncCapabilityRequest.class);
+        assertThat(snapshot.amount()).isEqualTo(120L);
+        assertThat(snapshot.capacity()).isEqualTo(1_000L);
+        assertThat(request.amount()).isEqualTo(32L);
+        assertThat(operation.amount()).isEqualTo(32L);
+        assertThat(AsyncCapabilityOperation.Scalar.class.getRecordComponents())
+                .extracting(RecordComponent::getType)
+                .containsExactly(Identifier.class, long.class, boolean.class);
+    }
+
+    @Test
+    void controlled_entry_rejects_live_facet_access_without_a_server_thread() {
+        AtomicBoolean captured = new AtomicBoolean();
+        AtomicBoolean committed = new AtomicBoolean();
+        AsyncPlanningFacet facet = new AsyncPlanningFacet() {
+            @Override
+            public AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
+                captured.set(true);
+                return new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 0L, 1_000L);
+            }
+
+            @Override
+            public CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
+                                                          TransactionContext transaction) {
+                committed.set(true);
+                throw new AssertionError("commit should not run");
+            }
+        };
+
+        assertThatThrownBy(() -> facet.captureSnapshot())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("captureSnapshot requires the server thread");
+        assertThatThrownBy(() -> facet.commit(
+                new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 32L, false), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("commit requires the server thread");
+        assertThat(captured).isFalse();
+        assertThat(committed).isFalse();
     }
 }

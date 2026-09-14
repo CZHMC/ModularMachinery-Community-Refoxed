@@ -9,7 +9,7 @@ import net.minecraft.resources.Identifier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Resource {
+public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Resource, AsyncCapabilityRequest.Scalar {
     Identifier capabilityId();
 
     long parallelism();
@@ -27,6 +27,23 @@ public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Re
             Objects.requireNonNull(capabilityId, "capabilityId");
             if (parallelism <= 0L) throw new IllegalArgumentException("parallelism must be positive");
             actions = List.copyOf(Objects.requireNonNull(actions, "actions"));
+        }
+    }
+
+    /**
+     * A scalar capability request, such as energy.
+     *
+     * @param capabilityId capability type identifier
+     * @param parallelism requested parallelism
+     * @param amount requested scalar amount
+     * @param insert whether the scalar is inserted rather than extracted
+     */
+    record Scalar(Identifier capabilityId, long parallelism, long amount, boolean insert) implements AsyncCapabilityRequest {
+        public Scalar {
+            Objects.requireNonNull(capabilityId, "capabilityId");
+            if (parallelism <= 0L || amount <= 0L) {
+                throw new IllegalArgumentException("parallelism and amount must be positive");
+            }
         }
     }
 }

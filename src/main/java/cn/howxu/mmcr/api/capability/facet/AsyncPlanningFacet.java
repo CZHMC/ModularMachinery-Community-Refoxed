@@ -1,11 +1,12 @@
 package cn.howxu.mmcr.api.capability.facet;
 
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
-import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
-import java.util.Optional;
+import java.util.Objects;
+import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 /**
  * Captures capability values on the main thread for planning on a worker thread.
@@ -18,16 +19,17 @@ public interface AsyncPlanningFacet extends CapabilityFacet {
      *
      * @return worker-safe capability values
      */
-    AsyncCapabilitySnapshot captureSnapshot();
+    default AsyncCapabilitySnapshot captureSnapshot() {
+        requireServerThread("captureSnapshot");
+        return captureSnapshotOnServerThread();
+    }
 
     /**
-     * Plans a worker-safe operation from an immutable snapshot.
+     * Captures capability values after {@link #captureSnapshot()} has checked the server thread.
      *
-     * @param snapshot captured capability values
-     * @param request worker-safe requested capability operation
-     * @return a logical operation when this request is supported
+     * @return worker-safe capability values
      */
-    Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot, AsyncCapabilityRequest request);
+    AsyncCapabilitySnapshot captureSnapshotOnServerThread();
 
     /**
      * Commits an operation against live storage. This method is main-thread-only.
@@ -36,5 +38,25 @@ public interface AsyncPlanningFacet extends CapabilityFacet {
      * @param transaction transaction used to apply the operation
      * @return the operation result
      */
-    CapabilityResult commit(AsyncCapabilityOperation operation, TransactionContext transaction);
+    default CapabilityResult commit(AsyncCapabilityOperation operation, TransactionContext transaction) {
+        requireServerThread("commit");
+        return commitOnServerThread(Objects.requireNonNull(operation, "operation"),
+                Objects.requireNonNull(transaction, "transaction"));
+    }
+
+    /**
+     * Commits an operation after {@link #commit(AsyncCapabilityOperation, TransactionContext)} has checked the server thread.
+     *
+     * @param operation logical operation produced from worker-safe values
+     * @param transaction transaction used to apply the operation
+     * @return the operation result
+     */
+    CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation, TransactionContext transaction);
+
+    private static void requireServerThread(String operation) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null || !server.isSameThread()) {
+            throw new IllegalStateException(operation + " requires the server thread");
+        }
+    }
 }
