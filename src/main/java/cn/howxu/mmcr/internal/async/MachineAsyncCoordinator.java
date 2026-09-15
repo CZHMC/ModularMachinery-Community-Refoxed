@@ -106,6 +106,9 @@ public final class MachineAsyncCoordinator {
                 stalledPasses = 0;
                 continue;
             }
+            if (hasDeferredMainStepFor(gameTime)) {
+                return;
+            }
             if (hasActiveWorkerFor(gameTime)) {
                 awaitWorkerProgress(progressBefore);
                 if (progress.get() != progressBefore) {

@@ -63,12 +63,17 @@ class AsyncCraftingExecutionTest {
 
         AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
-        AsyncContinuation.Yield yield = ((AsyncContinuation.Yield.MainThread) first).resume()
+        AsyncContinuation.Yield flush = ((AsyncContinuation.Yield.MainThread) first).resume()
+                .apply(MainThreadStep.Result.success()).advance(new AsyncExecutionContext(
+                        new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+        AsyncContinuation.Yield yield = ((AsyncContinuation.Yield.MainThread) flush).resume()
                 .apply(MainThreadStep.Result.success()).advance(new AsyncExecutionContext(
                         new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
 
         assertThat(((AsyncContinuation.Yield.MainThread) first).step())
                 .isEqualTo(new MainThreadStep.Lifecycle(MainThreadStep.Kind.BEFORE_START, "base", 1L));
+        assertThat(((AsyncContinuation.Yield.MainThread) flush).step().kind())
+                .isEqualTo(MainThreadStep.Kind.SCREEN_TEXT_FLUSH);
         AsyncContinuation.Yield.MainThread mainThread = (AsyncContinuation.Yield.MainThread) yield;
         assertThat(mainThread.step().kind()).isEqualTo(MainThreadStep.Kind.BEFORE_START);
         assertThat(mainThread.step().execute()).isInstanceOf(MainThreadStep.Result.Pending.class);
@@ -94,6 +99,35 @@ class AsyncCraftingExecutionTest {
 
         assertThat(((AsyncContinuation.Yield.MainThread) yield).step())
                 .isEqualTo(new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, "base", 1L));
+    }
+
+    @Test
+    void tick_yields_a_capability_tick_step_after_main_thread_preparation() {
+        AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
+        AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
+                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+        AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
+
+        AsyncContinuation.Yield next = ((AsyncContinuation.Yield.MainThread) first).resume()
+                .apply(MainThreadStep.Result.value(prepared)).advance(new AsyncExecutionContext(
+                        new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+
+        assertThat(((AsyncContinuation.Yield.MainThread) next).step().kind())
+                .isEqualTo(MainThreadStep.Kind.CAPABILITY_TICK);
+    }
+
+    @Test
+    void start_yields_a_screen_flush_step_before_shared_io_request() {
+        AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", 1L);
+        AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
+                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+
+        AsyncContinuation.Yield next = ((AsyncContinuation.Yield.MainThread) first).resume()
+                .apply(MainThreadStep.Result.success()).advance(new AsyncExecutionContext(
+                        new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
+
+        assertThat(((AsyncContinuation.Yield.MainThread) next).step().kind())
+                .isEqualTo(MainThreadStep.Kind.SCREEN_TEXT_FLUSH);
     }
 
     @Test

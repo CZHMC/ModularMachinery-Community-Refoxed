@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 
 /**
  * A state mutation that must execute on the server thread.
@@ -83,6 +84,32 @@ public interface MainThreadStep {
 
     /** Pure lifecycle boundary whose owner performs the matching server-thread callback. */
     record Lifecycle(Kind kind, String laneId, long catalogVersion) implements MainThreadStep {
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
+    /** Identifies one capability tick phase that its owner must execute on the server thread. */
+    record CapabilityTick(CapabilityTickPhase phase, String laneId, long catalogVersion) implements MainThreadStep {
+        @Override
+        public Kind kind() {
+            return Kind.CAPABILITY_TICK;
+        }
+
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
+    /** Flushes recipe callback screen-text replacements on the server thread. */
+    record ScreenTextFlush(Kind source, String laneId, long catalogVersion) implements MainThreadStep {
+        @Override
+        public Kind kind() {
+            return Kind.SCREEN_TEXT_FLUSH;
+        }
+
         @Override
         public Result execute() {
             return Result.success();

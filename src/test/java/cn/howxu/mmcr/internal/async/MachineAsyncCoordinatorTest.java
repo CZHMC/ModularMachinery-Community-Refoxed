@@ -221,6 +221,24 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void tick_fence_keeps_a_deferred_shared_io_request_for_the_next_level_tick() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        AtomicInteger resolutions = new AtomicInteger();
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThread(
+                new MainThreadStep.SharedIoRequest(MainThreadStep.Kind.INTENT_COMMIT, "base", 1L),
+                result -> context -> AsyncContinuation.Yield.complete()));
+
+        coordinator.completeTick(() -> {
+            resolutions.incrementAndGet();
+            return 0;
+        });
+
+        assertThat(resolutions.get()).isPositive();
+        assertThat(coordinator.failureFor(key)).isNull();
+    }
+
+    @Test
     void worker_exceptions_are_captured_without_escaping_the_pump() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);

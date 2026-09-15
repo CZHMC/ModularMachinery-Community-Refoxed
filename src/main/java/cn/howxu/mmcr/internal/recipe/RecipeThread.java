@@ -432,17 +432,31 @@ public abstract class RecipeThread {
             } else if (lifecycle.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
                 asyncFinishPrepared = runtime.prepareAsyncFinish();
             } else if (lifecycle.kind() == MainThreadStep.Kind.RECIPE_TICK) {
-                AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan();
-                if (preparedPlan == null) {
+                if (!runtime.prepareAsyncTick()) {
                     completeAsyncTick(new AsyncRequirementPlanner.PlanResult(List.of(), List.of()));
                     return validateAsyncMainStep(key, step) ? MainThreadStep.Result.success()
                             : MainThreadStep.Result.failure(new IllegalStateException("Async tick preparation became stale"));
                 }
-                return validateAsyncMainStep(key, step) ? MainThreadStep.Result.value(preparedPlan)
-                        : MainThreadStep.Result.failure(new IllegalStateException("Async tick preparation became stale"));
             }
             return validateAsyncMainStep(key, step) ? MainThreadStep.Result.success()
                     : MainThreadStep.Result.failure(new IllegalStateException("Async lifecycle became stale"));
+        }
+        if (step instanceof MainThreadStep.CapabilityTick capabilityTick) {
+            if (!runtime.executeAsyncCapabilityTick(capabilityTick.phase())) {
+                runtime.discardAsyncTickPreparation();
+                completeAsyncTick(new AsyncRequirementPlanner.PlanResult(List.of(), List.of()));
+            }
+            return validateAsyncMainStep(key, step) ? MainThreadStep.Result.success()
+                    : MainThreadStep.Result.failure(new IllegalStateException("Async capability tick became stale"));
+        }
+        if (step instanceof MainThreadStep.ScreenTextFlush screenTextFlush) {
+            if (screenTextFlush.source() == MainThreadStep.Kind.RECIPE_TICK) {
+                AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan();
+                runtime.flushAsyncScreenText();
+                return preparedPlan == null ? MainThreadStep.Result.success() : MainThreadStep.Result.value(preparedPlan);
+            }
+            runtime.flushAsyncScreenText();
+            return MainThreadStep.Result.success();
         }
         if (step instanceof MainThreadStep.SharedIoRequest request) {
             if (request.kind() == MainThreadStep.Kind.BEFORE_START) {
@@ -495,7 +509,9 @@ public abstract class RecipeThread {
     private boolean validateAsyncMainStep(MachineAsyncCoordinator.TaskKey key, MainThreadStep step) {
         if (!controller.getBlockPos().equals(key.controllerPos())) return false;
         if ((step instanceof MainThreadStep.SharedIoRequest request && request.kind() == MainThreadStep.Kind.BEFORE_START)
-                || (step instanceof MainThreadStep.Lifecycle lifecycle && lifecycle.kind() == MainThreadStep.Kind.BEFORE_START)) {
+                || (step instanceof MainThreadStep.Lifecycle lifecycle && lifecycle.kind() == MainThreadStep.Kind.BEFORE_START)
+                || (step instanceof MainThreadStep.ScreenTextFlush screenTextFlush
+                && screenTextFlush.source() == MainThreadStep.Kind.BEFORE_START)) {
             PendingAsyncStart pending = pendingAsyncStart;
             if (pending == null || controller.isRedstonePaused() || !pending.domain().equals(controller.resourceDomain())) {
                 return false;
@@ -503,7 +519,8 @@ public abstract class RecipeThread {
             StartSnapshot snapshot = pending.snapshot();
             ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
             long catalogVersion = step instanceof MainThreadStep.SharedIoRequest request
-                    ? request.catalogVersion() : ((MainThreadStep.Lifecycle) step).catalogVersion();
+                    ? request.catalogVersion() : step instanceof MainThreadStep.Lifecycle lifecycle
+                    ? lifecycle.catalogVersion() : ((MainThreadStep.ScreenTextFlush) step).catalogVersion();
             return catalogVersion == currentCatalogVersion()
                     && snapshot.catalogVersion() == currentCatalogVersion()
                     && snapshot.structureVersion() == current.structure().version()
@@ -516,7 +533,10 @@ public abstract class RecipeThread {
         long catalogVersion = step instanceof MainThreadStep.IntentCommit intent ? intent.catalogVersion()
                 : step instanceof MainThreadStep.UnsupportedRequirement unsupported ? unsupported.catalogVersion()
                 : step instanceof MainThreadStep.SharedIoRequest request ? request.catalogVersion()
-                : step instanceof MainThreadStep.Lifecycle lifecycle ? lifecycle.catalogVersion() : Long.MIN_VALUE;
+                : step instanceof MainThreadStep.Lifecycle lifecycle ? lifecycle.catalogVersion()
+                : step instanceof MainThreadStep.CapabilityTick capabilityTick ? capabilityTick.catalogVersion()
+                : step instanceof MainThreadStep.ScreenTextFlush screenTextFlush ? screenTextFlush.catalogVersion()
+                : Long.MIN_VALUE;
         return catalogVersion == Long.MIN_VALUE || catalogVersion == currentCatalogVersion()
                 && validateCurrentRuntime(pendingTickToken, pendingTickDomain);
     }

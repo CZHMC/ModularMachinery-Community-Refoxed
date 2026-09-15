@@ -201,8 +201,6 @@ public final class CraftingRuntime {
             logCallbackFailure("beforeStart", runtime, recipe, exception);
             fail(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.RECIPE_START, Map.of()));
             return null;
-        } finally {
-            flushScreenTextReplacements(machineContext.screenText());
         }
         if (startContext.cancelled()) {
             failure = null;
@@ -318,36 +316,58 @@ public final class CraftingRuntime {
         return status;
     }
 
-    /** Captures the immutable per-tick values consumed by worker-side native requirement planning. */
-    public @Nullable AsyncRequirementPlanner.PreparedPlan prepareAsyncTickPlan() {
+    /** Captures the main-thread recipe tick context before any worker-side planning begins. */
+    public boolean prepareAsyncTick() {
         asyncTickPreparation = null;
-        if (!active()) return null;
+        if (!active()) return false;
         if (!versionsCurrent()) {
             invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
-            return null;
+            return false;
         }
-        if (activeRecipe.isFinishPending()) return null;
+        if (activeRecipe.isFinishPending()) return false;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) {
             waiting(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.PER_TICK, Map.of()));
-            return null;
+            return false;
         }
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeTickContext tickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
                 MachineRecipeConverter.toPublicRequirements(effectiveRequirements()), activeOutputs(),
                 new CapabilitySnapshot(components.capabilities()));
-        if (!executeAsyncTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, tickContext)) return null;
+        asyncTickPreparation = new AsyncTickPreparation(runtime, machineContext, tickContext);
+        return true;
+    }
+
+    /** Executes one deferred capability tick phase against the captured recipe tick context. */
+    public boolean executeAsyncCapabilityTick(CapabilityTickPhase phase) {
+        AsyncTickPreparation preparation = asyncTickPreparation;
+        return preparation != null && executeAsyncTickPhase(phase, preparation.machineContext(), preparation.tickContext());
+    }
+
+    public void discardAsyncTickPreparation() {
+        asyncTickPreparation = null;
+    }
+
+    /** Produces the worker-safe native requirement plan after main-thread tick callbacks have completed. */
+    public @Nullable AsyncRequirementPlanner.PreparedPlan prepareAsyncTickPlan() {
+        AsyncTickPreparation preparation = asyncTickPreparation;
+        if (preparation == null) return null;
+        RecipeBehavior behavior = recipeBehavior(preparation.runtime());
+        if (behavior == null) return null;
         try {
-            behavior.recipeTick().accept(tickContext);
+            behavior.recipeTick().accept(preparation.tickContext());
         } catch (RuntimeException exception) {
-            logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
-        } finally {
-            flushScreenTextReplacements(machineContext.screenText());
+            logCallbackFailure("recipeTick", preparation.runtime(), activeRecipe.getRecipe(), exception);
         }
-        asyncTickPreparation = new AsyncTickPreparation(runtime, tickContext);
-        return context(runtime).planAsync(perTickRequirements(), activeRecipe.getParallelism());
+        return context(preparation.runtime()).planAsync(perTickRequirements(), activeRecipe.getParallelism());
+    }
+
+    /** Flushes recipe behavior screen text after its callback has run on the server thread. */
+    public void flushAsyncScreenText() {
+        AsyncTickPreparation preparation = asyncTickPreparation;
+        flushScreenTextReplacements(preparation == null ? behaviorContext().screenText() : preparation.machineContext().screenText());
     }
 
     /** Commits worker-planned native operations, then completes the remaining main-thread tick phases. */
@@ -503,8 +523,6 @@ public final class CraftingRuntime {
             logCallbackFailure("beforeFinish", runtime, activeRecipe.getRecipe(), exception);
             finishBlocked(failure(BuiltinFailureReasons.BEHAVIOR_BEFORE_FINISH, FailurePhase.FINISH, Map.of()));
             return null;
-        } finally {
-            flushScreenTextReplacements(machineContext.screenText());
         }
         if (finishContext.cancelled()) {
             finishBlocked(failure(BuiltinFailureReasons.BEHAVIOR_BEFORE_FINISH_CANCELLED, FailurePhase.FINISH, Map.of()));
@@ -1074,7 +1092,8 @@ public final class CraftingRuntime {
                         activeRecipe == null ? null : activeRecipe.getRecipe().id(), null, details));
     }
 
-    private record AsyncTickPreparation(ControllerRuntimeSnapshot runtime, RecipeTickContext tickContext) {
+    private record AsyncTickPreparation(ControllerRuntimeSnapshot runtime, MachineBehaviorContext machineContext,
+                                        RecipeTickContext tickContext) {
     }
 
     private static String failureUnloc(ExecutionStatus status) {

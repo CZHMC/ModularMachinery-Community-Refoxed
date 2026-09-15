@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 
 import java.util.Objects;
 
@@ -21,6 +22,8 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
             java.util.List.of());
     private boolean planned;
     private boolean lifecycleYielded;
+    private boolean capabilityTickYielded;
+    private boolean screenFlushYielded;
     private boolean unsupportedFallbackYielded;
     private boolean intentCommitYielded;
 
@@ -76,11 +79,26 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
                 return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(sharedIoRequest, laneId, catalogVersion),
                         ignored -> this);
             }
+            if (!screenFlushYielded) {
+                screenFlushYielded = true;
+                return AsyncContinuation.Yield.mainThread(new MainThreadStep.ScreenTextFlush(sharedIoRequest, laneId, catalogVersion),
+                        ignored -> this);
+            }
             return AsyncContinuation.Yield.mainThread(new MainThreadStep.SharedIoRequest(sharedIoRequest, laneId, catalogVersion),
                     ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
         }
         if (preparedPlan == null) {
-            return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK,
+            if (!lifecycleYielded) {
+                lifecycleYielded = true;
+                return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK,
+                        laneId, catalogVersion), ignored -> this);
+            }
+            if (!capabilityTickYielded) {
+                capabilityTickYielded = true;
+                return AsyncContinuation.Yield.mainThread(new MainThreadStep.CapabilityTick(CapabilityTickPhase.BEFORE_RECIPE,
+                        laneId, catalogVersion), ignored -> this);
+            }
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK,
                     laneId, catalogVersion), result -> ignored -> {
                 if (result instanceof MainThreadStep.Result.Value value
                         && value.value() instanceof AsyncRequirementPlanner.PreparedPlan prepared) {
