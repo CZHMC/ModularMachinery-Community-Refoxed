@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -66,6 +67,8 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.fml.config.IConfigSpec;
+import com.electronwill.nightconfig.core.CommentedConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +93,11 @@ class FactoryRuntimeTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        Config.SERVER_SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @BeforeEach
@@ -99,6 +107,7 @@ class FactoryRuntimeTest {
 
     @AfterEach
     void cleanup() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
     }
 
@@ -841,7 +850,8 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void shared_output_blocked_core_lane_publishes_its_failure_after_async_search() {
+    void shared_finish_release_wakes_output_capacity_lane_on_the_next_tick() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         Identifier machineId = MMCR.id("test_cube");
         Identifier activeId = MMCR.id("shared_finish_release_active");
         Identifier blockedId = MMCR.id("shared_finish_release_blocked");
@@ -870,6 +880,21 @@ class FactoryRuntimeTest {
         assertThat(runtime.activeLaneCount()).isEqualTo(1);
         assertThat(runtime.threadSnapshots().get(1).lastFailureUnloc())
                 .isEqualTo("gui.mmcr.controller.failure.missing_output");
+
+        long beforeFinishEpoch = controller.resourceAvailabilityEpoch();
+        runtime.tick(List.of(active, blocked), 1, 2L);
+        resolveSharedRequests(controller);
+        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
+
+        setItem(output.itemStorage(), 0, ItemStack.EMPTY);
+        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
+        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
+        runtime.tick(List.of(active, blocked), 1, 3L);
+        resolveSharedRequests(controller);
+
+        assertThat(runtime.activeLaneCount()).isEqualTo(2);
+        assertThat(runtime.threadSnapshots())
+                .anySatisfy(lane -> assertThat(lane.recipeId()).isEqualTo(blockedId.toString()));
     }
 
     @Test

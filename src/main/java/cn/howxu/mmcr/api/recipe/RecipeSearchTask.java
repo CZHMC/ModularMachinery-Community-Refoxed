@@ -3,11 +3,13 @@ package cn.howxu.mmcr.api.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReport;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -37,6 +39,7 @@ public final class RecipeSearchTask {
     private final @Nullable Identifier lockedRecipeId;
     private final List<MachineCapability> capabilities;
     private final List<RecipeModifier> modifiers;
+    private final @Nullable List<PlanningValue> planningValues;
 
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
                             long maxParallelism, List<MachineRecipe> candidates,
@@ -49,15 +52,35 @@ public final class RecipeSearchTask {
                             long maxParallelism, List<MachineRecipe> orderedCandidates,
                             @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities,
                             List<RecipeModifier> modifiers) {
+        this(snapshot, machineId, structureVersion, maxParallelism, orderedCandidates, lockedRecipeId,
+                capabilities, modifiers, null);
+    }
+
+    private RecipeSearchTask(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+                             long maxParallelism, List<MachineRecipe> orderedCandidates,
+                             @Nullable Identifier lockedRecipeId, List<MachineCapability> capabilities,
+                             List<RecipeModifier> modifiers, @Nullable List<PlanningValue> planningValues) {
         if (snapshot == null || machineId == null) throw new IllegalArgumentException("snapshot and machineId are required");
         this.snapshot = snapshot;
         this.machineId = machineId;
         this.structureVersion = structureVersion;
         this.maxParallelism = Math.max(1L, maxParallelism);
-        this.candidates = poolCandidates(machineId, orderedCandidates);
+        this.candidates = planningValues == null ? poolCandidates(machineId, orderedCandidates)
+                : List.copyOf(orderedCandidates == null ? List.of() : orderedCandidates);
         this.lockedRecipeId = lockedRecipeId;
         this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
         this.modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
+        this.planningValues = planningValues == null ? null : List.copyOf(planningValues);
+    }
+
+    /** Creates a worker-safe search task from immutable candidate planning values. */
+    public static RecipeSearchTask forPlanningValues(ControllerRuntimeSnapshot snapshot, Identifier machineId,
+                                                      long structureVersion, long maxParallelism,
+                                                      List<MachineRecipe> candidates,
+                                                      @Nullable Identifier lockedRecipeId,
+                                                      List<PlanningValue> planningValues) {
+        return new RecipeSearchTask(snapshot, machineId, structureVersion, maxParallelism, candidates,
+                lockedRecipeId, List.of(), List.of(), planningValues);
     }
 
     public RecipeSearchResult compute() {
@@ -77,7 +100,7 @@ public final class RecipeSearchTask {
                 if (failure != null) failureReport = failureReport.plus(failure, validity(result));
                 continue;
             }
-            ExecutionStatus levelFailure = levelFailure(recipe);
+            ExecutionStatus levelFailure = planningValues == null ? levelFailure(recipe) : null;
             if (levelFailure == null) {
                 boolean conflictProne = lockedRecipeId == null
                         && hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
@@ -92,6 +115,19 @@ public final class RecipeSearchTask {
     }
 
     private PlanningResult planStart(MachineRecipe recipe) {
+        if (planningValues != null) {
+            PlanningValue value = planningValues.stream()
+                    .filter(candidate -> candidate.recipeId().equals(recipe.id())).findFirst().orElse(null);
+            if (value == null || !value.successful()) {
+                FailureReason reason = value == null ? BuiltinFailureReasons.RECIPE_SEARCH : value.failureReason();
+                Integer failureIndex = value == null ? null : value.failureRequirementIndex();
+                FailureOccurrence occurrence = FailureOccurrence.at(reason, MMCR.id("crafting_runtime"),
+                        FailurePhase.RECIPE_SEARCH, recipe.id(), failureIndex, Map.of());
+                return new PlanningResult(null, ExecutionStatus.blocked(MMCR.id("crafting_runtime"),
+                        MMCR.id("crafting_runtime"), occurrence), List.of(), failureIndex);
+            }
+            return new PlanningResult(new CraftingPlan(List.of(), maxParallelism, Map.of()), null);
+        }
         CraftingContext context = borrowContext(recipe);
         try {
             return context.planStartResult(recipe, maxParallelism);
@@ -170,6 +206,7 @@ public final class RecipeSearchTask {
 
     private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe, int selectedIndex,
                                                           List<MachineRecipe> ordered) {
+        if (planningValues != null) return false;
         for (int index = 0; index < selectedIndex; index++) {
             MachineRecipe earlier = ordered.get(index);
             if (earlier.priority() != selectedRecipe.priority()
@@ -208,5 +245,27 @@ public final class RecipeSearchTask {
             if (candidate.status() == primary) return candidate.validity();
         }
         return 0.0F;
+    }
+
+    /** Immutable worker result for one candidate's captured capability planning. */
+    public record PlanningValue(Identifier recipeId, boolean successful, @Nullable FailureReason failureReason,
+                                @Nullable Integer failureRequirementIndex) {
+        public PlanningValue {
+            if (recipeId == null) throw new IllegalArgumentException("recipeId must not be null");
+            if (successful && failureReason != null) {
+                throw new IllegalArgumentException("successful planning values must not have a failure reason");
+            }
+            if (!successful && failureReason == null) {
+                throw new IllegalArgumentException("failed planning values require a failure reason");
+            }
+        }
+
+        public static PlanningValue success(Identifier recipeId) {
+            return new PlanningValue(recipeId, true, null, null);
+        }
+
+        public static PlanningValue failure(Identifier recipeId, FailureReason reason, int requirementIndex) {
+            return new PlanningValue(recipeId, false, reason, requirementIndex);
+        }
     }
 }
