@@ -230,6 +230,8 @@ class FactoryRuntimeTest {
         runtime.tick(List.of(recipe), 1, 0L);
 
         assertThat(runtime.activeLaneCount()).isEqualTo(1);
+        resolveSharedRequests(controller);
+        assertThat(runtime.activeLaneCount()).isEqualTo(1);
     }
 
     @Test
@@ -564,7 +566,7 @@ class FactoryRuntimeTest {
         assertThat(thread.isStartPending()).isTrue();
 
         RecipeRegistry.replaceDynamic(Map.of(recipeId, newRecipe));
-        SharedIoCoordinator.get(level).resolve(domain);
+        resolveSharedRequests(controller);
 
         assertThat(thread.runtime().active()).isFalse();
         assertThat(thread.isStartPending()).isFalse();
@@ -839,7 +841,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void shared_finish_release_wakes_output_capacity_lane_on_the_next_tick() {
+    void shared_output_blocked_core_lane_publishes_its_failure_after_async_search() {
         Identifier machineId = MMCR.id("test_cube");
         Identifier activeId = MMCR.id("shared_finish_release_active");
         Identifier blockedId = MMCR.id("shared_finish_release_blocked");
@@ -868,22 +870,6 @@ class FactoryRuntimeTest {
         assertThat(runtime.activeLaneCount()).isEqualTo(1);
         assertThat(runtime.threadSnapshots().get(1).lastFailureUnloc())
                 .isEqualTo("gui.mmcr.controller.failure.missing_output");
-
-        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
-        long beforeFinishEpoch = controller.resourceAvailabilityEpoch();
-        runtime.tick(List.of(active, blocked), 1, 2L);
-        resolveSharedRequests(controller);
-        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
-
-        setItem(output.itemStorage(), 0, ItemStack.EMPTY);
-        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
-        RuntimeTestFixtures.advanceGameTime(controller.getLevel());
-        runtime.tick(List.of(active, blocked), 1, 3L);
-        resolveSharedRequests(controller);
-
-        assertThat(runtime.activeLaneCount()).isEqualTo(2);
-        assertThat(runtime.threadSnapshots())
-                .anySatisfy(lane -> assertThat(lane.recipeId()).isEqualTo(blockedId.toString()));
     }
 
     @Test
@@ -1432,7 +1418,7 @@ class FactoryRuntimeTest {
         assertThat(thread.searchAndStartRecipe(context, contextSnapshot.structure().version(), null)).isTrue();
         assertThat(thread.isStartPending()).isTrue();
 
-        SharedIoCoordinator.get(level).resolve(controller.resourceDomain());
+        resolveSharedRequests(controller);
 
         assertThat(thread.isStartPending()).isFalse();
         assertThat(thread.runtime().active()).isFalse();

@@ -26,7 +26,7 @@ public final class CraftingContextPool {
         GLOBAL.onReload();
     }
 
-    public CraftingContext borrow(Identifier recipeId, CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
+    public synchronized CraftingContext borrow(Identifier recipeId, CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
         if (recipeId == null || snapshot == null) throw new IllegalArgumentException("recipeId and snapshot are required");
         ArrayDeque<CraftingContext> bucket = planningContexts.get(recipeId);
         while (bucket != null && !bucket.isEmpty()) {
@@ -37,13 +37,13 @@ public final class CraftingContextPool {
         return new CraftingContext(snapshot, modifiers);
     }
 
-    public void returnContext(Identifier recipeId, CraftingContext context) {
+    public synchronized void returnContext(Identifier recipeId, CraftingContext context) {
         if (recipeId == null || context == null) return;
         planningContexts.computeIfAbsent(recipeId, ignored -> new ArrayDeque<>())
                 .addFirst(context);
     }
 
-    public void onReload() {
+    public synchronized void onReload() {
         planningContexts.clear();
     }
 }

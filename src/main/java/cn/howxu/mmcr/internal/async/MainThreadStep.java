@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 
 /**
@@ -24,7 +25,8 @@ public interface MainThreadStep {
         CAPABILITY_TICK,
         UNSUPPORTED_REQUIREMENT,
         INTENT_COMMIT,
-        SCREEN_TEXT_FLUSH
+        SCREEN_TEXT_FLUSH,
+        FACTORY_SEARCH
     }
 
     sealed interface Result permits Result.Success, Result.Failure, Result.Pending, Result.Value {
@@ -135,6 +137,19 @@ public interface MainThreadStep {
         @Override
         public Kind kind() {
             return Kind.INTENT_COMMIT;
+        }
+
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
+    /** Carries an immutable factory lane search result back to its owning server thread. */
+    record FactorySearch(String laneId, long catalogVersion, FactoryRecipeThread.SearchResult result) implements MainThreadStep {
+        @Override
+        public Kind kind() {
+            return Kind.FACTORY_SEARCH;
         }
 
         @Override

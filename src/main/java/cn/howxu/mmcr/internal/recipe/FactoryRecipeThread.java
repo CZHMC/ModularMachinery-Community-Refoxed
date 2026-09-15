@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
+import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
+import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
@@ -310,15 +312,52 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public boolean searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
-                                        long structureVersion, @Nullable Identifier lockedRecipeId) {
+                                         long structureVersion, @Nullable Identifier lockedRecipeId) {
         if (context == null) return false;
         setSearchContextKey(contextSearchContextKey(context, lockedRecipeId));
         setSearchGameTime(context.gameTime());
         List<MachineRecipe> filtered = candidatesFor(candidates, context.catalogVersion());
         failureCandidates = filtered.stream().filter(Objects::nonNull).toList();
-        boolean started = super.searchAndStartRecipe(context, filtered, structureVersion, lockedRecipeId);
-        if (!started && runtime.failure() == null) failureCandidates = List.of();
-        return started;
+        return startSearchResult(context, filtered, structureVersion, lockedRecipeId,
+                search(context, filtered, structureVersion, lockedRecipeId));
+    }
+
+    /** Computes an immutable factory-lane search result without accessing the lane runtime. */
+    public static SearchResult search(FactorySearchContext context, List<MachineRecipe> candidates,
+                                      long structureVersion, @Nullable Identifier lockedRecipeId) {
+        if (context == null) return new SearchResult(null, null);
+        Machine machine = context.snapshot().structure().machine() == null
+                ? context.snapshot().structure().configuredMachine() : context.snapshot().structure().machine();
+        Identifier machineId = machine == null ? null : machine.registryName();
+        if (machineId == null || context.maxParallelism() <= 0) return new SearchResult(null, null);
+        try {
+            return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId, structureVersion,
+                    context.maxParallelism(), candidates, lockedRecipeId, context.capabilities(), context.modifiers()).compute(),
+                    null);
+        } catch (RuntimeException exception) {
+            return new SearchResult(null, exception);
+        }
+    }
+
+    /** Applies a worker search result on the main thread and begins the normal lane start lifecycle. */
+    public boolean startSearchResult(FactorySearchContext context, List<MachineRecipe> candidates,
+                                     long structureVersion, @Nullable Identifier lockedRecipeId, SearchResult searchResult) {
+        if (context == null || searchResult == null) return false;
+        setSearchContextKey(contextSearchContextKey(context, lockedRecipeId));
+        setSearchGameTime(context.gameTime());
+        failureCandidates = candidates.stream().filter(Objects::nonNull).toList();
+        RecipeSearchResult result = searchResult.result();
+        if (searchResult.failure() != null || result == null || !result.success()) {
+            controller.clearPendingConflictStart();
+            onStartSearchFailed(result == null ? null : result.failure());
+            return false;
+        }
+        if (controller.shouldDelayConflictProneStart(result)) return false;
+        return startRecipe(result.recipe(), context.maxParallelism(), structureVersion, context);
+    }
+
+    /** Immutable outcome of a worker-side factory recipe search. */
+    public record SearchResult(@Nullable RecipeSearchResult result, @Nullable RuntimeException failure) {
     }
 
     public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,

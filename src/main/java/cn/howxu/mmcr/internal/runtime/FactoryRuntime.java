@@ -17,6 +17,12 @@ import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
+import cn.howxu.mmcr.internal.async.AsyncContinuation;
+import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.async.MainThreadStep;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -25,6 +31,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jetbrains.annotations.Nullable;
 
@@ -66,6 +73,7 @@ public final class FactoryRuntime {
     private long cachedSnapshotEpoch = Long.MIN_VALUE;
     private @Nullable FactorySnapshot cachedSnapshot;
     private final Set<FactoryRecipeThread> readyLanes = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Map<FactoryRecipeThread, AsyncSearchRequest> pendingAsyncSearches = new IdentityHashMap<>();
     private List<MachineRecipe> cachedOrderedCandidateSource = List.of();
     private long cachedOrderedCandidateCatalogVersion = Long.MIN_VALUE;
     private List<MachineRecipe> cachedOrderedCandidates = List.of();
@@ -88,6 +96,7 @@ public final class FactoryRuntime {
         }
         startReservations.clear();
         readyLanes.clear();
+        pendingAsyncSearches.clear();
     }
 
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, Runnable onFinished) {
@@ -152,7 +161,11 @@ public final class FactoryRuntime {
         }
 
         Map<Identifier, Integer> activeCounts = activeRecipeCounts();
-        if (!context.orderedCandidates().isEmpty()) {
+        if (controller.activeWorkMode() == MachineWorkMode.ASYNC
+                && controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null
+                && context.gameTime() == level.getGameTime()) {
+            scheduleAsyncSearches(context, laneSnapshot, activeCounts, level);
+        } else if (!context.orderedCandidates().isEmpty()) {
             for (FactoryRecipeThread lane : laneSnapshot) {
                 if (patternStartReservations.contains(lane) || !lane.isIdle()) continue;
                 List<MachineRecipe> available = filterAvailableCandidates(context.orderedCandidates(), activeCounts);
@@ -208,6 +221,136 @@ public final class FactoryRuntime {
         int activeLaneCount = activeLaneCount();
         return new FactoryTickResult(activeLaneCount, failure,
                 initialEpoch != factoryStateEpoch, initialEpoch != factoryStateEpoch);
+    }
+
+    private void scheduleAsyncSearches(FactorySearchContext context, List<FactoryRecipeThread> laneSnapshot,
+                                       Map<Identifier, Integer> activeCounts, ServerLevel level) {
+        if (context.orderedCandidates().isEmpty() || context.maxParallelism() <= 0L) return;
+        for (FactoryRecipeThread lane : laneSnapshot) {
+            scheduleAsyncSearch(context, lane, activeCounts, level);
+        }
+        while (lanes.size() < laneLimit) {
+            FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
+            addLane(lane);
+            if (!scheduleAsyncSearch(context, lane, activeCounts, level)) break;
+        }
+    }
+
+    private boolean scheduleAsyncSearch(FactorySearchContext context, FactoryRecipeThread lane,
+                                        Map<Identifier, Integer> activeCounts, ServerLevel level) {
+        if (pendingAsyncSearches.containsKey(lane) || patternStartReservations.contains(lane) || !lane.isIdle()) {
+            return false;
+        }
+        Identifier lock = recipeLocks.get(lane);
+        RecipeSearchContextKey key = searchContextKey(context, lane, lock);
+        if (!lane.canSearch(context.gameTime(), key)) return false;
+        List<MachineRecipe> available = filterAvailableCandidates(context.orderedCandidates(), activeCounts);
+        List<MachineRecipe> candidates = lane.candidatesFor(available, context.catalogVersion());
+        if (candidates.isEmpty()) return false;
+        AsyncSearchRequest request = new AsyncSearchRequest(context, candidates, lock);
+        MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                level.getGameTime(), MachineWorkMode.ASYNC, "factory-search/" + lane.laneId(), controller.lifecycleEpoch());
+        if (!MachineAsyncCoordinator.get(level).submit(taskKey, new FactorySearchContinuation(lane.laneId(), request),
+                this::executeAsyncSearchStep)) return false;
+        pendingAsyncSearches.put(lane, request);
+        searchAttemptsForTesting++;
+        return true;
+    }
+
+    private MainThreadStep.Result executeAsyncSearchStep(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep step) {
+        if (!(step instanceof MainThreadStep.FactorySearch search)) {
+            return MainThreadStep.Result.failure(new IllegalArgumentException("Unexpected factory async step"));
+        }
+        FactoryRecipeThread lane = lanes.stream().filter(candidate -> candidate.laneId().equals(search.laneId()))
+                .findFirst().orElse(null);
+        AsyncSearchRequest request = lane == null ? null : pendingAsyncSearches.get(lane);
+        if (lane == null || request == null || !asyncSearchStillValid(lane, request, search.catalogVersion())) {
+            if (lane != null) pendingAsyncSearches.remove(lane);
+            return MainThreadStep.Result.failure(new IllegalStateException("Factory async search became stale"));
+        }
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
+        if (domain == null) {
+            pendingAsyncSearches.remove(lane);
+            return MainThreadStep.Result.failure(new IllegalStateException("Factory search lost its resource domain"));
+        }
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), lane.laneId()),
+                request.context().snapshot().structure().version(), request.context().snapshot().stateVersion(), () -> {
+                    if (!asyncSearchStillValid(lane, request, search.catalogVersion())) return false;
+                    pendingAsyncSearches.remove(lane);
+                    Map<Identifier, Integer> activeCounts = activeRecipeCounts();
+                    List<MachineRecipe> available = filterAvailableCandidates(request.context().orderedCandidates(), activeCounts);
+                    if (search.result().result() != null && search.result().result().success()
+                            && !available.contains(search.result().result().recipe())) {
+                        return true;
+                    }
+                    boolean started = lane.startSearchResult(request.context(), request.candidates(),
+                            request.context().snapshot().structure().version(), request.lockedRecipeId(), search.result());
+                    reserveStart(lane, started, activeCounts);
+                    if (started) markLaneStateChanged();
+                    return true;
+                }, () -> validateAsyncSearchRequest(lane, request, search.catalogVersion(), taskKey, level),
+                () -> controller.currentRuntimeSnapshot().structure().version(),
+                () -> controller.currentRuntimeSnapshot().stateVersion(), search.catalogVersion(),
+                this::currentCatalogVersion, () -> MachineAsyncCoordinator.get(level).resume(taskKey)));
+        return MainThreadStep.Result.pending();
+    }
+
+    private boolean validateAsyncSearchRequest(FactoryRecipeThread lane, AsyncSearchRequest request, long catalogVersion,
+                                               MachineAsyncCoordinator.TaskKey taskKey, ServerLevel level) {
+        boolean valid = asyncSearchStillValid(lane, request, catalogVersion);
+        if (!valid) {
+            pendingAsyncSearches.remove(lane, request);
+            MachineAsyncCoordinator.get(level).resume(taskKey);
+        }
+        return valid;
+    }
+
+    private boolean asyncSearchStillValid(FactoryRecipeThread lane, AsyncSearchRequest request, long catalogVersion) {
+        if (controller == null || controller.isRedstonePaused() || !lanes.contains(lane) || !lane.isIdle()
+                || pendingAsyncSearches.get(lane) != request || catalogVersion != request.context().catalogVersion()
+                || catalogVersion != currentCatalogVersion()) return false;
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        return current.structure().version() == request.context().snapshot().structure().version()
+                && current.capabilityVersion() == request.context().snapshot().capabilityVersion()
+                && current.modifierVersion() == request.context().snapshot().modifierVersion()
+                && current.stateVersion() == request.context().snapshot().stateVersion()
+                && Objects.equals(recipeLocks.get(lane), request.lockedRecipeId());
+    }
+
+    private long currentCatalogVersion() {
+        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        Machine machine = snapshot.structure().machine() == null
+                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        return RecipeRegistry.catalogForMachine(machine).version();
+    }
+
+    private record AsyncSearchRequest(FactorySearchContext context, List<MachineRecipe> candidates,
+                                      @Nullable Identifier lockedRecipeId) {
+    }
+
+    private static final class FactorySearchContinuation implements AsyncContinuation {
+        private final String laneId;
+        private final AsyncSearchRequest request;
+        private boolean searched;
+        private FactoryRecipeThread.SearchResult result;
+
+        private FactorySearchContinuation(String laneId, AsyncSearchRequest request) {
+            this.laneId = laneId;
+            this.request = request;
+        }
+
+        @Override
+        public Yield advance(AsyncExecutionContext context) {
+            if (!searched) {
+                searched = true;
+                result = FactoryRecipeThread.search(request.context(), request.candidates(),
+                        request.context().snapshot().structure().version(), request.lockedRecipeId());
+            }
+            return Yield.mainThread(new MainThreadStep.FactorySearch(laneId, request.context().catalogVersion(), result),
+                    ignored -> ignoredContext -> Yield.complete());
+        }
     }
 
     public void syncCoreLanes(MachineControllerBlockEntity controller, Machine machine,
