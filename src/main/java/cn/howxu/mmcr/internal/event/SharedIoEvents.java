@@ -25,12 +25,16 @@ public final class SharedIoEvents {
 
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
-            ModuleConnectionCoordinator.tick(level);
-            SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
-            sharedIo.resolve(level);
-            MachineAsyncCoordinator.get(level).completeTick(() -> sharedIo.resolve(level));
-            NetworkInterfaceBindingCoordinator.heartbeat(level);
+            completeLevelTick(level);
         }
+    }
+
+    public static void completeLevelTick(ServerLevel level) {
+        ModuleConnectionCoordinator.tick(level);
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        MachineAsyncCoordinator.get(level).completeTick(() -> sharedIo.resolve(level));
+        sharedIo.resolve(level);
+        if (level.getServer() != null) NetworkInterfaceBindingCoordinator.heartbeat(level);
     }
 
     public static void onServerTick(ServerTickEvent.Post event) {
@@ -40,8 +44,8 @@ public final class SharedIoEvents {
 
     public static void onLevelUnload(LevelEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel level) {
-            SharedIoCoordinator.discard(level);
             MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
             ModuleConnectionRefreshQueue.discard(level);
             StructureClaimRegistry.discard(level);
             MachineControllerBlockEntity.clearFormedControllerIndex(level);

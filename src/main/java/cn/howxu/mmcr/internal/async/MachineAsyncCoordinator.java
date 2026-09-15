@@ -149,7 +149,8 @@ public final class MachineAsyncCoordinator {
     }
 
     public static synchronized void discard(ServerLevel level) {
-        COORDINATORS.remove(level);
+        MachineAsyncCoordinator coordinator = COORDINATORS.remove(level);
+        if (coordinator != null) coordinator.cancelAll();
     }
 
     public MainThreadStep.Result.@Nullable Failure failureFor(TaskKey key) {
@@ -305,6 +306,19 @@ public final class MachineAsyncCoordinator {
             deferredMainSteps.remove(task.key);
             fail(task, new IllegalStateException("Async continuation made no tick-fence progress"));
         }
+    }
+
+    private void cancelAll() {
+        for (Task task : tasks.values()) {
+            synchronized (task) {
+                task.cancelled = true;
+            }
+        }
+        tasks.clear();
+        pendingMainSteps.clear();
+        deferredMainSteps.clear();
+        mainStepExecutors.clear();
+        failures.clear();
     }
 
     private void signalProgress() {

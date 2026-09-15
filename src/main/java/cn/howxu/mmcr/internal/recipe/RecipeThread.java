@@ -17,7 +17,6 @@ import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
-import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
@@ -158,7 +157,7 @@ public abstract class RecipeThread {
                     searchContextKeyForStart());
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                    serverLevel.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId());
+                    serverLevel.getGameTime(), controller.activeWorkMode(), asyncLaneId());
             long token = beginPendingStart(domain, next, startSnapshot);
             pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, token, startSnapshot);
             pendingAsyncStartExecution = null;
@@ -357,7 +356,7 @@ public abstract class RecipeThread {
                 () -> {
                       if (!validateCurrentRuntime(token, domain)) return false;
                       return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
-                              controller.getBlockPos(), level.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId()),
+                              controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(), asyncLaneId()),
                               AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
                   },
                   () -> {
@@ -377,7 +376,7 @@ public abstract class RecipeThread {
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
         MachineAsyncCoordinator.TaskKey key = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                level.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId());
+                level.getGameTime(), controller.activeWorkMode(), asyncLaneId());
         if (!coordinator.submit(key, AsyncCraftingExecution.finish(asyncLaneId(), pendingTickCatalogVersion),
                 this::executeAsyncMainStep)) clearPendingTick();
     }

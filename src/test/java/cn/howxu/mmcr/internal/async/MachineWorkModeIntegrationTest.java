@@ -1,0 +1,191 @@
+package cn.howxu.mmcr.internal.async;
+
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.TestBootstrap;
+import com.electronwill.nightconfig.core.CommentedConfig;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.neoforged.fml.config.IConfigSpec;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Verifies the controller execution modes at the server-level tick boundary.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+class MachineWorkModeIntegrationTest {
+    private ServerLevel level;
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        Config.SERVER_SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
+                .getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+    }
+
+    @AfterEach
+    void discardLevelCoordinators() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        if (level == null) return;
+        MachineAsyncCoordinator.discard(level);
+        SharedIoCoordinator.discard(level);
+        StructureClaimRegistry.discard(level);
+    }
+
+    @Test
+    void async_main_steps_complete_before_shared_io_round_robin_commits() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "tick fence",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controller.getBlockPos());
+        assertThat(domain).isNotNull();
+        List<String> order = new ArrayList<>();
+
+        MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                1L), ignored -> AsyncContinuation.Yield.mainThread(
+                new MainThreadStep.TestStep(() -> order.add("async-main-step")),
+                result -> context -> AsyncContinuation.Yield.complete()));
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), "base"), domain.id(), 0L,
+                () -> {
+                    order.add("shared-io-resolve");
+                    return true;
+                }, () -> true, domain::id, () -> 0L));
+
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(order).containsSubsequence("async-main-step", "shared-io-resolve");
+    }
+
+    @Test
+    void changing_work_mode_cancels_an_uncommitted_controller_lane() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "mode change",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        CountDownLatch mainStepQueued = new CountDownLatch(1);
+        AtomicBoolean committed = new AtomicBoolean();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        assertThat(coordinator.submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), 2L), ignored -> {
+            mainStepQueued.countDown();
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                    result -> context -> AsyncContinuation.Yield.complete());
+        })).isTrue();
+        assertThat(mainStepQueued.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(hasPendingMainStep(coordinator)).isTrue();
+
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        coordinator.pumpMainThreadSteps();
+
+        assertThat(committed).isFalse();
+    }
+
+    @Test
+    void redstone_pause_cancels_an_uncommitted_async_lane() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "redstone pause",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        CountDownLatch mainStepQueued = new CountDownLatch(1);
+        AtomicBoolean committed = new AtomicBoolean();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        assertThat(coordinator.submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), 2L), ignored -> {
+            mainStepQueued.countDown();
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                    result -> context -> AsyncContinuation.Yield.complete());
+        })).isTrue();
+        assertThat(mainStepQueued.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(hasPendingMainStep(coordinator)).isTrue();
+
+        RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 15);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        coordinator.pumpMainThreadSteps();
+
+        assertThat(controller.isRedstonePaused()).isTrue();
+        assertThat(committed).isFalse();
+    }
+
+    @Test
+    void level_discard_cancels_pending_async_tasks() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "level unload",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        AtomicBoolean committed = new AtomicBoolean();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        assertThat(coordinator.submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), 1L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                        result -> context -> AsyncContinuation.Yield.complete()))).isTrue();
+        assertThat(hasPendingMainStep(coordinator)).isTrue();
+
+        MachineAsyncCoordinator.discard(level);
+        coordinator.pumpMainThreadSteps();
+
+        assertThat(committed).isFalse();
+    }
+
+    @Test
+    void structure_invalidation_cancels_an_uncommitted_async_lane() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "structure invalidation",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        AtomicBoolean committed = new AtomicBoolean();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        assertThat(coordinator.submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), 1L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                        result -> context -> AsyncContinuation.Yield.complete()))).isTrue();
+        assertThat(hasPendingMainStep(coordinator)).isTrue();
+
+        controller.invalidateFormedStructure();
+        coordinator.pumpMainThreadSteps();
+
+        assertThat(committed).isFalse();
+    }
+
+    private static boolean hasPendingMainStep(MachineAsyncCoordinator coordinator)
+            throws ReflectiveOperationException, InterruptedException {
+        Field field = MachineAsyncCoordinator.class.getDeclaredField("pendingMainSteps");
+        field.setAccessible(true);
+        Queue<?> pending = (Queue<?>) field.get(coordinator);
+        for (int attempt = 0; attempt < 100; attempt++) {
+            if (!pending.isEmpty()) return true;
+            Thread.sleep(10L);
+        }
+        return false;
+    }
+}

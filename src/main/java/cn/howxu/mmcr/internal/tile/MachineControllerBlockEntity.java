@@ -42,6 +42,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSink;
@@ -92,6 +93,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryTickResult;
 import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
@@ -180,6 +182,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable Identifier pendingControllerLockId;
     private boolean redstonePaused;
+    private @Nullable MachineWorkMode activeWorkMode;
     private @Nullable FactoryRecipeScheduler factoryScheduler;
     private int recipeSearchRetryCounter;
     private long recipeSearchAttemptCounter;
@@ -575,6 +578,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void invalidateFormedStructure() {
+        if (level instanceof ServerLevel serverLevel) {
+            MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos());
+        }
         resetMachine();
         publishRuntimeState();
     }
@@ -1283,6 +1289,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
                 boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
                 if (powered) {
+                    MachineAsyncCoordinator.get(runtimeLevel).cancel(getBlockPos());
                     redstonePaused = true;
                     runtime.pauseCrafting();
                     setActiveState(false);
@@ -1318,14 +1325,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                             }
                             try {
                                 boolean idleBefore = !hasActiveOperation();
-                                if (recipeBehavior != null && idleBefore) {
-                                    invokeIdleCallback("idleStart", recipeBehavior.idleStart(), tickState);
-                                }
-                                if (factoryController) {
-                                    factoryTickResult = tickFactoryRecipes();
-                                } else {
-                                    tickSingleActiveRecipe();
-                                }
+                                    if (recipeBehavior != null && idleBefore) {
+                                        invokeIdleCallback("idleStart", recipeBehavior.idleStart(), tickState);
+                                    }
+                                factoryTickResult = dispatchRuntimeRecipeWork(runtimeLevel, tickState, factoryController);
                                 if (recipeBehavior != null && !hasActiveOperation()) {
                                     invokeIdleCallback("idleEnd", recipeBehavior.idleEnd(), tickState);
                                 }
@@ -1368,6 +1371,51 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 || !hasTickBehavior(runtime.currentStructureSnapshot())
                 && (factoryTickResult == null ? activeFactoryLaneCount : factoryTickResult.activeLaneCount()) > 0
                 || hasTickBehavior(runtime.currentStructureSnapshot());
+    }
+
+    private @Nullable FactoryTickResult dispatchRuntimeRecipeWork(ServerLevel runtimeLevel,
+                                                                    ControllerRuntimeSnapshot tickState,
+                                                                    boolean factoryController) {
+        MachineWorkMode mode = configuredWorkMode();
+        if (activeWorkMode != null && activeWorkMode != mode) {
+            MachineAsyncCoordinator.get(runtimeLevel).cancel(getBlockPos());
+        }
+        activeWorkMode = mode;
+        return switch (mode) {
+            case SYNC -> tickSynchronously(tickState, factoryController);
+            case SEMI_SYNC -> submitSemiSyncWork(tickState, factoryController);
+            case ASYNC -> submitAsyncWork(tickState, factoryController);
+        };
+    }
+
+    private @Nullable FactoryTickResult tickSynchronously(ControllerRuntimeSnapshot tickState, boolean factoryController) {
+        return tickRecipeWork(tickState, factoryController);
+    }
+
+    private @Nullable FactoryTickResult submitSemiSyncWork(ControllerRuntimeSnapshot tickState, boolean factoryController) {
+        return tickRecipeWork(tickState, factoryController);
+    }
+
+    private @Nullable FactoryTickResult submitAsyncWork(ControllerRuntimeSnapshot tickState, boolean factoryController) {
+        return tickRecipeWork(tickState, factoryController);
+    }
+
+    private @Nullable FactoryTickResult tickRecipeWork(ControllerRuntimeSnapshot tickState, boolean factoryController) {
+        if (factoryController) return tickFactoryRecipes();
+        tickSingleActiveRecipe();
+        return null;
+    }
+
+    public MachineWorkMode activeWorkMode() {
+        return activeWorkMode == null ? configuredWorkMode() : activeWorkMode;
+    }
+
+    private MachineWorkMode configuredWorkMode() {
+        try {
+            return Config.MACHINE_WORK_MODE.get();
+        } catch (IllegalStateException ignored) {
+            return MachineWorkMode.ASYNC;
+        }
     }
 
     private boolean hasTickBehavior(StructureSnapshot structure) {
