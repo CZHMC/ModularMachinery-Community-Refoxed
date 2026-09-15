@@ -1,10 +1,12 @@
 package cn.howxu.mmcr.config;
 
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class Config {
     public static final ModConfigSpec SPEC;
+    public static final ModConfigSpec SERVER_SPEC;
     public static final int DEFAULT_MACHINE_CHECK_INTERVAL_TICKS = 40;
     public static final int DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS = MultiblockAssemblyService.MAX_BLOCKS_PER_OPERATION;
     public static final int DEFAULT_BUILD_BLOCKS_PER_TICK = 256;
@@ -25,6 +27,7 @@ public final class Config {
     public static final ModConfigSpec.IntValue STRUCTURE_SYNC_MAX_BLOCKS;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
     public static final ModConfigSpec.IntValue MAX_REQUESTS_PER_TICK;
+    public static final ModConfigSpec.EnumValue<MachineWorkMode> MACHINE_WORK_MODE;
 
     static {
         var b = new ModConfigSpec.Builder();
@@ -62,6 +65,12 @@ public final class Config {
                 .comment("Maximum machine network requests processed per server tick")
                 .defineInRange("max_requests_per_tick", DEFAULT_MAX_REQUESTS_PER_TICK, 1, 1_000_000);
         SPEC = b.build();
+
+        var server = new ModConfigSpec.Builder();
+        MACHINE_WORK_MODE = server
+                .comment("Global machine execution mode")
+                .defineEnum("machine_work_mode", MachineWorkMode.ASYNC);
+        SERVER_SPEC = server.build();
     }
 
     private Config() {

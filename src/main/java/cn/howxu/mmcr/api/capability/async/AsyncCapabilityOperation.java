@@ -1,0 +1,74 @@
+package cn.howxu.mmcr.api.capability.async;
+
+import java.util.List;
+import java.util.Objects;
+import net.minecraft.resources.Identifier;
+
+/**
+ * An immutable capability operation that may be planned off the main thread.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperation.Resource, AsyncCapabilityOperation.Scalar,
+        AsyncCapabilityOperation.Group {
+    Identifier capabilityId();
+
+    /**
+     * A resource insertion or extraction for one storage slot.
+     *
+     * @param capabilityId capability type identifier
+     * @param slot storage slot index
+     * @param resource immutable resource value
+     * @param amount resource amount
+     * @param insert whether the resource is inserted rather than extracted
+     */
+    record Resource(Identifier capabilityId, int slot, AsyncResourceValue resource, long amount, boolean insert)
+            implements AsyncCapabilityOperation {
+        public Resource {
+            if (slot < 0 || amount <= 0L) {
+                throw new IllegalArgumentException("slot must be non-negative and amount must be positive");
+            }
+            Objects.requireNonNull(capabilityId, "capabilityId");
+            Objects.requireNonNull(resource, "resource");
+        }
+    }
+
+    /**
+     * An ordered, atomic group of logical operations.
+     *
+     * @param operations immutable operations for one capability to commit in order
+     */
+    record Group(List<AsyncCapabilityOperation> operations) implements AsyncCapabilityOperation {
+        public Group {
+            operations = List.copyOf(Objects.requireNonNull(operations, "operations"));
+            if (operations.isEmpty()) throw new IllegalArgumentException("operation group must not be empty");
+            if (operations.stream().anyMatch(Group.class::isInstance)) {
+                throw new IllegalArgumentException("operation groups must not be nested");
+            }
+            Identifier groupCapabilityId = operations.getFirst().capabilityId();
+            if (operations.stream().map(AsyncCapabilityOperation::capabilityId)
+                    .anyMatch(capabilityId -> !capabilityId.equals(groupCapabilityId))) {
+                throw new IllegalArgumentException("operation group capabilities must match");
+            }
+        }
+
+        @Override
+        public Identifier capabilityId() {
+            return operations.getFirst().capabilityId();
+        }
+    }
+
+    /**
+     * A scalar insertion or extraction, such as energy.
+     *
+     * @param capabilityId capability type identifier
+     * @param amount scalar amount
+     * @param insert whether the scalar is inserted rather than extracted
+     */
+    record Scalar(Identifier capabilityId, long amount, boolean insert) implements AsyncCapabilityOperation {
+        public Scalar {
+            Objects.requireNonNull(capabilityId, "capabilityId");
+            if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
+        }
+    }
+}

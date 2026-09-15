@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
@@ -15,6 +16,9 @@ import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -30,6 +34,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,6 +55,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     private final IOType ioType;
     private final ResourceStorage<ItemResource> storage;
     private final CapabilityView view;
+    private final AsyncPlanningFacet asyncPlanning;
 
     public ItemBusCapability(ResourceStorage<ItemResource> storage, IOType ioType) {
         this(null, storage, ioType, true);
@@ -66,8 +72,32 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
+        this.asyncPlanning = new AsyncPlanningFacet() {
+            @Override
+            protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
+                return new AsyncCapabilitySnapshot.Resource(type().id(), IntStream.range(0, storage.size())
+                        .mapToObj(slot -> {
+                            ItemResource resource = storage.resource(slot);
+                            return new AsyncCapabilitySnapshot.ResourceSlot(resource == null || resource.isEmpty()
+                                    ? Optional.empty() : Optional.of(NativeAsyncResourceValues.item(resource)),
+                                    storage.amount(slot), storage.capacity(slot, resource));
+                        }).toList());
+            }
+
+            @Override
+            protected AsyncCapabilityPlanner workerPlannerOnServerThread() {
+                return new AsyncCapabilityPlanner.Resource(type().id());
+            }
+
+            @Override
+            protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
+                                                             TransactionContext transaction) {
+                return commitAsync(operation, transaction);
+            }
+        };
         Set<Class<? extends CapabilityFacet>> facets = new LinkedHashSet<>(Set.of(
-                ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class));
+                ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
+                AsyncPlanningFacet.class));
         if (exposeTransferFacet) facets.add(TransferFacet.class);
         this.view = CapabilityFactories.view(type(), directions(),
                 Set.copyOf(facets));
@@ -122,6 +152,12 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     }
 
     @Override
+    public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+        if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        return MachineCapability.super.facet(facetType);
+    }
+
+    @Override
     public CapabilityOperation prepare(CapabilityRequest request) {
         return CapabilityFactories.operation(this, request);
     }
@@ -170,6 +206,44 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         FailureOccurrence occurrence = FailureOccurrence.at(reason, type().id(), FailurePhase.CAPABILITY_COMMIT,
                 null, null, details);
         return CapabilityResult.failure(ExecutionStatus.blocked(type().id(), type().id(), occurrence));
+    }
+
+    private CapabilityResult commitAsync(AsyncCapabilityOperation operation, TransactionContext transaction) {
+        if (operation instanceof AsyncCapabilityOperation.Group group) {
+            try (Transaction nested = Transaction.open(transaction)) {
+                for (AsyncCapabilityOperation child : group.operations()) {
+                    CapabilityResult result = commitAsync(child, nested);
+                    if (!result.success()) return result;
+                }
+                nested.commit();
+            }
+            return CapabilityResult.successful();
+        }
+        if (!(operation instanceof AsyncCapabilityOperation.Resource resource)
+                || !type().id().equals(resource.capabilityId())) {
+            return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        }
+        ItemResource nativeResource;
+        try {
+            nativeResource = NativeAsyncResourceValues.item(resource.resource());
+        } catch (IllegalArgumentException exception) {
+            return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
+        }
+        ItemResource current;
+        try {
+            current = storage.resource(resource.slot());
+        } catch (IndexOutOfBoundsException exception) {
+            return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        }
+        boolean matches = current != null && !current.isEmpty() && current.equals(nativeResource);
+        if ((!resource.insert() && !matches) || (resource.insert() && current != null && !current.isEmpty() && !matches)) {
+            return failure(resource.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+        }
+        long moved = resource.insert()
+                ? storage.insertResource(resource.slot(), nativeResource, resource.amount(), transaction)
+                : storage.extractResource(resource.slot(), nativeResource, resource.amount(), transaction);
+        return moved == resource.amount() ? CapabilityResult.successful()
+                : failure(resource.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Override

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.capability;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ScalarFacet;
@@ -34,17 +35,17 @@ public final class BuiltinCapabilityDefinitions {
         CapabilityRegistry.register(new CapabilityDefinition(
                 ITEM_TYPE,
                 Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
-                        TransferFacet.class),
+                        TransferFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createItem));
         CapabilityRegistry.register(new CapabilityDefinition(
                 FLUID_TYPE,
                 Set.of(ResourceFacet.class, OperationFacet.class, PresentationFacet.class, SyncFacet.class,
-                        TransferFacet.class),
+                        TransferFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createFluid));
         CapabilityRegistry.register(new CapabilityDefinition(
                 ENERGY_TYPE,
                 Set.of(ScalarFacet.class, ValueFacet.class, SyncFacet.class, TransferFacet.class,
-                        OperationFacet.class, PresentationFacet.class),
+                        OperationFacet.class, PresentationFacet.class, AsyncPlanningFacet.class),
                 BuiltinCapabilityDefinitions::createEnergy));
     }
 

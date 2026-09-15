@@ -28,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -213,6 +214,22 @@ class FactoryRuntimeTest {
         assertThat(result.snapshotChanged()).isTrue();
         FactorySnapshot snapshot = runtime.snapshot();
         assertThat(runtime.snapshot()).isSameAs(snapshot);
+    }
+
+    @Test
+    void async_pending_start_counts_as_an_active_factory_lane_before_shared_io_grants_it() {
+        MachineControllerBlockEntity controller = factoryController("test_cube");
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_pending_limit"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
+
+        runtime.tick(List.of(recipe), 1, 0L);
+
+        assertThat(runtime.activeLaneCount()).isEqualTo(1);
     }
 
     @Test
@@ -1536,7 +1553,10 @@ class FactoryRuntimeTest {
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
         if (controller.resourceDomain() != null) {
-            SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+            sharedIo.resolve(controller.resourceDomain());
+            MachineAsyncCoordinator.get(level).completeTick(() -> sharedIo.resolve(level));
         }
     }
 

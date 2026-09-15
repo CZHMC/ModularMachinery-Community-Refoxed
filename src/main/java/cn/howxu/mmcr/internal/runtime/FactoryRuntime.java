@@ -309,7 +309,7 @@ public final class FactoryRuntime {
         if (activeCountDirty) {
             int count = 0;
             for (FactoryRecipeThread lane : lanes) {
-                if (lane.runtime().active()) count++;
+                if (lane.runtime().active() || lane.isStartPending()) count++;
             }
             cachedActiveLaneCount = count;
             activeCountDirty = false;

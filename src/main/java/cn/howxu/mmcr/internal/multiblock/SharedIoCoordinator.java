@@ -30,6 +30,9 @@ public final class SharedIoCoordinator {
     private final Map<Long, LaneKey> tickCursors = new HashMap<>();
     private final Map<Long, LaneKey> finishCursors = new HashMap<>();
 
+    private record DomainResolution(List<Request> unresolved, int progress) {
+    }
+
     public static synchronized SharedIoCoordinator get(ServerLevel level) {
         return COORDINATORS.computeIfAbsent(level, ignored -> new SharedIoCoordinator());
     }
@@ -42,37 +45,44 @@ public final class SharedIoCoordinator {
         pending.add(request);
     }
 
-    public void resolve(ServerLevel level) {
+    public int resolve(ServerLevel level) {
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         Map<StructureClaimRegistry.ResourceDomain, List<Request>> requestsByDomain = new HashMap<>();
+        int resolved = 0;
         for (Request request : List.copyOf(pending)) {
             StructureClaimRegistry.ResourceDomain domain = registry.domainFor(request.laneKey().controllerPos());
             if (domain != null && request.domainId() == domain.id() && request.domainGeneration() == domain.generation()) {
                 requestsByDomain.computeIfAbsent(domain, ignored -> new ArrayList<>()).add(request);
             } else {
                 request.discard();
+                resolved++;
             }
         }
         pending.clear();
         for (var entry : requestsByDomain.entrySet()) {
-            pending.addAll(resolveDomain(entry.getKey(), entry.getValue()));
+            DomainResolution result = resolveDomain(entry.getKey(), entry.getValue());
+            resolved += result.progress();
+            pending.addAll(result.unresolved());
         }
+        return resolved;
     }
 
-    public void resolve(StructureClaimRegistry.ResourceDomain domain) {
+    public int resolve(StructureClaimRegistry.ResourceDomain domain) {
         List<Request> requests = pending.stream()
                 .filter(request -> request.domainId() == domain.id()
                         && request.domainGeneration() == domain.generation())
                 .toList();
         pending.removeAll(requests);
-        pending.addAll(resolveDomain(domain, requests));
+        DomainResolution result = resolveDomain(domain, requests);
+        pending.addAll(result.unresolved());
+        return result.progress();
     }
 
     public LaneKey nextStartLane(long domainId) {
         return startCursors.get(domainId);
     }
 
-    private List<Request> resolveDomain(StructureClaimRegistry.ResourceDomain domain, List<Request> requests) {
+    private DomainResolution resolveDomain(StructureClaimRegistry.ResourceDomain domain, List<Request> requests) {
         List<Request> current = new ArrayList<>(requests.size());
         List<StartRequest> startRequests = new ArrayList<>();
         List<TickRequest> tickRequests = new ArrayList<>();
@@ -122,7 +132,7 @@ public final class SharedIoCoordinator {
         for (StartRequest request : finishSpawnedStarts) {
             if (!successful.contains(request)) unresolved.add(request);
         }
-        return unresolved;
+        return new DomainResolution(unresolved, successful.size() + requests.size() - current.size());
     }
 
     private List<FinishRequest> takePendingFinishRequests(StructureClaimRegistry.ResourceDomain domain) {
@@ -160,7 +170,7 @@ public final class SharedIoCoordinator {
         int start = 0;
         if (cursor != null) {
             while (start < requests.size()
-                    && compareControllerPos(requests.get(start).laneKey().controllerPos(), cursor.controllerPos()) <= 0) start++;
+                    && requests.get(start).laneKey().compareTo(cursor) <= 0) start++;
             if (start == requests.size()) start = 0;
         }
         for (int offset = 0; offset < requests.size(); offset++) {
@@ -175,13 +185,6 @@ public final class SharedIoCoordinator {
                 successful.add(request);
             }
         }
-    }
-
-    private static int compareControllerPos(BlockPos first, BlockPos second) {
-        int result = Integer.compare(first.getX(), second.getX());
-        if (result != 0) return result;
-        result = Integer.compare(first.getY(), second.getY());
-        return result != 0 ? result : Integer.compare(first.getZ(), second.getZ());
     }
 
     public sealed interface Request permits StartRequest, TickRequest, FinishRequest {
@@ -283,41 +286,79 @@ public final class SharedIoCoordinator {
     }
 
     public record TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
-                              long controllerStructureVersion, long controllerStateVersion,
-                              BooleanSupplier transaction, BooleanSupplier validator,
-                              LongSupplier controllerStructureVersionSupplier,
-                              LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) implements Request {
+                               long controllerStructureVersion, long controllerStateVersion,
+                               BooleanSupplier transaction, BooleanSupplier validator,
+                               LongSupplier controllerStructureVersionSupplier,
+                               LongSupplier controllerStateVersionSupplier, long catalogVersion,
+                               LongSupplier catalogVersionSupplier, Runnable commitNotifier) implements Request {
         public TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                            long controllerStructureVersion, long controllerStateVersion,
                            BooleanSupplier transaction, BooleanSupplier validator,
                            LongSupplier controllerStructureVersionSupplier,
                            LongSupplier controllerStateVersionSupplier) {
             this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
-                    controllerStructureVersionSupplier, controllerStateVersionSupplier, () -> { });
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, () -> { });
+        }
+
+        public TickRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                           long controllerStructureVersion, long controllerStateVersion,
+                           BooleanSupplier transaction, BooleanSupplier validator,
+                           LongSupplier controllerStructureVersionSupplier,
+                           LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, commitNotifier);
         }
 
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
+        @Override public boolean isStillValid() {
+            if (catalogVersion != catalogVersionSupplier.getAsLong()) {
+                discard();
+                return false;
+            }
+            return Request.super.isStillValid();
+        }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
         @Override public void onCommitted() { commitNotifier.run(); }
     }
 
     public record FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
-                                long controllerStructureVersion, long controllerStateVersion,
-                                BooleanSupplier transaction, BooleanSupplier validator,
-                                LongSupplier controllerStructureVersionSupplier,
-                                LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) implements Request {
+                                 long controllerStructureVersion, long controllerStateVersion,
+                                 BooleanSupplier transaction, BooleanSupplier validator,
+                                 LongSupplier controllerStructureVersionSupplier,
+                                 LongSupplier controllerStateVersionSupplier, long catalogVersion,
+                                 LongSupplier catalogVersionSupplier, Runnable commitNotifier) implements Request {
         public FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
                              long controllerStructureVersion, long controllerStateVersion,
                              BooleanSupplier transaction, BooleanSupplier validator,
                              LongSupplier controllerStructureVersionSupplier,
                              LongSupplier controllerStateVersionSupplier) {
             this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
-                    controllerStructureVersionSupplier, controllerStateVersionSupplier, () -> { });
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, () -> { });
+        }
+
+        public FinishRequest(StructureClaimRegistry.ResourceDomain domain, LaneKey laneKey,
+                             long controllerStructureVersion, long controllerStateVersion,
+                             BooleanSupplier transaction, BooleanSupplier validator,
+                             LongSupplier controllerStructureVersionSupplier,
+                             LongSupplier controllerStateVersionSupplier, Runnable commitNotifier) {
+            this(domain, laneKey, controllerStructureVersion, controllerStateVersion, transaction, validator,
+                    controllerStructureVersionSupplier, controllerStateVersionSupplier,
+                    Long.MIN_VALUE, () -> Long.MIN_VALUE, commitNotifier);
         }
 
         @Override public long domainId() { return domain.id(); }
         @Override public long domainGeneration() { return domain.generation(); }
+        @Override public boolean isStillValid() {
+            if (catalogVersion != catalogVersionSupplier.getAsLong()) {
+                discard();
+                return false;
+            }
+            return Request.super.isStillValid();
+        }
         @Override public boolean tryCommit() { return transaction.getAsBoolean(); }
         @Override public void onCommitted() { commitNotifier.run(); }
     }
