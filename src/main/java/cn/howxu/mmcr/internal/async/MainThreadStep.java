@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
-import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 
 /**
@@ -145,8 +144,8 @@ public interface MainThreadStep {
         }
     }
 
-    /** Carries an immutable factory lane search result back to its owning server thread. */
-    record FactorySearch(String laneId, long catalogVersion, FactoryRecipeThread.SearchResult result) implements MainThreadStep {
+    /** Marks that a worker finished pure factory planning for one lane. */
+    record FactorySearch(String laneId, long catalogVersion, long searchId) implements MainThreadStep {
         @Override
         public Kind kind() {
             return Kind.FACTORY_SEARCH;
