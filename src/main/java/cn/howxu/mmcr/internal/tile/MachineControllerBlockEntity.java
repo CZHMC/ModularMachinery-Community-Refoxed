@@ -1575,16 +1575,25 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!runtime.craftingRuntime().active() && !sharedStartPending) {
             startedThisTick = tryStartNewRecipe();
         }
-        if (runtime.craftingRuntime().active() && !startedThisTick && tickActiveRecipe()) tryStartNewRecipe();
+        if (runtime.craftingRuntime().active() && !startedThisTick && tickActiveRecipe()) {
+            normalRecipeThread.markRecipeFinished();
+            if (!normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
+                    currentRuntimeSnapshot().structure().version())) tryStartNewRecipe();
+        }
         if (!runtime.craftingRuntime().active()) runtime.craftingRuntime().tickIdle();
     }
 
     private void tickSingleAsyncRecipe() {
         boolean startedThisTick = false;
-        if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending() && shouldSearchRecipe()) {
-            recipeSearchAttemptCounter++;
-            startedThisTick = normalRecipeThread.searchAndStartRecipe(recipesForMachine(), getMaxParallelism(),
-                    currentRuntimeSnapshot().structure().version());
+        if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending()) {
+            ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+            startedThisTick = normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
+                    snapshot.structure().version());
+            if (!startedThisTick && shouldSearchRecipe()) {
+                recipeSearchAttemptCounter++;
+                startedThisTick = normalRecipeThread.searchAndStartRecipe(recipesForMachine(), getMaxParallelism(),
+                        snapshot.structure().version());
+            }
         }
         if (runtime.craftingRuntime().active() && !startedThisTick) {
             normalRecipeThread.tick();
@@ -3229,6 +3238,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void resumePausedRecipeAfterStructureCheck() {
         if (!runtime.craftingRuntime().active() || redstonePaused) return;
         setActiveState(true);
+        normalRecipeThread.rememberStartedRecipe();
         syncRuntimeStateIfChanged();
     }
 
@@ -3653,6 +3663,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     if (!isPendingSharedStart(token, next, domain) || !runtime.craftingRuntime().active()) return;
                     clearPendingSharedStart();
                     setActiveState(true);
+                    normalRecipeThread.rememberStartedRecipe();
                     syncRuntimeStateIfChanged();
                     recipeSearchRetryCounter = 0;
                     syncCraftingFailure();
@@ -3787,7 +3798,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     // SharedIoCoordinator resolves starts submitted while committing finishes in this tick.
                     if (wasActive && !runtime.craftingRuntime().active()
                             && runtime.craftingRuntime().failure() == null) {
-                        tryStartNewRecipe();
+                        normalRecipeThread.markRecipeFinished();
+                        MachineRecipe restartRecipe = normalRecipeThread.consumeRestartRecipe(recipesForMachine(),
+                                getMaxParallelism(), currentRuntimeSnapshot().structure().version());
+                        if (restartRecipe != null) requestSharedStart(restartRecipe);
+                        else tryStartNewRecipe();
                     }
                     return true;
                   },
