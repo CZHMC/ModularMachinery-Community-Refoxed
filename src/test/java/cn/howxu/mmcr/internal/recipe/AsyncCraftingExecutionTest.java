@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -36,7 +37,8 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
-    void finishing_tick_commits_its_continuation_in_the_same_shared_io_fence() {
+    void async_finish_release_commits_its_continuation_in_the_same_shared_io_fence() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
         Identifier machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
@@ -68,6 +70,39 @@ class AsyncCraftingExecutionTest {
         assertThat(thread.runtime().active()).isFalse();
         assertThat(finishes).hasValue(1);
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(epochBeforeFinish + 1L);
+    }
+
+    @Test
+    void finished_async_lane_restarts_on_the_next_tick_through_the_shared_io_fence() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller,
+                new DynamicMachine(machineId, "async restart", new BlockArray(Map.of())));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_execution_restart"), machineId, 1,
+                List.of(), List.of());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        completeTick(controller);
+        thread.tick();
+        completeTick(controller);
+        thread.tick();
+        completeTick(controller);
+
+        assertThat(thread.runtime().active()).isFalse();
+        RuntimeTestFixtures.advanceGameTime(level);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        completeTick(controller);
+        assertThat(thread.runtime().active()).isTrue();
     }
 
     private static void completeTick(MachineControllerBlockEntity controller) {

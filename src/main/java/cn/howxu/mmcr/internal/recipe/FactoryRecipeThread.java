@@ -325,17 +325,17 @@ public final class FactoryRecipeThread extends RecipeThread {
     /** Computes an immutable factory-lane search result without accessing the lane runtime. */
     public static SearchResult search(FactorySearchContext context, List<MachineRecipe> candidates,
                                       long structureVersion, @Nullable Identifier lockedRecipeId) {
-        if (context == null) return new SearchResult(null, null);
+        if (context == null) return new SearchResult(null, null, false);
         Machine machine = context.snapshot().structure().machine() == null
                 ? context.snapshot().structure().configuredMachine() : context.snapshot().structure().machine();
         Identifier machineId = machine == null ? null : machine.registryName();
-        if (machineId == null || context.maxParallelism() <= 0) return new SearchResult(null, null);
+        if (machineId == null || context.maxParallelism() <= 0) return new SearchResult(null, null, false);
         try {
             return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId, structureVersion,
                     context.maxParallelism(), candidates, lockedRecipeId, context.capabilities(), context.modifiers()).compute(),
-                    null);
+                    null, false);
         } catch (RuntimeException exception) {
-            return new SearchResult(null, exception);
+            return new SearchResult(null, exception, false);
         }
     }
 
@@ -346,8 +346,10 @@ public final class FactoryRecipeThread extends RecipeThread {
         setSearchContextKey(contextSearchContextKey(context, lockedRecipeId));
         setSearchGameTime(context.gameTime());
         failureCandidates = candidates.stream().filter(Objects::nonNull).toList();
-        RecipeSearchResult result = searchResult.result();
-        if (searchResult.failure() != null || result == null || !result.success()) {
+        SearchResult resolved = searchResult.workerPlanned()
+                ? search(context, candidates, structureVersion, lockedRecipeId) : searchResult;
+        RecipeSearchResult result = resolved.result();
+        if (resolved.failure() != null || result == null || !result.success()) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(result == null ? null : result.failure());
             return false;
@@ -357,7 +359,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     /** Immutable outcome of a worker-side factory recipe search. */
-    public record SearchResult(@Nullable RecipeSearchResult result, @Nullable RuntimeException failure) {
+    public record SearchResult(@Nullable RecipeSearchResult result, @Nullable RuntimeException failure,
+                               boolean workerPlanned) {
     }
 
     public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,

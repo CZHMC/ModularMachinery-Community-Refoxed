@@ -206,13 +206,18 @@ public final class RecipeSearchTask {
 
     private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe, int selectedIndex,
                                                           List<MachineRecipe> ordered) {
-        if (planningValues != null) return false;
         for (int index = 0; index < selectedIndex; index++) {
             MachineRecipe earlier = ordered.get(index);
             if (earlier.priority() != selectedRecipe.priority()
                     || earlier.inputRequirementCount() <= selectedRecipe.inputRequirementCount()
                     || !earlier.hasOverlappingInputs(selectedRecipe)) continue;
             if (!snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
+            if (planningValues != null) {
+                PlanningValue value = planningValues.stream()
+                        .filter(candidate -> candidate.recipeId().equals(earlier.id())).findFirst().orElse(null);
+                if (value == null || value.requiresMainThread()) return true;
+                continue;
+            }
             CraftingContext context = borrowContext(earlier);
             PlanningResult inputs;
             PlanningResult outputs;
@@ -248,8 +253,8 @@ public final class RecipeSearchTask {
     }
 
     /** Immutable worker result for one candidate's captured capability planning. */
-    public record PlanningValue(Identifier recipeId, boolean successful, @Nullable FailureReason failureReason,
-                                @Nullable Integer failureRequirementIndex) {
+    public record PlanningValue(Identifier recipeId, boolean successful, boolean requiresMainThread,
+                                @Nullable FailureReason failureReason, @Nullable Integer failureRequirementIndex) {
         public PlanningValue {
             if (recipeId == null) throw new IllegalArgumentException("recipeId must not be null");
             if (successful && failureReason != null) {
@@ -261,11 +266,15 @@ public final class RecipeSearchTask {
         }
 
         public static PlanningValue success(Identifier recipeId) {
-            return new PlanningValue(recipeId, true, null, null);
+            return new PlanningValue(recipeId, true, false, null, null);
+        }
+
+        public static PlanningValue mainThread(Identifier recipeId) {
+            return new PlanningValue(recipeId, true, true, null, null);
         }
 
         public static PlanningValue failure(Identifier recipeId, FailureReason reason, int requirementIndex) {
-            return new PlanningValue(recipeId, false, reason, requirementIndex);
+            return new PlanningValue(recipeId, false, false, reason, requirementIndex);
         }
     }
 }

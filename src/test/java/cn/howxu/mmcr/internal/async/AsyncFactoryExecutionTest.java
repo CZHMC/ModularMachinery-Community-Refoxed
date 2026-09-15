@@ -86,12 +86,16 @@ class AsyncFactoryExecutionTest {
 
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
+                .extracting(lane -> lane.laneId())
+                .containsExactlyInAnyOrder("base", "factory-0");
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .filteredOn(lane -> lane.active())
                 .extracting(lane -> lane.tick())
                 .containsOnly(1);
     }
 
     @Test
-    void cancelled_factory_search_does_not_commit_and_resumes_only_after_the_pause_clears() {
+    void async_factory_retries_a_cancelled_search_after_the_pause_clears() {
         MachineControllerBlockEntity controller = factoryController();
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("cancelled_async_factory_search"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 2);

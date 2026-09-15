@@ -273,7 +273,7 @@ public final class FactoryRuntime {
         } catch (RuntimeException exception) {
             searchAttemptsForTesting++;
             lane.startSearchResult(context, candidates, context.snapshot().structure().version(), lock,
-                    new FactoryRecipeThread.SearchResult(null, exception));
+                    new FactoryRecipeThread.SearchResult(null, exception, false));
             return false;
         }
         AsyncSearchRequest request = new AsyncSearchRequest(context, candidates, lock, ++nextAsyncSearchId, workerRequest);
@@ -456,17 +456,7 @@ public final class FactoryRuntime {
                             continue;
                         }
                         if (candidate.plan() == null) {
-                            if (candidate.requirements().isEmpty()) {
-                                planningValues.add(RecipeSearchTask.PlanningValue.failure(candidate.recipe().id(),
-                                        BuiltinFailureReasons.RECIPE_SEARCH, 0));
-                                continue;
-                            }
-                            int failureIndex = 0;
-                            MachineRequirement requirement = candidate.requirements().get(failureIndex);
-                            planningValues.add(RecipeSearchTask.PlanningValue.failure(candidate.recipe().id(),
-                                    requirement.io() == RecipeModifier.IOType.OUTPUT
-                                            ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
-                                    failureIndex));
+                            planningValues.add(RecipeSearchTask.PlanningValue.mainThread(candidate.recipe().id()));
                             continue;
                         }
                         AsyncRequirementPlanner.PlanResult plan = candidate.plan().plan();
@@ -474,19 +464,14 @@ public final class FactoryRuntime {
                             planningValues.add(RecipeSearchTask.PlanningValue.success(candidate.recipe().id()));
                             continue;
                         }
-                        int failureIndex = plan.mainThreadRequirements().getFirst();
-                        MachineRequirement requirement = candidate.requirements().get(failureIndex);
-                        planningValues.add(RecipeSearchTask.PlanningValue.failure(candidate.recipe().id(),
-                                requirement.io() == RecipeModifier.IOType.OUTPUT
-                                        ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
-                                failureIndex));
+                        planningValues.add(RecipeSearchTask.PlanningValue.mainThread(candidate.recipe().id()));
                     }
                     request.result = new FactoryRecipeThread.SearchResult(
                             RecipeSearchTask.forPlanningValues(request.snapshot, request.machineId,
                                     request.structureVersion, request.maxParallelism, request.candidates,
-                                    request.lockedRecipeId, planningValues).compute(), null);
+                                    request.lockedRecipeId, planningValues).compute(), null, true);
                 } catch (RuntimeException exception) {
-                    request.result = new FactoryRecipeThread.SearchResult(null, exception);
+                    request.result = new FactoryRecipeThread.SearchResult(null, exception, true);
                 }
             }
             return Yield.mainThread(new MainThreadStep.FactorySearch(laneId, catalogVersion, searchId),

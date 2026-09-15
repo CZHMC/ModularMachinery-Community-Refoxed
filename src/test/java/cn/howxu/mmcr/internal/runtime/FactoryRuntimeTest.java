@@ -345,6 +345,49 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void async_worker_fallback_replans_and_commits_at_available_parallelism() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = asyncFactoryController(input);
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+
+        runtime.tick(List.of(inputRecipe("async_worker_fallback")), 2, level.getGameTime());
+        resolveSharedRequests(controller);
+
+        assertThat(runtime.activeRuntimes()).singleElement().satisfies(active -> {
+            assertThat(active.parallelism()).isEqualTo(1L);
+            assertThat(active.recipe().id()).isEqualTo(MMCR.id("async_worker_fallback"));
+        });
+        assertThat(input.itemStorage().amount(0)).isZero();
+    }
+
+    @Test
+    void async_planning_values_delay_a_less_specific_candidate_when_a_competing_input_is_missing() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = asyncFactoryController(input);
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe specific = RecipeTestSupport.create(MMCR.id("async_specific_candidate"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.GOLD_INGOT), 1, ItemStack.EMPTY)));
+        MachineRecipe fallback = inputRecipe("async_fallback_candidate");
+
+        runtime.tick(List.of(specific, fallback), 1, level.getGameTime());
+        resolveSharedRequests(controller);
+
+        assertThat(runtime.activeRuntimes()).isEmpty();
+    }
+
+    @Test
     void finished_lane_restarts_from_the_queued_candidate() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
@@ -1541,6 +1584,27 @@ class FactoryRuntimeTest {
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
         controller.componentRuntime().replaceComponents(List.of(
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        return controller;
+    }
+
+    private static MachineControllerBlockEntity asyncFactoryController(ItemInputBusBlockEntity input) {
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
+        DynamicMachine machine = new DynamicMachine(machineId, "async factory", pattern,
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, input);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null),
+                new ProcessingComponent(new MachineComponent(input.kind(), input.ioType()), input,
+                        input.getBlockPos(), input.getBlockPos(), (String) null)));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
         return controller;
