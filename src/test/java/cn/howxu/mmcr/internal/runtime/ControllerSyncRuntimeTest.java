@@ -25,7 +25,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
-import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -518,9 +518,7 @@ class ControllerSyncRuntimeTest {
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
-        if (controller.resourceDomain() != null) {
-            SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
-        }
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
     }
 
 }

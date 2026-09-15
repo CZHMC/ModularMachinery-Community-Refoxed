@@ -40,6 +40,7 @@ import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
@@ -48,7 +49,6 @@ import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
-import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.test.RecipeTestSupport;
@@ -387,6 +387,9 @@ class MachineControllerBlockEntityTest {
                 MMCR.id("operation_line"), Component.literal("operation"));
 
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
 
         assertThat(runtime.screenText().snapshot().lines())
                 .extracting(ControllerScreenTextSnapshot.Line::scope)
@@ -406,6 +409,9 @@ class MachineControllerBlockEntityTest {
         controller.componentRuntime().replaceModifiers(Map.of("changed", List.of()));
         RuntimeTestFixtures.republish(controller);
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
 
         assertThat(runtime.craftingRuntime().failure()).isNotNull();
         assertThat(runtime.craftingRuntime().active()).isFalse();
@@ -1603,9 +1609,7 @@ class MachineControllerBlockEntityTest {
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
-        if (controller.resourceDomain() != null) {
-            SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
-        }
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
     }
 
     private static NetworkInterfaceBlockEntity networkInterface(BlockPos pos) {
