@@ -5,17 +5,23 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.async.AsyncContinuation;
+import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +40,11 @@ class AsyncCraftingExecutionTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        Config.SERVER_SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @Test
@@ -103,6 +114,21 @@ class AsyncCraftingExecutionTest {
                 controller.runtimeSnapshot().structure().version())).isTrue();
         completeTick(controller);
         assertThat(thread.runtime().active()).isTrue();
+    }
+
+    @Test
+    void async_finish_forwards_a_shared_io_restart_continuation() {
+        AsyncExecutionContext context = new AsyncExecutionContext(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 0L));
+        AsyncContinuation continuation = AsyncCraftingExecution.finish("base", 1L);
+
+        AsyncContinuation.Yield.MainThread lifecycle = (AsyncContinuation.Yield.MainThread) continuation.advance(context);
+        continuation = lifecycle.resume().apply(MainThreadStep.Result.success());
+        AsyncContinuation.Yield.MainThread screenFlush = (AsyncContinuation.Yield.MainThread) continuation.advance(context);
+        continuation = screenFlush.resume().apply(MainThreadStep.Result.success());
+        AsyncContinuation.Yield.MainThread sharedIo = (AsyncContinuation.Yield.MainThread) continuation.advance(context);
+        AsyncContinuation restart = ignored -> AsyncContinuation.Yield.complete();
+
+        assertThat(sharedIo.resume().apply(MainThreadStep.Result.value(restart))).isSameAs(restart);
     }
 
     private static void completeTick(MachineControllerBlockEntity controller) {
