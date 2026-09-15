@@ -155,6 +155,37 @@ class AsyncFactoryExecutionTest {
     }
 
     @Test
+    void async_factory_finish_release_wakes_and_restarts_its_lane() {
+        MachineControllerBlockEntity controller = factoryController(1);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_factory_finish_restart"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1);
+        RecipeRegistry.registerStatic(recipe);
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+
+        controller.serverTick();
+        SharedIoEvents.completeLevelTick(level);
+        long beforeFinishEpoch = controller.resourceAvailabilityEpoch();
+
+        for (int pass = 0; pass < 3 && controller.resourceAvailabilityEpoch() == beforeFinishEpoch; pass++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.serverTick();
+            SharedIoEvents.completeLevelTick(level);
+        }
+
+        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
+        for (int pass = 0; pass < 8
+                && !controller.runtimeSnapshot().factory().presentationLanes().getFirst().active(); pass++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.serverTick();
+            SharedIoEvents.completeLevelTick(level);
+        }
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes()).singleElement().satisfies(lane -> {
+            assertThat(lane.active()).isTrue();
+            assertThat(lane.tick()).isZero();
+        });
+    }
+
+    @Test
     void shrinking_factory_invalidates_queued_lane_searches_before_their_continuations_commit() {
         MachineControllerBlockEntity controller = factoryController();
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("shrunk_async_factory_search"), MMCR.id("test_cube"), 20,
