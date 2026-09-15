@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
@@ -56,6 +57,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long lastRecipeComponentStateVersion = Long.MIN_VALUE;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
     private Runnable finishContinuation = () -> { };
+    private @Nullable AsyncContinuation pendingAsyncFinishRestart;
     private int failureStreak;
     private long nextSearchTick = Long.MIN_VALUE;
     private @Nullable RecipeSearchContextKey lastSearchFailureKey;
@@ -285,8 +287,25 @@ public final class FactoryRecipeThread extends RecipeThread {
         this.finishContinuation = finishContinuation == null ? () -> { } : finishContinuation;
     }
 
+    public boolean prepareAsyncFinishRestart(FactorySearchContext context, List<MachineRecipe> candidates,
+                                             long availableParallelism, long structureVersion, long capabilityVersion,
+                                             long modifierVersion, long componentStateVersion,
+                                             @Nullable Identifier lockedRecipeId) {
+        if (!tryRestartEligibility(candidates, availableParallelism, structureVersion, capabilityVersion,
+                modifierVersion, componentStateVersion, lockedRecipeId, context.catalogVersion())) return false;
+        pendingAsyncFinishRestart = prepareAsyncStartContinuation(lastRecipe, availableParallelism, structureVersion, context);
+        return pendingAsyncFinishRestart != null;
+    }
+
     @Override protected void onRecipeFinished() {
         finishContinuation.run();
+    }
+
+    @Override
+    protected @Nullable AsyncContinuation consumeAsyncFinishRestart() {
+        AsyncContinuation restart = pendingAsyncFinishRestart;
+        pendingAsyncFinishRestart = null;
+        return restart;
     }
 
     @Override
@@ -402,12 +421,24 @@ public final class FactoryRecipeThread extends RecipeThread {
                 && lastRecipeComponentStateVersion == componentStateVersion
                 && recipeBelongsToCurrentMachine(retryRecipe)
                 && candidatesFor(candidates, catalogVersion).contains(retryRecipe);
-        if (!canRestart) {
-            return false;
-        }
+        if (!canRestart) return false;
         failureCandidates = List.of(retryRecipe);
         boolean started = startRecipe(retryRecipe, availableParallelism, structureVersion, context);
         return started;
+    }
+
+    private boolean tryRestartEligibility(List<MachineRecipe> candidates, long availableParallelism,
+                                          long structureVersion, long capabilityVersion, long modifierVersion,
+                                          long componentStateVersion, @Nullable Identifier lockedRecipeId,
+                                          long catalogVersion) {
+        boolean eligible = lockedRecipeId == null && lastRecipe != null && availableParallelism > 0
+                && lastRecipeStructureVersion == structureVersion
+                && lastRecipeCapabilityVersion == capabilityVersion
+                && lastRecipeModifierVersion == modifierVersion
+                && lastRecipeComponentStateVersion == componentStateVersion
+                && recipeBelongsToCurrentMachine(lastRecipe)
+                && candidatesFor(candidates, catalogVersion).contains(lastRecipe);
+        return eligible;
     }
 
     @Override

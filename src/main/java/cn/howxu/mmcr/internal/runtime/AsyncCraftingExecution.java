@@ -88,7 +88,9 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
                         ignored -> this);
             }
             return AsyncContinuation.Yield.mainThread(new MainThreadStep.SharedIoRequest(sharedIoRequest, laneId, catalogVersion),
-                    ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
+                    result -> result instanceof MainThreadStep.Result.Value value
+                    && value.value() instanceof AsyncContinuation continuation
+                    ? continuation : ignoredContext -> AsyncContinuation.Yield.complete());
         }
         if (preparedPlan == null) {
             if (!lifecycleYielded) {

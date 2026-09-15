@@ -155,9 +155,14 @@ public final class FactoryRuntime {
                 } finally {
                     // Releasing a shared lane may unblock output capacity for another lane.
                     controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null);
-                    if (lane.tryRestartLastRecipe(context, context.orderedCandidates(), perThreadParallelLimit,
+                    boolean restarted = controller.activeWorkMode() == MachineWorkMode.ASYNC
+                            ? lane.prepareAsyncFinishRestart(context, context.orderedCandidates(), perThreadParallelLimit,
                             structureVersion, capabilityVersion, modifierVersion, componentStateVersion,
-                            recipeLocks.get(lane))) {
+                            recipeLocks.get(lane))
+                            : lane.tryRestartLastRecipe(context, context.orderedCandidates(), perThreadParallelLimit,
+                            structureVersion, capabilityVersion, modifierVersion, componentStateVersion,
+                            recipeLocks.get(lane));
+                    if (restarted) {
                         markLaneStateChanged();
                     }
                     markFinishedLaneReady(lane);

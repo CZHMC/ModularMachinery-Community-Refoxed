@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
+import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
@@ -156,19 +157,13 @@ public abstract class RecipeThread {
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (usesFullAsyncContinuation() && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
-            if (pendingAsyncStart != null) return false;
-            ControllerRuntimeSnapshot startRuntime = context == null ? currentSnapshot : context.snapshot();
-            StartSnapshot startSnapshot = new StartSnapshot(startRuntime, structureVersion,
-                    context == null ? currentCatalogVersion() : context.catalogVersion(), recipePoolId,
-                    searchContextKeyForStart());
+            AsyncContinuation continuation = prepareAsyncStartContinuation(next, requestedParallelism, structureVersion,
+                    context);
+            if (continuation == null) return false;
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                     serverLevel.getGameTime(), controller.activeWorkMode(), asyncLaneId(), controller.lifecycleEpoch());
-            long token = beginPendingStart(domain, next, startSnapshot);
-            pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, token, startSnapshot);
-            pendingAsyncStartExecution = null;
-            if (coordinator.submit(taskKey, AsyncCraftingExecution.start(asyncLaneId(), startSnapshot.catalogVersion()),
-                    this::executeAsyncMainStep)) return true;
+            if (coordinator.submit(taskKey, continuation, this::executeAsyncMainStep)) return true;
             failAsyncStart(pendingAsyncStart);
             return false;
         }
@@ -180,6 +175,26 @@ public abstract class RecipeThread {
         }
         onStarted();
         return true;
+    }
+
+    protected @Nullable AsyncContinuation prepareAsyncStartContinuation(MachineRecipe next, long requestedParallelism,
+                                                                         long structureVersion,
+                                                                         @Nullable FactorySearchContext context) {
+        if (next == null || requestedParallelism <= 0 || pendingAsyncStart != null) return null;
+        ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
+        Identifier recipePoolId = recipePoolForMachine(currentSnapshot);
+        if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())
+                || !(controller.getLevel() instanceof ServerLevel serverLevel)) return null;
+        StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
+        if (domain == null) return null;
+        ControllerRuntimeSnapshot startRuntime = context == null ? currentSnapshot : context.snapshot();
+        StartSnapshot startSnapshot = new StartSnapshot(startRuntime, structureVersion,
+                context == null ? currentCatalogVersion() : context.catalogVersion(), recipePoolId,
+                searchContextKeyForStart());
+        long token = beginPendingStart(domain, next, startSnapshot);
+        pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, token, startSnapshot);
+        pendingAsyncStartExecution = null;
+        return AsyncCraftingExecution.start(asyncLaneId(), startSnapshot.catalogVersion());
     }
 
     private long beginPendingStart(StructureClaimRegistry.ResourceDomain domain, MachineRecipe next,
@@ -455,7 +470,9 @@ public abstract class RecipeThread {
                  this::currentCatalogVersion,
                  () -> {
                      controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null);
-                     MachineAsyncCoordinator.get(level).resume(key);
+                     AsyncContinuation restart = consumeAsyncFinishRestart();
+                     MachineAsyncCoordinator.get(level).resume(key, restart == null
+                             ? MainThreadStep.Result.success() : MainThreadStep.Result.value(restart));
                  }
         ));
     }
@@ -722,6 +739,10 @@ public abstract class RecipeThread {
             }
             controller.clearRecipeScreenText(laneId());
         }
+    }
+
+    protected @Nullable AsyncContinuation consumeAsyncFinishRestart() {
+        return null;
     }
 
     public void invalidate() {

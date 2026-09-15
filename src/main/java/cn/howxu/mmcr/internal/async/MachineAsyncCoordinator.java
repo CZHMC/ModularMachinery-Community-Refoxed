@@ -142,10 +142,15 @@ public final class MachineAsyncCoordinator {
 
     /** Resumes a continuation whose main-thread step deferred to an external main-thread arbiter. */
     public void resume(TaskKey key) {
+        resume(key, MainThreadStep.Result.success());
+    }
+
+    /** Resumes a continuation whose main-thread step completed through an external main-thread arbiter. */
+    public void resume(TaskKey key, MainThreadStep.Result result) {
         PendingMainStep pending = deferredMainSteps.remove(key);
         if (pending != null) {
             signalProgress();
-            scheduleResume(pending.task, pending.resume, MainThreadStep.Result.success());
+            scheduleResume(pending.task, pending.resume, result);
         }
     }
 
