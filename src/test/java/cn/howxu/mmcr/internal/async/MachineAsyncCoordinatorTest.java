@@ -100,6 +100,20 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void worker_admission_rejection_does_not_queue_a_tick_task() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 1);
+        var running = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        var rejected = new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L);
+
+        assertThat(coordinator.submitDetailed(running, ignored -> AsyncContinuation.Yield.complete(), null))
+                .isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
+        assertThat(coordinator.submitDetailed(rejected, ignored -> AsyncContinuation.Yield.complete(), null))
+                .isEqualTo(MachineAsyncCoordinator.SubmissionResult.REJECTED);
+        assertThat(executor.pendingTaskCount()).isEqualTo(1);
+    }
+
+    @Test
     void separate_lanes_of_one_controller_can_wait_for_their_own_shared_io_grants() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var base = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L, MachineWorkMode.ASYNC, "base");
@@ -356,6 +370,10 @@ class MachineAsyncCoordinatorTest {
                 throw new AssertionError("Expected a queued worker task");
             }
             task.run();
+        }
+
+        int pendingTaskCount() {
+            return tasks.size();
         }
     }
 }

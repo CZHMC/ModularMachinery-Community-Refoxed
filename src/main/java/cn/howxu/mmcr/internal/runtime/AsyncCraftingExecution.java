@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -95,23 +96,22 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
         if (preparedPlan == null) {
             if (!lifecycleYielded) {
                 lifecycleYielded = true;
-                return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK,
-                        laneId, catalogVersion), ignored -> this);
-            }
-            if (!capabilityTickYielded) {
                 capabilityTickYielded = true;
-                return AsyncContinuation.Yield.mainThread(new MainThreadStep.CapabilityTick(CapabilityTickPhase.BEFORE_RECIPE,
-                        laneId, catalogVersion), result -> result instanceof MainThreadStep.Result.Value value
-                        && Boolean.FALSE.equals(value.value()) ? ignored -> AsyncContinuation.Yield.complete() : this);
-            }
-            return AsyncContinuation.Yield.mainThread(new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK,
-                    laneId, catalogVersion), result -> ignored -> {
-                if (result instanceof MainThreadStep.Result.Value value
+                screenFlushYielded = true;
+                return AsyncContinuation.Yield.mainThreadBatch(List.of(
+                        new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, laneId, catalogVersion),
+                        new MainThreadStep.CapabilityTick(CapabilityTickPhase.BEFORE_RECIPE, laneId, catalogVersion),
+                        new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK, laneId, catalogVersion)), results -> ignored -> {
+                if (results.get(1) instanceof MainThreadStep.Result.Value value && Boolean.FALSE.equals(value.value())) {
+                    return AsyncContinuation.Yield.complete();
+                }
+                if (results.get(2) instanceof MainThreadStep.Result.Value value
                         && value.value() instanceof AsyncRequirementPlanner.PreparedPlan prepared) {
                     return AsyncCraftingExecution.plan(prepared, laneId, catalogVersion).advance(ignored);
                 }
                 return AsyncContinuation.Yield.complete();
-            });
+                });
+            }
         }
         if (!planned) {
             planResult = preparedPlan.plan();

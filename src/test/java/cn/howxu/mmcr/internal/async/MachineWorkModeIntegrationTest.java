@@ -399,13 +399,9 @@ class MachineWorkModeIntegrationTest {
         return ((List<FactoryRecipeThread>) lanesField.get(factory)).getFirst();
     }
 
-    private static boolean hasPendingMainStep(MachineAsyncCoordinator coordinator)
-            throws ReflectiveOperationException, InterruptedException {
-        Field field = MachineAsyncCoordinator.class.getDeclaredField("pendingMainSteps");
-        field.setAccessible(true);
-        Queue<?> pending = (Queue<?>) field.get(coordinator);
+    private static boolean hasPendingMainStep(MachineAsyncCoordinator coordinator) throws InterruptedException {
         for (int attempt = 0; attempt < 100; attempt++) {
-            if (!pending.isEmpty()) return true;
+            if (coordinator.hasPendingMainStepForTesting()) return true;
             Thread.sleep(10L);
         }
         return false;

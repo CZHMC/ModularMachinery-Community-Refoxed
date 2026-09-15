@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.async;
 
+import java.util.List;
 import java.util.function.Function;
 
 /**
@@ -11,11 +12,18 @@ import java.util.function.Function;
 public interface AsyncContinuation {
     Yield advance(AsyncExecutionContext context);
 
-    sealed interface Yield permits Yield.Complete, Yield.MainThread {
+    sealed interface Yield permits Yield.Complete, Yield.MainThread, Yield.MainThreadBatch {
         record Complete() implements Yield {
         }
 
         record MainThread(MainThreadStep step, Function<MainThreadStep.Result, AsyncContinuation> resume) implements Yield {
+        }
+
+        record MainThreadBatch(List<MainThreadStep> steps,
+                               Function<List<MainThreadStep.Result>, AsyncContinuation> resume) implements Yield {
+            public MainThreadBatch {
+                steps = List.copyOf(steps);
+            }
         }
 
         static Complete complete() {
@@ -24,6 +32,11 @@ public interface AsyncContinuation {
 
         static MainThread mainThread(MainThreadStep step, Function<MainThreadStep.Result, AsyncContinuation> resume) {
             return new MainThread(step, resume);
+        }
+
+        static MainThreadBatch mainThreadBatch(List<MainThreadStep> steps,
+                                               Function<List<MainThreadStep.Result>, AsyncContinuation> resume) {
+            return new MainThreadBatch(steps, resume);
         }
     }
 }

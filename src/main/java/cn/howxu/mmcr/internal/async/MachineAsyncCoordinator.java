@@ -5,17 +5,21 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.jspecify.annotations.Nullable;
 
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
 
 /**
@@ -28,26 +32,28 @@ public final class MachineAsyncCoordinator {
     private static final int WORKER_COUNT = Math.min(Math.max(Runtime.getRuntime().availableProcessors() / 4, 4), 8);
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    private static final Semaphore WORKER_PERMITS = new Semaphore(WORKER_COUNT);
     private static final int MAX_STALLED_FENCE_PASSES = 5;
     private static final long WORKER_PROGRESS_WAIT_MILLIS = 10L;
 
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
+    private final Semaphore workerPermits;
+    private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
     private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
-    private final ConcurrentLinkedQueue<PendingMainStep> pendingMainSteps = new ConcurrentLinkedQueue<>();
-    private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStepExecutor> mainStepExecutors = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStep.Result.Failure> failures = new ConcurrentHashMap<>();
     private final Object progressMonitor = new Object();
     private final AtomicInteger progress = new AtomicInteger();
 
     private MachineAsyncCoordinator(Executor executor) {
-        this(executor, null);
+        this(executor, null, WORKER_PERMITS);
     }
 
-    private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep) {
+    private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep, Semaphore workerPermits) {
         this.executor = executor;
         this.beforePendingMainStep = beforePendingMainStep;
+        this.workerPermits = workerPermits;
     }
 
     public static synchronized MachineAsyncCoordinator get(ServerLevel level) {
@@ -59,99 +65,101 @@ public final class MachineAsyncCoordinator {
     }
 
     static MachineAsyncCoordinator forTesting(Executor executor, Runnable beforePendingMainStep) {
-        return new MachineAsyncCoordinator(executor, beforePendingMainStep);
+        return new MachineAsyncCoordinator(executor, beforePendingMainStep, new Semaphore(WORKER_COUNT));
+    }
+
+    static MachineAsyncCoordinator forTesting(Executor executor, int workerCount) {
+        return new MachineAsyncCoordinator(executor, null, new Semaphore(workerCount));
     }
 
     public boolean submit(TaskKey key, AsyncContinuation continuation) {
-        return submit(key, continuation, null);
+        return submitDetailed(key, continuation, null) == SubmissionResult.ACCEPTED;
     }
 
     public boolean submit(TaskKey key, AsyncContinuation continuation, @Nullable MainThreadStepExecutor mainStepExecutor) {
+        return submitDetailed(key, continuation, mainStepExecutor) == SubmissionResult.ACCEPTED;
+    }
+
+    public SubmissionResult submitDetailed(TaskKey key, AsyncContinuation continuation,
+                                           @Nullable MainThreadStepExecutor mainStepExecutor) {
         Task task = new Task(key);
-        if (tasks.putIfAbsent(key, task) != null) {
-            return false;
-        }
+        if (tasks.putIfAbsent(key, task) != null) return SubmissionResult.DUPLICATE;
+        TickBatch batch = batches.computeIfAbsent(key.gameTime(), TickBatch::new);
+        batch.tasks.put(key, task);
         if (mainStepExecutor != null) mainStepExecutors.put(key, mainStepExecutor);
-        schedule(task, continuation);
-        return true;
+        if (schedule(batch, task, continuation)) return SubmissionResult.ACCEPTED;
+        removeTask(batch, task);
+        return SubmissionResult.REJECTED;
     }
 
     public void pumpMainThreadSteps() {
-        pumpMainThreadSteps(null);
+        for (TickBatch batch : batches.values()) pumpMainThreadSteps(batch);
     }
 
     public void completeTick() {
         completeTick(() -> 0);
     }
 
-    /**
-     * Completes the current tick's continuations together with shared-IO arbitration.
-     * A stalled worker is cancelled rather than keeping the server thread in an unbounded wait.
-     */
+    /** Completes the earliest tick batch together with shared-IO arbitration. */
     public void completeTick(IntSupplier resolveSharedIo) {
         Objects.requireNonNull(resolveSharedIo, "resolveSharedIo");
-        Long gameTime = tasks.values().stream()
-                .map(task -> task.key.gameTime())
-                .min(Comparator.naturalOrder())
-                .orElse(null);
-        if (gameTime == null) {
-            return;
-        }
+        Map.Entry<Long, TickBatch> entry = batches.firstEntry();
+        if (entry == null) return;
+        TickBatch batch = entry.getValue();
         int stalledPasses = 0;
-        while (hasTaskFor(gameTime)) {
+        while (batch.hasLiveTask()) {
             int progressBefore = progress.get();
-            pumpMainThreadSteps(gameTime);
+            admitWaitingWorkers(batch);
+            pumpMainThreadSteps(batch);
             if (resolveSharedIo.getAsInt() > 0) signalProgress();
-            if (!hasTaskFor(gameTime)) break;
+            if (!batch.hasLiveTask()) break;
             if (progress.get() != progressBefore) {
                 stalledPasses = 0;
                 continue;
             }
-            if (hasDeferredMainStepFor(gameTime)) {
-                // A resource wait keeps its own fence, but must not starve runnable work from newer ticks.
-                pumpMainThreadStepsExcept(gameTime);
+            if (!batch.deferredMainSteps.isEmpty()) {
+                pumpNewerMainThreadSteps(batch.gameTime);
                 return;
             }
-            if (hasActiveWorkerFor(gameTime)) {
+            if (batch.runningWorkers.get() > 0) {
                 awaitWorkerProgress(progressBefore);
                 if (progress.get() != progressBefore) {
                     stalledPasses = 0;
                     continue;
                 }
             }
-            if (++stalledPasses >= MAX_STALLED_FENCE_PASSES) {
-                failStalledTasks(gameTime);
-            }
+            if (++stalledPasses >= MAX_STALLED_FENCE_PASSES) failStalledTasks(batch);
         }
-        tasks.entrySet().removeIf(entry -> entry.getKey().gameTime() == gameTime && entry.getValue().finished);
-        mainStepExecutors.keySet().removeIf(key -> !tasks.containsKey(key));
+        for (Task task : batch.tasks.values()) {
+            if (task.finished || task.cancelled) removeTask(batch, task);
+        }
+        batches.remove(batch.gameTime, batch);
     }
 
     public void cancel(BlockPos controllerPos) {
         for (Task task : tasks.values()) {
             if (!task.key.controllerPos().equals(controllerPos)) continue;
-            if (!tasks.remove(task.key, task)) continue;
+            TickBatch batch = batches.get(task.key.gameTime());
+            if (batch == null) continue;
             synchronized (task) {
                 task.cancelled = true;
             }
-            pendingMainSteps.removeIf(pending -> pending.task == task);
-            deferredMainSteps.remove(task.key);
-            mainStepExecutors.remove(task.key);
+            removeTask(batch, task);
         }
     }
 
-    /** Resumes a continuation whose main-thread step deferred to an external main-thread arbiter. */
     public void resume(TaskKey key) {
         resume(key, MainThreadStep.Result.success());
     }
 
-    /** Resumes a continuation whose main-thread step completed through an external main-thread arbiter. */
     public void resume(TaskKey key, MainThreadStep.Result result) {
-        PendingMainStep pending = deferredMainSteps.remove(key);
-        if (pending != null) {
-            signalProgress();
-            scheduleResume(pending.task, pending.resume, result);
-        }
+        Task task = tasks.get(key);
+        TickBatch batch = task == null ? null : batches.get(key.gameTime());
+        if (task == null || batch == null) return;
+        PendingMainStep pending = batch.deferredMainSteps.remove(key);
+        if (pending == null) return;
+        pending.results.add(result);
+        executePendingMainStep(batch, pending);
     }
 
     public static synchronized void discard(ServerLevel level) {
@@ -163,132 +171,141 @@ public final class MachineAsyncCoordinator {
         return failures.get(key);
     }
 
-    private void pumpMainThreadSteps(@Nullable Long gameTime) {
-        int remaining = pendingMainSteps.size();
-        while (remaining-- > 0) {
-            PendingMainStep pending = pendingMainSteps.poll();
-            if (pending == null) {
-                return;
-            }
-            if (gameTime != null && pending.task.key.gameTime() != gameTime) {
-                pendingMainSteps.add(pending);
-                continue;
-            }
-            if (beforePendingMainStep != null) beforePendingMainStep.run();
-            MainThreadStep.Result result;
-            synchronized (pending.task) {
-                if (pending.task.cancelled) {
-                    continue;
-                }
+    boolean hasPendingMainStepForTesting() {
+        return batches.values().stream().anyMatch(batch -> !batch.pendingMainSteps.isEmpty());
+    }
+
+    private boolean schedule(TickBatch batch, Task task, AsyncContinuation continuation) {
+        if (!workerPermits.tryAcquire()) return false;
+        batch.runningWorkers.incrementAndGet();
+        try {
+            executor.execute(() -> {
                 try {
-                    MainThreadStepExecutor executor = mainStepExecutors.get(pending.task.key);
-                    result = executor == null ? pending.step.execute() : executor.execute(pending.task.key, pending.step);
+                    if (!task.cancelled) handleYield(batch, task,
+                            continuation.advance(new AsyncExecutionContext(task.key)));
                 } catch (Throwable throwable) {
-                    result = MainThreadStep.Result.failure(throwable);
+                    fail(batch, task, throwable);
+                } finally {
+                    batch.runningWorkers.decrementAndGet();
+                    workerPermits.release();
+                    signalProgress();
                 }
-            }
-            if (result instanceof MainThreadStep.Result.Pending) {
-                deferredMainSteps.put(pending.task.key, pending);
-                signalProgress();
-            } else if (result instanceof MainThreadStep.Result.Failure failure) {
-                fail(pending.task, failure.cause());
-            } else {
-                scheduleResume(pending.task, pending.resume, result);
-            }
+            });
+            return true;
+        } catch (RuntimeException exception) {
+            batch.runningWorkers.decrementAndGet();
+            workerPermits.release();
+            return false;
         }
     }
 
-    private void pumpMainThreadStepsExcept(long excludedGameTime) {
-        int remaining = pendingMainSteps.size();
-        while (remaining-- > 0) {
-            PendingMainStep pending = pendingMainSteps.poll();
-            if (pending == null) return;
-            if (pending.task.key.gameTime() == excludedGameTime) {
-                pendingMainSteps.add(pending);
-                continue;
-            }
-            executePendingMainStep(pending);
+    private void admitWaitingWorkers(TickBatch batch) {
+        while (true) {
+            WorkerSegment segment = batch.waitingWorkers.peek();
+            if (segment == null || !schedule(batch, segment.task, segment.continuation)) return;
+            batch.waitingWorkers.poll();
         }
     }
 
-    private void executePendingMainStep(PendingMainStep pending) {
-        if (beforePendingMainStep != null) beforePendingMainStep.run();
-        MainThreadStep.Result result;
-        synchronized (pending.task) {
-            if (pending.task.cancelled) return;
-            try {
-                MainThreadStepExecutor executor = mainStepExecutors.get(pending.task.key);
-                result = executor == null ? pending.step.execute() : executor.execute(pending.task.key, pending.step);
-            } catch (Throwable throwable) {
-                result = MainThreadStep.Result.failure(throwable);
-            }
-        }
-        if (result instanceof MainThreadStep.Result.Pending) {
-            deferredMainSteps.put(pending.task.key, pending);
-            signalProgress();
-        } else if (result instanceof MainThreadStep.Result.Failure failure) {
-            fail(pending.task, failure.cause());
-        } else {
-            scheduleResume(pending.task, pending.resume, result);
-        }
-    }
-
-    private void scheduleResume(Task task, java.util.function.Function<MainThreadStep.Result, AsyncContinuation> resume,
-                                 MainThreadStep.Result result) {
-        task.activeWorkers.incrementAndGet();
-        executor.execute(() -> {
-            try {
-                if (!task.cancelled) {
-                    scheduleResult(task, resume.apply(result));
-                }
-            } catch (Throwable throwable) {
-                fail(task, throwable);
-            } finally {
-                task.activeWorkers.decrementAndGet();
-            }
-        });
-    }
-
-    private void schedule(Task task, AsyncContinuation continuation) {
-        task.activeWorkers.incrementAndGet();
-        executor.execute(() -> {
-            try {
-                scheduleResult(task, continuation);
-            } catch (Throwable throwable) {
-                fail(task, throwable);
-            } finally {
-                task.activeWorkers.decrementAndGet();
-            }
-        });
-    }
-
-    private void scheduleResult(Task task, AsyncContinuation continuation) {
-        synchronized (task) {
-            if (task.cancelled) {
-                return;
-            }
-        }
-        handleYield(task, continuation.advance(new AsyncExecutionContext(task.key)));
-    }
-
-    private void handleYield(Task task, AsyncContinuation.Yield yielded) {
+    private void handleYield(TickBatch batch, Task task, AsyncContinuation.Yield yielded) {
         if (yielded instanceof AsyncContinuation.Yield.Complete) {
             task.finished = true;
             signalProgress();
         } else if (yielded instanceof AsyncContinuation.Yield.MainThread mainThread) {
-            synchronized (task) {
-                if (!task.cancelled) {
-                    pendingMainSteps.add(new PendingMainStep(task, mainThread.step(), mainThread.resume()));
-                    signalProgress();
-                }
-            }
+            batch.pendingMainSteps.add(new PendingMainStep(task, List.of(mainThread.step()),
+                    results -> mainThread.resume().apply(results.getFirst())));
+        } else if (yielded instanceof AsyncContinuation.Yield.MainThreadBatch mainThreadBatch) {
+            batch.pendingMainSteps.add(new PendingMainStep(task, mainThreadBatch.steps(), mainThreadBatch.resume()));
         }
     }
 
-    private void fail(Task task, Throwable throwable) {
+    private void pumpMainThreadSteps(TickBatch batch) {
+        PendingMainStep pending;
+        while ((pending = batch.pendingMainSteps.poll()) != null) executePendingMainStep(batch, pending);
+    }
+
+    private void pumpNewerMainThreadSteps(long gameTime) {
+        for (TickBatch batch : batches.tailMap(gameTime, false).values()) pumpMainThreadSteps(batch);
+    }
+
+    private void executePendingMainStep(TickBatch batch, PendingMainStep pending) {
+        if (beforePendingMainStep != null) beforePendingMainStep.run();
+        synchronized (pending.task) {
+            if (pending.task.cancelled) return;
+            while (pending.nextStep < pending.steps.size()) {
+                MainThreadStep step = pending.steps.get(pending.nextStep);
+                MainThreadStep.Result result;
+                try {
+                    MainThreadStepExecutor executor = mainStepExecutors.get(pending.task.key);
+                    result = executor == null ? step.execute() : executor.execute(pending.task.key, step);
+                } catch (Throwable throwable) {
+                    result = MainThreadStep.Result.failure(throwable);
+                }
+                if (result instanceof MainThreadStep.Result.Pending) {
+                    pending.nextStep++;
+                    batch.deferredMainSteps.put(pending.task.key, pending);
+                    signalProgress();
+                    return;
+                }
+                if (result instanceof MainThreadStep.Result.Failure failure) {
+                    fail(batch, pending.task, failure.cause());
+                    return;
+                }
+                pending.results.add(result);
+                pending.nextStep++;
+            }
+        }
+        AsyncContinuation continuation;
+        try {
+            continuation = pending.resume.apply(List.copyOf(pending.results));
+        } catch (Throwable throwable) {
+            fail(batch, pending.task, throwable);
+            return;
+        }
+        if (!schedule(batch, pending.task, continuation)) batch.waitingWorkers.add(new WorkerSegment(pending.task, continuation));
+    }
+
+    private void fail(TickBatch batch, Task task, Throwable throwable) {
         failures.put(task.key, MainThreadStep.Result.failure(throwable));
         task.finished = true;
-        signalProgress();
+        removeTask(batch, task);
+    }
+
+    private void failStalledTasks(TickBatch batch) {
+        for (Task task : batch.tasks.values()) {
+            synchronized (task) {
+                task.cancelled = true;
+            }
+            fail(batch, task, new IllegalStateException("Async continuation made no tick-fence progress"));
+        }
+    }
+
+    private void removeTask(TickBatch batch, Task task) {
+        tasks.remove(task.key, task);
+        batch.tasks.remove(task.key, task);
+        batch.deferredMainSteps.remove(task.key);
+        mainStepExecutors.remove(task.key);
+    }
+
+    private void cancelAll() {
+        for (TickBatch batch : batches.values()) {
+            for (Task task : batch.tasks.values()) {
+                synchronized (task) {
+                    task.cancelled = true;
+                }
+            }
+        }
+        batches.clear();
+        tasks.clear();
+        mainStepExecutors.clear();
+        failures.clear();
+    }
+
+    private void signalProgress() {
+        progress.incrementAndGet();
+        synchronized (progressMonitor) {
+            progressMonitor.notifyAll();
+        }
     }
 
     private void awaitWorkerProgress(int progressBefore) {
@@ -302,52 +319,7 @@ public final class MachineAsyncCoordinator {
         }
     }
 
-    private void failStalledTasks(long gameTime) {
-        for (Task task : tasks.values()) {
-            if (task.key.gameTime() != gameTime || task.cancelled || task.finished) continue;
-            synchronized (task) {
-                task.cancelled = true;
-            }
-            pendingMainSteps.removeIf(pending -> pending.task == task);
-            deferredMainSteps.remove(task.key);
-            fail(task, new IllegalStateException("Async continuation made no tick-fence progress"));
-        }
-    }
-
-    private void cancelAll() {
-        for (Task task : tasks.values()) {
-            synchronized (task) {
-                task.cancelled = true;
-            }
-        }
-        tasks.clear();
-        pendingMainSteps.clear();
-        deferredMainSteps.clear();
-        mainStepExecutors.clear();
-        failures.clear();
-    }
-
-    private void signalProgress() {
-        progress.incrementAndGet();
-        synchronized (progressMonitor) {
-            progressMonitor.notifyAll();
-        }
-    }
-
-    private boolean hasTaskFor(long gameTime) {
-        return tasks.values().stream().anyMatch(task -> task.key.gameTime() == gameTime
-                && !task.cancelled && !task.finished);
-    }
-
-    private boolean hasActiveWorkerFor(long gameTime) {
-        return tasks.values().stream().anyMatch(task -> task.key.gameTime() == gameTime
-                && task.activeWorkers.get() > 0);
-    }
-
-    private boolean hasDeferredMainStepFor(long gameTime) {
-        return deferredMainSteps.values().stream().anyMatch(pending -> pending.task.key.gameTime() == gameTime
-                && !pending.task.cancelled);
-    }
+    public enum SubmissionResult { ACCEPTED, DUPLICATE, REJECTED }
 
     public record TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode, String laneId,
                           long lifecycleEpoch) {
@@ -374,15 +346,45 @@ public final class MachineAsyncCoordinator {
         private final TaskKey key;
         private volatile boolean cancelled;
         private volatile boolean finished;
-        private final AtomicInteger activeWorkers = new AtomicInteger();
 
         private Task(TaskKey key) {
             this.key = key;
         }
     }
 
-    private record PendingMainStep(Task task, MainThreadStep step,
-                                    java.util.function.Function<MainThreadStep.Result, AsyncContinuation> resume) {
+    private static final class TickBatch {
+        private final long gameTime;
+        private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
+        private final ConcurrentLinkedQueue<PendingMainStep> pendingMainSteps = new ConcurrentLinkedQueue<>();
+        private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
+        private final ConcurrentLinkedQueue<WorkerSegment> waitingWorkers = new ConcurrentLinkedQueue<>();
+        private final AtomicInteger runningWorkers = new AtomicInteger();
+
+        private TickBatch(long gameTime) {
+            this.gameTime = gameTime;
+        }
+
+        private boolean hasLiveTask() {
+            return tasks.values().stream().anyMatch(task -> !task.cancelled && !task.finished);
+        }
+    }
+
+    private static final class PendingMainStep {
+        private final Task task;
+        private final List<MainThreadStep> steps;
+        private final Function<List<MainThreadStep.Result>, AsyncContinuation> resume;
+        private final List<MainThreadStep.Result> results = new ArrayList<>();
+        private int nextStep;
+
+        private PendingMainStep(Task task, List<MainThreadStep> steps,
+                                Function<List<MainThreadStep.Result>, AsyncContinuation> resume) {
+            this.task = task;
+            this.steps = steps;
+            this.resume = resume;
+        }
+    }
+
+    private record WorkerSegment(Task task, AsyncContinuation continuation) {
     }
 
     @FunctionalInterface

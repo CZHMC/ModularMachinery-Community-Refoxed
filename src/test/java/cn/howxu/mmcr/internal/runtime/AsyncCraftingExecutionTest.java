@@ -91,50 +91,49 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
-    void tick_yields_main_thread_preparation_before_worker_planning() {
+    void tick_batches_main_thread_preparation_before_worker_planning() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
 
         AsyncContinuation.Yield yield = execution.advance(new AsyncExecutionContext(
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
 
-        assertThat(((AsyncContinuation.Yield.MainThread) yield).step())
-                .isEqualTo(new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, "base", 1L));
+        AsyncContinuation.Yield.MainThreadBatch batch = (AsyncContinuation.Yield.MainThreadBatch) yield;
+        assertThat(batch.steps()).containsExactly(
+                new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, "base", 1L),
+                new MainThreadStep.CapabilityTick(cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.BEFORE_RECIPE,
+                        "base", 1L),
+                new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK, "base", 1L));
     }
 
     @Test
-    void tick_yields_a_capability_tick_step_after_main_thread_preparation() {
+    void tick_yields_intent_commit_after_main_thread_preparation() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
-        AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
+        AsyncContinuation.Yield.MainThreadBatch first = (AsyncContinuation.Yield.MainThreadBatch) execution.advance(new AsyncExecutionContext(
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
         AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
 
-        AsyncContinuation.Yield next = ((AsyncContinuation.Yield.MainThread) first).resume()
-                .apply(MainThreadStep.Result.value(prepared)).advance(new AsyncExecutionContext(
+        AsyncContinuation.Yield next = first.resume().apply(List.of(MainThreadStep.Result.success(),
+                MainThreadStep.Result.success(), MainThreadStep.Result.value(prepared))).advance(new AsyncExecutionContext(
                         new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
 
-        assertThat(((AsyncContinuation.Yield.MainThread) next).step().kind())
-                .isEqualTo(MainThreadStep.Kind.CAPABILITY_TICK);
+        assertThat(((AsyncContinuation.Yield.MainThread) next).step())
+                .isInstanceOf(MainThreadStep.IntentCommit.class);
     }
 
     @Test
-    void tick_yields_each_capability_phase_as_its_own_main_thread_step() {
+    void tick_batches_preparation_and_keeps_commit_phases_ordered() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
         AsyncExecutionContext context = new AsyncExecutionContext(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L));
-        AsyncContinuation.Yield.MainThread lifecycle = (AsyncContinuation.Yield.MainThread) execution.advance(context);
-        AsyncContinuation.Yield.MainThread before = (AsyncContinuation.Yield.MainThread) lifecycle.resume()
-                .apply(MainThreadStep.Result.success()).advance(context);
-        AsyncContinuation.Yield.MainThread screen = (AsyncContinuation.Yield.MainThread) before.resume()
-                .apply(MainThreadStep.Result.success()).advance(context);
+        AsyncContinuation.Yield.MainThreadBatch preparation = (AsyncContinuation.Yield.MainThreadBatch) execution.advance(context);
         AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
-        AsyncContinuation.Yield.MainThread intent = (AsyncContinuation.Yield.MainThread) screen.resume()
-                .apply(MainThreadStep.Result.value(prepared)).advance(context);
+        AsyncContinuation.Yield.MainThread intent = (AsyncContinuation.Yield.MainThread) preparation.resume()
+                .apply(List.of(MainThreadStep.Result.success(), MainThreadStep.Result.success(),
+                        MainThreadStep.Result.value(prepared))).advance(context);
         AsyncContinuation.Yield.MainThread afterInputs = (AsyncContinuation.Yield.MainThread) intent.resume()
                 .apply(MainThreadStep.Result.success()).advance(context);
         AsyncContinuation.Yield.MainThread afterRecipe = (AsyncContinuation.Yield.MainThread) afterInputs.resume()
                 .apply(MainThreadStep.Result.value(true)).advance(context);
 
-        assertThat(before.step()).isEqualTo(new MainThreadStep.CapabilityTick(
-                cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.BEFORE_RECIPE, "base", 1L));
         assertThat(afterInputs.step()).isEqualTo(new MainThreadStep.CapabilityTick(
                 cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.AFTER_INPUTS, "base", 1L));
         assertThat(afterRecipe.step()).isEqualTo(new MainThreadStep.CapabilityTick(

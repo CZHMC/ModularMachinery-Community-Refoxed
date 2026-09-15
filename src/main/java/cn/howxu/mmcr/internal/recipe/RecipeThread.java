@@ -163,7 +163,13 @@ public abstract class RecipeThread {
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                     serverLevel.getGameTime(), controller.activeWorkMode(), asyncLaneId(), controller.lifecycleEpoch());
-            if (coordinator.submit(taskKey, continuation, this::executeAsyncMainStep)) return true;
+            MachineAsyncCoordinator.SubmissionResult submission = coordinator.submitDetailed(taskKey, continuation,
+                    this::executeAsyncMainStep);
+            if (submission == MachineAsyncCoordinator.SubmissionResult.ACCEPTED) return true;
+            if (submission == MachineAsyncCoordinator.SubmissionResult.REJECTED) {
+                rejectAsyncStart(pendingAsyncStart);
+                return false;
+            }
             failAsyncStart(pendingAsyncStart);
             return false;
         }
@@ -270,6 +276,13 @@ public abstract class RecipeThread {
         controller.clearRecipeScreenText(laneId());
         onStartFailed(failureKey);
         controller.syncRecipeRuntimeFailure(runtime);
+    }
+
+    private void rejectAsyncStart(PendingAsyncStart pending) {
+        if (pending == null) return;
+        pendingAsyncStart = null;
+        pendingAsyncStartExecution = null;
+        clearPendingStart(pending.token(), pending.recipe());
     }
 
     private boolean isPendingStart(long token, MachineRecipe recipe) {
@@ -408,10 +421,12 @@ public abstract class RecipeThread {
                 snapshot.stateVersion(),
                 () -> {
                     if (!validateCurrentRuntime(token, domain)) return false;
-                    return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
-                            controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(), asyncLaneId(),
-                            lifecycleEpoch), AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion),
-                            this::executeAsyncMainStep);
+                    MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(level).submitDetailed(
+                            new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), level.getGameTime(),
+                                    controller.activeWorkMode(), asyncLaneId(), lifecycleEpoch),
+                            AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
+                    if (submission == MachineAsyncCoordinator.SubmissionResult.REJECTED) clearPendingTick();
+                    return submission != MachineAsyncCoordinator.SubmissionResult.REJECTED;
                 },
                 () -> {
                     boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
