@@ -554,6 +554,34 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void catalog_change_before_shared_tick_commit_stops_the_old_recipe_without_advancing_it() {
+        Identifier recipeId = MMCR.id("factory_reload_pending_tick_recipe");
+        MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
+        MachineRecipe replacement = recipe(recipeId.getPath(), 40);
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
+
+        MachineControllerBlockEntity controller = factoryController("test_cube");
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+
+        assertThat(thread.searchAndStartRecipe(List.of(oldRecipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        resolveSharedRequests(controller);
+        assertThat(thread.runtime().tickCount()).isZero();
+
+        thread.tick();
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, replacement));
+        resolveSharedRequests(controller);
+
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.runtime().tickCount()).isZero();
+        assertThat(thread.runtime().failure()).isNotNull();
+        assertThat(thread.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+    }
+
+    @Test
     void loading_a_last_recipe_does_not_use_the_global_registry_fallback() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         Identifier recipeId = MMCR.id("factory_foreign_last_recipe");
@@ -669,7 +697,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void async_completion_searches_the_current_catalog_after_recipe_reload() {
+    void async_catalog_invalidation_stops_the_old_recipe_before_retrying_the_current_catalog() {
         Identifier machineId = MMCR.id("test_cube");
         Identifier recipeId = MMCR.id("factory_reload_completion_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, machineId, 1,
@@ -692,7 +720,14 @@ class FactoryRuntimeTest {
         runtime.tick(List.of(oldRecipe), 1, 1L);
         RecipeRegistry.replaceDynamic(Map.of(recipeId, newRecipe));
         resolveSharedRequests(controller);
+
+        assertThat(runtime.activeRuntimes()).isEmpty();
         runtime.tick(List.of(newRecipe), 1, 2L);
+        assertThat(runtime.threadSnapshots().getFirst().failure()).isNotNull();
+        assertThat(runtime.threadSnapshots().getFirst().failure().reason())
+                .isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+
+        runtime.tick(List.of(newRecipe), 1, 6L);
         resolveSharedRequests(controller);
 
         assertThat(runtime.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(newRecipe);

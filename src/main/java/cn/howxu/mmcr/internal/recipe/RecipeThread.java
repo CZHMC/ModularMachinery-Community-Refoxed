@@ -46,6 +46,7 @@ public abstract class RecipeThread {
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
     private long nextTickToken;
     private long pendingTickToken;
+    private long pendingTickCatalogVersion;
 
     protected RecipeThread(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -274,8 +275,7 @@ public abstract class RecipeThread {
         if (controller.getLevel() instanceof ServerLevel level && domain != null) {
             if (runtime.finishPending()) {
                 if (!runtime.shouldRetryFinish()) return;
-                long token = ++nextTickToken;
-                pendingTickToken = token;
+                long token = beginPendingTick(domain);
                 requestFinish(level, domain, token);
             } else {
                 requestTick(level, domain);
@@ -289,10 +289,7 @@ public abstract class RecipeThread {
     }
 
     private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
-        tickPending = true;
-        pendingTickDomain = domain;
-        long token = ++nextTickToken;
-        pendingTickToken = token;
+        long token = beginPendingTick(domain);
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         long structureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
@@ -321,8 +318,6 @@ public abstract class RecipeThread {
     }
 
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
-        tickPending = true;
-        pendingTickDomain = domain;
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         long structureVersion = snapshot.structure().version();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
@@ -342,7 +337,15 @@ public abstract class RecipeThread {
                  () -> controller.currentRuntimeSnapshot().structure().version(),
                  () -> controller.currentRuntimeSnapshot().stateVersion(),
                  () -> controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null)
-         ));
+        ));
+    }
+
+    private long beginPendingTick(StructureClaimRegistry.ResourceDomain domain) {
+        tickPending = true;
+        pendingTickDomain = domain;
+        pendingTickToken = ++nextTickToken;
+        pendingTickCatalogVersion = currentCatalogVersion();
+        return pendingTickToken;
     }
 
     private boolean validateCurrentRuntime(long token, @Nullable StructureClaimRegistry.ResourceDomain domain) {
@@ -353,6 +356,13 @@ public abstract class RecipeThread {
         }
         if (!runtime.active()) {
             clearPendingTick();
+            return false;
+        }
+        if (currentCatalogVersion() != pendingTickCatalogVersion) {
+            boolean wasActive = runtime.active();
+            runtime.invalidateForCatalogChange();
+            completeIfFinished(wasActive);
+            controller.syncRecipeRuntimeFailure(runtime);
             return false;
         }
         if (!runtime.versionsCurrent()) {
@@ -373,6 +383,7 @@ public abstract class RecipeThread {
         tickPending = false;
         pendingTickDomain = null;
         pendingTickToken = 0L;
+        pendingTickCatalogVersion = Long.MIN_VALUE;
     }
 
     private void completeIfFinished(boolean wasActive) {

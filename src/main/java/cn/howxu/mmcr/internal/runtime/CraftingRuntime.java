@@ -535,6 +535,10 @@ public final class CraftingRuntime {
         invalidate(BuiltinFailureReasons.SMART_INTERFACE_CHANGED, FailurePhase.RUNTIME);
     }
 
+    public void invalidateForCatalogChange() {
+        if (active()) invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
+    }
+
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
                         long restoredStructureVersion, long restoredCapabilityVersion,
                         long restoredModifierVersion, long restoredComponentStateVersion) {
