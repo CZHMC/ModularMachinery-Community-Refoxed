@@ -45,6 +45,15 @@ public final class SharedIoCoordinator {
         pending.add(request);
     }
 
+    /** Discards every queued request owned by one controller. */
+    public void cancel(BlockPos controllerPos) {
+        pending.removeIf(request -> {
+            if (!request.laneKey().controllerPos().equals(controllerPos)) return false;
+            request.discard();
+            return true;
+        });
+    }
+
     public int resolve(ServerLevel level) {
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         Map<StructureClaimRegistry.ResourceDomain, List<Request>> requestsByDomain = new HashMap<>();

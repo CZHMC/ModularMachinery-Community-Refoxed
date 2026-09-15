@@ -9,6 +9,9 @@ import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RecipeTestSupport;
@@ -227,6 +230,27 @@ class MachineWorkModeIntegrationTest {
     }
 
     @Test
+    void mode_switch_cancels_recipe_thread_shared_io_start_before_its_fence_commits() throws Exception {
+        assertLifecycleInterruptCancelsRecipeThreadSharedIo(controller -> {
+            Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+            controller.tickRuntimeWork(level, controller.getBlockPos());
+        });
+    }
+
+    @Test
+    void redstone_pause_cancels_recipe_thread_shared_io_start_before_its_fence_commits() throws Exception {
+        assertLifecycleInterruptCancelsRecipeThreadSharedIo(controller -> {
+            RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 15);
+            controller.tickRuntimeWork(level, controller.getBlockPos());
+        });
+    }
+
+    @Test
+    void reset_cancels_recipe_thread_shared_io_start_before_its_fence_commits() throws Exception {
+        assertLifecycleInterruptCancelsRecipeThreadSharedIo(MachineControllerBlockEntity::invalidateFormedStructure);
+    }
+
+    @Test
     void sync_starts_the_recipe_in_the_originating_main_tick() {
         Identifier machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
@@ -251,6 +275,45 @@ class MachineWorkModeIntegrationTest {
         controller.tickRuntimeWork(level, controller.getBlockPos());
         SharedIoEvents.completeLevelTick(level);
         RuntimeTestFixtures.advanceGameTime(level);
+    }
+
+    private void assertLifecycleInterruptCancelsRecipeThreadSharedIo(
+            java.util.function.Consumer<MachineControllerBlockEntity> interrupt) throws Exception {
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(machineId, "recipe thread lifecycle",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        FactoryRecipeThread thread = factoryBaseLane(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_thread_lifecycle"), machineId, 1,
+                List.of(), List.of());
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        MachineAsyncCoordinator.get(level).completeTick(() -> 0);
+
+        interrupt.accept(controller);
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.runtime().active()).isFalse();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static FactoryRecipeThread factoryBaseLane(MachineControllerBlockEntity controller)
+            throws ReflectiveOperationException {
+        Field runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        MachineControllerRuntime runtime = (MachineControllerRuntime) runtimeField.get(controller);
+        FactoryRuntime factory = runtime.factoryRuntime();
+        factory.ensureBaseLane(controller);
+        Field lanesField = FactoryRuntime.class.getDeclaredField("lanes");
+        lanesField.setAccessible(true);
+        return ((List<FactoryRecipeThread>) lanesField.get(factory)).getFirst();
     }
 
     private static boolean hasPendingMainStep(MachineAsyncCoordinator coordinator)

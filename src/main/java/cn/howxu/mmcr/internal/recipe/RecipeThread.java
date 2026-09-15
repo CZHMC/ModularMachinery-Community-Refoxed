@@ -158,7 +158,7 @@ public abstract class RecipeThread {
                     searchContextKeyForStart());
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                    serverLevel.getGameTime(), controller.activeWorkMode(), asyncLaneId());
+                    serverLevel.getGameTime(), controller.activeWorkMode(), asyncLaneId(), controller.lifecycleEpoch());
             long token = beginPendingStart(domain, next, startSnapshot);
             pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, token, startSnapshot);
             pendingAsyncStartExecution = null;
@@ -199,6 +199,7 @@ public abstract class RecipeThread {
                                  StartSnapshot startSnapshot, RecipeStartContext.ExecutionSnapshot preparedStart,
                                  Runnable completion) {
         if (!isPendingStart(token, next)) return false;
+        long lifecycleEpoch = controller.lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -226,7 +227,8 @@ public abstract class RecipeThread {
                     controller.syncRecipeRuntimeFailure(runtime);
                 },
                 () -> {
-                    boolean valid = isPendingStart(token, next) && domain.equals(controller.resourceDomain());
+                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
+                            && isPendingStart(token, next) && domain.equals(controller.resourceDomain());
                     if (!valid) completion.run();
                     return valid;
                 },
@@ -378,23 +380,26 @@ public abstract class RecipeThread {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         long structureVersion = snapshot.structure().version();
         long catalogVersion = currentCatalogVersion();
+        long lifecycleEpoch = controller.lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 snapshot.stateVersion(),
                 () -> {
-                      if (!validateCurrentRuntime(token, domain)) return false;
-                      return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
-                              controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(), asyncLaneId()),
-                              AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
-                  },
-                  () -> {
-                      boolean runtimeValid = validateCurrentRuntime(token, domain);
+                    if (!validateCurrentRuntime(token, domain)) return false;
+                    return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
+                            controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(), asyncLaneId(),
+                            lifecycleEpoch),
+                               AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
+                },
+                () -> {
+                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
+                            && validateCurrentRuntime(token, domain);
                       boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                       if (!valid) clearPendingTick();
                       return valid;
-                  },
+                },
                   () -> controller.currentRuntimeSnapshot().structure().version(),
                   () -> controller.currentRuntimeSnapshot().stateVersion(),
                    catalogVersion,
@@ -406,7 +411,7 @@ public abstract class RecipeThread {
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
         MachineAsyncCoordinator.TaskKey key = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                level.getGameTime(), controller.activeWorkMode(), asyncLaneId());
+                level.getGameTime(), controller.activeWorkMode(), asyncLaneId(), controller.lifecycleEpoch());
         if (!coordinator.submit(key, AsyncCraftingExecution.finish(asyncLaneId(), pendingTickCatalogVersion),
                 this::executeAsyncMainStep)) clearPendingTick();
     }
@@ -415,6 +420,7 @@ public abstract class RecipeThread {
                                MachineAsyncCoordinator.TaskKey key, long catalogVersion) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         long structureVersion = snapshot.structure().version();
+        long lifecycleEpoch = controller.lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -429,14 +435,15 @@ public abstract class RecipeThread {
                     return true;
                  },
                  () -> {
-                     boolean runtimeValid = validateCurrentRuntime(token, domain);
-                     boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
-                     if (!valid) {
-                         clearPendingTick();
-                         MachineAsyncCoordinator.get(level).resume(key);
-                     }
-                     return valid;
-                 },
+                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
+                            && validateCurrentRuntime(token, domain);
+                    boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
+                    if (!valid) {
+                        clearPendingTick();
+                        MachineAsyncCoordinator.get(level).resume(key);
+                    }
+                    return valid;
+                },
                  () -> controller.currentRuntimeSnapshot().structure().version(),
                  () -> controller.currentRuntimeSnapshot().stateVersion(),
                  catalogVersion,
@@ -592,7 +599,8 @@ public abstract class RecipeThread {
     }
 
     private boolean validateAsyncMainStep(MachineAsyncCoordinator.TaskKey key, MainThreadStep step) {
-        if (!controller.getBlockPos().equals(key.controllerPos())) return false;
+        if (!controller.getBlockPos().equals(key.controllerPos())
+                || key.lifecycleEpoch() != controller.lifecycleEpoch()) return false;
         if ((step instanceof MainThreadStep.SharedIoRequest request && request.kind() == MainThreadStep.Kind.BEFORE_START)
                 || (step instanceof MainThreadStep.Lifecycle lifecycle && lifecycle.kind() == MainThreadStep.Kind.BEFORE_START)
                 || (step instanceof MainThreadStep.ScreenTextFlush screenTextFlush
@@ -631,6 +639,7 @@ public abstract class RecipeThread {
                                         MachineAsyncCoordinator.TaskKey key, long catalogVersion,
                                         AsyncRequirementPlanner.PlanResult intent) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        long lifecycleEpoch = controller.lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()), snapshot.structure().version(),
                 snapshot.stateVersion(), () -> {
@@ -638,7 +647,8 @@ public abstract class RecipeThread {
                     asyncTickCommitted = runtime.commitAsyncTick(intent);
                     return true;
                 }, () -> {
-                    boolean runtimeValid = validateCurrentRuntime(token, domain);
+                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
+                            && validateCurrentRuntime(token, domain);
                     boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                     if (!valid) {
                         clearPendingTick();
@@ -727,6 +737,15 @@ public abstract class RecipeThread {
         pendingStartRecipePoolId = null;
         pendingStartSearchContextKey = null;
           clearPendingTick();
+    }
+
+    /** Clears deferred async work without invalidating a recipe that may resume after a pause. */
+    public void cancelAsyncState() {
+        pendingAsyncStart = null;
+        pendingAsyncStartExecution = null;
+        asyncFinishPrepared = false;
+        clearPendingStart(pendingStartToken, pendingStartRecipe);
+        clearPendingTick();
     }
 
     public void invalidateForSmartInterfaceChange() {

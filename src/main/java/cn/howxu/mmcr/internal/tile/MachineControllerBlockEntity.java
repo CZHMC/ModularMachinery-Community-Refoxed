@@ -183,6 +183,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Identifier pendingControllerLockId;
     private boolean redstonePaused;
     private @Nullable MachineWorkMode activeWorkMode;
+    private long lifecycleEpoch;
     private @Nullable FactoryRecipeScheduler factoryScheduler;
     private int recipeSearchRetryCounter;
     private long recipeSearchAttemptCounter;
@@ -1286,7 +1287,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
                 boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
                 if (powered) {
-                    MachineAsyncCoordinator.get(runtimeLevel).cancel(getBlockPos());
+                    if (!redstonePaused) invalidateAsyncLifecycle(runtimeLevel);
                     redstonePaused = true;
                     runtime.pauseCrafting();
                     setActiveState(false);
@@ -1375,7 +1376,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                                                     boolean factoryController) {
         MachineWorkMode mode = configuredWorkMode();
         if (activeWorkMode != null && activeWorkMode != mode) {
-            MachineAsyncCoordinator.get(runtimeLevel).cancel(getBlockPos());
+            invalidateAsyncLifecycle(runtimeLevel);
         }
         activeWorkMode = mode;
         return switch (mode) {
@@ -1405,6 +1406,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineWorkMode activeWorkMode() {
         return activeWorkMode == null ? configuredWorkMode() : activeWorkMode;
+    }
+
+    public long lifecycleEpoch() {
+        return lifecycleEpoch;
+    }
+
+    private void invalidateAsyncLifecycle(ServerLevel serverLevel) {
+        lifecycleEpoch++;
+        MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos());
+        SharedIoCoordinator.get(serverLevel).cancel(getBlockPos());
+        runtime.factoryRuntime().cancelAsyncState();
+        clearPendingSharedStart();
+        clearSharedTickPending();
     }
 
     private MachineWorkMode configuredWorkMode() {
@@ -3215,7 +3229,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState, boolean invalidateScheduledCheck) {
         if (level instanceof ServerLevel serverLevel) {
-            MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos());
+            invalidateAsyncLifecycle(serverLevel);
         }
         StructureSnapshot structure = runtimeSnapshot().structure();
         StructureWorkSnapshot work = structureWorkSnapshot();
@@ -3571,6 +3585,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         long token = ++nextSharedStartToken;
         pendingSharedStartToken = token;
         long runtimeStructureVersion = snapshot.structure().version();
+        long lifecycleEpoch = lifecycleEpoch();
         SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), runtimeStructureVersion,
@@ -3597,7 +3612,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     syncCraftingFailure();
                     setChanged();
                 },
-                  () -> isPendingSharedStart(token, next, domain),
+                  () -> lifecycleEpoch == lifecycleEpoch() && isPendingSharedStart(token, next, domain),
                   () -> runtimeSnapshot().structure().version(),
                   () -> runtimeSnapshot().stateVersion(),
                   pendingSharedStartCatalogVersion,
@@ -3686,6 +3701,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         pendingSharedTickToken = token;
         ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
         long runtimeStructureVersion = snapshot.structure().version();
+        long lifecycleEpoch = lifecycleEpoch();
         SharedIoCoordinator.get(serverLevel).enqueue(new SharedIoCoordinator.TickRequest(
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), runtimeStructureVersion,
                 snapshot.stateVersion(),
@@ -3704,7 +3720,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     completeSharedRuntime(wasActive);
                     return true;
                  },
-                 () -> validateSharedRuntime(token, domain),
+                  () -> lifecycleEpoch == lifecycleEpoch() && validateSharedRuntime(token, domain),
                  () -> runtimeSnapshot().structure().version(),
                  () -> runtimeSnapshot().stateVersion()
          ));
@@ -3713,6 +3729,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void requestSharedFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
         ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
         long runtimeStructureVersion = snapshot.structure().version();
+        long lifecycleEpoch = lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.FinishRequest(
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), runtimeStructureVersion,
                 snapshot.stateVersion(),
@@ -3728,7 +3745,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     }
                     return true;
                   },
-                 () -> validateSharedRuntime(token, domain),
+                  () -> lifecycleEpoch == lifecycleEpoch() && validateSharedRuntime(token, domain),
                  () -> runtimeSnapshot().structure().version(),
                  () -> runtimeSnapshot().stateVersion(),
                  () -> notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null)

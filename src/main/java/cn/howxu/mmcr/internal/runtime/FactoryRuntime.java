@@ -80,6 +80,14 @@ public final class FactoryRuntime {
         return tick(candidates, maxParallelism, currentGameTime());
     }
 
+    /** Drops deferred lane work when the owning controller changes execution lifecycle. */
+    public void cancelAsyncState() {
+        for (FactoryRecipeThread lane : lanes) lane.cancelAsyncState();
+        startReservations.clear();
+        patternStartReservations.clear();
+        readyLanes.clear();
+    }
+
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, Runnable onFinished) {
         return tick(candidates, maxParallelism, onFinished, currentGameTime());
     }

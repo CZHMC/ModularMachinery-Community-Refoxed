@@ -343,13 +343,18 @@ public final class MachineAsyncCoordinator {
                 && !pending.task.cancelled);
     }
 
-    public record TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode, String laneId) {
+    public record TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode, String laneId,
+                          long lifecycleEpoch) {
         public TaskKey(BlockPos controllerPos, long gameTime) {
-            this(controllerPos, gameTime, MachineWorkMode.ASYNC, "base");
+            this(controllerPos, gameTime, MachineWorkMode.ASYNC, "base", 0L);
         }
 
         public TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode) {
-            this(controllerPos, gameTime, workMode, "base");
+            this(controllerPos, gameTime, workMode, "base", 0L);
+        }
+
+        public TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode, String laneId) {
+            this(controllerPos, gameTime, workMode, laneId, 0L);
         }
 
         public TaskKey {

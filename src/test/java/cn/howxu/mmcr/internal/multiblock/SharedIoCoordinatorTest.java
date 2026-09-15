@@ -109,6 +109,32 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void cancelling_a_controller_discards_its_start_tick_and_finish_requests() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A, B);
+        List<String> committed = new ArrayList<>();
+
+        coordinator.enqueue(start(domain, A, 1L, 1, ignored -> 1, ignored -> committed.add("start"), () -> true, () -> 1L));
+        coordinator.enqueue(tick(domain, A, 1L, () -> {
+            committed.add("tick");
+            return true;
+        }, () -> true, () -> 1L));
+        coordinator.enqueue(finish(domain, A, 1L, () -> {
+            committed.add("finish");
+            return true;
+        }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(domain, B, 1L, () -> {
+            committed.add("other-controller");
+            return true;
+        }, () -> true, () -> 1L));
+
+        coordinator.cancel(A);
+        coordinator.resolve(domain);
+
+        assertThat(committed).containsExactly("other-controller");
+    }
+
+    @Test
     void finite_shared_energy_rotates_to_the_lane_that_can_finish_the_next_tick() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = domain(A, B);
