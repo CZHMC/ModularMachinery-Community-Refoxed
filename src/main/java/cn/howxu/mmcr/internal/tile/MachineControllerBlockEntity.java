@@ -63,6 +63,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
+import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
@@ -231,6 +232,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int buildTaskAge;
     private final Map<Long, Integer> buildTaskPlacementsPerTickForTesting = new LinkedHashMap<>();
     private final transient MachineControllerRuntime runtime;
+    private final transient MachineRecipeThread normalRecipeThread;
     private List<UpgradeBusBlockEntity> boundUpgradeBuses = List.of();
     private Set<BlockPos> activeNetworkInterfacePositions = Set.of();
     private transient Set<BlockPos> pendingStructureChanges = new HashSet<>();
@@ -243,6 +245,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
         runtime = new MachineControllerRuntime(this);
+        normalRecipeThread = new MachineRecipeThread(this, runtime.craftingRuntime());
     }
 
     public ControllerRuntimeSnapshot runtimeSnapshot() {
@@ -322,6 +325,30 @@ public class MachineControllerBlockEntity extends BlockEntity {
         syncRuntimeStateIfChanged();
         publishRuntimeState();
         setChanged();
+    }
+
+    public void onNormalRecipeThreadStarted() {
+        setActiveState(true);
+        recipeSearchRetryCounter = 0;
+        lastFailure = null;
+        syncRuntimeStateIfChanged();
+        setChanged();
+    }
+
+    public void onNormalRecipeThreadFinished() {
+        lastFailure = runtime.craftingRuntime().failure();
+        if (!runtime.craftingRuntime().active()) {
+            if (lastFailure == null) playFinishSound();
+            setActiveState(false);
+        }
+        syncRuntimeStateIfChanged();
+        setChanged();
+    }
+
+    public void onNormalRecipeThreadSearchFailed() {
+        recipeSearchRetryCounter++;
+        lastFailure = runtime.craftingRuntime().failure();
+        syncRuntimeStateIfChanged();
     }
 
     public MachineBehaviorContext behaviorContext() {
@@ -1416,6 +1443,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         lifecycleEpoch++;
         MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos());
         SharedIoCoordinator.get(serverLevel).cancel(getBlockPos());
+        normalRecipeThread.cancelAsyncState();
         runtime.factoryRuntime().cancelAsyncState();
         clearPendingSharedStart();
         clearSharedTickPending();
@@ -1535,6 +1563,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void tickSingleActiveRecipe() {
+        if (activeWorkMode() != MachineWorkMode.SYNC) {
+            tickSingleAsyncRecipe();
+            return;
+        }
         boolean startedThisTick = false;
         if (sharedStartPending && !isPendingSharedStart(pendingSharedStartToken,
                 pendingSharedStartRecipe, pendingSharedStartDomain)) {
@@ -1545,6 +1577,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (runtime.craftingRuntime().active() && !startedThisTick && tickActiveRecipe()) tryStartNewRecipe();
         if (!runtime.craftingRuntime().active()) runtime.craftingRuntime().tickIdle();
+    }
+
+    private void tickSingleAsyncRecipe() {
+        boolean startedThisTick = false;
+        if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending() && shouldSearchRecipe()) {
+            recipeSearchAttemptCounter++;
+            startedThisTick = normalRecipeThread.searchAndStartRecipe(recipesForMachine(), getMaxParallelism(),
+                    currentRuntimeSnapshot().structure().version());
+        }
+        if (runtime.craftingRuntime().active() && !startedThisTick) {
+            normalRecipeThread.tick();
+        } else if (!normalRecipeThread.isStartPending()) {
+            runtime.craftingRuntime().tickIdle();
+        }
     }
 
     private FactoryTickResult tickFactoryRecipes() {

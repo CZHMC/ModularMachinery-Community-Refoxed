@@ -3,6 +3,13 @@ package cn.howxu.mmcr.internal.async;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.config.Config;
@@ -22,6 +29,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.fml.config.IConfigSpec;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,6 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,7 +78,7 @@ class MachineWorkModeIntegrationTest {
     }
 
     @Test
-    void async_main_steps_complete_before_shared_io_round_robin_commits() {
+    void async_main_steps_complete_before_shared_io_round_robin_commits() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "tick fence",
                 new BlockArray(Map.of())));
@@ -91,6 +100,7 @@ class MachineWorkModeIntegrationTest {
                     return true;
                 }, () -> true, domain::id, () -> 0L));
 
+        assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
         SharedIoEvents.completeLevelTick(level);
 
         assertThat(order).containsSubsequence("async-main-step", "shared-io-resolve");
@@ -163,6 +173,25 @@ class MachineWorkModeIntegrationTest {
         assertThat(hasPendingMainStep(coordinator)).isTrue();
 
         MachineAsyncCoordinator.discard(level);
+        coordinator.pumpMainThreadSteps();
+
+        assertThat(committed).isFalse();
+    }
+
+    @Test
+    void level_unload_event_cancels_pending_async_tasks() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "level unload event",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        AtomicBoolean committed = new AtomicBoolean();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        assertThat(coordinator.submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), 1L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                        result -> context -> AsyncContinuation.Yield.complete()))).isTrue();
+        assertThat(hasPendingMainStep(coordinator)).isTrue();
+
+        SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
         coordinator.pumpMainThreadSteps();
 
         assertThat(committed).isFalse();
@@ -268,6 +297,60 @@ class MachineWorkModeIntegrationTest {
 
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
         assertThat(controller.runtimeSnapshot().crafting().status().isCrafting()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void normal_controller_schedules_start_tick_and_finish_by_work_mode(MachineWorkMode mode) throws Exception {
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        List<String> phases = new ArrayList<>();
+        RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.builder()
+                .beforeStart(context -> phases.add("start"))
+                .recipeTick(context -> phases.add("tick"))
+                .beforeFinish(context -> phases.add("finish"))
+                .build()));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_mode_lifecycle"), machineId, 2,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        Config.MACHINE_WORK_MODE.set(mode);
+
+        controller.serverTick();
+        if (mode == MachineWorkMode.ASYNC) {
+            assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
+        } else {
+            assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        }
+        SharedIoEvents.completeLevelTick(level);
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.serverTick();
+        if (mode == MachineWorkMode.SYNC) {
+            assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
+        } else {
+            SharedIoCoordinator.get(level).resolve(level);
+            assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
+        }
+        SharedIoEvents.completeLevelTick(level);
+
+        for (int tick = 0; tick < 5 && !phases.contains("finish"); tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.serverTick();
+            SharedIoEvents.completeLevelTick(level);
+        }
+
+        assertThat(phases).containsSubsequence("start", "tick", "finish");
+    }
+
+    private static DynamicMachine normalMachine(Identifier machineId, RecipeBehavior behavior) {
+        return new DynamicMachine(machineId, "normal mode lifecycle", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(),
+                MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), behavior);
     }
 
     private static void tickAndComplete(MachineControllerBlockEntity controller) {

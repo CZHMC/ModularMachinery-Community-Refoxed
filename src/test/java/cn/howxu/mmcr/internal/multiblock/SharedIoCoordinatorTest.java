@@ -336,6 +336,28 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void resolver_discards_a_partitioned_request_after_its_lifecycle_epoch_changes() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A, B);
+        AtomicLong lifecycleEpoch = new AtomicLong(1L);
+        AtomicBoolean staleInvoked = new AtomicBoolean();
+
+        coordinator.enqueue(tick(domain, A, 1L, () -> {
+            lifecycleEpoch.incrementAndGet();
+            return true;
+        }, () -> true, () -> 1L));
+        long requestEpoch = lifecycleEpoch.get();
+        coordinator.enqueue(tick(domain, B, 1L, () -> {
+            staleInvoked.set(true);
+            return true;
+        }, () -> lifecycleEpoch.get() == requestEpoch, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(staleInvoked).isFalse();
+    }
+
+    @Test
     void validity_filtering_preserves_stage_order_when_requests_are_partitioned() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = domain(A);

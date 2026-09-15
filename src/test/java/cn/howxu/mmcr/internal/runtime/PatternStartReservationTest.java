@@ -321,6 +321,22 @@ class PatternStartReservationTest {
     }
 
     @Test
+    void cancelling_factory_async_state_releases_pattern_reservations_and_prevents_commit() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        MachineRecipe recipe = recipe("reservation_factory_lifecycle_cancel", List.of());
+        FactoryRuntime.PatternLane lane = factory.reservePatternStart(recipe, 1L, List.of());
+        assertThat(lane).isNotNull();
+        PatternStartReservation reservation = reservation(recipe, factory, lane);
+
+        factory.cancelAsyncState();
+
+        assertThat(reservation.commit()).isFalse();
+        assertThat(factory.reservePatternStart(recipe, 1L, List.of())).isNotNull();
+    }
+
+    @Test
     void removing_a_factory_lane_invalidates_its_live_reservation() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime factory = new FactoryRuntime();

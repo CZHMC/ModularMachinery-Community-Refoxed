@@ -48,6 +48,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
@@ -81,6 +82,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import com.electronwill.nightconfig.core.CommentedConfig;
+import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -105,10 +108,17 @@ class MachineBehaviorRuntimeTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        Config.SERVER_SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
+                .getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach
     void cleanupRecipes() {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
     }
 
@@ -646,6 +656,7 @@ class MachineBehaviorRuntimeTest {
         MachineRecipe lifecycleRecipe = recipe("behavior_recipe_hook_lifecycle", machineId,
                 input(Items.IRON_INGOT), output(Items.GOLD_NUGGET));
         RecipeRegistry.registerStatic(lifecycleRecipe);
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         assertThat(controller.structureSnapshot().machine()).isSameAs(recipeMachine);
         assertThat(RecipeRegistry.catalogForMachine(machineId).recipes()).containsExactly(lifecycleRecipe);
         assertThat(controller.componentRuntime().capabilities())
@@ -663,7 +674,6 @@ class MachineBehaviorRuntimeTest {
         RuntimeTestFixtures.advanceGameTime(controller.getLevel());
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(),
                 controller.getBlockPos());
-
         assertThat(phases).containsExactly("pre", "beforeStart", "post", "pre", "recipeTick", "beforeFinish", "post");
         assertThat(preContexts).hasSize(2);
         assertThat(postContexts).hasSize(2);

@@ -82,9 +82,11 @@ public final class FactoryRuntime {
 
     /** Drops deferred lane work when the owning controller changes execution lifecycle. */
     public void cancelAsyncState() {
-        for (FactoryRecipeThread lane : lanes) lane.cancelAsyncState();
+        for (FactoryRecipeThread lane : lanes) {
+            lane.cancelAsyncState();
+            if (patternStartReservations.remove(lane)) lane.runtime().releasePatternStart();
+        }
         startReservations.clear();
-        patternStartReservations.clear();
         readyLanes.clear();
     }
 

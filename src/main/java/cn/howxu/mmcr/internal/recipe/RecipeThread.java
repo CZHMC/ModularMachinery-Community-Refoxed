@@ -68,9 +68,14 @@ public abstract class RecipeThread {
     private boolean asyncTickCommitted;
 
     protected RecipeThread(MachineControllerBlockEntity controller) {
+        this(controller, new CraftingRuntime(controller, controller.componentRuntime()));
+    }
+
+    protected RecipeThread(MachineControllerBlockEntity controller, CraftingRuntime runtime) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
+        if (runtime == null) throw new IllegalArgumentException("runtime must not be null");
         this.controller = controller;
-        this.runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        this.runtime = runtime;
     }
 
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
