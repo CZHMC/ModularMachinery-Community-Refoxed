@@ -367,14 +367,15 @@ public final class FactoryRuntime {
             List<MachineRequirement> requirements = candidate.runtimeRequirements(context.modifiers());
             FailureReason levelFailure = capturedLevelFailure(context.snapshot(), candidate);
             if (levelFailure != null) {
-                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, levelFailure));
+                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, levelFailure,
+                        hasPendingInputWithFeasibleOutputs(craftingContext, candidate, context.maxParallelism())));
                 continue;
             }
             try {
                 workerCandidates.add(new WorkerCandidate(candidate, requirements,
-                        craftingContext.planAsync(requirements, context.maxParallelism()), null));
+                        craftingContext.planAsync(requirements, context.maxParallelism()), null, false));
             } catch (RuntimeException ignored) {
-                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, null));
+                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, null, false));
             }
         }
         Machine machine = context.snapshot().structure().machine() == null
@@ -393,7 +394,8 @@ public final class FactoryRuntime {
     /** Main-thread-captured requirement values and their worker-safe planners. */
     private record WorkerCandidate(MachineRecipe recipe, List<MachineRequirement> requirements,
                                    @Nullable AsyncRequirementPlanner.PreparedPlan plan,
-                                   @Nullable FailureReason capturedFailure) {
+                                   @Nullable FailureReason capturedFailure,
+                                   boolean inputInsufficientWithFeasibleOutputs) {
         private WorkerCandidate {
             requirements = List.copyOf(requirements);
         }
@@ -453,7 +455,8 @@ public final class FactoryRuntime {
                     for (WorkerCandidate candidate : request.planningCandidates) {
                         if (candidate.capturedFailure() != null) {
                             planningValues.add(RecipeSearchTask.PlanningValue.failure(candidate.recipe().id(),
-                                    candidate.capturedFailure(), 0));
+                                    candidate.capturedFailure(), 0,
+                                    candidate.inputInsufficientWithFeasibleOutputs()));
                             continue;
                         }
                         if (candidate.plan() == null) {
@@ -499,6 +502,16 @@ public final class FactoryRuntime {
                     .anyMatch(RecipeSearchTask.PlanningValue::requiresMainThread)) return true;
         }
         return false;
+    }
+
+    private static boolean hasPendingInputWithFeasibleOutputs(CraftingContext context, MachineRecipe candidate,
+                                                              long maxParallelism) {
+        try {
+            return !context.planInputs(candidate, maxParallelism).successful()
+                    && context.planOutputs(candidate, maxParallelism).successful();
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static @Nullable FailureReason capturedLevelFailure(ControllerRuntimeSnapshot snapshot,

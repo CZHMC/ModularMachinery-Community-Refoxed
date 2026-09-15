@@ -277,6 +277,26 @@ class RecipeCandidateIndexTest {
     }
 
     @Test
+    void worker_level_failure_snapshot_preserves_sync_pending_input_conflict() {
+        MachineRecipe specific = RecipeTestSupport.create(id("worker_level_blocked_specific"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.GOLD_INGOT), 1, ItemStack.EMPTY),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_NUGGET, 1))));
+        MachineRecipe fallback = RecipeTestSupport.create(id("worker_level_blocked_fallback"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
+
+        RecipeSearchResult result = RecipeSearchTask.forPlanningValues(emptySnapshot(), MACHINE, 0L, 1L,
+                List.of(specific, fallback), null, List.of(
+                RecipeSearchTask.PlanningValue.failure(specific.id(), BuiltinFailureReasons.LEVEL_INSUFFICIENT, 0, true),
+                RecipeSearchTask.PlanningValue.success(fallback.id()))).compute();
+
+        assertThat(result.recipe()).isEqualTo(fallback);
+        assertThat(result.hasMoreSpecificPendingInputCandidate()).isTrue();
+    }
+
+    @Test
     void search_failure_report_prioritizes_core_failure_reasons() {
         assertThat(BuiltinFailureReasons.MISSING_INPUT.priority())
                 .isGreaterThan(BuiltinFailureReasons.MISSING_ENERGY.priority());

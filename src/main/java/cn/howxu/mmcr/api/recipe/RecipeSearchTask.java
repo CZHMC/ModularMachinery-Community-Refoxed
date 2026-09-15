@@ -213,8 +213,9 @@ public final class RecipeSearchTask {
                     || !earlier.hasOverlappingInputs(selectedRecipe)) continue;
             if (!snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
             if (planningValues != null) {
-                // A worker fallback is not evidence that the input is insufficient. The main-thread
-                // replan decides whether its inputs fail while its outputs remain feasible.
+                PlanningValue value = planningValues.stream()
+                        .filter(candidate -> candidate.recipeId().equals(earlier.id())).findFirst().orElse(null);
+                if (value != null && !value.successful() && value.inputInsufficientWithFeasibleOutputs()) return true;
                 continue;
             }
             CraftingContext context = borrowContext(earlier);
@@ -253,7 +254,8 @@ public final class RecipeSearchTask {
 
     /** Immutable worker result for one candidate's captured capability planning. */
     public record PlanningValue(Identifier recipeId, boolean successful, boolean requiresMainThread,
-                                @Nullable FailureReason failureReason, @Nullable Integer failureRequirementIndex) {
+                                @Nullable FailureReason failureReason, @Nullable Integer failureRequirementIndex,
+                                boolean inputInsufficientWithFeasibleOutputs) {
         public PlanningValue {
             if (recipeId == null) throw new IllegalArgumentException("recipeId must not be null");
             if (successful && failureReason != null) {
@@ -262,18 +264,23 @@ public final class RecipeSearchTask {
             if (!successful && failureReason == null) {
                 throw new IllegalArgumentException("failed planning values require a failure reason");
             }
+            if (successful && inputInsufficientWithFeasibleOutputs) {
+                throw new IllegalArgumentException("successful planning values cannot have pending input conflicts");
+            }
         }
 
         public static PlanningValue success(Identifier recipeId) {
-            return new PlanningValue(recipeId, true, false, null, null);
+            return new PlanningValue(recipeId, true, false, null, null, false);
         }
 
         public static PlanningValue mainThread(Identifier recipeId) {
-            return new PlanningValue(recipeId, true, true, null, null);
+            return new PlanningValue(recipeId, true, true, null, null, false);
         }
 
-        public static PlanningValue failure(Identifier recipeId, FailureReason reason, int requirementIndex) {
-            return new PlanningValue(recipeId, false, false, reason, requirementIndex);
+        public static PlanningValue failure(Identifier recipeId, FailureReason reason, int requirementIndex,
+                                            boolean inputInsufficientWithFeasibleOutputs) {
+            return new PlanningValue(recipeId, false, false, reason, requirementIndex,
+                    inputInsufficientWithFeasibleOutputs);
         }
     }
 }

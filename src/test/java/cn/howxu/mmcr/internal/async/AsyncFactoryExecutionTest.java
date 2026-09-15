@@ -7,12 +7,16 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
@@ -21,6 +25,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -29,6 +34,8 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -36,6 +43,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.fml.config.IConfigSpec;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -274,6 +282,12 @@ class AsyncFactoryExecutionTest {
     }
 
     @Test
+    void async_factory_matches_sync_delay_for_a_level_blocked_specific_recipe_with_pending_input() {
+        assertThat(fallbackStartIsDelayedBySpecificPendingInput(MachineWorkMode.SYNC)).isTrue();
+        assertThat(fallbackStartIsDelayedBySpecificPendingInput(MachineWorkMode.ASYNC)).isTrue();
+    }
+
+    @Test
     void shrinking_factory_invalidates_queued_lane_searches_before_their_continuations_commit() {
         MachineControllerBlockEntity controller = factoryController();
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("shrunk_async_factory_search"), MMCR.id("test_cube"), 20,
@@ -332,6 +346,65 @@ class AsyncFactoryExecutionTest {
         controller.componentRuntime().replaceComponents(components);
         controller.setFormed(true);
         input.linkControllerAppearance(controller.getBlockPos(), null);
+        RuntimeTestFixtures.republish(controller);
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        return controller;
+    }
+
+    private boolean fallbackStartIsDelayedBySpecificPendingInput(MachineWorkMode mode) {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = factoryController(input, output);
+        Identifier levelType = MMCR.id("factory_pending_input_level_type");
+        Identifier requiredLevel = MMCR.id("factory_pending_input_level");
+        TestBootstrap.registerType(new LevelType(levelType, Component.literal("Factory Test Level")));
+        TestBootstrap.registerLevel(new MachineLevel(requiredLevel, levelType, 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
+                LevelModifier.IDENTITY));
+        MachineRecipe specific = RecipeTestSupport.create(MMCR.id("level_blocked_specific"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.GOLD_INGOT), 1, ItemStack.EMPTY),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_NUGGET, 1))), false,
+                List.of(LevelRequirement.input(levelType, requiredLevel)));
+        MachineRecipe fallback = RecipeTestSupport.create(MMCR.id("level_blocked_fallback"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
+        RecipeRegistry.replaceDynamic(Map.of(specific.id(), specific, fallback.id(), fallback));
+        Config.MACHINE_WORK_MODE.set(mode);
+        setItem(input.itemStorage(), new ItemStack(Items.IRON_INGOT, 1));
+
+        for (int pass = 0; pass < 8; pass++) {
+            controller.serverTick();
+            SharedIoEvents.completeLevelTick(level);
+            RuntimeTestFixtures.advanceGameTime(level);
+        }
+
+        return controller.runtimeSnapshot().factory().activeLaneCount() == 0;
+    }
+
+    private MachineControllerBlockEntity factoryController(ItemInputBusBlockEntity input, ItemOutputBusBlockEntity output) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("test_cube"), "async factory", pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("test_cube")), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, input, output);
+        List<ProcessingComponent> components = new ArrayList<>();
+        components.add(new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null));
+        components.add(new ProcessingComponent(new MachineComponent(input.kind(), input.ioType()), input,
+                input.getBlockPos(), input.getBlockPos(), (String) null));
+        components.add(new ProcessingComponent(new MachineComponent(output.kind(), output.ioType()), output,
+                output.getBlockPos(), output.getBlockPos(), (String) null));
+        controller.componentRuntime().replaceComponents(components);
+        controller.setFormed(true);
+        input.linkControllerAppearance(controller.getBlockPos(), null);
+        output.linkControllerAppearance(controller.getBlockPos(), null);
         RuntimeTestFixtures.republish(controller);
         level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
