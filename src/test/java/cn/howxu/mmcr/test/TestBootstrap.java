@@ -116,7 +116,8 @@ public final class TestBootstrap {
     public static synchronized void bootstrap() throws Exception {
         ensureFailureReasons();
         if (initialized) {
-            if (MachineDefinitions.getRegistration(id("test_cube")) == null) {
+            if (MachineDefinitions.getRegistration(id("test_cube")) == null
+                    || MachineRegistry.getCompiled(id("test_cube")) == null) {
                 restoreMachineDefinitions();
             }
             bindAllVanillaItemComponents();
