@@ -213,9 +213,8 @@ public final class RecipeSearchTask {
                     || !earlier.hasOverlappingInputs(selectedRecipe)) continue;
             if (!snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
             if (planningValues != null) {
-                PlanningValue value = planningValues.stream()
-                        .filter(candidate -> candidate.recipeId().equals(earlier.id())).findFirst().orElse(null);
-                if (value == null || value.requiresMainThread()) return true;
+                // A worker fallback is not evidence that the input is insufficient. The main-thread
+                // replan decides whether its inputs fail while its outputs remain feasible.
                 continue;
             }
             CraftingContext context = borrowContext(earlier);

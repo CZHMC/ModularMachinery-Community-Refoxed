@@ -470,9 +470,7 @@ public final class FactoryRuntime {
                     RecipeSearchResult result = RecipeSearchTask.forPlanningValues(request.snapshot, request.machineId,
                             request.structureVersion, request.maxParallelism, request.candidates,
                             request.lockedRecipeId, planningValues).compute();
-                    boolean requiresMainThreadReplan = result.success() && planningValues.stream()
-                            .filter(value -> result.recipe().id().equals(value.recipeId()))
-                            .anyMatch(RecipeSearchTask.PlanningValue::requiresMainThread);
+                    boolean requiresMainThreadReplan = requiresMainThreadReplan(result, request, planningValues);
                     request.result = new FactoryRecipeThread.SearchResult(result, null, requiresMainThreadReplan);
                 } catch (RuntimeException exception) {
                     request.result = new FactoryRecipeThread.SearchResult(null, exception, false);
@@ -482,6 +480,25 @@ public final class FactoryRuntime {
                     ignored -> ignoredContext -> Yield.complete());
         }
 
+    }
+
+    private static boolean requiresMainThreadReplan(RecipeSearchResult result, WorkerSearchRequest request,
+                                                    List<RecipeSearchTask.PlanningValue> planningValues) {
+        if (!result.success()) return false;
+        MachineRecipe selected = result.recipe();
+        RecipeSearchTask.PlanningValue selectedValue = planningValues.stream()
+                .filter(value -> selected.id().equals(value.recipeId())).findFirst().orElse(null);
+        if (selectedValue == null || selectedValue.requiresMainThread()) return true;
+        for (MachineRecipe earlier : request.candidates) {
+            if (earlier == selected) break;
+            if (earlier.priority() != selected.priority()
+                    || earlier.inputRequirementCount() <= selected.inputRequirementCount()
+                    || !earlier.hasOverlappingInputs(selected)
+                    || !request.snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
+            if (planningValues.stream().filter(value -> earlier.id().equals(value.recipeId()))
+                    .anyMatch(RecipeSearchTask.PlanningValue::requiresMainThread)) return true;
+        }
+        return false;
     }
 
     private static @Nullable FailureReason capturedLevelFailure(ControllerRuntimeSnapshot snapshot,
