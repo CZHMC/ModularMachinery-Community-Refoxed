@@ -91,7 +91,7 @@ class AsyncFactoryExecutionTest {
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
                 .extracting(lane -> lane.tick())
-                 .containsOnly(1);
+                .containsOnly(1);
     }
 
     @Test
