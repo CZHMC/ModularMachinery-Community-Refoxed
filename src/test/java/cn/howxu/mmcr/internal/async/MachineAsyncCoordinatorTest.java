@@ -239,6 +239,23 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void deferred_shared_io_from_an_older_tick_does_not_block_newer_runnable_main_steps() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        AtomicBoolean newerStepRan = new AtomicBoolean();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.SharedIoRequest(
+                        MainThreadStep.Kind.INTENT_COMMIT, "base", 1L), result -> context ->
+                        AsyncContinuation.Yield.complete()));
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> newerStepRan.set(true)),
+                        result -> context -> AsyncContinuation.Yield.complete()));
+
+        coordinator.completeTick(() -> 0);
+
+        assertThat(newerStepRan).isTrue();
+    }
+
+    @Test
     void worker_exceptions_are_captured_without_escaping_the_pump() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);

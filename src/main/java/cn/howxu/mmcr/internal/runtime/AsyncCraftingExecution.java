@@ -26,6 +26,8 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
     private boolean screenFlushYielded;
     private boolean unsupportedFallbackYielded;
     private boolean intentCommitYielded;
+    private boolean afterInputsYielded;
+    private boolean afterRecipeYielded;
 
     private AsyncCraftingExecution(AsyncRequirementPlanner.PreparedPlan preparedPlan, String laneId, long catalogVersion) {
         this.preparedPlan = Objects.requireNonNull(preparedPlan, "preparedPlan");
@@ -77,7 +79,8 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
             if (!lifecycleYielded) {
                 lifecycleYielded = true;
                 return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(sharedIoRequest, laneId, catalogVersion),
-                        ignored -> this);
+                        result -> result instanceof MainThreadStep.Result.Value value && Boolean.FALSE.equals(value.value())
+                                ? ignored -> AsyncContinuation.Yield.complete() : this);
             }
             if (!screenFlushYielded) {
                 screenFlushYielded = true;
@@ -96,7 +99,8 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
             if (!capabilityTickYielded) {
                 capabilityTickYielded = true;
                 return AsyncContinuation.Yield.mainThread(new MainThreadStep.CapabilityTick(CapabilityTickPhase.BEFORE_RECIPE,
-                        laneId, catalogVersion), ignored -> this);
+                        laneId, catalogVersion), result -> result instanceof MainThreadStep.Result.Value value
+                        && Boolean.FALSE.equals(value.value()) ? ignored -> AsyncContinuation.Yield.complete() : this);
             }
             return AsyncContinuation.Yield.mainThread(new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK,
                     laneId, catalogVersion), result -> ignored -> {
@@ -118,10 +122,27 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
                     new MainThreadStep.UnsupportedRequirement(requirementIndex, catalogVersion, planResult),
                     ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
         }
-        if (intentCommitYielded) return AsyncContinuation.Yield.complete();
-        intentCommitYielded = true;
-        return AsyncContinuation.Yield.mainThread(new MainThreadStep.IntentCommit(laneId, catalogVersion, planResult),
-                ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
+        if (!intentCommitYielded) {
+            intentCommitYielded = true;
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.IntentCommit(laneId, catalogVersion, planResult),
+                    ignored -> this);
+        }
+        if (!afterInputsYielded) {
+            afterInputsYielded = true;
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.CapabilityTick(CapabilityTickPhase.AFTER_INPUTS,
+                    laneId, catalogVersion), result -> {
+                if (result instanceof MainThreadStep.Result.Value value && Boolean.FALSE.equals(value.value())) {
+                    return ignored -> AsyncContinuation.Yield.complete();
+                }
+                return this;
+            });
+        }
+        if (!afterRecipeYielded) {
+            afterRecipeYielded = true;
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.CapabilityTick(CapabilityTickPhase.AFTER_RECIPE,
+                    laneId, catalogVersion), ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
+        }
+        return AsyncContinuation.Yield.complete();
     }
 
     public int workerPlannedOperationCount() {

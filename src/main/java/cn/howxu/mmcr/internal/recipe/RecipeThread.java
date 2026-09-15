@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
@@ -57,12 +58,13 @@ public abstract class RecipeThread {
     }
 
     private record PendingAsyncStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                     MachineRecipe recipe, long parallelism, StartSnapshot snapshot) {
+                                     MachineRecipe recipe, long parallelism, long token, StartSnapshot snapshot) {
     }
 
     private @Nullable PendingAsyncStart pendingAsyncStart;
     private @Nullable RecipeStartContext.ExecutionSnapshot pendingAsyncStartExecution;
     private boolean asyncFinishPrepared;
+    private boolean asyncTickCommitted;
 
     protected RecipeThread(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -156,10 +158,13 @@ public abstract class RecipeThread {
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                     serverLevel.getGameTime(), MachineWorkMode.ASYNC, asyncLaneId());
-            pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, startSnapshot);
+            long token = beginPendingStart(domain, next, startSnapshot);
+            pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, token, startSnapshot);
             pendingAsyncStartExecution = null;
-            return coordinator.submit(taskKey, AsyncCraftingExecution.start(asyncLaneId(), startSnapshot.catalogVersion()),
-                    this::executeAsyncMainStep);
+            if (coordinator.submit(taskKey, AsyncCraftingExecution.start(asyncLaneId(), startSnapshot.catalogVersion()),
+                    this::executeAsyncMainStep)) return true;
+            failAsyncStart(pendingAsyncStart);
+            return false;
         }
         CraftingStatus state = runtime.start(next, requestedParallelism);
         if (!state.isCrafting()) {
@@ -171,10 +176,8 @@ public abstract class RecipeThread {
         return true;
     }
 
-    private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
-                                   MachineRecipe next, long requestedParallelism,
-                                   StartSnapshot startSnapshot, RecipeStartContext.ExecutionSnapshot preparedStart,
-                                   Runnable completion) {
+    private long beginPendingStart(StructureClaimRegistry.ResourceDomain domain, MachineRecipe next,
+                                   StartSnapshot startSnapshot) {
         long token = ++nextStartToken;
         startPending = true;
         pendingStartRecipe = next;
@@ -187,6 +190,14 @@ public abstract class RecipeThread {
         pendingStartCatalogVersion = startSnapshot.catalogVersion();
         pendingStartRecipePoolId = startSnapshot.recipePoolId();
         pendingStartSearchContextKey = startSnapshot.searchContextKey();
+        return token;
+    }
+
+    private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
+                                 MachineRecipe next, long requestedParallelism, long token,
+                                 StartSnapshot startSnapshot, RecipeStartContext.ExecutionSnapshot preparedStart,
+                                 Runnable completion) {
+        if (!isPendingStart(token, next)) return false;
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -225,6 +236,17 @@ public abstract class RecipeThread {
                 completion
         ));
         return true;
+    }
+
+    private void failAsyncStart(PendingAsyncStart pending) {
+        if (pending == null) return;
+        RecipeSearchContextKey failureKey = pending.snapshot().searchContextKey();
+        pendingAsyncStart = null;
+        pendingAsyncStartExecution = null;
+        clearPendingStart(pending.token(), pending.recipe());
+        controller.clearRecipeScreenText(laneId());
+        onStartFailed(failureKey);
+        controller.syncRecipeRuntimeFailure(runtime);
     }
 
     private boolean isPendingStart(long token, MachineRecipe recipe) {
@@ -324,6 +346,7 @@ public abstract class RecipeThread {
 
     private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
         tickPending = true;
+        asyncTickCommitted = false;
         pendingTickDomain = domain;
         long token = ++nextTickToken;
         pendingTickToken = token;
@@ -352,24 +375,6 @@ public abstract class RecipeThread {
                   this::currentCatalogVersion,
                   () -> { }
           ));
-    }
-
-    /** Runs only from {@link AsyncCraftingExecution}'s explicit main-thread intent commit step. */
-    public void completeAsyncTick(AsyncRequirementPlanner.PlanResult ignoredPlan) {
-        if (!tickPending || !runtime.active()) return;
-        if (!validateCurrentRuntime(pendingTickToken, pendingTickDomain)) return;
-        boolean wasActive = runtime.active();
-        runtime.completeAsyncTick(ignoredPlan);
-        if (runtime.finishPending()) {
-            if (runtime.shouldRetryFinish()) {
-                clearPendingTick();
-            } else {
-                clearPendingTick();
-            }
-        } else {
-            completeIfFinished(wasActive);
-        }
-        controller.syncRecipeRuntimeFailure(runtime);
     }
 
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {
@@ -420,6 +425,8 @@ public abstract class RecipeThread {
 
     private MainThreadStep.Result executeAsyncMainStep(MachineAsyncCoordinator.TaskKey key, MainThreadStep step) {
         if (!validateAsyncMainStep(key, step)) {
+            discardInvalidAsyncStart(step);
+            if (pendingAsyncStart == null) finishAsyncTick();
             return MainThreadStep.Result.failure(new IllegalStateException("Async continuation validation failed"));
         }
         if (step instanceof MainThreadStep.Lifecycle lifecycle) {
@@ -429,34 +436,47 @@ public abstract class RecipeThread {
                     return MainThreadStep.Result.failure(new IllegalStateException("Missing async start lifecycle"));
                 }
                 pendingAsyncStartExecution = runtime.prepareAsyncStart(pending.recipe(), pending.parallelism());
+                if (pendingAsyncStartExecution == null) {
+                    failAsyncStart(pending);
+                    return MainThreadStep.Result.value(false);
+                }
             } else if (lifecycle.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
                 asyncFinishPrepared = runtime.prepareAsyncFinish();
             } else if (lifecycle.kind() == MainThreadStep.Kind.RECIPE_TICK) {
                 if (!runtime.prepareAsyncTick()) {
-                    completeAsyncTick(new AsyncRequirementPlanner.PlanResult(List.of(), List.of()));
-                    return validateAsyncMainStep(key, step) ? MainThreadStep.Result.success()
-                            : MainThreadStep.Result.failure(new IllegalStateException("Async tick preparation became stale"));
+                    finishAsyncTick();
+                    return MainThreadStep.Result.value(false);
                 }
             }
-            return validateAsyncMainStep(key, step) ? MainThreadStep.Result.success()
-                    : MainThreadStep.Result.failure(new IllegalStateException("Async lifecycle became stale"));
+            return validatedAsyncResult(key, step, MainThreadStep.Result.success());
         }
         if (step instanceof MainThreadStep.CapabilityTick capabilityTick) {
+            if (capabilityTick.phase() == CapabilityTickPhase.AFTER_INPUTS) {
+                boolean completed = asyncTickCommitted && runtime.completeAsyncTickAfterInputs();
+                if (!completed) finishAsyncTick();
+                return validatedAsyncResult(key, step, MainThreadStep.Result.value(completed));
+            }
+            if (capabilityTick.phase() == CapabilityTickPhase.AFTER_RECIPE) {
+                runtime.completeAsyncTickAfterRecipe();
+                finishAsyncTick();
+                return validatedAsyncResult(key, step, MainThreadStep.Result.success());
+            }
             if (!runtime.executeAsyncCapabilityTick(capabilityTick.phase())) {
                 runtime.discardAsyncTickPreparation();
-                completeAsyncTick(new AsyncRequirementPlanner.PlanResult(List.of(), List.of()));
+                finishAsyncTick();
+                return MainThreadStep.Result.value(false);
             }
-            return validateAsyncMainStep(key, step) ? MainThreadStep.Result.success()
-                    : MainThreadStep.Result.failure(new IllegalStateException("Async capability tick became stale"));
+            return validatedAsyncResult(key, step, MainThreadStep.Result.success());
         }
         if (step instanceof MainThreadStep.ScreenTextFlush screenTextFlush) {
             if (screenTextFlush.source() == MainThreadStep.Kind.RECIPE_TICK) {
                 AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan();
                 runtime.flushAsyncScreenText();
-                return preparedPlan == null ? MainThreadStep.Result.success() : MainThreadStep.Result.value(preparedPlan);
+                return validatedAsyncResult(key, step,
+                        preparedPlan == null ? MainThreadStep.Result.success() : MainThreadStep.Result.value(preparedPlan));
             }
             runtime.flushAsyncScreenText();
-            return MainThreadStep.Result.success();
+            return validatedAsyncResult(key, step, MainThreadStep.Result.success());
         }
         if (step instanceof MainThreadStep.SharedIoRequest request) {
             if (request.kind() == MainThreadStep.Kind.BEFORE_START) {
@@ -468,9 +488,11 @@ public abstract class RecipeThread {
                     return MainThreadStep.Result.failure(new IllegalStateException("Missing async start continuation"));
                 }
                 if (preparedStart == null) return MainThreadStep.Result.success();
-                requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(), pending.snapshot(), preparedStart,
-                        () -> MachineAsyncCoordinator.get(pending.level()).resume(key));
-                return MainThreadStep.Result.pending();
+                if (requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(), pending.token(),
+                        pending.snapshot(), preparedStart, () -> MachineAsyncCoordinator.get(pending.level()).resume(key))) {
+                    return MainThreadStep.Result.pending();
+                }
+                return MainThreadStep.Result.value(false);
             }
             if (request.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
                 if (controller.getLevel() instanceof ServerLevel level && pendingTickDomain != null) {
@@ -502,8 +524,35 @@ public abstract class RecipeThread {
             return MainThreadStep.Result.failure(new IllegalStateException("Missing async intent context"));
         }
         MainThreadStep.Result result = step.execute();
-        return result instanceof MainThreadStep.Result.Pending || validateAsyncMainStep(key, step)
-                ? result : MainThreadStep.Result.failure(new IllegalStateException("Async continuation became stale"));
+        return validatedAsyncResult(key, step, result);
+    }
+
+    private MainThreadStep.Result validatedAsyncResult(MachineAsyncCoordinator.TaskKey key, MainThreadStep step,
+                                                        MainThreadStep.Result result) {
+        if (result instanceof MainThreadStep.Result.Pending || validateAsyncMainStep(key, step)) return result;
+        discardInvalidAsyncStart(step);
+        if (pendingAsyncStart == null) finishAsyncTick();
+        return MainThreadStep.Result.failure(new IllegalStateException("Async continuation became stale"));
+    }
+
+    private void discardInvalidAsyncStart(MainThreadStep step) {
+        if (!isAsyncStartStep(step)) return;
+        PendingAsyncStart pending = pendingAsyncStart;
+        if (pending == null) return;
+        pendingAsyncStart = null;
+        pendingAsyncStartExecution = null;
+        if (currentCatalogVersion() != pending.snapshot().catalogVersion()) {
+            invalidatePendingStartForCatalog(pending.token(), pending.recipe());
+        } else {
+            invalidatePendingStart(pending.token(), pending.recipe());
+        }
+    }
+
+    private static boolean isAsyncStartStep(MainThreadStep step) {
+        return step instanceof MainThreadStep.SharedIoRequest request && request.kind() == MainThreadStep.Kind.BEFORE_START
+                || step instanceof MainThreadStep.Lifecycle lifecycle && lifecycle.kind() == MainThreadStep.Kind.BEFORE_START
+                || step instanceof MainThreadStep.ScreenTextFlush screenTextFlush
+                && screenTextFlush.source() == MainThreadStep.Kind.BEFORE_START;
     }
 
     private boolean validateAsyncMainStep(MachineAsyncCoordinator.TaskKey key, MainThreadStep step) {
@@ -549,7 +598,7 @@ public abstract class RecipeThread {
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()), snapshot.structure().version(),
                 snapshot.stateVersion(), () -> {
                     if (!validateCurrentRuntime(token, domain)) return false;
-                    completeAsyncTick(intent);
+                    asyncTickCommitted = runtime.commitAsyncTick(intent);
                     return true;
                 }, () -> {
                     boolean valid = catalogVersion == currentCatalogVersion() && validateCurrentRuntime(token, domain);
@@ -591,6 +640,14 @@ public abstract class RecipeThread {
         tickPending = false;
         pendingTickDomain = null;
         pendingTickToken = 0L;
+        asyncTickCommitted = false;
+    }
+
+    private void finishAsyncTick() {
+        boolean wasActive = runtime.active();
+        clearPendingTick();
+        completeIfFinished(wasActive);
+        controller.syncRecipeRuntimeFailure(runtime);
     }
 
     private void completeIfFinished(boolean wasActive) {

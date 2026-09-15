@@ -117,6 +117,31 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
+    void tick_yields_each_capability_phase_as_its_own_main_thread_step() {
+        AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
+        AsyncExecutionContext context = new AsyncExecutionContext(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L));
+        AsyncContinuation.Yield.MainThread lifecycle = (AsyncContinuation.Yield.MainThread) execution.advance(context);
+        AsyncContinuation.Yield.MainThread before = (AsyncContinuation.Yield.MainThread) lifecycle.resume()
+                .apply(MainThreadStep.Result.success()).advance(context);
+        AsyncContinuation.Yield.MainThread screen = (AsyncContinuation.Yield.MainThread) before.resume()
+                .apply(MainThreadStep.Result.success()).advance(context);
+        AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
+        AsyncContinuation.Yield.MainThread intent = (AsyncContinuation.Yield.MainThread) screen.resume()
+                .apply(MainThreadStep.Result.value(prepared)).advance(context);
+        AsyncContinuation.Yield.MainThread afterInputs = (AsyncContinuation.Yield.MainThread) intent.resume()
+                .apply(MainThreadStep.Result.success()).advance(context);
+        AsyncContinuation.Yield.MainThread afterRecipe = (AsyncContinuation.Yield.MainThread) afterInputs.resume()
+                .apply(MainThreadStep.Result.value(true)).advance(context);
+
+        assertThat(before.step()).isEqualTo(new MainThreadStep.CapabilityTick(
+                cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.BEFORE_RECIPE, "base", 1L));
+        assertThat(afterInputs.step()).isEqualTo(new MainThreadStep.CapabilityTick(
+                cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.AFTER_INPUTS, "base", 1L));
+        assertThat(afterRecipe.step()).isEqualTo(new MainThreadStep.CapabilityTick(
+                cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.AFTER_RECIPE, "base", 1L));
+    }
+
+    @Test
     void start_yields_a_screen_flush_step_before_shared_io_request() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", 1L);
         AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(

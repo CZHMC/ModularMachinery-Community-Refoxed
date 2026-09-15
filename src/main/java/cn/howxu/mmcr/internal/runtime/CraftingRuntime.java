@@ -370,17 +370,39 @@ public final class CraftingRuntime {
         flushScreenTextReplacements(preparation == null ? behaviorContext().screenText() : preparation.machineContext().screenText());
     }
 
-    /** Commits worker-planned native operations, then completes the remaining main-thread tick phases. */
-    public CraftingStatus completeAsyncTick(AsyncRequirementPlanner.PlanResult planned) {
+    /** Commits worker-planned native operations inside the shared-IO arbitration transaction. */
+    public boolean commitAsyncTick(AsyncRequirementPlanner.PlanResult planned) {
+        AsyncTickPreparation preparation = asyncTickPreparation;
+        if (preparation == null || !active()) return false;
+        if (!versionsCurrent()) {
+            invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
+            return false;
+        }
+        return commitAsyncTickPlan(planned, preparation.runtime());
+    }
+
+    /** Runs the AFTER_INPUTS capability phase after the shared-IO transaction has committed. */
+    public boolean completeAsyncTickAfterInputs() {
+        AsyncTickPreparation preparation = asyncTickPreparation;
+        if (preparation == null || !active()) return false;
+        if (!versionsCurrent()) {
+            invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
+            return false;
+        }
+        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_INPUTS, behaviorContext(), preparation.tickContext())) {
+            if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
+            asyncTickPreparation = null;
+            return false;
+        }
+        return true;
+    }
+
+    /** Runs the AFTER_RECIPE capability phase and publishes tick progress after the previous explicit steps succeed. */
+    public CraftingStatus completeAsyncTickAfterRecipe() {
         AsyncTickPreparation preparation = asyncTickPreparation;
         asyncTickPreparation = null;
         if (preparation == null || !active()) return status;
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
-        if (!commitAsyncTickPlan(planned, preparation.runtime())) return status;
-        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_INPUTS, behaviorContext(), preparation.tickContext())) {
-            if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
-            return status;
-        }
         int gameTime = currentGameTime();
         if (activeRecipe.needsFinishCommit()) {
             if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) {

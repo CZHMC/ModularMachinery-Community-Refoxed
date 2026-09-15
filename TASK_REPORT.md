@@ -29,3 +29,11 @@
 - Start, tick, and finish continuations yield lifecycle steps before shared-IO arbitration. Their callbacks and screen flushes run on the main thread, while start grants, tick intents, unsupported fallback plans, and finish output commits remain in coordinator transactions.
 - Every lifecycle, intent, unsupported fallback, and shared request validates catalog, controller versions, domain, and recipe pool before a worker resume. Failed main steps terminate the chain without resource consumption.
 - Verified with focused async continuation and shared-IO coordinator tests plus `compileJava`; full test and GameTest runs were intentionally not requested.
+
+## Task 5 Review Follow-up
+
+- A deferred shared-IO request now preserves its own tick fence while the coordinator pumps runnable work from later ticks, so one resource wait cannot starve other controllers or factory lanes.
+- Async starts reserve their lane before worker submission, count toward factory activity and per-recipe limits immediately, and use the synchronous failure cleanup path when `beforeStart` cancels or fails.
+- BEFORE_RECIPE, AFTER_INPUTS, and AFTER_RECIPE capability facets are separate main-thread continuation steps. Shared I/O only commits planned resource operations; later facets and progress publication occur after the worker resumes.
+- Recipe tick and screen flush results revalidate catalog, controller versions, domain, and lane state before continuation resume.
+- Verified with focused coordinator/continuation/factory tests and `compileJava`; full test and GameTest runs were intentionally not requested.

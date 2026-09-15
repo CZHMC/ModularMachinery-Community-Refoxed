@@ -107,6 +107,8 @@ public final class MachineAsyncCoordinator {
                 continue;
             }
             if (hasDeferredMainStepFor(gameTime)) {
+                // A resource wait keeps its own fence, but must not starve runnable work from newer ticks.
+                pumpMainThreadStepsExcept(gameTime);
                 return;
             }
             if (hasActiveWorkerFor(gameTime)) {
@@ -186,6 +188,41 @@ public final class MachineAsyncCoordinator {
             } else {
                 scheduleResume(pending.task, pending.resume, result);
             }
+        }
+    }
+
+    private void pumpMainThreadStepsExcept(long excludedGameTime) {
+        int remaining = pendingMainSteps.size();
+        while (remaining-- > 0) {
+            PendingMainStep pending = pendingMainSteps.poll();
+            if (pending == null) return;
+            if (pending.task.key.gameTime() == excludedGameTime) {
+                pendingMainSteps.add(pending);
+                continue;
+            }
+            executePendingMainStep(pending);
+        }
+    }
+
+    private void executePendingMainStep(PendingMainStep pending) {
+        if (beforePendingMainStep != null) beforePendingMainStep.run();
+        MainThreadStep.Result result;
+        synchronized (pending.task) {
+            if (pending.task.cancelled) return;
+            try {
+                MainThreadStepExecutor executor = mainStepExecutors.get(pending.task.key);
+                result = executor == null ? pending.step.execute() : executor.execute(pending.task.key, pending.step);
+            } catch (Throwable throwable) {
+                result = MainThreadStep.Result.failure(throwable);
+            }
+        }
+        if (result instanceof MainThreadStep.Result.Pending) {
+            deferredMainSteps.put(pending.task.key, pending);
+            signalProgress();
+        } else if (result instanceof MainThreadStep.Result.Failure failure) {
+            fail(pending.task, failure.cause());
+        } else {
+            scheduleResume(pending.task, pending.resume, result);
         }
     }
 
