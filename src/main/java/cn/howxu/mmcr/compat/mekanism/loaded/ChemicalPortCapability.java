@@ -81,10 +81,11 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
             @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
                 ChemicalResource resource = chemicalTank.resource();
+                boolean empty = resource.isEmpty();
                 return new AsyncCapabilitySnapshot.Resource(type().id(), List.of(
-                        new AsyncCapabilitySnapshot.ResourceSlot(resource.isEmpty() ? Optional.empty()
+                        new AsyncCapabilitySnapshot.ResourceSlot(empty ? Optional.empty()
                                 : Optional.of(NativeAsyncResourceValues.chemical(resource)),
-                                chemicalTank.amountAsLong(), chemicalTank.capacityAsLong(resource))));
+                                empty ? 0L : chemicalTank.amountAsLong(), chemicalTank.capacityAsLong(resource))));
             }
 
             @Override

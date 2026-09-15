@@ -395,8 +395,8 @@ public abstract class RecipeThread {
                     if (!validateCurrentRuntime(token, domain)) return false;
                     return MachineAsyncCoordinator.get(level).submit(new MachineAsyncCoordinator.TaskKey(
                             controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(), asyncLaneId(),
-                            lifecycleEpoch),
-                               AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
+                            lifecycleEpoch), AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion),
+                            this::executeAsyncMainStep);
                 },
                 () -> {
                     boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()

@@ -120,7 +120,7 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
             int requirementIndex = planResult.mainThreadRequirements().getFirst();
             return AsyncContinuation.Yield.mainThread(
                     new MainThreadStep.UnsupportedRequirement(requirementIndex, catalogVersion, planResult),
-                    ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
+                    ignored -> this);
         }
         if (!intentCommitYielded) {
             intentCommitYielded = true;

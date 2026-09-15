@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.runtime;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -412,22 +411,14 @@ public final class ComponentRuntime {
                 if (stack.isEmpty()) continue;
                 items.add(stack.copy());
                 Identifier modifierId = ModifierRegistry.modifierFor(stack);
-                MMCR.LOG.info("[upgrade-bus-debug] item: busPos={} slot={} stack={} modifierId={} "
-                                + "definitionPresent={} count={}",
-                        bus.position(), slot, stack, modifierId,
-                        modifierId != null && ModifierRegistry.get(modifierId) != null, stack.getCount());
                 if (modifierId != null) units.merge(modifierId, (long) stack.getCount(), Long::sum);
             }
         }
         upgradeItems = List.copyOf(items);
         upgradeModifierUnits = immutableMap(units);
         upgradeModifiers = upgradeModifiers(units);
-        MMCR.LOG.info("[upgrade-bus-debug] aggregate: busCount={} itemCount={} modifierUnits={} "
-                        + "upgradeModifiers={} registeredBindings={}",
-                next.size(), items.size(), units, describeModifiers(upgradeModifiers), ModifierRegistry.modifierItems());
         upgradeContentRevision++;
         rebuildModifierList();
-        MMCR.LOG.info("[upgrade-bus-debug] rebuilt modifiers: {}", describeModifiers(flattenedModifiers));
         modifierVersion++;
         stateVersion++;
         return true;
@@ -443,13 +434,6 @@ public final class ComponentRuntime {
             }
         }
         return List.copyOf(result);
-    }
-
-    private static List<String> describeModifiers(List<RecipeModifier> modifiers) {
-        return modifiers.stream()
-                .map(modifier -> modifier.getTarget() + "/" + modifier.getIOTarget() + "/"
-                        + modifier.getOperation() + "/" + modifier.getModifier())
-                .toList();
     }
 
     private void rebuildModifierList() {

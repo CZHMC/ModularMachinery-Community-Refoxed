@@ -78,9 +78,10 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
                 return new AsyncCapabilitySnapshot.Resource(type().id(), IntStream.range(0, storage.size())
                         .mapToObj(slot -> {
                             ItemResource resource = storage.resource(slot);
-                            return new AsyncCapabilitySnapshot.ResourceSlot(resource == null || resource.isEmpty()
+                            boolean empty = resource == null || resource.isEmpty();
+                            return new AsyncCapabilitySnapshot.ResourceSlot(empty
                                     ? Optional.empty() : Optional.of(NativeAsyncResourceValues.item(resource)),
-                                    storage.amount(slot), storage.capacity(slot, resource));
+                                    empty ? 0L : storage.amount(slot), storage.capacity(slot, resource));
                         }).toList());
             }
 
