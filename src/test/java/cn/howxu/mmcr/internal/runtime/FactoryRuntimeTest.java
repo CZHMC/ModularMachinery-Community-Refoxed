@@ -599,6 +599,33 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void catalog_change_after_shared_tick_commit_invalidates_before_async_continuation() {
+        Identifier recipeId = MMCR.id("factory_reload_async_tick_recipe");
+        MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
+        MachineRecipe replacement = recipe(recipeId.getPath(), 40);
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
+
+        MachineControllerBlockEntity controller = factoryController("test_cube");
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+
+        assertThat(thread.searchAndStartRecipe(List.of(oldRecipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        resolveSharedRequests(controller);
+        thread.tick();
+        SharedIoCoordinator.get(level).resolve(controller.resourceDomain());
+        RecipeRegistry.replaceDynamic(Map.of(recipeId, replacement));
+        MachineAsyncCoordinator.get(level).completeTick(() -> SharedIoCoordinator.get(level).resolve(level));
+
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.runtime().tickCount()).isZero();
+        assertThat(thread.runtime().failure()).isNotNull();
+        assertThat(thread.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+    }
+
+    @Test
     void loading_a_last_recipe_does_not_use_the_global_registry_fallback() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         Identifier recipeId = MMCR.id("factory_foreign_last_recipe");

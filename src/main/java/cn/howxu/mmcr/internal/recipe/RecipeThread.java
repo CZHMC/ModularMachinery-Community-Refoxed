@@ -361,7 +361,8 @@ public abstract class RecipeThread {
                               AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
                   },
                   () -> {
-                      boolean valid = catalogVersion == currentCatalogVersion() && validateCurrentRuntime(token, domain);
+                      boolean runtimeValid = validateCurrentRuntime(token, domain);
+                      boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                       if (!valid) clearPendingTick();
                       return valid;
                   },
@@ -399,7 +400,8 @@ public abstract class RecipeThread {
                     return true;
                  },
                  () -> {
-                     boolean valid = catalogVersion == currentCatalogVersion() && validateCurrentRuntime(token, domain);
+                     boolean runtimeValid = validateCurrentRuntime(token, domain);
+                     boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                      if (!valid) {
                          clearPendingTick();
                          MachineAsyncCoordinator.get(level).resume(key);
@@ -461,8 +463,10 @@ public abstract class RecipeThread {
             }
             if (capabilityTick.phase() == CapabilityTickPhase.AFTER_RECIPE) {
                 runtime.completeAsyncTickAfterRecipe();
+                MainThreadStep.Result result = validatedAsyncResult(key, step, MainThreadStep.Result.success());
+                if (result instanceof MainThreadStep.Result.Failure) return result;
                 finishAsyncTick();
-                return validatedAsyncResult(key, step, MainThreadStep.Result.success());
+                return result;
             }
             if (!runtime.executeAsyncCapabilityTick(capabilityTick.phase())) {
                 runtime.discardAsyncTickPreparation();
@@ -589,8 +593,9 @@ public abstract class RecipeThread {
                 : step instanceof MainThreadStep.CapabilityTick capabilityTick ? capabilityTick.catalogVersion()
                 : step instanceof MainThreadStep.ScreenTextFlush screenTextFlush ? screenTextFlush.catalogVersion()
                 : Long.MIN_VALUE;
-        return catalogVersion == Long.MIN_VALUE || catalogVersion == currentCatalogVersion()
-                && validateCurrentRuntime(pendingTickToken, pendingTickDomain);
+        if (catalogVersion == Long.MIN_VALUE) return true;
+        boolean runtimeValid = validateCurrentRuntime(pendingTickToken, pendingTickDomain);
+        return catalogVersion == currentCatalogVersion() && runtimeValid;
     }
 
     private void enqueueAsyncTickIntent(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token,
@@ -604,7 +609,8 @@ public abstract class RecipeThread {
                     asyncTickCommitted = runtime.commitAsyncTick(intent);
                     return true;
                 }, () -> {
-                    boolean valid = catalogVersion == currentCatalogVersion() && validateCurrentRuntime(token, domain);
+                    boolean runtimeValid = validateCurrentRuntime(token, domain);
+                    boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                     if (!valid) {
                         clearPendingTick();
                         MachineAsyncCoordinator.get(level).resume(key);

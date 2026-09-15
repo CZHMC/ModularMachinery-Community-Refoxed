@@ -4,8 +4,10 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -53,17 +55,25 @@ class AsyncCraftingExecutionTest {
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
                 controller.runtimeSnapshot().structure().version())).isTrue();
-        resolve(controller);
+        completeTick(controller);
         long epochBeforeFinish = controller.resourceAvailabilityEpoch();
+        MachineAsyncCoordinator.TaskKey tickKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                level.getGameTime(), MachineWorkMode.ASYNC, thread.asyncLaneId());
         thread.tick();
-        resolve(controller);
+        completeTick(controller);
+        assertThat(MachineAsyncCoordinator.get(level).failureFor(tickKey)).isNull();
+        thread.tick();
+        completeTick(controller);
 
         assertThat(thread.runtime().active()).isFalse();
         assertThat(finishes).hasValue(1);
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(epochBeforeFinish + 1L);
     }
 
-    private static void resolve(MachineControllerBlockEntity controller) {
-        SharedIoCoordinator.get((ServerLevel) controller.getLevel()).resolve(controller.resourceDomain());
+    private static void completeTick(MachineControllerBlockEntity controller) {
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeTick(() -> sharedIo.resolve(level));
     }
 }
