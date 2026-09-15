@@ -100,7 +100,7 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
-    void worker_admission_rejection_does_not_queue_a_tick_task() {
+    void worker_saturation_queues_a_tick_task_without_rejecting_it() {
         ManualExecutor executor = new ManualExecutor();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 1);
         var running = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
@@ -109,8 +109,8 @@ class MachineAsyncCoordinatorTest {
         assertThat(coordinator.submitDetailed(running, ignored -> AsyncContinuation.Yield.complete(), null))
                 .isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
         assertThat(coordinator.submitDetailed(rejected, ignored -> AsyncContinuation.Yield.complete(), null))
-                .isEqualTo(MachineAsyncCoordinator.SubmissionResult.REJECTED);
-        assertThat(executor.pendingTaskCount()).isEqualTo(1);
+                .isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
+        assertThat(executor.pendingTaskCount()).isEqualTo(2);
     }
 
     @Test

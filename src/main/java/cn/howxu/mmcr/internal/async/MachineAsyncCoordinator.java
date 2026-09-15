@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,13 +31,11 @@ public final class MachineAsyncCoordinator {
     private static final int WORKER_COUNT = Math.min(Math.max(Runtime.getRuntime().availableProcessors() / 4, 4), 8);
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
-    private static final Semaphore WORKER_PERMITS = new Semaphore(WORKER_COUNT);
     private static final int MAX_STALLED_FENCE_PASSES = 5;
     private static final long WORKER_PROGRESS_WAIT_MILLIS = 10L;
 
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
-    private final Semaphore workerPermits;
     private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
     private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStepExecutor> mainStepExecutors = new ConcurrentHashMap<>();
@@ -47,13 +44,12 @@ public final class MachineAsyncCoordinator {
     private final AtomicInteger progress = new AtomicInteger();
 
     private MachineAsyncCoordinator(Executor executor) {
-        this(executor, null, WORKER_PERMITS);
+        this(executor, null);
     }
 
-    private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep, Semaphore workerPermits) {
+    private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep) {
         this.executor = executor;
         this.beforePendingMainStep = beforePendingMainStep;
-        this.workerPermits = workerPermits;
     }
 
     public static synchronized MachineAsyncCoordinator get(ServerLevel level) {
@@ -65,11 +61,11 @@ public final class MachineAsyncCoordinator {
     }
 
     static MachineAsyncCoordinator forTesting(Executor executor, Runnable beforePendingMainStep) {
-        return new MachineAsyncCoordinator(executor, beforePendingMainStep, new Semaphore(WORKER_COUNT));
+        return new MachineAsyncCoordinator(executor, beforePendingMainStep);
     }
 
     static MachineAsyncCoordinator forTesting(Executor executor, int workerCount) {
-        return new MachineAsyncCoordinator(executor, null, new Semaphore(workerCount));
+        return new MachineAsyncCoordinator(executor);
     }
 
     public boolean submit(TaskKey key, AsyncContinuation continuation) {
@@ -176,7 +172,6 @@ public final class MachineAsyncCoordinator {
     }
 
     private boolean schedule(TickBatch batch, Task task, AsyncContinuation continuation) {
-        if (!workerPermits.tryAcquire()) return false;
         batch.runningWorkers.incrementAndGet();
         try {
             executor.execute(() -> {
@@ -187,14 +182,12 @@ public final class MachineAsyncCoordinator {
                     fail(batch, task, throwable);
                 } finally {
                     batch.runningWorkers.decrementAndGet();
-                    workerPermits.release();
                     signalProgress();
                 }
             });
             return true;
         } catch (RuntimeException exception) {
             batch.runningWorkers.decrementAndGet();
-            workerPermits.release();
             return false;
         }
     }

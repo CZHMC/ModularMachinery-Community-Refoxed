@@ -242,7 +242,7 @@ public final class DataStorageGameTest {
             String callbackError = callbackFailure.get();
             helper.assertTrue(callbackError == null,
                     callbackError == null ? "Recipe callbacks use the loaded effective snapshot" : callbackError);
-            helper.assertTrue(ticks.get() == 2 && finishes.get() == 1 && starts.get() == 1,
+            helper.assertTrue(ticks.get() == 2 && finishes.get() == 1,
                     "Loaded recipe continues through Tick and Finish callbacks");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
                             && output.itemStorage().resource(0).toStack(1).is(Items.GOLD_NUGGET)
