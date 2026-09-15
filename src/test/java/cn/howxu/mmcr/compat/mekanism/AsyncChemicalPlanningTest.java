@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,9 +59,10 @@ class AsyncChemicalPlanningTest {
 
         AsyncCapabilitySnapshot.Resource snapshot = (AsyncCapabilitySnapshot.Resource) capture(facet);
         AsyncCapabilityPlanner planner = workerPlanner(facet);
-        AsyncCapabilityOperation operation = planner.plan(snapshot, new AsyncCapabilityRequest.Resource(
-                capability.type().id(), 1L, List.of(new AsyncResourceAction(snapshot.slots().getFirst().resource().orElseThrow(),
-                100L, false)))).orElseThrow();
+        AsyncCapabilityOperation operation = CompletableFuture.supplyAsync(() -> planner.plan(snapshot,
+                new AsyncCapabilityRequest.Resource(capability.type().id(), 1L,
+                        List.of(new AsyncResourceAction(snapshot.slots().getFirst().resource().orElseThrow(),
+                                100L, false))))).get().orElseThrow();
 
         assertThat(operation).isInstanceOf(AsyncCapabilityOperation.Group.class);
         assertThat(((AsyncCapabilityOperation.Group) operation).operations())
