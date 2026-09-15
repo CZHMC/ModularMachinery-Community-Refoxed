@@ -3,21 +3,27 @@ package cn.howxu.mmcr.internal.async;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.config.Config;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -52,6 +58,7 @@ class MachineWorkModeIntegrationTest {
     @AfterEach
     void discardLevelCoordinators() {
         Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        RecipeRegistry.clearForTesting();
         if (level == null) return;
         MachineAsyncCoordinator.discard(level);
         SharedIoCoordinator.discard(level);
@@ -175,6 +182,75 @@ class MachineWorkModeIntegrationTest {
         coordinator.pumpMainThreadSteps();
 
         assertThat(committed).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void work_modes_produce_the_same_observable_recipe_progress(MachineWorkMode mode) {
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(machineId, "work mode recipe progress",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("work_mode_recipe_progress"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        Config.MACHINE_WORK_MODE.set(mode);
+
+        tickAndComplete(controller);
+        tickAndComplete(controller);
+
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(controller.runtimeSnapshot().crafting().status().isCrafting()).isTrue();
+        assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
+    }
+
+    @Test
+    void reset_machine_cancels_an_uncommitted_async_lane() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "ordinary reset",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        AtomicBoolean committed = new AtomicBoolean();
+        assertThat(coordinator.submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), 1L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
+                        result -> context -> AsyncContinuation.Yield.complete()))).isTrue();
+        assertThat(hasPendingMainStep(coordinator)).isTrue();
+
+        controller.onMachineDestroyed();
+        coordinator.pumpMainThreadSteps();
+
+        assertThat(committed).isFalse();
+    }
+
+    @Test
+    void sync_starts_the_recipe_in_the_originating_main_tick() {
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(machineId, "sync main tick",
+                new BlockArray(Map.of())));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_main_tick_recipe"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(controller.runtimeSnapshot().crafting().status().isCrafting()).isTrue();
+    }
+
+    private static void tickAndComplete(MachineControllerBlockEntity controller) {
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        SharedIoEvents.completeLevelTick(level);
+        RuntimeTestFixtures.advanceGameTime(level);
     }
 
     private static boolean hasPendingMainStep(MachineAsyncCoordinator coordinator)

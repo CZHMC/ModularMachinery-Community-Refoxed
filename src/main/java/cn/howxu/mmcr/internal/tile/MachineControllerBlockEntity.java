@@ -578,9 +578,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void invalidateFormedStructure() {
-        if (level instanceof ServerLevel serverLevel) {
-            MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos());
-        }
         resetMachine();
         publishRuntimeState();
     }
@@ -3217,6 +3214,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void resetMachine(boolean clearFormationFailure, boolean updateBlockState, boolean invalidateScheduledCheck) {
+        if (level instanceof ServerLevel serverLevel) {
+            MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos());
+        }
         StructureSnapshot structure = runtimeSnapshot().structure();
         StructureWorkSnapshot work = structureWorkSnapshot();
         invalidateStructureScan(StructureMatcher.InvalidationReason.VERSION);

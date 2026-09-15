@@ -17,6 +17,7 @@ import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.Identifier;
@@ -149,7 +150,7 @@ public abstract class RecipeThread {
         Identifier recipePoolId = recipePoolForMachine(currentSnapshot);
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
-        if (controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
+        if (usesFullAsyncContinuation() && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
             if (pendingAsyncStart != null) return false;
             ControllerRuntimeSnapshot startRuntime = context == null ? currentSnapshot : context.snapshot();
             StartSnapshot startSnapshot = new StartSnapshot(startRuntime, structureVersion,
@@ -323,6 +324,14 @@ public abstract class RecipeThread {
             controller.clearRecipeScreenText(laneId());
         }
         if (!runtime.active()) return;
+        if (!usesAsyncPlanning()) {
+            tickSynchronously();
+            return;
+        }
+        if (!usesFullAsyncContinuation() && runtime.finishPending()) {
+            finishSynchronously();
+            return;
+        }
         if (tickPending && !validateCurrentRuntime(pendingTickToken, pendingTickDomain)) clearPendingTick();
         if (tickPending) return;
 
@@ -340,6 +349,27 @@ public abstract class RecipeThread {
         boolean wasActive = runtime.active();
         runtime.tick();
         if (runtime.finishPending()) runtime.finish();
+        completeIfFinished(wasActive);
+    }
+
+    private boolean usesAsyncPlanning() {
+        return controller.activeWorkMode() != MachineWorkMode.SYNC;
+    }
+
+    private boolean usesFullAsyncContinuation() {
+        return controller.activeWorkMode() == MachineWorkMode.ASYNC;
+    }
+
+    private void tickSynchronously() {
+        boolean wasActive = runtime.active();
+        runtime.tick();
+        if (runtime.finishPending()) runtime.finish();
+        completeIfFinished(wasActive);
+    }
+
+    private void finishSynchronously() {
+        boolean wasActive = runtime.active();
+        runtime.finish();
         completeIfFinished(wasActive);
     }
 
