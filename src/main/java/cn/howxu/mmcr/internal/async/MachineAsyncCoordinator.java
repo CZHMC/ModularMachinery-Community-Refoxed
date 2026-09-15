@@ -28,7 +28,8 @@ public final class MachineAsyncCoordinator {
     private static final int WORKER_COUNT = Math.min(Math.max(Runtime.getRuntime().availableProcessors() / 4, 4), 8);
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
-    private static final int MAX_STALLED_FENCE_PASSES = 2;
+    private static final int MAX_STALLED_FENCE_PASSES = 5;
+    private static final long WORKER_PROGRESS_WAIT_MILLIS = 10L;
 
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
@@ -289,7 +290,7 @@ public final class MachineAsyncCoordinator {
         synchronized (progressMonitor) {
             if (progress.get() != progressBefore) return;
             try {
-                progressMonitor.wait(1L);
+                progressMonitor.wait(WORKER_PROGRESS_WAIT_MILLIS);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
             }

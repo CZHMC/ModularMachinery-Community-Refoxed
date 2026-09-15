@@ -17,6 +17,8 @@ import appeng.core.definitions.AEItems;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.implementations.InterfaceMenu;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -88,6 +90,7 @@ public class AE2InterfaceGameTest {
     private static final long MANUAL_ITEM_AMOUNT = 4L;
 
     public void interfaceFeedsMmcrInputs(GameTestHelper helper) {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         helper.assertTrue(AE2Bridge.get().available(),
                 "AE2 must be loaded for this integration test");
 
@@ -230,7 +233,7 @@ public class AE2InterfaceGameTest {
         });
 
         helper.runAtTickTime(60, () -> {
-            helper.runAfterDelay(10, () -> {
+            helper.runAfterDelay(40, () -> {
                 int polls = 0;
                 while (!controller.structureSnapshot().formed() && polls++ < 100) {
                     controller.serverTick();

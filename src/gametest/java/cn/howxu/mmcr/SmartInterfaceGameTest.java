@@ -1,6 +1,8 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -26,6 +28,7 @@ import java.util.Set;
 public class SmartInterfaceGameTest {
 
     public void bindsDefaultValueAndWritesRecipeOutput(GameTestHelper helper) {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         BlockPos controllerPos = new BlockPos(1, 1, 1);
         BlockPos interfacePos = controllerPos.offset(1, 0, 0);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
@@ -56,9 +59,10 @@ public class SmartInterfaceGameTest {
 
         helper.assertTrue(smartInterface.bindingFor(controllerWorldPos).map(binding -> binding.value() == 15F).orElse(false),
                 "Recipe output does not write the smart interface value when it starts");
-        for (int tick = 0; tick < 25; tick++) controller.serverTick();
-        helper.assertTrue(smartInterface.bindingFor(controllerWorldPos).map(binding -> binding.value() == 42F).orElse(false),
-                "Recipe output writes the smart interface value when it finishes");
-        helper.succeed();
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(smartInterface.bindingFor(controllerWorldPos)
+                                .map(binding -> binding.value() == 42F).orElse(false),
+                        "Recipe output writes the smart interface value when it finishes"))
+                .thenExecute(helper::succeed);
     }
 }

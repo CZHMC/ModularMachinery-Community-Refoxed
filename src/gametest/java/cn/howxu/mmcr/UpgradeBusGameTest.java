@@ -1,6 +1,8 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -39,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class UpgradeBusGameTest {
     public void optionalBusesInvalidateActiveRecipe(GameTestHelper helper) {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         Identifier machineId = MMCR.id("upgrade_bus_test");
         Identifier modifierId = MMCR.id("upgrade_bus_test_modifier");
         BlockPos controllerPos = new BlockPos(2, 1, 2);

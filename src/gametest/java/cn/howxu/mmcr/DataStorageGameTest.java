@@ -1,6 +1,8 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -133,6 +135,7 @@ public final class DataStorageGameTest {
     }
 
     public void recipeSnapshotLoadsWithoutStartCallbackRerun(GameTestHelper helper) {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         Identifier machineId = MMCR.id("task7_recipe_snapshot");
         BlockPos controllerPos = new BlockPos(3, 1, 3);
         BlockPos inputPos = controllerPos.west();
@@ -214,8 +217,11 @@ public final class DataStorageGameTest {
             helper.assertTrue(controller.structureSnapshot().formed(), "Recipe snapshot machine forms with real I/O buses");
             RecipeRegistry.registerStatic(recipe);
             controller.serverTick();
-            helper.assertTrue(recipe.id().equals(controller.runtimeSnapshot().crafting().recipeId()) && starts.get() == 1,
-                    "Recipe Start runs once before serialization");
+            helper.startSequence()
+                    .thenWaitUntil(() -> helper.assertTrue(recipe.id().equals(controller.runtimeSnapshot().crafting().recipeId())
+                                    && starts.get() == 1,
+                            "Recipe Start runs once before serialization"))
+                    .thenExecute(() -> {
 
             CompoundTag saved = saveController(controller, helper.getLevel().registryAccess());
             loadController(controller, helper.getLevel().registryAccess(), saved);
@@ -243,6 +249,7 @@ public final class DataStorageGameTest {
                             && output.itemStorage().amount(0) == 2L,
                     "Loaded effective output finishes through the real output bus");
             helper.succeed();
+                    });
         });
     }
 

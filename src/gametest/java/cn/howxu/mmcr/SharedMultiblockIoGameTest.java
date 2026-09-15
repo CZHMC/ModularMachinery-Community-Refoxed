@@ -12,6 +12,8 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -43,6 +45,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author howxu <dev@howxu.cn>
  */
 public class SharedMultiblockIoGameTest {
+
+    public void asyncFiniteSharedEnergyRotatesTickGrantsBetweenLanes(GameTestHelper helper) {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        finiteSharedEnergyRotatesTickGrantsBetweenLanes(helper);
+    }
 
     public void sharedEnergyPortFormsBothControllersAndSurvivesOneTeardown(GameTestHelper helper) {
         BlockPos sharedEnergy = new BlockPos(2, 2, 2);

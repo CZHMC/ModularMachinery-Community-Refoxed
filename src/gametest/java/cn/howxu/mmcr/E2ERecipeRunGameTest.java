@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
@@ -33,6 +35,11 @@ import java.util.Map;
 import java.util.Set;
 
 public class E2ERecipeRunGameTest {
+
+    public void asyncIronCompressorRuns(GameTestHelper helper) {
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ironCompressorRuns(helper);
+    }
 
     public void ironCompressorRuns(GameTestHelper helper) {
         for (int x = 0; x < 3; x++) for (int z = 0; z < 3; z++)

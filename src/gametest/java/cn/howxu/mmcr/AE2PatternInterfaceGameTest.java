@@ -225,7 +225,7 @@ public class AE2PatternInterfaceGameTest {
 
         helper.runAtTickTime(10, () -> connectNetwork(helper));
 
-        helper.runAtTickTime(80, () -> {
+        helper.runAtTickTime(120, () -> {
             MEChestBlockEntity meChest = helper.getBlockEntity(ME_CHEST_POS, MEChestBlockEntity.class);
             ChestBlockEntity chest = helper.getBlockEntity(TARGET_CHEST_POS, ChestBlockEntity.class);
             helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 2L,

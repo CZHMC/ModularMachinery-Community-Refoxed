@@ -6,6 +6,7 @@ import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.security.IActionSource;
+import cn.howxu.mmcr.MMCR;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
@@ -76,9 +77,9 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         this.kind = kind;
         // PatternProviderLogic must return completed pattern outputs to the grid itself so AE2 can settle the craft.
         itemOutputStorage = AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv(), () -> null,
-                IActionSource.ofMachine(this), () -> { });
+                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
         fluidOutputStorage = AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv(), () -> null,
-                IActionSource.ofMachine(this), () -> { });
+                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
     }
 
     @Override
@@ -198,6 +199,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     /** Notifies linked controllers after AE2's native return inventory drains. */
     public void onNativeReturnInventoryDrained() {
+        MMCR.LOG.info("[ae2-pattern-debug] native return inventory changed at {}", worldPosition);
         notifyStorageChanged();
     }
 

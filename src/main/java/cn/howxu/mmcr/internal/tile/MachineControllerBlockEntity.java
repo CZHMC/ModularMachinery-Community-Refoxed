@@ -728,6 +728,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void notifyResourceAvailability(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
         if (reason == null) return;
+        MMCR.LOG.info("[ae2-pattern-debug] controller {} availability reason={} resource={} epoch={}",
+                worldPosition, reason, resource, resourceAvailabilityEpoch);
         runtime.componentRuntime().markCapabilityPresentationChanged();
         long gameTime = level == null ? Long.MIN_VALUE : level.getGameTime();
         if (lastResourceAvailabilityTick != gameTime) {
