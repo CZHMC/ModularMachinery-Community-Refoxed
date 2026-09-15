@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
+import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
@@ -466,12 +467,15 @@ public final class FactoryRuntime {
                         }
                         planningValues.add(RecipeSearchTask.PlanningValue.mainThread(candidate.recipe().id()));
                     }
-                    request.result = new FactoryRecipeThread.SearchResult(
-                            RecipeSearchTask.forPlanningValues(request.snapshot, request.machineId,
-                                    request.structureVersion, request.maxParallelism, request.candidates,
-                                    request.lockedRecipeId, planningValues).compute(), null, true);
+                    RecipeSearchResult result = RecipeSearchTask.forPlanningValues(request.snapshot, request.machineId,
+                            request.structureVersion, request.maxParallelism, request.candidates,
+                            request.lockedRecipeId, planningValues).compute();
+                    boolean requiresMainThreadReplan = result.success() && planningValues.stream()
+                            .filter(value -> result.recipe().id().equals(value.recipeId()))
+                            .anyMatch(RecipeSearchTask.PlanningValue::requiresMainThread);
+                    request.result = new FactoryRecipeThread.SearchResult(result, null, requiresMainThreadReplan);
                 } catch (RuntimeException exception) {
-                    request.result = new FactoryRecipeThread.SearchResult(null, exception, true);
+                    request.result = new FactoryRecipeThread.SearchResult(null, exception, false);
                 }
             }
             return Yield.mainThread(new MainThreadStep.FactorySearch(laneId, catalogVersion, searchId),

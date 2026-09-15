@@ -346,7 +346,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         setSearchContextKey(contextSearchContextKey(context, lockedRecipeId));
         setSearchGameTime(context.gameTime());
         failureCandidates = candidates.stream().filter(Objects::nonNull).toList();
-        SearchResult resolved = searchResult.workerPlanned()
+        SearchResult resolved = searchResult.requiresMainThreadReplan()
                 ? search(context, candidates, structureVersion, lockedRecipeId) : searchResult;
         RecipeSearchResult result = resolved.result();
         if (resolved.failure() != null || result == null || !result.success()) {
@@ -360,7 +360,7 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     /** Immutable outcome of a worker-side factory recipe search. */
     public record SearchResult(@Nullable RecipeSearchResult result, @Nullable RuntimeException failure,
-                               boolean workerPlanned) {
+                               boolean requiresMainThreadReplan) {
     }
 
     public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,

@@ -91,7 +91,37 @@ class AsyncFactoryExecutionTest {
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
                 .extracting(lane -> lane.tick())
-                .containsOnly(1);
+                 .containsOnly(1);
+    }
+
+    @Test
+    void async_factory_keeps_base_and_factory_lane_order_fair_across_ticks() {
+        MachineControllerBlockEntity controller = factoryController(3);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_factory_lane_order"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 3);
+        RecipeRegistry.registerStatic(recipe);
+        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+
+        controller.serverTick();
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .filteredOn(lane -> lane.active())
+                .extracting(lane -> lane.laneId())
+                .containsExactly("base", "factory-0", "factory-1");
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .filteredOn(lane -> lane.active())
+                .extracting(lane -> lane.parallelism())
+                .containsExactly(1L, 1L, 1L);
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.serverTick();
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .filteredOn(lane -> lane.active())
+                .extracting(lane -> lane.tick())
+                .containsExactly(1, 1, 1);
     }
 
     @Test
@@ -108,6 +138,13 @@ class AsyncFactoryExecutionTest {
         SharedIoEvents.completeLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        assertThat(coordinator.failureFor(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                level.getGameTime(), MachineWorkMode.ASYNC, "factory-search/base", controller.lifecycleEpoch())))
+                .isNull();
+        assertThat(coordinator.failureFor(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                level.getGameTime(), MachineWorkMode.ASYNC, "factory-search/factory-0", controller.lifecycleEpoch())))
+                .isNull();
 
         RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 0);
         RuntimeTestFixtures.advanceGameTime(level);
@@ -134,13 +171,17 @@ class AsyncFactoryExecutionTest {
     }
 
     private MachineControllerBlockEntity factoryController() {
+        return factoryController(2);
+    }
+
+    private MachineControllerBlockEntity factoryController(int laneLimit) {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
                 new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get())));
         DynamicMachine machine = new DynamicMachine(MMCR.id("test_cube"), "async factory", pattern,
                 MachineControllerSpec.defaultsFor(MMCR.id("test_cube")), PortRequirementSpec.none(), List.of(), Map.of(),
-                1, false, true, 2);
+                1, false, true, laneLimit);
         FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
                 ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
