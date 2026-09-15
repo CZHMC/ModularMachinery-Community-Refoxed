@@ -7,8 +7,13 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -23,6 +28,7 @@ import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
 import mekanism.api.chemical.ChemicalResource;
@@ -32,6 +38,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -52,6 +59,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
     private final ResourceStorage<ChemicalResource> storage;
     private final IOType ioType;
     private final CapabilityView view;
+    private final AsyncPlanningFacet asyncPlanning;
 
     public ChemicalPortCapability(IChemicalTank chemicalTank, IOType ioType) {
         this(null, chemicalTank, ioType);
@@ -69,9 +77,30 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         this.chemicalTank = chemicalTank;
         this.storage = new ChemicalStorage(chemicalTank);
         this.ioType = ioType;
+        this.asyncPlanning = new AsyncPlanningFacet() {
+            @Override
+            protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
+                ChemicalResource resource = chemicalTank.resource();
+                return new AsyncCapabilitySnapshot.Resource(type().id(), List.of(
+                        new AsyncCapabilitySnapshot.ResourceSlot(resource.isEmpty() ? Optional.empty()
+                                : Optional.of(NativeAsyncResourceValues.chemical(resource)),
+                                chemicalTank.amountAsLong(), chemicalTank.capacityAsLong(resource))));
+            }
+
+            @Override
+            protected AsyncCapabilityPlanner workerPlannerOnServerThread() {
+                return new AsyncCapabilityPlanner.Resource(type().id());
+            }
+
+            @Override
+            protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
+                                                             TransactionContext transaction) {
+                return commitAsync(operation, transaction);
+            }
+        };
         this.view = CapabilityFactories.view(TYPE, directions(),
                 Set.of(ResourceFacet.class, TransferFacet.class, OperationFacet.class,
-                        PresentationFacet.class, SyncFacet.class));
+                        PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
     }
 
     @Override
@@ -126,6 +155,12 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
     @Override
     public CapabilityView view() {
         return view;
+    }
+
+    @Override
+    public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+        if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        return LoadedMekanismBridge.ChemicalPort.super.facet(facetType);
     }
 
     @Override
@@ -243,6 +278,41 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         FailureOccurrence occurrence = FailureOccurrence.at(reason, type().id(), FailurePhase.CAPABILITY_COMMIT,
                 null, null, details);
         return CapabilityResult.failure(ExecutionStatus.blocked(type().id(), type().id(), occurrence));
+    }
+
+    private CapabilityResult commitAsync(AsyncCapabilityOperation operation, TransactionContext transaction) {
+        if (operation instanceof AsyncCapabilityOperation.Group group) {
+            try (Transaction nested = Transaction.open(transaction)) {
+                for (AsyncCapabilityOperation child : group.operations()) {
+                    CapabilityResult result = commitAsync(child, nested);
+                    if (!result.success()) return result;
+                }
+                nested.commit();
+            }
+            return CapabilityResult.successful();
+        }
+        if (!(operation instanceof AsyncCapabilityOperation.Resource resource)
+                || !type().id().equals(resource.capabilityId())) {
+            return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+        }
+        ChemicalResource nativeResource;
+        try {
+            nativeResource = NativeAsyncResourceValues.chemical(resource.resource());
+        } catch (IllegalArgumentException exception) {
+            return failure(MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
+        }
+        ChemicalResource current = chemicalTank.resource();
+        boolean matches = !current.isEmpty() && current.equals(nativeResource);
+        if ((!resource.insert() && !matches) || (resource.insert() && !current.isEmpty() && !matches)) {
+            return failure(resource.insert() ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
+                    : MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
+        }
+        long moved = resource.insert()
+                ? storage.insert(0, nativeResource, resource.amount(), transaction)
+                : storage.extract(0, nativeResource, resource.amount(), transaction);
+        return moved == resource.amount() ? CapabilityResult.successful()
+                : failure(resource.insert() ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
+                : MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
     }
 
     private static void checkSlot(int slot) {
