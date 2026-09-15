@@ -199,7 +199,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     /** Notifies linked controllers after AE2's native return inventory drains. */
     public void onNativeReturnInventoryDrained() {
-        MMCR.LOG.info("[ae2-pattern-debug] native return inventory changed at {}", worldPosition);
+        // MMCR.LOG.info("[ae2-pattern-debug] native return inventory changed at {}", worldPosition);
         notifyStorageChanged();
     }
 
