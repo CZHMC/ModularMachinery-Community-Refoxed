@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -30,8 +31,11 @@ import java.util.function.IntSupplier;
 public final class MachineAsyncCoordinator {
     private static final Map<ServerLevel, MachineAsyncCoordinator> COORDINATORS = new WeakHashMap<>();
     private static final int WORKER_COUNT = ServerConfig.asyncWorkerCount();
+    private static final AtomicInteger WORKER_THREAD_ID = new AtomicInteger(1);
+    private static final ThreadFactory WORKER_THREAD_FACTORY = runnable ->
+            new Thread(runnable, "MMCR-AsyncWorker-" + WORKER_THREAD_ID.getAndIncrement());
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
-            0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+            0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), WORKER_THREAD_FACTORY);
     private static final int MAX_STALLED_FENCE_PASSES = 5;
 
     private final Executor executor;
