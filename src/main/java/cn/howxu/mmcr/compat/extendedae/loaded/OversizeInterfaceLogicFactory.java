@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded;
+package cn.howxu.mmcr.compat.extendedae.loaded;
 
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.stacks.AEKeyTypes;

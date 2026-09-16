@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.extendedae;
+package cn.howxu.mmcr.compat.extendedae;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.List;

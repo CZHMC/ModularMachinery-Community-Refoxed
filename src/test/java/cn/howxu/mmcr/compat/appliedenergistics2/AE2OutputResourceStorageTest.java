@@ -16,7 +16,7 @@ import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedInputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;

@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind;
+package cn.howxu.mmcr.compat.extendedae.loaded.kind;
 
 import appeng.api.networking.IManagedGridNode;
 import appeng.core.definitions.AEBlocks;

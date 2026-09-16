@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind;
+package cn.howxu.mmcr.compat.extendedae.loaded.kind;
 
 import appeng.api.networking.IManagedGridNode;
 import appeng.helpers.InterfaceLogic;
@@ -7,7 +7,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.OversizeInterfaceLogicFactory;
+import cn.howxu.mmcr.compat.extendedae.loaded.OversizeInterfaceLogicFactory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;

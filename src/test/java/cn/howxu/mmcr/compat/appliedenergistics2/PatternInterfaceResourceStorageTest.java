@@ -13,7 +13,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;

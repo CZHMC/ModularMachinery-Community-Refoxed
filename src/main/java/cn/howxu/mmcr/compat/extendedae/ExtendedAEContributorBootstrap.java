@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.extendedae;
+package cn.howxu.mmcr.compat.extendedae;
 
 import java.util.Objects;
 import net.neoforged.fml.ModList;
@@ -11,7 +11,7 @@ import net.neoforged.fml.ModList;
 public final class ExtendedAEContributorBootstrap {
     private static final String EXTENDED_AE_MOD_ID = "extendedae";
     private static final String LOADED_CONTRIBUTOR =
-            "cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.LoadedExtendedAEContributor";
+            "cn.howxu.mmcr.compat.extendedae.loaded.LoadedExtendedAEContributor";
     private static volatile ExtendedAEContributor contributor;
     private static volatile ExtendedAEContributor testingContributor;
 

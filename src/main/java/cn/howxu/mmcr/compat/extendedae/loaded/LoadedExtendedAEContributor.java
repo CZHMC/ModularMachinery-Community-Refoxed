@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded;
+package cn.howxu.mmcr.compat.extendedae.loaded;
 
 import appeng.api.AECapabilities;
 import appeng.helpers.InterfaceLogicHost;
@@ -6,14 +6,14 @@ import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.MenuOpener;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.ExtendedAEContributor;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedInputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedOutputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedStockingInputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.OversizeInputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.OversizeOutputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.OversizeStockingInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedOutputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedStockingInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeOutputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeStockingInputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeDataProvider;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
@@ -65,13 +65,13 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
     public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
         if (kind == null) return null;
         return switch (kind.id()) {
-            case "eae_me_extended_input_interface" -> MMCR.id("block/appliedenergistics2/eae_me_extended_input_interface");
-            case "eae_me_extended_stocking_input_interface" -> MMCR.id("block/appliedenergistics2/eae_me_extended_stocking_input_interface");
-            case "eae_me_extended_output_interface" -> MMCR.id("block/appliedenergistics2/eae_me_extended_output_interface");
-            case "eae_me_oversize_input_interface" -> MMCR.id("block/appliedenergistics2/eae_me_oversize_input_interface");
-            case "eae_me_oversize_stocking_input_interface" -> MMCR.id("block/appliedenergistics2/eae_me_oversize_stocking_input_interface");
-            case "eae_me_oversize_output_interface" -> MMCR.id("block/appliedenergistics2/eae_me_oversize_output_interface");
-            case "eae_me_extended_pattern_interface" -> MMCR.id("block/appliedenergistics2/eae_me_extended_pattern_interface");
+            case "eae_me_extended_input_interface" -> MMCR.id("block/extendedae/eae_me_extended_input_interface");
+            case "eae_me_extended_stocking_input_interface" -> MMCR.id("block/extendedae/eae_me_extended_stocking_input_interface");
+            case "eae_me_extended_output_interface" -> MMCR.id("block/extendedae/eae_me_extended_output_interface");
+            case "eae_me_oversize_input_interface" -> MMCR.id("block/extendedae/eae_me_oversize_input_interface");
+            case "eae_me_oversize_stocking_input_interface" -> MMCR.id("block/extendedae/eae_me_oversize_stocking_input_interface");
+            case "eae_me_oversize_output_interface" -> MMCR.id("block/extendedae/eae_me_oversize_output_interface");
+            case "eae_me_extended_pattern_interface" -> MMCR.id("block/extendedae/eae_me_extended_pattern_interface");
             default -> null;
         };
     }
