@@ -96,6 +96,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
+        if (contributor.available() && contributor.openMenu(player, level, pos)) return true;
         if (level.getBlockEntity(pos) instanceof InputInterfaceBlockEntity host) {
             return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
@@ -111,7 +112,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (level.getBlockEntity(pos) instanceof PatternInterfaceBlockEntity host) {
             return MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
-        return contributor.available() && contributor.openMenu(player, level, pos);
+        return false;
     }
 
     @Override

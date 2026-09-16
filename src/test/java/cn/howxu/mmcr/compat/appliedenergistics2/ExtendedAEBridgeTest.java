@@ -8,12 +8,14 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.LoadedExtendedAEContributor;
+import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedInputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -61,6 +63,7 @@ class ExtendedAEBridgeTest {
         bindTestEntityType(OutputInterfaceKind.INSTANCE);
         bindTestEntityType(AsyncOutputInterfaceKind.INSTANCE);
         bindTestEntityType(PatternInterfaceKind.INSTANCE);
+        bindTestEntityType(ExtendedInputInterfaceKind.INSTANCE);
     }
 
     @AfterEach
@@ -136,6 +139,30 @@ class ExtendedAEBridgeTest {
         assertThatThrownBy(() -> bridge.openMenu(null, level, BlockPos.ZERO))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Menus must be opened on the server.");
+    }
+
+    @Test
+    void availableContributorRoutesExtendedAeHostsBeforeSharedNativeEntityTypes() {
+        MenuRoutingTestContributor contributor = new MenuRoutingTestContributor();
+        ExtendedAEContributorBootstrap.installForTesting(contributor);
+        LoadedAE2Bridge bridge = new LoadedAE2Bridge();
+        var extendedHost = ExtendedInputInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+        Level extendedLevel = LevelStub.createWithBlockEntities(List.of(extendedHost));
+        extendedHost.setLevel(extendedLevel);
+
+        assertThat(bridge.openMenu(null, extendedLevel, BlockPos.ZERO)).isTrue();
+        assertThat(contributor.extendedMenuOpened).isTrue();
+
+        var nativeHost = InputInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+        Level nativeLevel = LevelStub.createWithBlockEntities(List.of(nativeHost));
+        nativeHost.setLevel(nativeLevel);
+
+        assertThatThrownBy(() -> bridge.openMenu(null, nativeLevel, BlockPos.ZERO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Menus must be opened on the server.");
+        assertThat(contributor.nativeMenuChecked).isTrue();
     }
 
     private static RegisterCapabilitiesEvent capabilityEvent() {
@@ -282,7 +309,7 @@ class ExtendedAEBridgeTest {
 
         @Override
         public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
-            throw unexpectedDelegation();
+            return false;
         }
 
         @Override
@@ -299,7 +326,32 @@ class ExtendedAEBridgeTest {
         }
 
         private AssertionError unexpectedDelegation() {
-            return new AssertionError("Native AE2 paths must not be delegated to ExtendedAE");
+            return new AssertionError("Native AE2 paths must not be delegated beyond menu fallback");
         }
+    }
+
+    /** Records the contributor-first menu routing contract. */
+    private static final class MenuRoutingTestContributor implements ExtendedAEContributor {
+        private boolean extendedMenuOpened;
+        private boolean nativeMenuChecked;
+
+        @Override public boolean available() { return true; }
+        @Override public List<IOPortKind> portKinds() { return List.of(ExtendedInputInterfaceKind.INSTANCE); }
+        @Override public boolean isPort(String id) { return ExtendedInputInterfaceKind.INSTANCE.id().equals(id); }
+
+        @Override
+        public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
+            if (level.getBlockEntity(pos) instanceof InputInterfaceBlockEntity host
+                    && host.kind() == ExtendedInputInterfaceKind.INSTANCE) {
+                extendedMenuOpened = true;
+                return true;
+            }
+            nativeMenuChecked = true;
+            return false;
+        }
+
+        @Override public @Nullable Identifier portOverlayTexture(IOPortKind kind) { return null; }
+        @Override public void registerCapabilities(RegisterCapabilitiesEvent event) {}
+        @Override public void registerJadeCommon(IWailaCommonRegistration registration) {}
     }
 }
