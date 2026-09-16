@@ -2,7 +2,6 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 
 import appeng.helpers.InventoryAction;
 import appeng.menu.AEBaseMenu;
-import appeng.menu.SlotSemantics;
 import appeng.menu.slot.AppEngSlot;
 import cn.howxu.mmcr.compat.appliedenergistics2.util.InterfaceMenuPolicy;
 import net.minecraft.server.level.ServerPlayer;
@@ -69,10 +68,10 @@ public abstract class InterfaceMenuMixin {
     private boolean mmcr$isExtractableOutputStorageSlot(int slot) {
         if (slot < 0) return false;
         AEBaseMenu menu = (AEBaseMenu) (Object) this;
-        for (Slot candidate : menu.getSlots(SlotSemantics.STORAGE)) {
-            if (candidate.index == slot && candidate instanceof AppEngSlot appEngSlot) {
-                return InterfaceMenuPolicy.isExtractableOutputStorageSlot(getTarget(), appEngSlot.getInventory());
-            }
+        if (slot >= menu.slots.size()) return false;
+        Slot candidate = menu.getSlot(slot);
+        if (candidate instanceof AppEngSlot appEngSlot) {
+            return InterfaceMenuPolicy.isExtractableOutputStorageSlot(getTarget(), appEngSlot.getInventory());
         }
         return false;
     }
