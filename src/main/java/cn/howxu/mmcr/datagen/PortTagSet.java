@@ -1,0 +1,31 @@
+package cn.howxu.mmcr.datagen;
+
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import net.minecraft.resources.Identifier;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+
+/**
+ * Derives stable tag paths for one IO port kind.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+record PortTagSet(List<Identifier> tags, boolean optionalEntries) {
+    static PortTagSet forKind(IOPortKind kind) {
+        LinkedHashSet<Identifier> tags = new LinkedHashSet<>();
+        tags.add(MMCR.id("ports"));
+        tags.add(MMCR.id("machines"));
+        kind.families().forEach(family -> {
+            String prefix = family.familyId().getNamespace().equals(MMCR.MODID)
+                    || family.familyId().getNamespace().equals("minecraft")
+                    ? family.familyId().getPath()
+                    : family.familyId().getNamespace() + "_" + family.familyId().getPath();
+            tags.add(MMCR.id(prefix + "_ports"));
+            tags.add(MMCR.id(prefix + "_" + family.ioType().getSerializedName() + "_ports"));
+        });
+        kind.modDependencies().forEach(dependency -> tags.add(MMCR.id(dependency + "_ports")));
+        return new PortTagSet(List.copyOf(tags), !kind.modDependencies().isEmpty());
+    }
+}
