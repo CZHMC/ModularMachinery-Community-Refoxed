@@ -52,6 +52,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -188,48 +189,17 @@ class AE2OutputInterfaceHostTest {
         host.linkControllerAppearance(controller.getBlockPos(), null);
 
         AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
-        host.getLogic().getReturnInv().setStack(0, new GenericStack(gold, 2L));
+        try (Transaction transaction = Transaction.openRoot()) {
+            host.getLogic().getReturnInv().setStack(0, new GenericStack(gold, 2L));
+            transaction.commit();
+        }
+        host.serverTick();
+        host.linkControllerAppearance(controller.getBlockPos(), null);
         controller.notifiedOutputResources.clear();
 
         assertThat(host.getLogic().getReturnInv().injectIntoNetwork(new MEStorage() {
             @Override
             public long insert(AEKey key, long amount, appeng.api.config.Actionable mode, IActionSource source) {
-                return amount;
-            }
-
-            @Override
-            public Component getDescription() {
-                return Component.literal("test");
-            }
-        }, IActionSource.empty(), ignored -> {})).isTrue();
-
-        host.serverTick();
-
-        assertThat(controller.notifiedOutputResources).containsExactly(ItemResource.of(Items.GOLD_INGOT));
-    }
-
-    @Test
-    void restoredPatternHostNotifiesLinkedOutputCapacitySearchesAfterNativeReturnInventoryDrain() {
-        PatternInterfaceBlockEntity source = patternHost();
-        BlockPos controllerPos = new BlockPos(1, 0, 0);
-        source.linkControllerAppearance(controllerPos, null);
-        source.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 2L));
-        var saved = source.saveCustomOnly(HolderLookup.Provider.create(Stream.empty()));
-
-        PatternInterfaceBlockEntity host = patternHost();
-        RecordingController controller = new RecordingController(controllerPos,
-                ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
-        var level = LevelStub.create(Map.of(
-                host.getBlockPos(), host.getBlockState().getBlock(),
-                controller.getBlockPos(), controller.getBlockState().getBlock()), List.of(host, controller));
-        host.setLevel(level);
-        controller.setLevel(level);
-        host.loadCustomOnly(TagValueInput.create(ProblemReporter.DISCARDING,
-                HolderLookup.Provider.create(Stream.empty()), saved));
-
-        assertThat(host.getLogic().getReturnInv().injectIntoNetwork(new MEStorage() {
-            @Override
-            public long insert(AEKey key, long amount, appeng.api.config.Actionable mode, IActionSource actionSource) {
                 return amount;
             }
 

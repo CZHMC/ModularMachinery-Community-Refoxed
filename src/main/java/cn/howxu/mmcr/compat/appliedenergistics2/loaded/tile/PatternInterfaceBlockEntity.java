@@ -72,6 +72,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final OutputResourceStorage<ItemResource> itemOutputStorage;
     private final OutputResourceStorage<FluidResource> fluidOutputStorage;
     private long observedReturnInventoryAmount;
+    private boolean returnInventorySnapshotPending;
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -142,8 +143,11 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void saveChanges() {
-        if (Transaction.getCurrentOpenedTransaction() != null) return;
         observedReturnInventoryAmount = returnInventoryAmount();
+        if (Transaction.getCurrentOpenedTransaction() != null) {
+            returnInventorySnapshotPending = true;
+            return;
+        }
         notifyStorageChanged();
     }
 
@@ -208,6 +212,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     protected void tick() {
         super.tick();
+        if (returnInventorySnapshotPending) {
+            returnInventorySnapshotPending = false;
+            notifyStorageChanged();
+        }
         long currentAmount = returnInventoryAmount();
         if (currentAmount < observedReturnInventoryAmount) onNativeReturnInventoryDrained();
         observedReturnInventoryAmount = currentAmount;
