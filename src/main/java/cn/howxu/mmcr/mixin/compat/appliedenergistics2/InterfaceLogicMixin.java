@@ -5,7 +5,7 @@ import appeng.api.stacks.GenericStack;
 import appeng.helpers.InterfaceLogic;
 import appeng.helpers.InterfaceLogicHost;
 import appeng.util.ConfigInventory;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.NetworkOwnedInputHost;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -41,7 +41,7 @@ public abstract class InterfaceLogicMixin {
 
     @Inject(method = "updatePlan(I)V", at = @At("TAIL"))
     private void mmcr$limitInputReturnPlan(int slot, CallbackInfo callbackInfo) {
-        if (!(host instanceof InputInterfaceBlockEntity input)) return;
+        if (!(host instanceof NetworkOwnedInputHost input)) return;
 
         GenericStack planned = plannedWork[slot];
         if (planned == null || planned.amount() >= 0L) {
@@ -58,14 +58,14 @@ public abstract class InterfaceLogicMixin {
     private void mmcr$capturePlanStorage(int slot, AEKey what, int amount,
                                          CallbackInfoReturnable<Boolean> callbackInfo) {
         mmcr$planAmount = amount;
-        mmcr$planStorageBefore = host instanceof InputInterfaceBlockEntity
+        mmcr$planStorageBefore = host instanceof NetworkOwnedInputHost
                 ? getStorage().getStack(slot) : null;
     }
 
     @Inject(method = "tryUsePlan(ILappeng/api/stacks/AEKey;I)Z", at = @At("RETURN"))
     private void mmcr$recordPlanStorage(int slot, AEKey what, int amount,
                                         CallbackInfoReturnable<Boolean> callbackInfo) {
-        if (host instanceof InputInterfaceBlockEntity input) {
+        if (host instanceof NetworkOwnedInputHost input) {
             if (mmcr$planAmount > 0) {
                 mmcr$recordStorageIncrease(input, slot, mmcr$planStorageBefore);
             } else if (mmcr$planAmount < 0) {
@@ -77,7 +77,7 @@ public abstract class InterfaceLogicMixin {
     }
 
     @Unique
-    private void mmcr$recordStorageIncrease(InputInterfaceBlockEntity input, int slot, GenericStack before) {
+    private void mmcr$recordStorageIncrease(NetworkOwnedInputHost input, int slot, GenericStack before) {
         GenericStack after = getStorage().getStack(slot);
         if (after == null) return;
 
@@ -88,7 +88,7 @@ public abstract class InterfaceLogicMixin {
     }
 
     @Unique
-    private void mmcr$recordStorageDecrease(InputInterfaceBlockEntity input, int slot, GenericStack before) {
+    private void mmcr$recordStorageDecrease(NetworkOwnedInputHost input, int slot, GenericStack before) {
         if (before == null) return;
 
         GenericStack after = getStorage().getStack(slot);

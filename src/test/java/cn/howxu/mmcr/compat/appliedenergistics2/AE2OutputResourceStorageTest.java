@@ -15,16 +15,28 @@ import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedInputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
+import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -53,6 +65,7 @@ class AE2OutputResourceStorageTest {
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
         if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
+        bindTestAE2InterfaceItem();
     }
 
     @Test
@@ -132,6 +145,20 @@ class AE2OutputResourceStorageTest {
 
         assertThat(network.amount(AEItemKey.of(iron))).isEqualTo(8L);
         assertThat(returns.isEmpty()).isTrue();
+    }
+
+    @Test
+    void extendedInputKindRetainsNetworkProvenanceAcrossPartialReturn() {
+        bindTestEntityType(ExtendedInputInterfaceKind.INSTANCE);
+        var host = ExtendedInputInterfaceKind.INSTANCE.entityFactory()
+                .create(net.minecraft.core.BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
+        host.getInterfaceLogic().getStorage().setStack(0, new GenericStack(iron, 8L));
+
+        host.recordNetworkPull(0, iron, 8L);
+        host.recordNetworkReturn(0, iron, 3L);
+
+        assertThat(host.networkOwnedAmount(0, iron)).isEqualTo(5L);
     }
 
     @Test
@@ -674,6 +701,35 @@ class AE2OutputResourceStorageTest {
         Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
         Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
         registry.freeze();
+    }
+
+    private static void bindTestAE2InterfaceItem() {
+        Identifier id = Identifier.fromNamespaceAndPath("ae2", "interface");
+        MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
+        registry.unfreeze(true);
+        try {
+            if (!registry.containsKey(id)) {
+                Registry.register(registry, id, new Item(new Item.Properties().setId(
+                        ResourceKey.create(Registries.ITEM, id))));
+            }
+        } finally {
+            registry.freeze();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void bindTestEntityType(IOPortKind kind) {
+        Identifier id = MMCR.id(kind.id());
+        MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        registry.unfreeze(true);
+        try {
+            if (!registry.containsKey(id)) {
+                Registry.register(registry, id, new BlockEntityType<>(kind.entityFactory(), Blocks.IRON_BLOCK));
+            }
+        } finally {
+            registry.freeze();
+        }
+        ModBlockEntities.BES.put(kind.id(), DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
     }
 
     private static final class RejectedInventory extends GenericStackInv {

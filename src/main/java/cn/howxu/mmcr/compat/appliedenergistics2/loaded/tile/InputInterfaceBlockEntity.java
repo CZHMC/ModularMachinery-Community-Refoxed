@@ -41,7 +41,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class InputInterfaceBlockEntity extends IOPortBlockEntity
-        implements InterfaceLogicHost, IGridConnectedBlockEntity {
+        implements InterfaceLogicHost, IGridConnectedBlockEntity, NetworkOwnedInputHost {
     private static final String NETWORK_OWNED_KEY = "network_owned";
     private static final String NETWORK_OWNED_SLOT_KEY = "slot";
     private static final IGridNodeListener<InputInterfaceBlockEntity> NODE_LISTENER =

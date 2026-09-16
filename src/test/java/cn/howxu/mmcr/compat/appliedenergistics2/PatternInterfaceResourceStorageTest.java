@@ -10,19 +10,25 @@ import appeng.api.stacks.KeyCounter;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -30,10 +36,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import com.mojang.serialization.Lifecycle;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -291,6 +300,17 @@ class PatternInterfaceResourceStorageTest {
         assertThatIllegalArgumentException().isThrownBy(() -> returns.insert(0, iron, -1L, null));
     }
 
+    @Test
+    void extendedPatternKindProvidesTheNativeReturnNotificationHost() {
+        bindTestEntityType(ExtendedPatternInterfaceKind.INSTANCE);
+        var host = ExtendedPatternInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+
+        host.onNativeReturnInventoryDrained();
+
+        assertThat(host.craftingMachine()).isNotNull();
+    }
+
     private static KeyCounter counter(AEKey firstKey, long firstAmount) {
         KeyCounter counter = new KeyCounter();
         counter.add(firstKey, firstAmount);
@@ -311,6 +331,21 @@ class PatternInterfaceResourceStorageTest {
         Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
         Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
         registry.freeze();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void bindTestEntityType(IOPortKind kind) {
+        Identifier id = MMCR.id(kind.id());
+        MappedRegistry<BlockEntityType<?>> registry = (MappedRegistry<BlockEntityType<?>>) BuiltInRegistries.BLOCK_ENTITY_TYPE;
+        registry.unfreeze(true);
+        try {
+            if (!registry.containsKey(id)) {
+                Registry.register(registry, id, new BlockEntityType<>(kind.entityFactory(), Blocks.IRON_BLOCK));
+            }
+        } finally {
+            registry.freeze();
+        }
+        ModBlockEntities.BES.put(kind.id(), DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
     }
 
     private static KeyCounter counter(AEKey firstKey, long firstAmount, AEKey secondKey, long secondAmount) {

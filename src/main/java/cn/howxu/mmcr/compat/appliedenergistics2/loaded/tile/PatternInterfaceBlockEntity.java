@@ -55,7 +55,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author howxu <dev@howxu.cn>
  */
 public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
-        implements PatternProviderLogicHost, IGridConnectedBlockEntity {
+        implements PatternProviderLogicHost, IGridConnectedBlockEntity, PatternInterfaceHost {
     private static final IGridNodeListener<PatternInterfaceBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
