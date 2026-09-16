@@ -7,6 +7,7 @@ import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.ExtendedAEContributorBootstrap;
+import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.loaded.LoadedExtendedAEContributor;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
@@ -77,11 +78,21 @@ class ExtendedAEBridgeTest {
     }
 
     @Test
-    void missingLoadedExtendedAeContributorAddsNoPorts() {
-        ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.selectForTesting(true);
+    void loadedExtendedAeContributorProvidesAllExtendedInterfaceKinds() {
+        ExtendedAEContributor contributor = new LoadedExtendedAEContributor();
 
-        assertThat(contributor.available()).isFalse();
-        assertThat(contributor.portKinds()).isEmpty();
+        assertThat(contributor.available()).isTrue();
+        assertThat(contributor.portKinds()).extracting(IOPortKind::id)
+                .containsExactlyInAnyOrder(
+                        "eae_me_extended_input_interface",
+                        "eae_me_extended_stocking_input_interface",
+                        "eae_me_extended_output_interface",
+                        "eae_me_oversize_input_interface",
+                        "eae_me_oversize_stocking_input_interface",
+                        "eae_me_oversize_output_interface",
+                        "eae_me_extended_pattern_interface");
+        assertThat(contributor.portKinds())
+                .allSatisfy(kind -> assertThat(kind.modDependencies()).containsExactly("ae2", "extendedae"));
     }
 
     @Test
