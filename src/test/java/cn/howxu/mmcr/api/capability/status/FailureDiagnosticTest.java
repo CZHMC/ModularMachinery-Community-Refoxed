@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.capability.status;
 
+import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +33,18 @@ class FailureDiagnosticTest {
                 .plus(highStatus, 0.0F);
 
         assertThat(report.primary()).isSameAs(highStatus);
+    }
+
+    @Test
+    void report_prefers_insufficient_temperature_over_missing_chemical_input() {
+        ExecutionStatus missingChemical = status(MekanismFailureReasons.CHEMICAL_INPUT_MISSING);
+        ExecutionStatus insufficientTemperature = status(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT);
+
+        FailureReport report = FailureReport.empty()
+                .plus(missingChemical, 1.0F)
+                .plus(insufficientTemperature, 1.0F);
+
+        assertThat(report.primary()).isSameAs(insufficientTemperature);
     }
 
     @Test

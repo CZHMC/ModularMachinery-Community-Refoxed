@@ -360,7 +360,7 @@ class RecipeCandidateIndexTest {
                 indexedCandidates, null, List.of(), List.of()).compute();
 
         assertThat(result.failure()).isNotNull();
-        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(result.failure().reason()).isSameAs(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT);
         assertThat(result.failureReport().candidates()).extracting(FailureReport.Candidate::status)
                 .extracting(ExecutionStatus::reason)
                 .containsExactlyInAnyOrder(BuiltinFailureReasons.MISSING_INPUT,
@@ -370,7 +370,7 @@ class RecipeCandidateIndexTest {
                         BuiltinFailureReasons.MISSING_OUTPUT);
         assertThat(result.primaryFailure().trace().frames())
                 .anySatisfy(frame -> assertThat(frame.phase()).isEqualTo(FailurePhase.RECIPE_SEARCH))
-                .anySatisfy(frame -> assertThat(frame.source()).isEqualTo(ItemRequirement.TYPE.id()));
+                .anySatisfy(frame -> assertThat(frame.source()).isEqualTo(LoadedHeatRequirement.TYPE.id()));
     }
 
     @Test

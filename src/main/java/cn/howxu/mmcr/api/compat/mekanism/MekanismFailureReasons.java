@@ -20,7 +20,7 @@ public final class MekanismFailureReasons {
             "chemical_output_blocked", BuiltinFailureReasons.MISSING_OUTPUT.priority());
     public static final FailureReason CHEMICAL_TYPE_MISMATCH = reason("chemical_type_mismatch", 0);
     public static final FailureReason CHEMICAL_RADIOACTIVITY_REJECTED = reason("chemical_radioactivity_rejected", 0);
-    public static final FailureReason HEAT_TEMPERATURE_INSUFFICIENT = reason("heat_temperature_insufficient", 250);
+    public static final FailureReason HEAT_TEMPERATURE_INSUFFICIENT = reason("heat_temperature_insufficient", 401);
     public static final FailureReason HEAT_INPUT_MISSING = reason("heat_input_missing", 0);
     public static final FailureReason HEAT_OUTPUT_BLOCKED = reason("heat_output_blocked", 0);
 

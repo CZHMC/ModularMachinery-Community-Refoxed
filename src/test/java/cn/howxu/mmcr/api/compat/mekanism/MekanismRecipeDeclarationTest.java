@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Verifies the Mekanism-neutral recipe declaration values.
@@ -91,7 +92,8 @@ class MekanismRecipeDeclarationTest {
                 MekanismFailureReasons.CHEMICAL_INPUT_MISSING.priority());
         assertEquals(BuiltinFailureReasons.MISSING_OUTPUT.priority(),
                 MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED.priority());
-        assertEquals(250, MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.priority());
+        assertTrue(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.priority()
+                > MekanismFailureReasons.CHEMICAL_INPUT_MISSING.priority());
 
         FailureReason reason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
         ExecutionStatus status = ExecutionStatus.blocked(reason.id(), reason.id(),
