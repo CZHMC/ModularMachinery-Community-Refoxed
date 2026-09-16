@@ -45,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * End-to-end GameTest coverage for the AE2 stocking input interface.
@@ -245,6 +246,7 @@ public class AE2StockingInterfaceGameTest {
         chest.setCell(AEItems.ITEM_CELL_64K.stack());
         port.getInterfaceLogic().getConfig().setStack(35,
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+        AtomicLong refreshesAfterInitialWatch = new AtomicLong();
 
         helper.runAtTickTime(2, () -> {
             helper.assertTrue(port.getMainNode().getNode() != null && chest.getMainNode().getNode() != null
@@ -264,6 +266,7 @@ public class AE2StockingInterfaceGameTest {
             helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(35)).amount()
                             == OVERSIZE_TRANSFER_AMOUNT,
                     "Oversize stocking watcher mirrors the configured key after the large network transfer");
+            refreshesAfterInitialWatch.set(port.storageMirrorRefreshes());
             chest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), 1L, Actionable.MODULATE, IActionSource.empty());
         });
 
@@ -271,6 +274,13 @@ public class AE2StockingInterfaceGameTest {
             helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(35)).amount()
                             == OVERSIZE_TRANSFER_AMOUNT - 1L,
                     "Watcher updates the changed configured key on the next tick");
+            helper.assertTrue(port.storageMirrorRefreshes() == refreshesAfterInitialWatch.get(),
+                    "Watcher callback updates the changed key without a full network mirror refresh");
+        });
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(port.storageMirrorRefreshes() == refreshesAfterInitialWatch.get(),
+                    "Unchanged ticks do not poll the full network storage");
             helper.succeed();
         });
     }

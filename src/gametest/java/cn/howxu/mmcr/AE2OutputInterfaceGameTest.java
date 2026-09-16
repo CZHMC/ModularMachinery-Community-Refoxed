@@ -305,12 +305,13 @@ public class AE2OutputInterfaceGameTest {
             port.getInterfaceLogic().getStorage().insert(35, AEItemKey.of(Items.IRON_INGOT), 1L, Actionable.MODULATE);
             ContainerExInterface menu = new ContainerExInterface(ContainerExInterface.TYPE, 0, player.getInventory(), port);
             AppEngSlot storageSlot = (AppEngSlot) menu.getSlots(com.glodblock.github.extendedae.client.ExSemantics.EX_8).getLast();
+            storageSlot.set(Items.DIAMOND.getDefaultInstance());
+            helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(35).what().equals(AEItemKey.of(Items.IRON_INGOT)),
+                    "ExtendedAE output storage menu rejects item insertion");
             helper.assertTrue(storageSlot.mayPickup(player), "ExtendedAE output storage can be extracted by a player");
             menu.quickMoveStack(player, storageSlot.index);
             helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(35) == null,
                     "Player menu extraction removes the extended output stack");
-            helper.assertFalse(menu.getConfigSlots().getLast().mayPlace(Items.DIAMOND.getDefaultInstance()),
-                    "ExtendedAE output menu blocks config-slot insertion");
             menu.setFilter(35, new ItemStack(Items.DIAMOND));
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(35) == null,
                     "ExtendedAE output menu blocks filter edits");

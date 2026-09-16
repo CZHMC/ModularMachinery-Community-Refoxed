@@ -94,6 +94,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
             AE2ResourceFamilies.FLUID.stockingInputView(NullInventory.of(), List.of()));
     @Nullable
     private IStackWatcher storageWatcher;
+    private long storageMirrorRefreshes;
     private CapabilitySnapshot capabilitySnapshot;
 
     public StockingInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
@@ -287,6 +288,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
 
     private void refreshStorageMirror() {
         if (level != null && level.isClientSide()) return;
+        storageMirrorRefreshes++;
         IGrid grid = mainNode.getGrid();
         boolean reportAmounts = mainNode.isActive() && grid != null;
         var cachedInventory = reportAmounts ? grid.getStorageService().getCachedInventory() : null;
@@ -320,6 +322,10 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         } finally {
             storage.endBatchSuppressed();
         }
+    }
+
+    public long storageMirrorRefreshes() {
+        return storageMirrorRefreshes;
     }
 
     private void normalizeConfigAmounts() {
