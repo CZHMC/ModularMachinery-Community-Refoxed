@@ -1,0 +1,17 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    }
+  ],
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "ae2:pattern_provider",
+    "mmcr:basic_casing"
+  ],
+  "result": {
+    "id": "mmcr:ae2_me_pattern_interface"
+  }
+}

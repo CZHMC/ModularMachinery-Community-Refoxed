@@ -1,0 +1,21 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    },
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "extendedae"
+    }
+  ],
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "mmcr:ae2_me_pattern_interface",
+    "extendedae:ex_pattern_provider"
+  ],
+  "result": {
+    "id": "mmcr:eae_me_extended_pattern_interface"
+  }
+}

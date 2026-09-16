@@ -1,9 +1,3 @@
-sourceSets.main.resources {
-    srcDir('src/generated/resources')
-    exclude("**/*.bbmodel")
-    exclude("src/generated/**/.cache")
-}
-
 sourceSets.test {
     resources.setSrcDirs(['src/test/resources'])
 }
