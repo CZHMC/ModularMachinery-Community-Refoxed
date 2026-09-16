@@ -68,6 +68,14 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public List<IOPortKind> portKinds() {
+        if (!contributor.available()) {
+            return List.of(
+                    InputInterfaceKind.INSTANCE,
+                    StockingInterfaceKind.INSTANCE,
+                    OutputInterfaceKind.INSTANCE,
+                    AsyncOutputInterfaceKind.INSTANCE,
+                    PatternInterfaceKind.INSTANCE);
+        }
         return Stream.concat(List.of(
                 InputInterfaceKind.INSTANCE,
                 StockingInterfaceKind.INSTANCE,
@@ -83,7 +91,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 || OUTPUT_INTERFACE_ID.equals(id)
                 || ASYNC_OUTPUT_INTERFACE_ID.equals(id)
                 || PATTERN_INTERFACE_ID.equals(id)
-                || contributor.isPort(id);
+                || contributor.available() && contributor.isPort(id);
     }
 
     @Override
@@ -103,7 +111,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (level.getBlockEntity(pos) instanceof PatternInterfaceBlockEntity host) {
             return MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
-        return contributor.openMenu(player, level, pos);
+        return contributor.available() && contributor.openMenu(player, level, pos);
     }
 
     @Override
@@ -118,7 +126,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (kind instanceof OutputInterfaceKind) return OUTPUT_INTERFACE_OVERLAY_TEXTURE;
         if (kind instanceof AsyncOutputInterfaceKind) return ASYNC_OUTPUT_INTERFACE_OVERLAY_TEXTURE;
         if (kind instanceof PatternInterfaceKind) return PATTERN_INTERFACE_OVERLAY_TEXTURE;
-        return contributor.portOverlayTexture(kind);
+        return contributor.available() ? contributor.portOverlayTexture(kind) : null;
     }
 
     @Override
@@ -146,7 +154,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 (be, ignored) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, patternInterfaceType,
                 (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
-        contributor.registerCapabilities(event);
+        if (contributor.available()) contributor.registerCapabilities(event);
     }
 
     @Override
@@ -161,7 +169,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 AsyncOutputInterfaceBlockEntity.class);
         registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
                 PatternInterfaceBlockEntity.class);
-        contributor.registerJadeCommon(registration);
+        if (contributor.available()) contributor.registerJadeCommon(registration);
     }
 
     @Override
