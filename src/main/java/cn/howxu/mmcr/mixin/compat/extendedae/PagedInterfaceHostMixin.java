@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.extendedae.mixin;
+package cn.howxu.mmcr.mixin.compat.extendedae;
 
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;

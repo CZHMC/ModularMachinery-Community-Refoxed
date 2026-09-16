@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.extendedae.mixin;
+package cn.howxu.mmcr.mixin.compat.extendedae;
 
 import appeng.client.gui.AEBaseScreen;
 import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
