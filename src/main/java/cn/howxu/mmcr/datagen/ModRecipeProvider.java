@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.recipes.RecipeCategory;
 import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.data.recipes.RecipeProvider;
@@ -27,7 +28,11 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.common.conditions.ICondition;
+import net.neoforged.neoforge.common.conditions.ModLoadedCondition;
 import net.neoforged.neoforge.common.Tags;
+
+import java.util.Arrays;
 
 public final class ModRecipeProvider extends RecipeProvider {
     private final HolderGetter<Item> items;
@@ -204,6 +209,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         }
 
         generatedPortRecipes();
+        ae2InterfaceRecipes();
 
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
                 .pattern("DBD")
@@ -399,6 +405,61 @@ public final class ModRecipeProvider extends RecipeProvider {
         }
     }
 
+    private void ae2InterfaceRecipes() {
+        ItemLike ae2Interface = externalItem("ae2", "interface");
+        ItemLike input = ModItems.ITEMS.get("ae2_me_input_interface").get();
+        ItemLike stockingInput = ModItems.ITEMS.get("ae2_me_stocking_input_interface").get();
+        ItemLike output = ModItems.ITEMS.get("ae2_me_output_interface").get();
+        ItemLike asyncOutput = ModItems.ITEMS.get("ae2_me_async_output_interface").get();
+        ItemLike pattern = ModItems.ITEMS.get("ae2_me_pattern_interface").get();
+
+        shaped(input, 1)
+                .pattern("A")
+                .pattern("B")
+                .define('A', ae2Interface)
+                .define('B', ModBlocks.BASIC_CASING.get())
+                .save(whenLoaded("ae2"));
+        shaped(output, 1)
+                .pattern("A")
+                .pattern("B")
+                .define('A', ModBlocks.BASIC_CASING.get())
+                .define('B', ae2Interface)
+                .save(whenLoaded("ae2"));
+        shapeless(stockingInput, 1)
+                .requires(input)
+                .requires(externalItem("ae2", "storage_bus"))
+                .save(whenLoaded("ae2"));
+        shapeless(asyncOutput, 1)
+                .requires(output)
+                .requires(ModItems.THREAD_DISPERSER.get())
+                .save(whenLoaded("ae2"));
+        shapeless(pattern, 1)
+                .requires(externalItem("ae2", "pattern_provider"))
+                .requires(ModBlocks.BASIC_CASING.get())
+                .save(whenLoaded("ae2"));
+
+        ItemLike extendedInput = ModItems.ITEMS.get("eae_me_extended_input_interface").get();
+        ItemLike extendedStockingInput = ModItems.ITEMS.get("eae_me_extended_stocking_input_interface").get();
+        ItemLike extendedOutput = ModItems.ITEMS.get("eae_me_extended_output_interface").get();
+        ItemLike oversizeInput = ModItems.ITEMS.get("eae_me_oversize_input_interface").get();
+        ItemLike oversizeStockingInput = ModItems.ITEMS.get("eae_me_oversize_stocking_input_interface").get();
+        ItemLike oversizeOutput = ModItems.ITEMS.get("eae_me_oversize_output_interface").get();
+        ItemLike extendedPattern = ModItems.ITEMS.get("eae_me_extended_pattern_interface").get();
+        ItemLike extendedAeInterface = externalItem("extendedae", "ex_interface");
+        ItemLike oversizeAeInterface = externalItem("extendedae", "oversize_interface");
+
+        shapeless(extendedInput, 1).requires(input).requires(extendedAeInterface).save(whenLoaded("ae2", "extendedae"));
+        shapeless(extendedStockingInput, 1).requires(stockingInput).requires(extendedAeInterface).save(whenLoaded("ae2", "extendedae"));
+        shapeless(extendedOutput, 1).requires(output).requires(extendedAeInterface).save(whenLoaded("ae2", "extendedae"));
+        shapeless(oversizeInput, 1).requires(extendedInput).requires(oversizeAeInterface).save(whenLoaded("ae2", "extendedae"));
+        shapeless(oversizeStockingInput, 1).requires(extendedStockingInput).requires(oversizeAeInterface).save(whenLoaded("ae2", "extendedae"));
+        shapeless(oversizeOutput, 1).requires(extendedOutput).requires(oversizeAeInterface).save(whenLoaded("ae2", "extendedae"));
+        shapeless(extendedPattern, 1)
+                .requires(pattern)
+                .requires(externalItem("extendedae", "ex_pattern_provider"))
+                .save(whenLoaded("ae2", "extendedae"));
+    }
+
     private ItemLike combinedRecipe(String resultId, String itemId, String fluidId) {
         ItemLike result = ModItems.ITEMS.get(resultId).get();
         shapeless(result, 1)
@@ -414,6 +475,17 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .requires(previous)
                 .requires(ModItems.MODULARIUM.get())
                 .save(output);
+    }
+
+    private RecipeOutput whenLoaded(String... modIds) {
+        ICondition[] conditions = Arrays.stream(modIds)
+                .map(ModLoadedCondition::new)
+                .toArray(ICondition[]::new);
+        return output.withConditions(conditions);
+    }
+
+    private ItemLike externalItem(String namespace, String path) {
+        return BuiltInRegistries.ITEM.getValue(Identifier.fromNamespaceAndPath(namespace, path));
     }
 
     private static String itemInputBusId(ItemBusSize size) {

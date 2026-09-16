@@ -1,0 +1,21 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "ae2"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": "ae2:interface",
+    "B": "mmcr:basic_casing"
+  },
+  "pattern": [
+    "A",
+    "B"
+  ],
+  "result": {
+    "id": "mmcr:ae2_me_input_interface"
+  }
+}
