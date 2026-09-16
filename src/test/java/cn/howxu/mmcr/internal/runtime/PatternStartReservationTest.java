@@ -162,7 +162,7 @@ class PatternStartReservationTest {
     }
 
     @Test
-    void output_matching_rejects_differences_in_amount_components_fluid_and_probability() {
+    void output_matching_rejects_differences_in_amount_components_and_fluid() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         formForPattern(controller, true);
         ItemStack componentOutput = stack(Items.IRON_NUGGET, 1);
@@ -170,10 +170,7 @@ class PatternStartReservationTest {
         MachineRecipe exact = recipeWithOutputs("reservation_output_strict", List.of(
                 new MachineOutput.ItemOutput(componentOutput, 1F),
                 new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 1_000), 1F)));
-        MachineRecipe probabilistic = recipeWithOutputs("reservation_output_probability", List.of(
-                new MachineOutput.ItemOutput(stack(Items.GOLD_NUGGET, 1), 0.5F)));
         RecipeRegistry.registerStatic(exact);
-        RecipeRegistry.registerStatic(probabilistic);
 
         assertThat(controller.reservePatternStart(PATTERN_PORT,
                 List.of(new MachineOutput.ItemOutput(stack(Items.IRON_NUGGET, 2), 1F),
@@ -187,9 +184,21 @@ class PatternStartReservationTest {
                 List.of(new MachineOutput.ItemOutput(componentOutput, 1F),
                         new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 500), 1F)), List.of()).status())
                 .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
-        assertThat(controller.reservePatternStart(PATTERN_PORT,
-                List.of(new MachineOutput.ItemOutput(stack(Items.GOLD_NUGGET, 1), 0.5F)), List.of()).status())
-                .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+    }
+
+    @Test
+    void output_matching_accepts_a_probabilistic_recipe_output() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        formForPattern(controller, true);
+        MachineRecipe recipe = recipeWithOutputs("reservation_output_probability", List.of(
+                new MachineOutput.ItemOutput(stack(Items.GOLD_NUGGET, 1), 0.5F)));
+        RecipeRegistry.registerStatic(recipe);
+
+        PatternStartReservation reservation = controller.reservePatternStart(PATTERN_PORT,
+                List.of(new MachineOutput.ItemOutput(stack(Items.GOLD_NUGGET, 1), 1F)), List.of());
+
+        assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+        reservation.rollback();
     }
 
     @Test

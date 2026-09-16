@@ -3973,14 +3973,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static boolean samePatternOutput(MachineOutput expected, MachineOutput actual) {
         if (expected instanceof MachineOutput.ItemOutput expectedItem
                 && actual instanceof MachineOutput.ItemOutput actualItem) {
-            return expectedItem.chance() == 1F && actualItem.chance() == 1F
-                    && expectedItem.stack().getCount() == actualItem.stack().getCount()
+            return expectedItem.stack().getCount() == actualItem.stack().getCount()
                     && net.minecraft.world.item.ItemStack.isSameItemSameComponents(expectedItem.stack(), actualItem.stack());
         }
         if (expected instanceof MachineOutput.FluidOutput expectedFluid
                 && actual instanceof MachineOutput.FluidOutput actualFluid) {
-            return expectedFluid.chance() == 1F && actualFluid.chance() == 1F
-                    && expectedFluid.stack().getAmount() == actualFluid.stack().getAmount()
+            return expectedFluid.stack().getAmount() == actualFluid.stack().getAmount()
                     && expectedFluid.stack().getFluid() == actualFluid.stack().getFluid()
                     && Objects.equals(expectedFluid.stack().getComponents(), actualFluid.stack().getComponents());
         }
