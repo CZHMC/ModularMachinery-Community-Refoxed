@@ -202,20 +202,28 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
          register(event, "ae2_me_input_interface", 200,
                  helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
-         register(event, "ae2_me_input_manual_cache", 100,
-                 helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
+        register(event, "ae2_me_input_manual_cache", 100,
+                helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
+        register(event, "eae_me_extended_input_provenance", 100,
+                helper -> new AE2InterfaceGameTest().extendedInputReturnsOnlyAeOwnedResourcesAfterCommittedExtraction(helper));
         register(event, "ae2_me_stocking_input_interface", 100,
                 helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
+        register(event, "eae_me_oversize_stocking_watcher", 100,
+                helper -> new AE2StockingInterfaceGameTest().oversizeStockingWatcherTracksLargeConfiguredKey(helper));
         register(event, "task2_ae2_output_lifecycle", 100,
                 helper -> new Task2AE2OutputGameTest().outputWakeUpAndActiveNodeLifecycle(helper));
         register(event, "ae2_me_output_interface", 200,
                 helper -> new AE2OutputInterfaceGameTest().outputInterfaceDrainsToNetworkAndLocksConfig(helper));
+        register(event, "eae_me_extended_output_menu", 100,
+                helper -> new AE2OutputInterfaceGameTest().extendedOutputMenuAllowsExtractionButBlocksInsertionAndFilters(helper));
         register(event, "ae2_me_async_output_interface", 200,
                 helper -> new AE2AsyncOutputInterfaceGameTest().asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(helper));
         register(event, "ae2_me_pattern_interface", 160,
                 helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
         register(event, "ae2_me_pattern_interface_request", 100,
                 helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
+        register(event, "eae_me_extended_pattern_slot_35", 100,
+                helper -> new AE2PatternInterfaceGameTest().extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {

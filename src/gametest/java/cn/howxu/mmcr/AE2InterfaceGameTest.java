@@ -396,6 +396,65 @@ public class AE2InterfaceGameTest {
         });
     }
 
+    public void extendedInputReturnsOnlyAeOwnedResourcesAfterCommittedExtraction(GameTestHelper helper) {
+        helper.assertTrue(AE2Bridge.get().available(), "AE2 must be loaded for this integration test");
+
+        BlockPos inputPos = new BlockPos(0, 0, 0);
+        BlockPos chestPos = new BlockPos(3, 0, 0);
+        BlockPos energyPos = new BlockPos(3, 0, 2);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("eae_me_extended_input_interface").get().defaultBlockState());
+        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+
+        helper.runAtTickTime(2, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            chest.setCell(AEItems.ITEM_CELL_1K.stack());
+            helper.assertTrue(input != null && chest != null && energy != null
+                            && input.getMainNode().getNode() != null && chest.getMainNode().getNode() != null
+                            && energy.getMainNode().getNode() != null,
+                    "ExtendedAE input interface and its ME network initialize");
+            GridHelper.createConnection(input.getMainNode().getNode(), chest.getMainNode().getNode());
+            GridHelper.createConnection(input.getMainNode().getNode(), energy.getMainNode().getNode());
+        });
+
+        helper.runAtTickTime(4, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            helper.assertTrue(chest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT), NETWORK_ITEM_AMOUNT,
+                            Actionable.MODULATE, IActionSource.empty()) == NETWORK_ITEM_AMOUNT,
+                    "ME network accepts the ExtendedAE input source items");
+            input.getInterfaceLogic().getConfig().setStack(35,
+                    new GenericStack(AEItemKey.of(Items.IRON_INGOT), CONFIGURED_ITEM_AMOUNT));
+        });
+
+        helper.runAtTickTime(20, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
+            helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(35) == CONFIGURED_ITEM_AMOUNT,
+                    "ExtendedAE slot 35 stocks the configured AE-owned resources");
+            try (Transaction transaction = Transaction.openRoot()) {
+                helper.assertTrue(input.itemStorage().extract(35, ItemResource.of(Items.IRON_INGOT), 1L, transaction) == 1L,
+                        "Committed machine extraction consumes an AE-owned resource");
+                transaction.commit();
+            }
+            input.getInterfaceLogic().getStorage().insert(35, AEItemKey.of(Items.IRON_INGOT), MANUAL_ITEM_AMOUNT,
+                    Actionable.MODULATE);
+            input.getInterfaceLogic().getConfig().setStack(35, null);
+        });
+
+        helper.runAtTickTime(30, () -> {
+            InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos, InputInterfaceBlockEntity.class);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+            helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(35) == MANUAL_ITEM_AMOUNT,
+                    "Config cancellation returns only the remaining AE-owned resources, preserving manual cache items");
+            helper.assertTrue(chest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), NETWORK_ITEM_AMOUNT - 1L,
+                            Actionable.SIMULATE, IActionSource.empty()) == NETWORK_ITEM_AMOUNT - 1L,
+                    "The network receives all returnable resources except the committed machine extraction");
+            helper.succeed();
+        });
+    }
+
     private static ServerPlayer makePlayer(GameTestHelper helper) {
         return new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
                 new GameProfile(UUID.nameUUIDFromBytes(

@@ -15,6 +15,7 @@ import appeng.core.settings.TickRates;
 import appeng.menu.SlotSemantics;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.slot.AppEngSlot;
+import com.glodblock.github.extendedae.container.ContainerExInterface;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -286,6 +287,33 @@ public class AE2OutputInterfaceGameTest {
                     "InterfaceMenu.setFilter cannot write into the locked output config");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
                     "Locked output config leaves the storage empty after the menu write attempt");
+            helper.succeed();
+        });
+    }
+
+    public void extendedOutputMenuAllowsExtractionButBlocksInsertionAndFilters(GameTestHelper helper) {
+        helper.assertTrue(AE2Bridge.get().available(), "AE2 must be loaded for this integration test");
+
+        BlockPos portPos = new BlockPos(0, 0, 0);
+        helper.setBlock(portPos, ModBlocks.BLOCKS.get("eae_me_extended_output_interface").get().defaultBlockState());
+
+        helper.runAtTickTime(2, () -> {
+            OutputInterfaceBlockEntity port = helper.getBlockEntity(portPos, OutputInterfaceBlockEntity.class);
+            ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                    new GameProfile(UUID.nameUUIDFromBytes("mmcr-eae-output-menu".getBytes(StandardCharsets.UTF_8)),
+                            "mmcr-eae-output-menu"), ClientInformation.createDefault());
+            port.getInterfaceLogic().getStorage().insert(35, AEItemKey.of(Items.IRON_INGOT), 1L, Actionable.MODULATE);
+            ContainerExInterface menu = new ContainerExInterface(ContainerExInterface.TYPE, 0, player.getInventory(), port);
+            AppEngSlot storageSlot = (AppEngSlot) menu.getSlots(com.glodblock.github.extendedae.client.ExSemantics.EX_8).getLast();
+            helper.assertTrue(storageSlot.mayPickup(player), "ExtendedAE output storage can be extracted by a player");
+            menu.quickMoveStack(player, storageSlot.index);
+            helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(35) == null,
+                    "Player menu extraction removes the extended output stack");
+            helper.assertFalse(menu.getConfigSlots().getLast().mayPlace(Items.DIAMOND.getDefaultInstance()),
+                    "ExtendedAE output menu blocks config-slot insertion");
+            menu.setFilter(35, new ItemStack(Items.DIAMOND));
+            helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(35) == null,
+                    "ExtendedAE output menu blocks filter edits");
             helper.succeed();
         });
     }

@@ -149,6 +149,74 @@ public class AE2PatternInterfaceGameTest {
         });
     }
 
+    public void extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(GameTestHelper helper) {
+        BlockPos patternPortPos = new BlockPos(1, 2, 0);
+        BlockPos ordinaryInputPos = new BlockPos(1, 0, 0);
+        BlockPos controllerPos = new BlockPos(1, 1, 0);
+        BlockPos meChestPos = new BlockPos(4, 0, 0);
+        BlockPos energyPos = new BlockPos(4, 0, 2);
+        helper.assertTrue(AE2Bridge.get().available(), "AE2 must be loaded for extended pattern integration");
+        helper.setBlock(patternPortPos, ModBlocks.BLOCKS.get("eae_me_extended_pattern_interface").get().defaultBlockState());
+        helper.setBlock(ordinaryInputPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        helper.setBlock(meChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+
+        DynamicMachine machine = new DynamicMachine(PATTERN_MACHINE_ID, "ExtendedAE Pattern Interface Test",
+                new BlockArray(Map.of(
+                        new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("eae_me_extended_pattern_interface").get()),
+                        new BlockPos(0, -1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))));
+        if (!MachineRegistry.containsStatic(PATTERN_MACHINE_ID)) MachineRegistry.register(machine);
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(PATTERN_RECIPE_ID, PATTERN_MACHINE_ID, 1,
+                List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                        MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
+                        MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
+                List.of(), 0, 1, false, false, false, Set.of()));
+
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(machine);
+        controller.setStructureCheckIntervalForTesting(1);
+        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos, MEChestBlockEntity.class);
+        meChest.setCell(AEItems.ITEM_CELL_1K.stack());
+        helper.runAtTickTime(2, () -> {
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
+            GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
+            ItemBusBlockEntity ordinaryInput = helper.getBlockEntity(ordinaryInputPos, ItemBusBlockEntity.class);
+            try (Transaction transaction = Transaction.openRoot()) {
+                ordinaryInput.itemStorage().insert(0, ItemResource.of(Items.COAL), 1L, transaction);
+                transaction.commit();
+            }
+            controller.requestImmediateStructureCheck();
+        });
+
+        helper.runAtTickTime(30, () -> {
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            helper.assertTrue(controller.structureSnapshot().formed(), "Extended pattern machine forms");
+            ItemStack encodedPattern = PatternDetailsHelper.encodeProcessingPattern(
+                    List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
+                    List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)));
+            patternPort.getLogic().getPatternInv().setItemDirect(35, encodedPattern);
+            helper.assertTrue(patternPort.getLogic().getAvailablePatterns().size() == 1,
+                    "ExtendedAE pattern in slot 35 is advertised");
+            KeyCounter requestItems = new KeyCounter();
+            requestItems.add(AEItemKey.of(Items.IRON_INGOT), 1L);
+            helper.assertTrue(patternPort.getLogic().pushPattern(patternPort.getLogic().getAvailablePatterns().getFirst(),
+                            new KeyCounter[]{requestItems}),
+                    "ExtendedAE slot 35 pattern reaches the existing crafting machine");
+        });
+
+        helper.runAtTickTime(50, () -> {
+            helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
+                            Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 1L,
+                    "Crafting-machine result settles through the extended pattern return inventory");
+            helper.succeed();
+        });
+    }
+
     public void patternInterfaceRestoresPatternsAndWakesNativeWork(GameTestHelper helper) {
         AtomicReference<PatternInterfaceBlockEntity> restoredHost = new AtomicReference<>();
         AtomicLong returnDrainAvailabilityEpoch = new AtomicLong();
