@@ -1,3 +1,7 @@
+sourceSets.main {
+    resources.setSrcDirs(['src/main/resources', 'src/generated/resources'])
+}
+
 sourceSets.test {
     resources.setSrcDirs(['src/test/resources'])
 }
