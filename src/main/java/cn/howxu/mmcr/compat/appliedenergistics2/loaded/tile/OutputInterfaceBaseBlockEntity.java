@@ -11,6 +11,7 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -45,12 +46,15 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
     protected final IOPortKind kind;
     protected final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
             .setInWorldNode(true);
-    protected final InterfaceLogic logic = new InterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
+    protected final InterfaceLogic logic;
     private CapabilitySnapshot capabilitySnapshot;
 
     protected OutputInterfaceBaseBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
+        logic = kind instanceof InterfaceLogicKind logicKind
+                ? logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem())
+                : new InterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
     }
 
     @Override

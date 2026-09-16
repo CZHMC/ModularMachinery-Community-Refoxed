@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
@@ -66,7 +67,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final IOPortKind kind;
     private final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
             .setInWorldNode(true);
-    private final PatternProviderLogic logic = new PatternProviderLogic(mainNode, this);
+    private final PatternProviderLogic logic;
     private final PatternInterfaceCraftingMachine craftingMachine = new PatternInterfaceCraftingMachine(this);
     private final AtomicInteger nextPatternController = new AtomicInteger();
     private final OutputResourceStorage<ItemResource> itemOutputStorage;
@@ -77,6 +78,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
+        PatternLogicKind logicKind = (PatternLogicKind) kind;
+        logic = logicKind.createPatternLogic(mainNode, this);
         // PatternProviderLogic must return completed pattern outputs to the grid itself so AE2 can settle the craft.
         itemOutputStorage = AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv(), () -> null,
                 IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);

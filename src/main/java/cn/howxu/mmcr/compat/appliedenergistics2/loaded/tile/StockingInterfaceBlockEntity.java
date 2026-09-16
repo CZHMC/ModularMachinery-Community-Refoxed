@@ -24,6 +24,7 @@ import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -86,7 +87,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
                 }
             });
     private final IManagedGridNode uiNode = GridHelper.createManagedNode(this, UI_NODE_LISTENER);
-    private final InterfaceLogic logic = new InterfaceLogic(uiNode, this, AEBlocks.INTERFACE.asItem());
+    private final InterfaceLogic logic;
     private final LiveResourceStorage<ItemResource> itemStorage = new LiveResourceStorage<>(
             AE2ResourceFamilies.ITEM.stockingInputView(NullInventory.of(), List.of()));
     private final LiveResourceStorage<FluidResource> fluidStorage = new LiveResourceStorage<>(
@@ -98,6 +99,8 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     public StockingInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
+        InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
+        logic = logicKind.createInterfaceLogic(uiNode, this, AEBlocks.INTERFACE.asItem());
         configureStorageMirrorCapacity();
     }
 

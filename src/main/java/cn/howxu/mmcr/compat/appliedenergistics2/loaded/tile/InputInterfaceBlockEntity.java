@@ -15,6 +15,7 @@ import appeng.me.helpers.IGridConnectedBlockEntity;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -54,16 +55,21 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     private final IOPortKind kind;
     private final IManagedGridNode mainNode = GridHelper.createManagedNode(this, NODE_LISTENER)
             .setInWorldNode(true);
-    private final InterfaceLogic logic = new InterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
-    private final GenericStack[] networkOwned = new GenericStack[logic.getStorage().size()];
-    private final ResourceStorage<ItemResource> itemStorage = AE2ResourceFamilies.ITEM.standardInputView(logic.getStorage());
-    private final ResourceStorage<FluidResource> fluidStorage = AE2ResourceFamilies.FLUID.standardInputView(logic.getStorage());
+    private final InterfaceLogic logic;
+    private final GenericStack[] networkOwned;
+    private final ResourceStorage<ItemResource> itemStorage;
+    private final ResourceStorage<FluidResource> fluidStorage;
     private CapabilitySnapshot capabilitySnapshot;
     private boolean loadingProvenance;
 
     public InputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
         this.kind = kind;
+        InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
+        logic = logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
+        networkOwned = new GenericStack[logic.getStorage().size()];
+        itemStorage = AE2ResourceFamilies.ITEM.standardInputView(logic.getStorage());
+        fluidStorage = AE2ResourceFamilies.FLUID.standardInputView(logic.getStorage());
     }
 
     @Override

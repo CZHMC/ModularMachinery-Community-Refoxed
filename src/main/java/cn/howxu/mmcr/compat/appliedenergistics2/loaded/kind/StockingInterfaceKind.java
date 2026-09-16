@@ -4,7 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -16,7 +15,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class StockingInterfaceKind implements IOPortKind {
+public final class StockingInterfaceKind implements InterfaceLogicKind {
     private static final String ID = "ae2_me_stocking_input_interface";
     private static final List<PortFamilyDescriptor> FAMILIES = AE2ResourceFamilies.inputFamilies();
 
