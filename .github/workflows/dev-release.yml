@@ -7,7 +7,35 @@ permissions:
   contents: write
 
 jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve dev version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          hash="$(git rev-parse --short HEAD)"
+          base="$(git tag --merged HEAD --sort=-v:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
+          if [ -z "$base" ]; then
+            base="0.0.0"
+          fi
+
+          version="${base}+dev-${hash}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
   release:
+    name: Nightly Dev Release ${{ needs.resolve-version.outputs.version }}
+    needs: resolve-version
     runs-on: ubuntu-latest
 
     steps:
@@ -25,28 +53,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Resolve dev version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          hash="$(git rev-parse --short HEAD)"
-          base="$(git tag --merged HEAD --sort=-v:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
-          if [ -z "$base" ]; then
-            base="0.0.0"
-          fi
-
-          version="${base}+dev-${hash}"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "base=${base}" >> "$GITHUB_OUTPUT"
-          echo "hash=${hash}" >> "$GITHUB_OUTPUT"
-
       - name: Apply CI version
         shell: bash
         run: |
           set -euo pipefail
-          perl -0pi -e 's/^mod_version=.*/mod_version=${{ steps.version.outputs.version }}/m' gradle.properties
+          perl -0pi -e 's/^mod_version=.*/mod_version=${{ needs.resolve-version.outputs.version }}/m' gradle.properties
 
       - name: Run Client Data
         run: gradle runClientData --no-daemon
@@ -81,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          current_version="${{ steps.version.outputs.version }}"
+          current_version="${{ needs.resolve-version.outputs.version }}"
 
           previous_tag="$(
             gh release list --limit 50 --json tagName --jq '.[].tagName' \
@@ -96,7 +107,7 @@ jobs:
 
           commit_data="$(git log "$range" --pretty=format:'%h %s' --no-merges)"
           fallback="$(bash .github/scripts/format-release-notes.sh \
-            "${{ steps.version.outputs.version }}" <<< "$commit_data")"
+            "${{ needs.resolve-version.outputs.version }}" <<< "$commit_data")"
           full_list="$(bash .github/scripts/format-release-notes.sh --full <<< "$commit_data")"
           if [ -z "$full_list" ]; then
             full_list="- No changes found."
@@ -123,7 +134,7 @@ jobs:
             generated="$fallback"
           else
             generated="$(printf '# Release %s\n\n%s\n\n<details>\n<summary>Full commit list</summary>\n\n%s\n\n</details>\n' \
-              "${{ steps.version.outputs.version }}" "$generated" "$full_list")"
+              "${{ needs.resolve-version.outputs.version }}" "$generated" "$full_list")"
           fi
 
           summary="$(printf '%s\n' "$generated" | awk 'index($0, "<details>") { exit } { print }')"
@@ -143,9 +154,9 @@ jobs:
         uses: Kira-NT/mc-publish@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-tag: ${{ steps.version.outputs.version }}
-          name: ${{ steps.version.outputs.version }}
-          version: ${{ steps.version.outputs.version }}
+          github-tag: ${{ needs.resolve-version.outputs.version }}
+          name: ${{ needs.resolve-version.outputs.version }}
+          version: ${{ needs.resolve-version.outputs.version }}
           version-type: beta
           github-changelog: ${{ steps.notes.outputs.body }}
           modrinth-changelog: ${{ steps.notes.outputs.summary }}
