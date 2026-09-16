@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
+import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.AEKeyTypes;
+import appeng.api.stacks.AEKeyTypesInternal;
+import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.appliedenergistics2.extendedae.ExtendedAEContributorBootstrap;
@@ -22,7 +26,9 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -36,11 +42,19 @@ import snownee.jade.api.IWailaCommonRegistration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * Verifies the optional ExtendedAE contribution boundary in the AE2 bridge.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
 class ExtendedAEBridgeTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
+        if (!ae2KeyTypesAreInitialized()) initializeAE2KeyTypes();
+        bindTestAE2InterfaceItem();
         bindTestEntityType(InputInterfaceKind.INSTANCE);
         bindTestEntityType(StockingInterfaceKind.INSTANCE);
         bindTestEntityType(OutputInterfaceKind.INSTANCE);
@@ -96,6 +110,23 @@ class ExtendedAEBridgeTest {
         assertThat(registrations).hasSize(5);
     }
 
+    @Test
+    void availableContributorDoesNotOverrideNativeAe2Paths() {
+        ExtendedAEContributorBootstrap.installForTesting(new AvailableTestContributor());
+        LoadedAE2Bridge bridge = new LoadedAE2Bridge();
+
+        assertThat(bridge.isPort("ae2_me_input_interface")).isTrue();
+        assertThat(bridge.portOverlayTexture(InputInterfaceKind.INSTANCE))
+                .isEqualTo(Identifier.fromNamespaceAndPath("mmcr", "block/appliedenergistics2/ae2_input"));
+        var host = InputInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+        Level level = LevelStub.createWithBlockEntities(List.of(host));
+        host.setLevel(level);
+        assertThatThrownBy(() -> bridge.openMenu(null, level, BlockPos.ZERO))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Menus must be opened on the server.");
+    }
+
     private static RegisterCapabilitiesEvent capabilityEvent() {
         try {
             Constructor<RegisterCapabilitiesEvent> constructor = RegisterCapabilitiesEvent.class.getDeclaredConstructor();
@@ -133,9 +164,49 @@ class ExtendedAEBridgeTest {
         ModBlockEntities.BES.put(kind.id(), DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, id));
     }
 
+    private static void bindTestAE2InterfaceItem() {
+        Identifier id = Identifier.fromNamespaceAndPath("ae2", "interface");
+        MappedRegistry<Item> registry = (MappedRegistry<Item>) BuiltInRegistries.ITEM;
+        registry.unfreeze(true);
+        try {
+            if (!registry.containsKey(id)) {
+                Registry.register(registry, id, new Item(new Item.Properties().setId(
+                        ResourceKey.create(Registries.ITEM, id))));
+            }
+        } finally {
+            registry.freeze();
+        }
+    }
+
+    private static void initializeAE2KeyTypes() {
+        MappedRegistry<AEKeyType> registry = new MappedRegistry<>(AEKeyType.REGISTRY_KEY, Lifecycle.stable());
+        AEKeyTypesInternal.setRegistry(registry);
+        Registry.register(registry, AEKeyType.items().getId(), AEKeyType.items());
+        Registry.register(registry, AEKeyType.fluids().getId(), AEKeyType.fluids());
+        registry.freeze();
+    }
+
+    private static boolean ae2KeyTypesAreInitialized() {
+        try {
+            return !AEKeyTypes.getAll().isEmpty();
+        } catch (IllegalStateException ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * Captures a real Jade registration emitted by the bridge.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private record Registration(Object provider, Class<?> blockEntityType) {
     }
 
+    /**
+     * Fails if a bridge delegates work after declaring ExtendedAE unavailable.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
     private static final class UnavailableTestContributor implements ExtendedAEContributor {
         @Override
         public boolean available() {
@@ -174,6 +245,50 @@ class ExtendedAEBridgeTest {
 
         private AssertionError unexpectedDelegation() {
             return new AssertionError("Unavailable ExtendedAE contributor must not be delegated to");
+        }
+    }
+
+    /**
+     * Fails if a native AE2 path is delegated to an available ExtendedAE contributor.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class AvailableTestContributor implements ExtendedAEContributor {
+        @Override
+        public boolean available() {
+            return true;
+        }
+
+        @Override
+        public List<IOPortKind> portKinds() {
+            return List.of();
+        }
+
+        @Override
+        public boolean isPort(String id) {
+            throw unexpectedDelegation();
+        }
+
+        @Override
+        public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
+            throw unexpectedDelegation();
+        }
+
+        @Override
+        public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
+            throw unexpectedDelegation();
+        }
+
+        @Override
+        public void registerCapabilities(RegisterCapabilitiesEvent event) {
+        }
+
+        @Override
+        public void registerJadeCommon(IWailaCommonRegistration registration) {
+        }
+
+        private AssertionError unexpectedDelegation() {
+            return new AssertionError("Native AE2 paths must not be delegated to ExtendedAE");
         }
     }
 }
