@@ -41,7 +41,8 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
@@ -649,7 +650,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
     public int buildBlocksPerTick() {
         if (buildBlocksPerTickOverrideForTesting != null) return buildBlocksPerTickOverrideForTesting;
-        return Config.BUILD_BLOCKS_PER_TICK.get();
+        return ServerConfig.BUILD_BLOCKS_PER_TICK.get();
     }
 
     public void onMachineDestroyed() {
@@ -1451,7 +1452,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private MachineWorkMode configuredWorkMode() {
         try {
-            return Config.MACHINE_WORK_MODE.get();
+            return CommonConfig.MACHINE_WORK_MODE.get();
         } catch (IllegalStateException ignored) {
             return MachineWorkMode.ASYNC;
         }
@@ -1517,7 +1518,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         buildTaskAge++;
         ServerPlayer owner = buildTaskOwner;
         if (owner == null || owner.isRemoved() || owner.level() != level
-                || buildTaskAge > Config.BUILD_TASK_TIMEOUT_TICKS.get()) {
+                || buildTaskAge > ServerConfig.BUILD_TASK_TIMEOUT_TICKS.get()) {
             buildTaskPlacementsPerTickForTesting.merge(level.getGameTime(), 0, Integer::sum);
             cancelBuildTask();
             return true;
@@ -1773,9 +1774,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int structureCheckIntervalTicks() {
         if (structureCheckIntervalOverrideForTesting != null) return structureCheckIntervalOverrideForTesting;
         try {
-            return Config.MACHINE_CHECK_INTERVAL_TICKS.get();
+            return ServerConfig.MACHINE_CHECK_INTERVAL_TICKS.get();
         } catch (IllegalStateException ignored) {
-            return Config.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS;
+            return ServerConfig.DEFAULT_MACHINE_CHECK_INTERVAL_TICKS;
         }
     }
 
@@ -2432,8 +2433,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private int structureScanBatches() {
         if (structureScanBatchesOverrideForTesting != null) return structureScanBatchesOverrideForTesting;
-        try { return Config.STRUCTURE_SCAN_BATCHES.get(); }
-        catch (IllegalStateException ignored) { return Config.DEFAULT_STRUCTURE_SCAN_BATCHES; }
+        try { return ServerConfig.STRUCTURE_SCAN_BATCHES.get(); }
+        catch (IllegalStateException ignored) { return ServerConfig.DEFAULT_STRUCTURE_SCAN_BATCHES; }
     }
 
     private long structureScanTimeoutTicks() {
@@ -2447,12 +2448,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private static int structureSentinelCount() {
-        try { return Config.STRUCTURE_SENTINEL_COUNT.get(); }
-        catch (IllegalStateException ignored) { return Config.DEFAULT_STRUCTURE_SENTINEL_COUNT; }
+        try { return ServerConfig.STRUCTURE_SENTINEL_COUNT.get(); }
+        catch (IllegalStateException ignored) { return ServerConfig.DEFAULT_STRUCTURE_SENTINEL_COUNT; }
     }
 
     private static boolean structureSentinelEnabled() {
-        try { return Config.STRUCTURE_SENTINEL_ENABLED.get(); }
+        try { return ServerConfig.STRUCTURE_SENTINEL_ENABLED.get(); }
         catch (IllegalStateException ignored) { return true; }
     }
 

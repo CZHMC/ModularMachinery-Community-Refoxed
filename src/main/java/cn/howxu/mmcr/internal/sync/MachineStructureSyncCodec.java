@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -84,9 +84,9 @@ public final class MachineStructureSyncCodec {
 
     public static int maximumBlockPatternCount() {
         try {
-            return Config.STRUCTURE_SYNC_MAX_BLOCKS.get();
+            return ServerConfig.STRUCTURE_SYNC_MAX_BLOCKS.get();
         } catch (IllegalStateException ignored) {
-            return Config.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS;
+            return ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS;
         }
     }
 

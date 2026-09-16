@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.sync;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -257,7 +257,7 @@ class RuntimeContentSnapshotTest {
         Identifier machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         buf.writeVarInt(1);
-        buf.writeVarInt(Config.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
+        buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buf, machineId);
         MachineStructureSyncCodec.encode(buf, structure(machineId));
@@ -275,7 +275,7 @@ class RuntimeContentSnapshotTest {
         Identifier structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         buf.writeVarInt(1);
-        buf.writeVarInt(Config.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
+        buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buf, key);
         MachineStructureSyncCodec.encode(buf, structure(structureId));
@@ -562,7 +562,7 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void structureSyncCodecUsesConfiguredDefaultBlockPatternLimit() {
-        assertThat(Config.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(524_288);
+        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(524_288);
         assertThat(MachineStructureSyncCodec.maximumBlockPatternCount()).isEqualTo(524_288);
     }
 

@@ -17,7 +17,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -32,6 +32,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -66,15 +67,15 @@ class AsyncFactoryExecutionTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        Config.SERVER_SPEC.correct(config);
+        CommonConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach
     void cleanup() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
         if (level == null) return;
         MachineAsyncCoordinator.discard(level);
@@ -88,7 +89,7 @@ class AsyncFactoryExecutionTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_factory_lanes"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 2);
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
 
@@ -118,7 +119,7 @@ class AsyncFactoryExecutionTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_factory_lane_order"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 3);
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
         SharedIoEvents.completeLevelTick(level);
@@ -148,7 +149,7 @@ class AsyncFactoryExecutionTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("cancelled_async_factory_search"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 2);
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
         RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 15);
@@ -178,7 +179,7 @@ class AsyncFactoryExecutionTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_factory_finish_restart"), MMCR.id("test_cube"), 1,
                 List.of(), List.of(), List.of(), 0, 1);
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
         SharedIoEvents.completeLevelTick(level);
@@ -211,7 +212,7 @@ class AsyncFactoryExecutionTest {
         MachineRecipe fallback = RecipeTestSupport.create(MMCR.id("async_factory_unlocked_fallback"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1);
         RecipeRegistry.replaceDynamic(Map.of(locked.id(), locked, fallback.id(), fallback));
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
         SharedIoEvents.completeLevelTick(level);
@@ -266,7 +267,7 @@ class AsyncFactoryExecutionTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
         RecipeRegistry.replaceDynamic(Map.of(specific.id(), specific, fallback.id(), fallback));
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         setItem(input.itemStorage(), new ItemStack(Items.IRON_INGOT, 1));
 
         for (int pass = 0; pass < 8 && controller.runtimeSnapshot().factory().activeLaneCount() == 0; pass++) {
@@ -293,7 +294,7 @@ class AsyncFactoryExecutionTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("shrunk_async_factory_search"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 2);
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
         factoryRuntime(controller).setLaneLimit(1);
@@ -372,7 +373,7 @@ class AsyncFactoryExecutionTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
         RecipeRegistry.replaceDynamic(Map.of(specific.id(), specific, fallback.id(), fallback));
-        Config.MACHINE_WORK_MODE.set(mode);
+        ConfigTestSupport.setMachineWorkMode(mode);
         setItem(input.itemStorage(), new ItemStack(Items.IRON_INGOT, 1));
 
         for (int pass = 0; pass < 8; pass++) {

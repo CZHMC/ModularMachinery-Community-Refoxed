@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
@@ -17,6 +17,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -41,15 +42,15 @@ class AsyncCraftingExecutionTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        Config.SERVER_SPEC.correct(config);
+        CommonConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @Test
     void async_finish_release_commits_its_continuation_in_the_same_shared_io_fence() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,
@@ -85,7 +86,7 @@ class AsyncCraftingExecutionTest {
 
     @Test
     void finished_async_lane_restarts_on_the_next_tick_through_the_shared_io_fence() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,

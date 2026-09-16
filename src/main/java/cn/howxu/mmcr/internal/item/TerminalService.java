@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.StructureItemSink;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
@@ -161,7 +161,7 @@ public final class TerminalService {
                         ? MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(), freeInventoryBuild,
                                 data.selectedLevels())
                         : MultiblockAssemblyService.demolish(player, controller, data.stage(),
-                                Config.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink);
+                                ServerConfig.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink);
                 player.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
                 return result.interactionResult().consumesAction()
                         ? accepted(player, stack, result.message().key()) : rejected(player, stack, result.message().key());

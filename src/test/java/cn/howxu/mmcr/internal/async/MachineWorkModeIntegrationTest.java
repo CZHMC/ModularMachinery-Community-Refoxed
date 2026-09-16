@@ -12,7 +12,7 @@ import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -24,6 +24,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -60,16 +61,16 @@ class MachineWorkModeIntegrationTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        Config.SERVER_SPEC.correct(config);
+        CommonConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
                 .getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach
     void discardLevelCoordinators() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
         if (level == null) return;
         MachineAsyncCoordinator.discard(level);
@@ -107,12 +108,12 @@ class MachineWorkModeIntegrationTest {
     }
 
     @Test
-    void changing_work_mode_cancels_an_uncommitted_controller_lane() throws Exception {
+    void reloading_work_mode_keeps_an_uncommitted_controller_lane_active_until_world_restart() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "mode change",
                 new BlockArray(Map.of())));
         level = (ServerLevel) controller.getLevel();
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         controller.tickRuntimeWork(level, controller.getBlockPos());
         CountDownLatch mainStepQueued = new CountDownLatch(1);
         AtomicBoolean committed = new AtomicBoolean();
@@ -125,11 +126,11 @@ class MachineWorkModeIntegrationTest {
         assertThat(mainStepQueued.await(1, TimeUnit.SECONDS)).isTrue();
         assertThat(hasPendingMainStep(coordinator)).isTrue();
 
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        CommonConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         controller.tickRuntimeWork(level, controller.getBlockPos());
         coordinator.pumpMainThreadSteps();
 
-        assertThat(committed).isFalse();
+        assertThat(committed).isTrue();
     }
 
     @Test
@@ -138,7 +139,7 @@ class MachineWorkModeIntegrationTest {
         RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "redstone pause",
                 new BlockArray(Map.of())));
         level = (ServerLevel) controller.getLevel();
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         controller.tickRuntimeWork(level, controller.getBlockPos());
         CountDownLatch mainStepQueued = new CountDownLatch(1);
         AtomicBoolean committed = new AtomicBoolean();
@@ -229,7 +230,7 @@ class MachineWorkModeIntegrationTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("work_mode_recipe_progress"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(mode);
+        ConfigTestSupport.setMachineWorkMode(mode);
 
         tickAndComplete(controller);
         tickAndComplete(controller);
@@ -261,7 +262,7 @@ class MachineWorkModeIntegrationTest {
     @Test
     void mode_switch_cancels_recipe_thread_shared_io_start_before_its_fence_commits() throws Exception {
         assertLifecycleInterruptCancelsRecipeThreadSharedIo(controller -> {
-            Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
             controller.tickRuntimeWork(level, controller.getBlockPos());
         });
     }
@@ -291,7 +292,7 @@ class MachineWorkModeIntegrationTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_main_tick_recipe"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
 
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
@@ -316,7 +317,7 @@ class MachineWorkModeIntegrationTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_mode_lifecycle"), machineId, 2,
                 List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
-        Config.MACHINE_WORK_MODE.set(mode);
+        ConfigTestSupport.setMachineWorkMode(mode);
 
         controller.serverTick();
         if (mode == MachineWorkMode.ASYNC) {
@@ -369,7 +370,7 @@ class MachineWorkModeIntegrationTest {
                 new BlockArray(Map.of())));
         level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         controller.tickRuntimeWork(level, controller.getBlockPos());
         FactoryRecipeThread thread = factoryBaseLane(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_thread_lifecycle"), machineId, 1,

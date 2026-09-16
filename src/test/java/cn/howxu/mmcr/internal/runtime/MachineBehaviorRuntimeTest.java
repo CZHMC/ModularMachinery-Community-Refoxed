@@ -48,7 +48,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
@@ -67,6 +67,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -109,16 +110,16 @@ class MachineBehaviorRuntimeTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        Config.SERVER_SPEC.correct(config);
+        CommonConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
                 .getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach
     void cleanupRecipes() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
     }
 
@@ -656,7 +657,7 @@ class MachineBehaviorRuntimeTest {
         MachineRecipe lifecycleRecipe = recipe("behavior_recipe_hook_lifecycle", machineId,
                 input(Items.IRON_INGOT), output(Items.GOLD_NUGGET));
         RecipeRegistry.registerStatic(lifecycleRecipe);
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
         assertThat(controller.structureSnapshot().machine()).isSameAs(recipeMachine);
         assertThat(RecipeRegistry.catalogForMachine(machineId).recipes()).containsExactly(lifecycleRecipe);
         assertThat(controller.componentRuntime().capabilities())

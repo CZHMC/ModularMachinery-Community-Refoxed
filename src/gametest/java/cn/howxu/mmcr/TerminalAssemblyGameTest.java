@@ -2,7 +2,7 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSource;
@@ -326,7 +326,7 @@ public class TerminalAssemblyGameTest {
         List<MultiblockAssemblyService.Placement> template = template(controller);
         controller.setBuildBlocksPerTickForTesting(1);
         controller.setStructureCheckIntervalForTesting(1);
-        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
+        controller.setStructureScanBatchesForTesting(ServerConfig.DEFAULT_STRUCTURE_SCAN_BATCHES);
         long acceptedAt = helper.getLevel().getGameTime();
         ServerPlayer player = servicePlayer(helper);
         MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, true);
@@ -399,7 +399,7 @@ public class TerminalAssemblyGameTest {
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         controller.setStructureCheckIntervalForTesting(1);
-        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
+        controller.setStructureScanBatchesForTesting(ServerConfig.DEFAULT_STRUCTURE_SCAN_BATCHES);
         List<MultiblockAssemblyService.Placement> template = template(controller);
         helper.getLevel().setBlock(template.getFirst().pos(), Blocks.COBBLESTONE.defaultBlockState(), 3);
 
@@ -457,7 +457,7 @@ public class TerminalAssemblyGameTest {
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
         controller.setStructureCheckIntervalForTesting(1);
-        controller.setStructureScanBatchesForTesting(Config.DEFAULT_STRUCTURE_SCAN_BATCHES);
+        controller.setStructureScanBatchesForTesting(ServerConfig.DEFAULT_STRUCTURE_SCAN_BATCHES);
         ServerPlayer player = servicePlayer(helper);
         int[] diagnostics = {0};
         controller.setStructureDiagnosticCallbackForTesting(() -> diagnostics[0]++);

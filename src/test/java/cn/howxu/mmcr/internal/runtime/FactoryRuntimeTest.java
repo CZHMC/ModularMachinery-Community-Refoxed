@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -49,6 +49,7 @@ import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -94,10 +95,10 @@ class FactoryRuntimeTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        Config.SERVER_SPEC.correct(config);
+        CommonConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        Config.SERVER_SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @BeforeEach
@@ -107,7 +108,7 @@ class FactoryRuntimeTest {
 
     @AfterEach
     void cleanup() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
     }
 
@@ -346,7 +347,7 @@ class FactoryRuntimeTest {
 
     @Test
     void async_worker_fallback_replans_and_commits_at_available_parallelism() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = asyncFactoryController(input);
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
@@ -367,7 +368,7 @@ class FactoryRuntimeTest {
 
     @Test
     void async_planning_values_delay_a_less_specific_candidate_when_a_competing_input_is_missing() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = asyncFactoryController(input);
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
@@ -894,7 +895,7 @@ class FactoryRuntimeTest {
 
     @Test
     void shared_finish_release_wakes_output_capacity_lane_on_the_next_tick() {
-        Config.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
         Identifier machineId = MMCR.id("test_cube");
         Identifier activeId = MMCR.id("shared_finish_release_active");
         Identifier blockedId = MMCR.id("shared_finish_release_blocked");

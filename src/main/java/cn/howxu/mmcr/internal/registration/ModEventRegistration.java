@@ -1,7 +1,9 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ClientConfig;
+import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.command.BuildCommand;
 import cn.howxu.mmcr.internal.command.ExportCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
@@ -76,8 +78,12 @@ public final class ModEventRegistration {
     public static void register(IEventBus modBus, ModContainer modContainer) {
         registerDeferredRegisters(modBus);
         MMCR.CREATIVE_TABS.register(modBus);
-        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
-        modContainer.registerConfig(ModConfig.Type.SERVER, Config.SERVER_SPEC);
+        modContainer.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC,
+                "modular-machinery-community-refoxed/client.toml");
+        modContainer.registerConfig(ModConfig.Type.COMMON, CommonConfig.SPEC,
+                "modular-machinery-community-refoxed/common.toml");
+        modContainer.registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC,
+                "modular-machinery-community-refoxed/server.toml");
         registerListeners(registrar(modBus), registrar(NeoForge.EVENT_BUS), EventHandlers.production());
         MMCR.CREATIVE_TABS.register(MMCR.MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))

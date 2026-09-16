@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.client;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMesh;
 import cn.howxu.mmcr.client.preview.world.WorldPreviewMeshCache;
@@ -230,9 +230,9 @@ public final class MultiblockPreviewClientHandler {
     private static void rebuildVisibleEntries(Vec3 camera) {
         double radius;
         try {
-            radius = Config.PREVIEW_RENDER_RADIUS.get();
+            radius = ClientConfig.PREVIEW_RENDER_RADIUS.get();
         } catch (IllegalStateException ignored) {
-            radius = Config.DEFAULT_PREVIEW_RENDER_RADIUS;
+            radius = ClientConfig.DEFAULT_PREVIEW_RENDER_RADIUS;
         }
         BlockPos cameraCell = camera == null ? null : BlockPos.containing(camera);
         if (camera != null && cameraCell.equals(visibleEntriesCameraCell) && radius == visibleEntriesRadius) return;

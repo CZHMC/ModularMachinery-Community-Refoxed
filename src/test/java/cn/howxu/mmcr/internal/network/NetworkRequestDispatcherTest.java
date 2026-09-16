@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.network.RequestProcess;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
@@ -154,14 +154,14 @@ class NetworkRequestDispatcherTest {
         Identifier requestId = Identifier.parse("mmcr:budget");
         Fixture fixture = fixture(requestId, null, new boolean[1][]);
         NetworkServerState state = NetworkServerState.get(fixture.server);
-        for (int index = 0; index < Config.DEFAULT_MAX_REQUESTS_PER_TICK + 1; index++) {
+        for (int index = 0; index < ServerConfig.DEFAULT_MAX_REQUESTS_PER_TICK + 1; index++) {
             state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
                     fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
         }
 
         state.dispatch(fixture.server, 1L);
 
-        assertEquals(Config.DEFAULT_MAX_REQUESTS_PER_TICK, fixture.processedBodies.size());
+        assertEquals(ServerConfig.DEFAULT_MAX_REQUESTS_PER_TICK, fixture.processedBodies.size());
     }
 
     @Test
@@ -398,7 +398,7 @@ class NetworkRequestDispatcherTest {
         Identifier requestId = Identifier.parse("mmcr:server_budget");
         Fixture fixture = fixture(requestId, null, new boolean[1][]);
         NetworkServerState state = NetworkServerState.get(fixture.server);
-        for (int index = 0; index < Config.DEFAULT_MAX_REQUESTS_PER_TICK + 1; index++) {
+        for (int index = 0; index < ServerConfig.DEFAULT_MAX_REQUESTS_PER_TICK + 1; index++) {
             state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
                     fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
         }
@@ -406,12 +406,12 @@ class NetworkRequestDispatcherTest {
         SharedIoEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
         SharedIoEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
 
-        assertEquals(Config.DEFAULT_MAX_REQUESTS_PER_TICK, fixture.processedBodies.size());
+        assertEquals(ServerConfig.DEFAULT_MAX_REQUESTS_PER_TICK, fixture.processedBodies.size());
     }
 
     private static void enqueueOverBudget(Fixture fixture) {
         NetworkServerState state = NetworkServerState.get(fixture.server);
-        for (int index = 0; index <= Config.DEFAULT_MAX_REQUESTS_PER_TICK; index++) {
+        for (int index = 0; index <= ServerConfig.DEFAULT_MAX_REQUESTS_PER_TICK; index++) {
             state.enqueue(new PendingRequest(fixture.sourceEndpoint, fixture.targetEndpoint, fixture.sourceOwner,
                     fixture.targetMachine, Identifier.parse("mmcr:request"), RequestBody.of(Map.of()), 0L));
         }

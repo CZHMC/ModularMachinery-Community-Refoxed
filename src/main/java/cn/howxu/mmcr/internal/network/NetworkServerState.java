@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import net.minecraft.server.MinecraftServer;
-import cn.howxu.mmcr.config.Config;
+import cn.howxu.mmcr.config.ServerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,9 +66,9 @@ public final class NetworkServerState {
 
     private static int maxRequestsPerTick() {
         try {
-            return Config.MAX_REQUESTS_PER_TICK.get();
+            return ServerConfig.MAX_REQUESTS_PER_TICK.get();
         } catch (IllegalStateException ignored) {
-            return Config.DEFAULT_MAX_REQUESTS_PER_TICK;
+            return ServerConfig.DEFAULT_MAX_REQUESTS_PER_TICK;
         }
     }
 }
