@@ -14,7 +14,6 @@ import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedStockingInputInterfac
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeInputInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeOutputInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeStockingInputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeDataProvider;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
@@ -93,10 +92,7 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
 
     @Override
     public void registerJadeCommon(IWailaCommonRegistration registration) {
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE, InputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE, StockingInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE, OutputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE, PatternInterfaceBlockEntity.class);
+        // LoadedAE2Bridge owns registration for the shared interface host classes.
     }
 
     private static boolean isOversize(IOPortKind kind) {

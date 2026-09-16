@@ -65,6 +65,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class AE2PatternInterfaceGameTest {
     private static final Identifier PATTERN_MACHINE_ID = MMCR.id("ae2_pattern_interface_test");
     private static final Identifier PATTERN_RECIPE_ID = MMCR.id("ae2_pattern_interface_recipe");
+    private static final Identifier EXTENDED_PATTERN_MACHINE_ID = MMCR.id("eae_extended_pattern_interface_test");
+    private static final Identifier EXTENDED_PATTERN_RECIPE_ID = MMCR.id("eae_extended_pattern_interface_recipe");
     private static final BlockPos PORT_POS = new BlockPos(0, 0, 0);
     private static final BlockPos RESTORED_PORT_POS = new BlockPos(10, 0, 0);
     private static final BlockPos TARGET_CHEST_POS = new BlockPos(1, 0, 0);
@@ -163,17 +165,19 @@ public class AE2PatternInterfaceGameTest {
         helper.setBlock(meChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
         helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
 
-        DynamicMachine machine = new DynamicMachine(PATTERN_MACHINE_ID, "ExtendedAE Pattern Interface Test",
+        DynamicMachine machine = new DynamicMachine(EXTENDED_PATTERN_MACHINE_ID, "ExtendedAE Pattern Interface Test",
                 new BlockArray(Map.of(
                         new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("eae_me_extended_pattern_interface").get()),
                         new BlockPos(0, -1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))));
-        if (!MachineRegistry.containsStatic(PATTERN_MACHINE_ID)) MachineRegistry.register(machine);
-        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(PATTERN_RECIPE_ID, PATTERN_MACHINE_ID, 1,
-                List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                        MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
-                        MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
-                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
-                List.of(), 0, 1, false, false, false, Set.of()));
+        if (!MachineRegistry.containsStatic(EXTENDED_PATTERN_MACHINE_ID)) MachineRegistry.register(machine);
+        if (!RecipeRegistry.containsStatic(EXTENDED_PATTERN_RECIPE_ID)) {
+            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(EXTENDED_PATTERN_RECIPE_ID, EXTENDED_PATTERN_MACHINE_ID, 1,
+                    List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                            MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
+                            MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
+                    List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
+                    List.of(), 0, 1, false, false, false, Set.of()));
+        }
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
         controller.setMachine(machine);

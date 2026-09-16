@@ -406,6 +406,8 @@ public final class ModRecipeProvider extends RecipeProvider {
     }
 
     private void ae2InterfaceRecipes() {
+        if (!ModItems.ITEMS.containsKey("ae2_me_input_interface")) return;
+
         ItemLike ae2Interface = externalItem("ae2", "interface");
         ItemLike input = ModItems.ITEMS.get("ae2_me_input_interface").get();
         ItemLike stockingInput = ModItems.ITEMS.get("ae2_me_stocking_input_interface").get();
@@ -437,6 +439,8 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .requires(externalItem("ae2", "pattern_provider"))
                 .requires(ModBlocks.BASIC_CASING.get())
                 .save(whenLoaded("ae2"));
+
+        if (!ModItems.ITEMS.containsKey("eae_me_extended_input_interface")) return;
 
         ItemLike extendedInput = ModItems.ITEMS.get("eae_me_extended_input_interface").get();
         ItemLike extendedStockingInput = ModItems.ITEMS.get("eae_me_extended_stocking_input_interface").get();

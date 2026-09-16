@@ -27,6 +27,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockE
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.extendedae.loaded.LoadedExtendedAEContributor;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -95,6 +96,15 @@ class AE2InterfaceJadeProviderTest {
 
         assertThat(registrations).contains(new Registration(InterfaceJadeDataProvider.INSTANCE,
                 PatternInterfaceBlockEntity.class));
+    }
+
+    @Test
+    void extendedAeContributorDoesNotReregisterCommonInterfaceHosts() {
+        List<Registration> registrations = new ArrayList<>();
+
+        new LoadedExtendedAEContributor().registerJadeCommon(commonRegistration(registrations));
+
+        assertThat(registrations).isEmpty();
     }
 
     @Test
