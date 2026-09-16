@@ -168,14 +168,24 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().heatOutputCapabilityRejectsExternalHeatInput(helper));
         register(event, "mekanism_heat_port_loses_heat_to_environment", 100,
                 helper -> new MekanismPortGameTest().heatPortLosesHeatToItsEnvironment(helper));
+        register(event, "mekanism_heat_output_port_loses_heat_to_environment", 100,
+                helper -> new MekanismPortGameTest().heatOutputPortLosesHeatToItsEnvironment(helper));
         register(event, "mekanism_heat_output_port_does_not_absorb_ambient", 100,
                 helper -> new MekanismPortGameTest().heatOutputPortDoesNotAbsorbAmbientHeat(helper));
-        register(event, "mekanism_heat_input_port_does_absorb_ambient", 100,
-                helper -> new MekanismPortGameTest().heatInputPortDoesAbsorbAmbientHeat(helper));
+        register(event, "mekanism_heat_input_port_does_not_absorb_ambient", 100,
+                helper -> new MekanismPortGameTest().heatInputPortDoesNotAbsorbAmbientHeat(helper));
         register(event, "mekanism_heat_port_uses_standard_adjacent_exchange", 100,
                 helper -> new MekanismPortGameTest().heatPortUsesStandardAdjacentExchange(helper));
         register(event, "mekanism_ambient_heat_port_does_not_emit_baseline", 100,
                 helper -> new MekanismPortGameTest().ambientHeatPortDoesNotEmitBaselineHeat(helper));
+        register(event, "mekanism_heat_input_port_does_not_transfer_to_output", 100,
+                helper -> new MekanismPortGameTest().heatInputPortDoesNotTransferHeatToAdjacentOutput(helper));
+        register(event, "mekanism_heat_output_port_does_not_transfer_to_output", 100,
+                helper -> new MekanismPortGameTest().heatOutputPortDoesNotTransferHeatToAdjacentOutput(helper));
+        register(event, "mekanism_heat_output_port_transfers_to_thermodynamic_conductor", 100,
+                helper -> new MekanismPortGameTest().heatOutputPortTransfersHeatToThermodynamicConductor(helper));
+        register(event, "mekanism_thermodynamic_conductor_does_not_heat_output_port", 100,
+                helper -> new MekanismPortGameTest().thermodynamicConductorDoesNotHeatOutputPort(helper));
         register(event, "mekanism_chemical_input_auto_imports", 160,
                 helper -> new MekanismPortGameTest().chemicalInputAutoImportsFromAdjacentOutput(helper));
         register(event, "mekanism_chemical_input_ejects_to_first_target", 100,
@@ -186,8 +196,8 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().chemicalAndHeatContentsPersistAcrossReload(helper));
         register(event, "mekanism_unavailable_bridge_still_registers_io", 100,
                 helper -> new MekanismPortGameTest().unavailableBridgeLeavesBuilderWorkingThroughCustomRecipeIo(helper));
-        register(event, "mekanism_heat_port_exchanges_with_adjacent_handler", 100,
-                helper -> new MekanismPortGameTest().heatPortExchangesHeatWithAdjacentMekHandler(helper));
+        register(event, "mekanism_heat_input_accepts_only_external_input", 100,
+                helper -> new MekanismPortGameTest().heatInputCapabilityAcceptsOnlyExternalHeatInput(helper));
         register(event, "mekanism_formed_port_reflects_texture_change", 100,
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
          register(event, "ae2_me_input_interface", 200,

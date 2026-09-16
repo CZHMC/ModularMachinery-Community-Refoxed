@@ -31,6 +31,8 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements ITileHeatHandler {
+    private static final double OUTPUT_INVERSE_CONDUCTION = Double.MAX_VALUE;
+
     private final BasicHeatCapacitor heatCapacitor;
     private final IHeatHandler externalHeatHandler = new IHeatHandler() {
         @Override
@@ -40,7 +42,7 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
 
         @Override
         public double getInverseConduction() {
-            return heatCapacitor.getInverseConduction();
+            return ioType() == IOType.OUTPUT ? OUTPUT_INVERSE_CONDUCTION : heatCapacitor.getInverseConduction();
         }
 
         @Override
@@ -50,7 +52,7 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
 
         @Override
         public void handleHeat(double transfer, TransactionContext transaction) {
-            if (ioType() == IOType.OUTPUT && transfer > 0D) return;
+            if (ioType() == IOType.INPUT && transfer < 0D || ioType() == IOType.OUTPUT && transfer > 0D) return;
             heatCapacitor.handleHeat(transfer, transaction);
         }
     };
@@ -99,18 +101,21 @@ public abstract class HeatPortBlockEntity extends IOPortBlockEntity implements I
         return HeatAPI.getAmbientTemp(level, worldPosition.relative(side));
     }
 
-    /**
-     * Output ports must not absorb environmental heat. {@link ITileHeatHandler#simulateEnvironment}
-     * calls {@code heatCapacitor.handleHeat(-tempToTransfer * heatCapacity)} for every exposed
-     * side, which adds heat from ambient when the port is colder than the surrounding air. For an
-     * output port this is semantically wrong (heat is flowing in, not out), so we skip the ambient
-     * pass entirely. Neighbor exchange via {@link ITileHeatHandler#simulateAdjacent} still runs and
-     * recipes can still deposit heat into the capacitor directly.
-     */
     @Override
     public HeatAPI.HeatTransfer simulate(TransactionContext transaction) {
-        double adjacent = simulateAdjacent(transaction);
-        double environment = ioType() == IOType.OUTPUT ? 0D : simulateEnvironment(transaction);
+        double adjacent = ioType() == IOType.OUTPUT ? simulateAdjacent(transaction) : 0D;
+        double environment = 0D;
+        for (Direction side : Direction.values()) {
+            IHeatCapacitor capacitor = getHeatCapacitor(side);
+            if (capacitor == null) continue;
+            double temperatureDifference = capacitor.getTemperature() - getAmbientTemperature(side);
+            if (temperatureDifference <= 0D) continue;
+            double inverseConduction = HeatAPI.AIR_INVERSE_COEFFICIENT
+                    + capacitor.getInverseInsulation() + capacitor.getInverseConduction();
+            double temperatureTransfer = temperatureDifference / inverseConduction;
+            capacitor.handleHeat(-temperatureTransfer * capacitor.getHeatCapacity(), transaction);
+            environment += temperatureTransfer;
+        }
         return new HeatAPI.HeatTransfer(adjacent, environment);
     }
 

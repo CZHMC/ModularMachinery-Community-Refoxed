@@ -60,6 +60,8 @@ dependencies {
 
     // ExtendedAE 26.1-1.0.3-neoforge
     implementation "maven.modrinth:JiOqfoFM:KpNzac5y"
+    // glodium 26.1-1.2-neoforge
+    implementation "maven.modrinth:UhW5uCKw:t0p0CUPy"
 
     // AppliedFlux 26.1-1.0.1-neoforge
     implementation "curse.maven:applied-flux-965012:8512902"

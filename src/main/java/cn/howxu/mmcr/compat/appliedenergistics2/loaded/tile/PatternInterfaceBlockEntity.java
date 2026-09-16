@@ -71,6 +71,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final AtomicInteger nextPatternController = new AtomicInteger();
     private final OutputResourceStorage<ItemResource> itemOutputStorage;
     private final OutputResourceStorage<FluidResource> fluidOutputStorage;
+    private long observedReturnInventoryAmount;
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -142,6 +143,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void saveChanges() {
         if (Transaction.getCurrentOpenedTransaction() != null) return;
+        observedReturnInventoryAmount = returnInventoryAmount();
         notifyStorageChanged();
     }
 
@@ -199,7 +201,16 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     /** Notifies linked controllers after AE2's native return inventory drains. */
     public void onNativeReturnInventoryDrained() {
+        observedReturnInventoryAmount = returnInventoryAmount();
         notifyStorageChanged();
+    }
+
+    @Override
+    protected void tick() {
+        super.tick();
+        long currentAmount = returnInventoryAmount();
+        if (currentAmount < observedReturnInventoryAmount) onNativeReturnInventoryDrained();
+        observedReturnInventoryAmount = currentAmount;
     }
 
     @Override
@@ -268,5 +279,15 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private MEStorage networkStorage() {
         IGrid grid = mainNode.getGrid();
         return grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
+    }
+
+    private long returnInventoryAmount() {
+        long amount = 0L;
+        for (int slot = 0; slot < logic.getReturnInv().size(); slot++) {
+            long slotAmount = logic.getReturnInv().getAmount(slot);
+            if (slotAmount > Long.MAX_VALUE - amount) return Long.MAX_VALUE;
+            amount += slotAmount;
+        }
+        return amount;
     }
 }

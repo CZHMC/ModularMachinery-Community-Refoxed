@@ -176,7 +176,7 @@ class AE2OutputInterfaceHostTest {
     }
 
     @Test
-    void nativeReturnInventoryDrainNotifiesLinkedOutputCapacitySearches() {
+    void serverTickNotifiesLinkedOutputCapacitySearchesAfterNativeReturnInventoryDrain() {
         PatternInterfaceBlockEntity host = patternHost();
         RecordingController controller = new RecordingController(new BlockPos(1, 0, 0),
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
@@ -203,7 +203,43 @@ class AE2OutputInterfaceHostTest {
             }
         }, IActionSource.empty(), ignored -> {})).isTrue();
 
-        host.onNativeReturnInventoryDrained();
+        host.serverTick();
+
+        assertThat(controller.notifiedOutputResources).containsExactly(ItemResource.of(Items.GOLD_INGOT));
+    }
+
+    @Test
+    void restoredPatternHostNotifiesLinkedOutputCapacitySearchesAfterNativeReturnInventoryDrain() {
+        PatternInterfaceBlockEntity source = patternHost();
+        BlockPos controllerPos = new BlockPos(1, 0, 0);
+        source.linkControllerAppearance(controllerPos, null);
+        source.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 2L));
+        var saved = source.saveCustomOnly(HolderLookup.Provider.create(Stream.empty()));
+
+        PatternInterfaceBlockEntity host = patternHost();
+        RecordingController controller = new RecordingController(controllerPos,
+                ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        var level = LevelStub.create(Map.of(
+                host.getBlockPos(), host.getBlockState().getBlock(),
+                controller.getBlockPos(), controller.getBlockState().getBlock()), List.of(host, controller));
+        host.setLevel(level);
+        controller.setLevel(level);
+        host.loadCustomOnly(TagValueInput.create(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()), saved));
+
+        assertThat(host.getLogic().getReturnInv().injectIntoNetwork(new MEStorage() {
+            @Override
+            public long insert(AEKey key, long amount, appeng.api.config.Actionable mode, IActionSource actionSource) {
+                return amount;
+            }
+
+            @Override
+            public Component getDescription() {
+                return Component.literal("test");
+            }
+        }, IActionSource.empty(), ignored -> {})).isTrue();
+
+        host.serverTick();
 
         assertThat(controller.notifiedOutputResources).containsExactly(ItemResource.of(Items.GOLD_INGOT));
     }

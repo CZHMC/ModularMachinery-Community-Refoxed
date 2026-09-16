@@ -25,6 +25,8 @@ import mekanism.api.chemical.ChemicalResource;
 import mekanism.api.heat.HeatAPI;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
+import mekanism.common.registries.MekanismBlocks;
+import mekanism.common.tile.transmitter.TileEntityThermodynamicConductor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -198,13 +200,17 @@ public class MekanismPortGameTest {
         helper.assertTrue(capability != null,
                 "Heat capability is exposed on the EAST side of a heat output port");
 
+        double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
+        setHeat(port, ambient * port.heatCapacitor().getHeatCapacity()
+                + port.heatCapacitor().getHeatCapacity() * 100D);
         double before = port.heatCapacitor().getHeat();
         try (Transaction transaction = Transaction.openRoot()) {
             capability.handleHeat(10D, transaction);
+            capability.handleHeat(-4D, transaction);
             transaction.commit();
         }
-        helper.assertValueEqual(before, port.heatCapacitor().getHeat(),
-                "The exposed heat output handler rejects external heat input");
+        helper.assertValueEqual(before - 4D, port.heatCapacitor().getHeat(),
+                "The exposed heat output handler rejects external heat input and permits external extraction");
         helper.succeed();
     }
 
@@ -227,6 +233,23 @@ public class MekanismPortGameTest {
         helper.succeed();
     }
 
+    public void heatOutputPortLosesHeatToItsEnvironment(GameTestHelper helper) {
+        BlockPos heatPos = new BlockPos(0, 1, 0);
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+
+        double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
+        double capacity = port.heatCapacitor().getHeatCapacity();
+        setHeat(port, ambient * capacity + capacity * 100D);
+        double before = port.heatCapacitor().getHeat();
+
+        port.serverTick();
+
+        helper.assertTrue(port.heatCapacitor().getHeat() < before,
+                "A hot heat output port loses heat to its ambient environment during a server tick");
+        helper.succeed();
+    }
+
     public void heatOutputPortDoesNotAbsorbAmbientHeat(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
@@ -246,12 +269,12 @@ public class MekanismPortGameTest {
         helper.succeed();
     }
 
-    public void heatInputPortDoesAbsorbAmbientHeat(GameTestHelper helper) {
+    public void heatInputPortDoesNotAbsorbAmbientHeat(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
         HeatPortBlockEntity port = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
 
-        // Set the port noticeably below ambient; the default simulateEnvironment should push heat in.
+        // Set the port noticeably below ambient so a default environment simulation would push heat in.
         double ambient = HeatAPI.getAmbientTemp(port.getLevel(), port.getBlockPos());
         double capacity = port.heatCapacitor().getHeatCapacity();
         double coldHeat = Math.max(0D, (ambient - 50D) * capacity);
@@ -260,8 +283,8 @@ public class MekanismPortGameTest {
 
         port.serverTick();
 
-        helper.assertTrue(port.heatCapacitor().getHeat() > before,
-                "An input heat port still absorbs heat from its ambient environment");
+        helper.assertValueEqual(before, port.heatCapacitor().getHeat(),
+                "An input heat port does not absorb heat from its ambient environment");
         helper.succeed();
     }
 
@@ -309,6 +332,120 @@ public class MekanismPortGameTest {
         helper.assertValueEqual(sinkBefore, sink.heatCapacitor().getHeat(),
                 "An ambient heat port does not emit its ambient baseline to an adjacent port");
         helper.succeed();
+    }
+
+    public void heatInputPortDoesNotTransferHeatToAdjacentOutput(GameTestHelper helper) {
+        BlockPos sourcePos = new BlockPos(0, 1, 0);
+        BlockPos sinkPos = sourcePos.relative(Direction.EAST);
+        BlockPos referencePos = new BlockPos(0, 1, 3);
+        helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.setBlock(referencePos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity reference = helper.getBlockEntity(referencePos, HeatPortBlockEntity.class);
+        source.setAutoIOEnabled(false);
+        sink.setAutoIOEnabled(false);
+        reference.setAutoIOEnabled(false);
+        double sourceAmbient = HeatAPI.getAmbientTemp(source.getLevel(), source.getBlockPos());
+        double heat = sourceAmbient * source.heatCapacitor().getHeatCapacity()
+                + source.heatCapacitor().getHeatCapacity() * 100D;
+        setHeat(source, heat);
+        setHeat(reference, heat);
+        double sinkBefore = sink.heatCapacitor().getHeat();
+
+        source.serverTick();
+        reference.serverTick();
+
+        helper.assertValueEqual(reference.heatCapacitor().getHeat(), source.heatCapacitor().getHeat(),
+                "Heat input does not lose additional heat to an adjacent output port");
+        helper.assertValueEqual(sinkBefore, sink.heatCapacitor().getHeat(),
+                "Heat output does not receive heat from an adjacent input port");
+        helper.succeed();
+    }
+
+    public void heatOutputPortDoesNotTransferHeatToAdjacentOutput(GameTestHelper helper) {
+        BlockPos sourcePos = new BlockPos(0, 1, 0);
+        BlockPos sinkPos = sourcePos.relative(Direction.EAST);
+        BlockPos referencePos = new BlockPos(0, 1, 3);
+        helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.setBlock(sinkPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.setBlock(referencePos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        HeatPortBlockEntity source = helper.getBlockEntity(sourcePos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity sink = helper.getBlockEntity(sinkPos, HeatPortBlockEntity.class);
+        HeatPortBlockEntity reference = helper.getBlockEntity(referencePos, HeatPortBlockEntity.class);
+        source.setAutoIOEnabled(false);
+        sink.setAutoIOEnabled(false);
+        reference.setAutoIOEnabled(false);
+        double sourceAmbient = HeatAPI.getAmbientTemp(source.getLevel(), source.getBlockPos());
+        double heat = sourceAmbient * source.heatCapacitor().getHeatCapacity()
+                + source.heatCapacitor().getHeatCapacity() * 100D;
+        setHeat(source, heat);
+        setHeat(reference, heat);
+        double sinkBefore = sink.heatCapacitor().getHeat();
+
+        source.serverTick();
+        reference.serverTick();
+
+        helper.assertValueEqual(reference.heatCapacitor().getHeat(), source.heatCapacitor().getHeat(),
+                "Heat output does not lose additional heat to an adjacent output port");
+        helper.assertValueEqual(sinkBefore, sink.heatCapacitor().getHeat(),
+                "Heat output does not receive heat from another output port");
+        helper.succeed();
+    }
+
+    public void heatOutputPortTransfersHeatToThermodynamicConductor(GameTestHelper helper) {
+        BlockPos outputPos = new BlockPos(0, 1, 0);
+        BlockPos conductorPos = outputPos.relative(Direction.EAST);
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.setBlock(conductorPos, MekanismBlocks.BASIC_THERMODYNAMIC_CONDUCTOR.get().defaultBlockState());
+        HeatPortBlockEntity output = helper.getBlockEntity(outputPos, HeatPortBlockEntity.class);
+        TileEntityThermodynamicConductor conductor = helper.getBlockEntity(conductorPos,
+                TileEntityThermodynamicConductor.class);
+        output.setAutoIOEnabled(false);
+        double ambient = HeatAPI.getAmbientTemp(output.getLevel(), output.getBlockPos());
+        setHeat(output, ambient * output.heatCapacitor().getHeatCapacity()
+                + output.heatCapacitor().getHeatCapacity() * 100D);
+
+        helper.runAtTickTime(20, () -> {
+            double outputBefore = output.heatCapacitor().getHeat();
+            double conductorBefore = conductor.getTransmitter().buffer.getHeat();
+            output.serverTick();
+
+            helper.assertTrue(output.heatCapacitor().getHeat() < outputBefore,
+                    "A heat output port transfers heat to a connected thermodynamic conductor");
+            helper.assertTrue(conductor.getTransmitter().buffer.getHeat() > conductorBefore,
+                    "A connected thermodynamic conductor receives heat from a heat output port");
+            helper.succeed();
+        });
+    }
+
+    public void thermodynamicConductorDoesNotHeatOutputPort(GameTestHelper helper) {
+        BlockPos outputPos = new BlockPos(0, 1, 0);
+        BlockPos conductorPos = outputPos.relative(Direction.EAST);
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.setBlock(conductorPos, MekanismBlocks.BASIC_THERMODYNAMIC_CONDUCTOR.get().defaultBlockState());
+        HeatPortBlockEntity output = helper.getBlockEntity(outputPos, HeatPortBlockEntity.class);
+        TileEntityThermodynamicConductor conductor = helper.getBlockEntity(conductorPos,
+                TileEntityThermodynamicConductor.class);
+
+        helper.runAtTickTime(20, () -> {
+            IHeatHandler outputHandler = helper.getLevel().getCapability(Capabilities.HEAT,
+                    helper.absolutePos(outputPos), helper.getLevel().getBlockState(helper.absolutePos(outputPos)), output,
+                    Direction.EAST);
+            helper.assertTrue(outputHandler != null, "Heat output port exposes its heat handler");
+            helper.assertTrue(outputHandler.getInverseConduction() > 1E300,
+                    "Heat output presents an effectively insulated inbound boundary to a conductor");
+            double before = output.heatCapacitor().getHeat();
+            try (Transaction transaction = Transaction.openRoot()) {
+                conductor.getTransmitter().buffer.handleHeat(30_000D, transaction);
+                conductor.getTransmitter().simulate(transaction);
+                transaction.commit();
+            }
+            helper.assertValueEqual(before, output.heatCapacitor().getHeat(),
+                    "A thermodynamic conductor cannot inject heat into a heat output port");
+            helper.succeed();
+        });
     }
 
     public void chemicalInputAutoImportsFromAdjacentOutput(GameTestHelper helper) {
@@ -489,13 +626,10 @@ public class MekanismPortGameTest {
         }
     }
 
-    public void heatPortExchangesHeatWithAdjacentMekHandler(GameTestHelper helper) {
+    public void heatInputCapabilityAcceptsOnlyExternalHeatInput(GameTestHelper helper) {
         BlockPos heatPos = new BlockPos(0, 1, 0);
-        BlockPos adjacentPos = heatPos.relative(Direction.EAST);
         helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
-        helper.setBlock(adjacentPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
         HeatPortBlockEntity heat = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
-        BlockEntity adjacentEntity = helper.getLevel().getBlockEntity(helper.absolutePos(adjacentPos));
 
         IHeatHandler capability = helper.getLevel().getCapability(Capabilities.HEAT,
                 helper.absolutePos(heatPos),
@@ -511,10 +645,8 @@ public class MekanismPortGameTest {
             capability.handleHeat(-0.25D, transaction);
             transaction.commit();
         }
-        helper.assertValueEqual(before + 10D, heat.heatCapacitor().getHeat(),
-                "The exposed Mekanism heat handler accepts positive and negative heat changes");
-        helper.assertTrue(adjacentEntity != null,
-                "Adjacent block entity is preserved for the heat exchange fixture");
+        helper.assertValueEqual(before + 10.25D, heat.heatCapacitor().getHeat(),
+                "The exposed Mekanism heat input handler accepts heat but rejects external extraction");
         helper.succeed();
     }
 
