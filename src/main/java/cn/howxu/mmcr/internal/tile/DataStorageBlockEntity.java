@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import com.mojang.serialization.Codec;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.data.DataValueType;
@@ -35,8 +36,6 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
     private static final String CONTROLLER_Y_KEY = "ControllerY";
     private static final String CONTROLLER_Z_KEY = "ControllerZ";
     private static final String CONTROLLER_MACHINE_KEY = "ControllerMachine";
-    private static final int LINK_CHECK_INTERVAL_TICKS = 40;
-
     private DataStorage storage = new DataStorage(this::onStorageChanged);
     private @Nullable BlockPos controllerPosition;
     private @Nullable Identifier controllerMachine;
@@ -87,7 +86,8 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
         }
         BlockPos currentControllerPosition = controllerPosition;
         if (currentControllerPosition == null) return;
-        if (Math.floorMod(linkCheckCounter++ + worldPosition.asLong(), LINK_CHECK_INTERVAL_TICKS) != 0) return;
+        if (Math.floorMod(linkCheckCounter++ + worldPosition.asLong(),
+                ServerConfig.linkDataStorageCheckIntervalTicks()) != 0) return;
         if (!level.hasChunkAt(currentControllerPosition)) return;
         if (!(level.getBlockEntity(currentControllerPosition) instanceof MachineControllerBlockEntity controller)) {
             releaseController(currentControllerPosition);

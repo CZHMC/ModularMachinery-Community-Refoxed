@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import net.minecraft.core.BlockPos;
@@ -36,8 +37,6 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     private static final String LINKED_CONTROLLER_Y_KEY = "Y";
     private static final String LINKED_CONTROLLER_Z_KEY = "Z";
     private static final String LINKED_CONTROLLER_TEXTURE_KEY = "Texture";
-    private static final int CONTROLLER_LINK_CHECK_INTERVAL_TICKS = 40;
-
     private Identifier appearanceBaseTexture = DEFAULT_APPEARANCE_BASE_TEXTURE;
     private final TreeMap<BlockPos, Identifier> linkedControllers = new TreeMap<>(BlockPos::compareTo);
     private int controllerLinkCheckCounter;
@@ -150,7 +149,8 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
 
     protected void maintainControllerLink() {
         if (level == null || level.isClientSide() || linkedControllers.isEmpty()) return;
-        if (Math.floorMod(controllerLinkCheckCounter++ + worldPosition.asLong(), CONTROLLER_LINK_CHECK_INTERVAL_TICKS) != 0) return;
+        if (Math.floorMod(controllerLinkCheckCounter++ + worldPosition.asLong(),
+                ServerConfig.linkAppearanceCheckIntervalTicks()) != 0) return;
         boolean changed = linkedControllers.entrySet().removeIf(entry -> {
             BlockPos controllerPos = entry.getKey();
             if (!level.hasChunkAt(controllerPos)) return false;

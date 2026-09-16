@@ -17,7 +17,7 @@ import appeng.core.definitions.AEItems;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.implementations.InterfaceMenu;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -90,8 +90,8 @@ public class AE2InterfaceGameTest {
     private static final long MANUAL_ITEM_AMOUNT = 4L;
 
     public void interfaceFeedsMmcrInputs(GameTestHelper helper) {
-        CommonConfig.MACHINE_WORK_MODE.clearCache();
-        CommonConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        ServerConfig.MACHINE_WORK_MODE.clearCache();
+        ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         helper.assertTrue(AE2Bridge.get().available(),
                 "AE2 must be loaded for this integration test");
 

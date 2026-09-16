@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -56,8 +57,6 @@ import org.jetbrains.annotations.Nullable;
 
 public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile, CapabilityHost {
     private static final String AUTO_IO_CAPABILITIES_KEY = "auto_io_capabilities";
-    private static final int AUTO_IO_MIN_DELAY = 5;
-    private static final int AUTO_IO_MAX_DELAY = 60;
     private final Map<CapabilityType, AutoIOConfig> autoIOConfigs = new LinkedHashMap<>();
     private boolean autoIOCacheDirty = true;
     private boolean loadingAdditional;
@@ -304,8 +303,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
 
     public int autoIODelay() {
         MachineCapability capability = autoIOCapability();
-        return capability == null ? AUTO_IO_MAX_DELAY
-                : autoIOStates.getOrDefault(capability.type(), new AutoIOState()).delay;
+        int minimum = ServerConfig.autoIoMinDelayTicks();
+        int maximum = ServerConfig.autoIoMaxDelayTicks();
+        return capability == null ? maximum
+                : Math.clamp(autoIOStates.getOrDefault(capability.type(), new AutoIOState()).delay, minimum, maximum);
     }
 
     public boolean hasAutoIOWork() {
@@ -449,7 +450,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             if (rebuiltCandidates) rebuildAutoIOCandidates(capability, policy, config, state);
             if (state.candidateSides.isEmpty()) {
                 if (rebuiltCandidates) {
-                    state.ticksUntilTransfer = AUTO_IO_MIN_DELAY - 1;
+                    state.ticksUntilTransfer = ServerConfig.autoIoMinDelayTicks() - 1;
                     continue;
                 }
                 if (state.ticksUntilTransfer > 0) {
@@ -558,14 +559,20 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     private void incrementAutoIOSuccess(AutoIOState state) {
-        int max = (AUTO_IO_MAX_DELAY - AUTO_IO_MIN_DELAY) / 5;
+        int minimum = ServerConfig.autoIoMinDelayTicks();
+        int maximum = ServerConfig.autoIoMaxDelayTicks();
+        int step = ServerConfig.autoIoSuccessDelayStepTicks();
+        int max = (maximum - minimum) / step;
         if (state.successCounter < max) state.successCounter++;
-        state.delay = Math.max(AUTO_IO_MIN_DELAY, AUTO_IO_MAX_DELAY - state.successCounter * 5);
+        state.delay = Math.max(minimum, maximum - state.successCounter * step);
     }
 
     private void decrementAutoIOSuccess(AutoIOState state) {
+        int minimum = ServerConfig.autoIoMinDelayTicks();
+        int maximum = ServerConfig.autoIoMaxDelayTicks();
+        int step = ServerConfig.autoIoSuccessDelayStepTicks();
         if (state.successCounter > 0) state.successCounter--;
-        state.delay = Math.max(AUTO_IO_MIN_DELAY, AUTO_IO_MAX_DELAY - state.successCounter * 5);
+        state.delay = Math.max(minimum, maximum - state.successCounter * step);
     }
 
     protected void tick() {
@@ -603,7 +610,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private static final class AutoIOState {
         private final EnumSet<Direction> candidateSides = EnumSet.noneOf(Direction.class);
         private int successCounter;
-        private int delay = AUTO_IO_MAX_DELAY;
+        private int delay = ServerConfig.autoIoMaxDelayTicks();
         private int ticksUntilTransfer;
     }
 

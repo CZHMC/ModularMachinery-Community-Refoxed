@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.compat.kubejs.SmartInterfaceEvents;
 import cn.howxu.mmcr.compat.kubejs.SmartInterfaceUpdateEventJS;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.capability.SmartInterfaceCapability;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -39,8 +40,6 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     private static final String MACHINE_ID_KEY = "machineId";
     private static final String VALUES_KEY = "values";
     private static final String CONTROLLERS_KEY = "controllers";
-    private static final int BINDING_CHECK_INTERVAL_TICKS = 20;
-
     private @Nullable Identifier machineId;
     private final Map<String, Float> values = new LinkedHashMap<>();
     private final Set<BlockPos> controllers = new LinkedHashSet<>();
@@ -146,7 +145,8 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
     }
 
     public void serverTick() {
-        if (level == null || level.isClientSide() || level.getGameTime() % BINDING_CHECK_INTERVAL_TICKS != 0) return;
+        if (level == null || level.isClientSide()
+                || level.getGameTime() % ServerConfig.linkSmartInterfaceCheckIntervalTicks() != 0) return;
         if (controllers.removeIf(controllerPos -> level.hasChunkAt(controllerPos)
                 && !(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity))) {
             changed();

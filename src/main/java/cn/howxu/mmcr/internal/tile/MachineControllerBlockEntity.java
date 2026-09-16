@@ -41,7 +41,6 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
-import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -163,8 +162,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final Set<MachineControllerBlockEntity> ACTIVE_STRUCTURE_SCANS = ConcurrentHashMap.newKeySet();
     private static final String SHARED_COMPONENT_CONFLICT = "shared_component_conflict";
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
-    private static final int STRUCTURE_SAFETY_INTERVAL_TICKS = 120;
-    private static final int STRUCTURE_SAFETY_SCAN_BATCHES = 40;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     private final int instanceId = INSTANCE_COUNTER.incrementAndGet();
     private boolean chunkUnloaded;
@@ -1451,11 +1448,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private MachineWorkMode configuredWorkMode() {
-        try {
-            return CommonConfig.MACHINE_WORK_MODE.get();
-        } catch (IllegalStateException ignored) {
-            return MachineWorkMode.ASYNC;
-        }
+        return ServerConfig.machineWorkMode();
     }
 
     private boolean hasTickBehavior(StructureSnapshot structure) {
@@ -1645,13 +1638,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK && structure.formed()
                 && work.scan() == null) {
             publishStructureWork(state -> state.withDirty(false).withCheckCounter(0)
-                    .withNextCheckTick(level.getGameTime() + STRUCTURE_SAFETY_INTERVAL_TICKS));
+                    .withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks()));
             runStructureSafetyCheck(structure);
             return;
         }
         publishStructureWork(state -> state.withDirty(false).withCheckCounter(0)
                 .withNextCheckTick(level.getGameTime() + (structure.formed()
-                        ? STRUCTURE_SAFETY_INTERVAL_TICKS : structureCheckIntervalTicks())));
+                        ? ServerConfig.structureSafetyCheckIntervalTicks() : structureCheckIntervalTicks())));
         if (structureWorkSnapshot().scan() != null) {
             advanceStructureScan();
             return;
@@ -1747,7 +1740,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (!isPatternAreaLoaded(structure.pattern())) return;
         CandidatePattern candidatePattern = new CandidatePattern(compiled, structure.pattern(), structure.rollFacing());
-        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(STRUCTURE_SAFETY_SCAN_BATCHES, false, 0);
+        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(ServerConfig.structureSafetyScanBatches(), false, 0);
         CompiledMachinePattern.ScanPlan scanPlan = hasCompiledFacing(compiled, structure.facing())
                 ? compiled.scanPlan(structure.facing(), 0) : null;
         StructureMatcher.ScanState scan = StructureMatcher.beginScan(structure.version(), structure.facing(), structure.rollFacing(),
@@ -1880,7 +1873,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public boolean sendStructurePreview(ServerPlayer player) {
-        Optional<MultiblockPreviewSnapshot> snapshot = createStructurePreviewSnapshot(PktMultiblockPreviewPayload.MAX_ENTRIES);
+        Optional<MultiblockPreviewSnapshot> snapshot = createStructurePreviewSnapshot(PktMultiblockPreviewPayload.maxEntries());
         if (snapshot.isEmpty()) return false;
         PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.get()));
         rememberPreviewReceiver(player.getUUID(), level.getGameTime(), PREVIEW_RECEIVER_WINDOW_TICKS);
@@ -1899,7 +1892,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
         MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(),
-                applySelectedLevels(machine, stage, pattern, selectedLevels), PktMultiblockPreviewPayload.MAX_ENTRIES);
+                applySelectedLevels(machine, stage, pattern, selectedLevels), PktMultiblockPreviewPayload.maxEntries());
         if (snapshot.isEmpty()) return false;
         PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.dimension(), snapshot.controllerPos(),
                 snapshot.entries(), PktMultiblockPreviewPayload.PERSISTENT_DURATION_TICKS));
@@ -2281,7 +2274,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         publishStructureWork(state -> state.withPreviousMismatch(null, null).withPendingInvalidation(false));
         clearStructureScan();
         if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK) {
-            publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + STRUCTURE_SAFETY_INTERVAL_TICKS));
+            publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks()));
             return;
         }
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
@@ -2626,7 +2619,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!refreshComponents) {
                 publishStructureWork(state -> state.withDirty(false).withComponentRefreshRequired(false)
                         .withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK)
-                        .withNextCheckTick(level.getGameTime() + STRUCTURE_SAFETY_INTERVAL_TICKS)
+                        .withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks())
                         .withFormationFailure(null).withLastStructureError(null));
                 registerFormedController();
                 restoringFactoryRuntime = false;
@@ -2653,7 +2646,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
             publishStructureWork(state -> state.withDirty(false).withComponentRefreshRequired(false)
                     .withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK)
-                    .withNextCheckTick(level.getGameTime() + STRUCTURE_SAFETY_INTERVAL_TICKS));
+                    .withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks()));
             if (!physicalFormed()) {
                 updatePhysicalFormedState(true);
                 notifyPreviewReceiversStructureFormed();

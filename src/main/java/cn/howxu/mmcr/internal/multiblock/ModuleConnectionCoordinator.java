@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.multiblock;
 
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
@@ -25,8 +26,6 @@ import java.util.Collections;
  * @author howxu <dev@howxu.cn>
  */
 public final class ModuleConnectionCoordinator {
-    private static final int FALLBACK_SCAN_INTERVAL_TICKS = 60;
-
     private ModuleConnectionCoordinator() {
     }
 
@@ -92,7 +91,7 @@ public final class ModuleConnectionCoordinator {
 
     public static void tick(ServerLevel level) {
         for (BlockPos couplerPos : ModuleConnectionRefreshQueue.drain(level)) refresh(level, couplerPos);
-        if (level.getGameTime() % FALLBACK_SCAN_INTERVAL_TICKS != 0) return;
+        if (level.getGameTime() % ServerConfig.moduleFallbackScanIntervalTicks() != 0) return;
         for (BlockPos couplerPos : registeredCouplers(level)) {
             if (level.hasChunk(couplerPos.getX() >> 4, couplerPos.getZ() >> 4)) refresh(level, couplerPos);
         }

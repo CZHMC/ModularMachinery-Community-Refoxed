@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.preview;
 
+import cn.howxu.mmcr.config.ClientConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
@@ -126,7 +127,7 @@ public final class StructurePreviewWidget implements AutoCloseable {
         if (closed || !viewport.contains(mouseX, mouseY)) return false;
         camera.zoom((float) Math.pow(0.9F, scrollDelta));
         renderer.setInteractive(true);
-        interactiveUntilNanos = System.nanoTime() + 150_000_000L;
+        interactiveUntilNanos = System.nanoTime() + ClientConfig.interactiveRestoreDelayNanos();
         return true;
     }
 

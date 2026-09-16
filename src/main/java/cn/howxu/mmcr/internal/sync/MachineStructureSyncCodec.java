@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -38,13 +39,7 @@ import java.util.Map;
 public final class MachineStructureSyncCodec {
 
     private static final int MAX_DECLARATIONS = 1024;
-    private static final int MAX_TAGS = 1024;
-    private static final int MAX_PORT_REQUIREMENTS = 1024;
-    private static final int MAX_TIER_REQUIREMENTS = 1024;
-    private static final int MAX_DYNAMIC_PATTERNS = 1024;
-    private static final int MAX_REPLACEMENTS = 1024;
     private static final int MAX_SYMBOL_REQUIREMENTS = 256;
-    private static final int MAX_CHILD_PREDICATES = 1024;
     private static final int MAX_FACES = Direction.values().length;
 
     private MachineStructureSyncCodec() {
@@ -58,7 +53,7 @@ public final class MachineStructureSyncCodec {
         validateMaximumBlockPatternCount(maxBlocks);
         BlockPatternLimit blockPatternLimit = new BlockPatternLimit(value.machineId(), maxBlocks);
         Identifier.STREAM_CODEC.encode(buf, value.machineId());
-        checkSize(value.declarations().size(), MAX_DECLARATIONS, "declaration");
+        checkSize(value.declarations().size(), maxCollectionEntries(), "declaration");
         buf.writeVarInt(value.declarations().size());
         for (MachineStructureDefinition.Declaration declaration : value.declarations()) {
             writeDeclaration(buf, value.machineId(), declaration, blockPatternLimit);
@@ -74,7 +69,7 @@ public final class MachineStructureSyncCodec {
         BlockPatternLimit blockPatternLimit = new BlockPatternLimit(null, maxBlocks);
         Identifier machineId = Identifier.STREAM_CODEC.decode(buf);
         int count = buf.readVarInt();
-        checkSize(count, MAX_DECLARATIONS, "declaration");
+        checkSize(count, maxCollectionEntries(), "declaration");
         List<MachineStructureDefinition.Declaration> declarations = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             declarations.add(readDeclaration(buf, blockPatternLimit));
@@ -122,7 +117,7 @@ public final class MachineStructureSyncCodec {
             buf.writeBlockPos(entry.getKey());
             writeBlockPredicate(buf, entry.getValue());
         }
-        checkSize(value.tagsByPosition().size(), MAX_TAGS, "block tag position");
+        checkSize(value.tagsByPosition().size(), maxCollectionEntries(), "block tag position");
         buf.writeVarInt(value.tagsByPosition().size());
         for (var entry : value.tagsByPosition().entrySet()) {
             buf.writeBlockPos(entry.getKey());
@@ -149,10 +144,10 @@ public final class MachineStructureSyncCodec {
         }
 
         int tagCount = buf.readVarInt();
-        checkSize(tagCount, MAX_TAGS, "block tag position");
+        checkSize(tagCount, maxCollectionEntries(), "block tag position");
         Map<BlockPos, List<String>> tags = new LinkedHashMap<>();
         for (int i = 0; i < tagCount; i++) {
-            tags.put(buf.readBlockPos(), readStringList(buf, MAX_TAGS, "block tag"));
+            tags.put(buf.readBlockPos(), readStringList(buf, maxCollectionEntries(), "block tag"));
         }
         int symbolCount = buf.readVarInt();
         checkSize(symbolCount, blockPatternLimit.maxBlocks, "block symbol position");
@@ -186,7 +181,7 @@ public final class MachineStructureSyncCodec {
             }
             case BlockPredicate.AnyOf anyOf -> {
                 buf.writeEnum(PredicateKind.ANY_OF);
-                checkSize(anyOf.children().size(), MAX_CHILD_PREDICATES, "child predicate");
+                checkSize(anyOf.children().size(), maxCollectionEntries(), "child predicate");
                 buf.writeVarInt(anyOf.children().size());
                 for (BlockPredicate child : anyOf.children()) {
                     writeBlockPredicate(buf, child);
@@ -206,7 +201,7 @@ public final class MachineStructureSyncCodec {
                     Identifier.STREAM_CODEC.decode(buf)));
             case ANY_OF -> {
                 int count = buf.readVarInt();
-                checkSize(count, MAX_CHILD_PREDICATES, "child predicate");
+                checkSize(count, maxCollectionEntries(), "child predicate");
                 List<BlockPredicate> children = new ArrayList<>(count);
                 for (int i = 0; i < count; i++) {
                     children.add(readBlockPredicate(buf));
@@ -249,7 +244,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writePortRequirements(RegistryFriendlyByteBuf buf, PortRequirementSpec value) {
-        checkSize(value.requirements().size(), MAX_PORT_REQUIREMENTS, "port requirement");
+        checkSize(value.requirements().size(), maxCollectionEntries(), "port requirement");
         buf.writeVarInt(value.requirements().size());
         for (var entry : value.requirements().entrySet()) {
             ByteBufCodecs.STRING_UTF8.encode(buf, entry.getKey());
@@ -261,7 +256,7 @@ public final class MachineStructureSyncCodec {
 
     private static PortRequirementSpec readPortRequirements(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_PORT_REQUIREMENTS, "port requirement");
+        checkSize(count, maxCollectionEntries(), "port requirement");
         Map<String, PortRequirementSpec.CountRange> requirements = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
             String id = ByteBufCodecs.STRING_UTF8.decode(buf);
@@ -274,7 +269,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writePortTierRequirements(RegistryFriendlyByteBuf buf, PortTierRequirementSpec value) {
-        checkSize(value.requirements().size(), MAX_TIER_REQUIREMENTS, "port tier requirement");
+        checkSize(value.requirements().size(), maxCollectionEntries(), "port tier requirement");
         buf.writeVarInt(value.requirements().size());
         for (PortTierRequirementSpec.Requirement requirement : value.requirements()) {
             buf.writeEnum(requirement.category());
@@ -286,7 +281,7 @@ public final class MachineStructureSyncCodec {
 
     private static PortTierRequirementSpec readPortTierRequirements(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_TIER_REQUIREMENTS, "port tier requirement");
+        checkSize(count, maxCollectionEntries(), "port tier requirement");
         List<PortTierRequirementSpec.Requirement> requirements = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             requirements.add(new PortTierRequirementSpec.Requirement(buf.readEnum(PortTierRequirementSpec.PortCategory.class),
@@ -297,7 +292,7 @@ public final class MachineStructureSyncCodec {
 
     private static void writeDynamicPatterns(RegistryFriendlyByteBuf buf, Identifier machineId,
             List<DynamicPatternSpec> values, BlockPatternLimit blockPatternLimit) {
-        checkSize(values.size(), MAX_DYNAMIC_PATTERNS, "dynamic pattern");
+        checkSize(values.size(), maxCollectionEntries(), "dynamic pattern");
         buf.writeVarInt(values.size());
         for (DynamicPatternSpec value : values) {
             ByteBufCodecs.STRING_UTF8.encode(buf, value.name());
@@ -319,7 +314,7 @@ public final class MachineStructureSyncCodec {
     private static List<DynamicPatternSpec> readDynamicPatterns(RegistryFriendlyByteBuf buf,
             BlockPatternLimit blockPatternLimit) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_DYNAMIC_PATTERNS, "dynamic pattern");
+        checkSize(count, maxCollectionEntries(), "dynamic pattern");
         List<DynamicPatternSpec> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             String name = ByteBufCodecs.STRING_UTF8.decode(buf);
@@ -352,11 +347,11 @@ public final class MachineStructureSyncCodec {
 
     private static void writeModifierReplacements(RegistryFriendlyByteBuf buf,
             Map<Character, List<SingleBlockModifierReplacement>> values) {
-        checkSize(values.size(), MAX_SYMBOL_REQUIREMENTS, "modifier replacement symbol");
+        checkSize(values.size(), maxSymbolRequirements(), "modifier replacement symbol");
         buf.writeVarInt(values.size());
         for (var entry : values.entrySet()) {
             buf.writeChar(entry.getKey());
-            checkSize(entry.getValue().size(), MAX_REPLACEMENTS, "modifier replacement");
+            checkSize(entry.getValue().size(), maxCollectionEntries(), "modifier replacement");
             buf.writeVarInt(entry.getValue().size());
             for (SingleBlockModifierReplacement replacement : entry.getValue()) {
                 writeReplacement(buf, replacement);
@@ -366,12 +361,12 @@ public final class MachineStructureSyncCodec {
 
     private static Map<Character, List<SingleBlockModifierReplacement>> readModifierReplacements(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_SYMBOL_REQUIREMENTS, "modifier replacement symbol");
+        checkSize(count, maxSymbolRequirements(), "modifier replacement symbol");
         Map<Character, List<SingleBlockModifierReplacement>> values = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
             char symbol = buf.readChar();
             int replacementCount = buf.readVarInt();
-            checkSize(replacementCount, MAX_REPLACEMENTS, "modifier replacement");
+            checkSize(replacementCount, maxCollectionEntries(), "modifier replacement");
             List<SingleBlockModifierReplacement> replacements = new ArrayList<>(replacementCount);
             for (int j = 0; j < replacementCount; j++) {
                 replacements.add(readReplacement(buf));
@@ -392,7 +387,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeLevelSlots(RegistryFriendlyByteBuf buf, Map<Character, Identifier> values) {
-        checkSize(values.size(), MAX_SYMBOL_REQUIREMENTS, "level slot");
+        checkSize(values.size(), maxSymbolRequirements(), "level slot");
         buf.writeVarInt(values.size());
         for (var entry : values.entrySet()) {
             buf.writeChar(entry.getKey());
@@ -402,7 +397,7 @@ public final class MachineStructureSyncCodec {
 
     private static Map<Character, Identifier> readLevelSlots(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_SYMBOL_REQUIREMENTS, "level slot");
+        checkSize(count, maxSymbolRequirements(), "level slot");
         Map<Character, Identifier> values = new LinkedHashMap<>();
         for (int i = 0; i < count; i++) {
             values.put(buf.readChar(), Identifier.STREAM_CODEC.decode(buf));
@@ -411,7 +406,7 @@ public final class MachineStructureSyncCodec {
     }
 
     private static void writeStringList(RegistryFriendlyByteBuf buf, List<String> values) {
-        checkSize(values.size(), MAX_TAGS, "string");
+        checkSize(values.size(), maxCollectionEntries(), "string");
         buf.writeVarInt(values.size());
         for (String value : values) {
             ByteBufCodecs.STRING_UTF8.encode(buf, value);
@@ -430,6 +425,14 @@ public final class MachineStructureSyncCodec {
 
     private static void checkSize(int size, int max, String label) {
         if (size < 0 || size > max) throw new IllegalArgumentException("Invalid " + label + " count: " + size);
+    }
+
+    private static int maxCollectionEntries() {
+        return CommonConfig.valueOrDefault(CommonConfig.STRUCTURE_SYNC_MAX_COLLECTION_ENTRIES, MAX_DECLARATIONS);
+    }
+
+    private static int maxSymbolRequirements() {
+        return CommonConfig.valueOrDefault(CommonConfig.STRUCTURE_SYNC_MAX_SYMBOL_REQUIREMENTS, MAX_SYMBOL_REQUIREMENTS);
     }
 
     private static void validateMaximumBlockPatternCount(int maxBlocks) {

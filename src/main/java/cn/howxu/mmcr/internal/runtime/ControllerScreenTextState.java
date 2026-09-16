@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.config.CommonConfig;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -172,7 +173,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     }
 
     private static void validateCandidate(Map<Key, ControllerScreenTextSnapshot.Line> candidate) {
-        if (candidate.size() > MAX_LINES) {
+        if (candidate.size() > maxLines()) {
             throw new IllegalArgumentException("Too many controller screen text lines");
         }
 
@@ -183,7 +184,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
                 buffer.writeVarInt(line.scope().ordinal());
                 Identifier.STREAM_CODEC.encode(buffer, line.lineId());
                 ComponentSerialization.STREAM_CODEC.encode(buffer, line.text());
-                if (buffer.writerIndex() > MAX_ENCODED_TEXT_BYTES) {
+                if (buffer.writerIndex() > maxEncodedTextBytes()) {
                     throw new IllegalArgumentException("Encoded controller screen text is too large");
                 }
             }
@@ -193,5 +194,13 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     }
 
     private record Key(ControllerScreenTextScope scope, Identifier lineId) {
+    }
+
+    private static int maxLines() {
+        return CommonConfig.valueOrDefault(CommonConfig.SCREEN_TEXT_MAX_LINES, MAX_LINES);
+    }
+
+    private static int maxEncodedTextBytes() {
+        return CommonConfig.valueOrDefault(CommonConfig.SCREEN_TEXT_MAX_ENCODED_BYTES, MAX_ENCODED_TEXT_BYTES);
     }
 }

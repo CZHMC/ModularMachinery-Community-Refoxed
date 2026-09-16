@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -169,8 +170,9 @@ public final class MultiblockAssemblyService {
     }
 
     public static <T> List<T> limitOperation(List<T> entries) {
-        return entries.size() > MAX_BLOCKS_PER_OPERATION
-                ? entries.subList(0, MAX_BLOCKS_PER_OPERATION)
+        int maxBlocks = ServerConfig.assemblyMaxBlocksPerOperation();
+        return entries.size() > maxBlocks
+                ? entries.subList(0, maxBlocks)
                 : entries;
     }
 
@@ -258,7 +260,7 @@ public final class MultiblockAssemblyService {
         BlockArray pattern = controller.assemblyPattern(machine.get(), stage);
         boolean stateSensitive = controller.assemblyStateSensitive(machine.get());
         List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern);
-        maxBlocks = Math.min(maxBlocks, MAX_BLOCKS_PER_OPERATION);
+        maxBlocks = Math.min(maxBlocks, ServerConfig.assemblyMaxBlocksPerOperation());
         List<Removal> removals = new ArrayList<>();
         for (Placement placement : template) {
             if (removals.size() >= maxBlocks) break;

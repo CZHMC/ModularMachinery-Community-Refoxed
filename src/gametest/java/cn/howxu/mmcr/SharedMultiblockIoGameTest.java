@@ -12,7 +12,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
@@ -47,8 +47,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SharedMultiblockIoGameTest {
 
     public void asyncFiniteSharedEnergyRotatesTickGrantsBetweenLanes(GameTestHelper helper) {
-        CommonConfig.MACHINE_WORK_MODE.clearCache();
-        CommonConfig.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ServerConfig.MACHINE_WORK_MODE.clearCache();
+        ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
         finiteSharedEnergyRotatesTickGrantsBetweenLanes(helper);
     }
 

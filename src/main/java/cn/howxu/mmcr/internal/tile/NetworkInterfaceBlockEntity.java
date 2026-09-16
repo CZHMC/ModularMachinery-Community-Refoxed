@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.network.MachineReference;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -40,8 +41,6 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
     private static final String MACHINE_KEY = "machine";
     private static final String HASH_KEY = "hash";
     private static final String SEQUENCE_KEY = "sequence";
-    private static final int HEARTBEAT_INTERVAL_TICKS = 40;
-
     private @Nullable GlobalPos owner;
     private final Map<ConnectionKey, Connection> connections = new LinkedHashMap<>();
     private @Nullable List<Connection> connectionSnapshot;
@@ -108,7 +107,8 @@ public class NetworkInterfaceBlockEntity extends LinkedAppearanceBlockEntity {
 
     public void serverTick() {
         if (level == null || level.isClientSide()
-                || Math.floorMod(heartbeatCounter++ + worldPosition.asLong(), HEARTBEAT_INTERVAL_TICKS) != 0) return;
+                || Math.floorMod(heartbeatCounter++ + worldPosition.asLong(),
+                ServerConfig.linkNetworkInterfaceHeartbeatIntervalTicks()) != 0) return;
         GlobalPos currentOwner = owner;
         if (currentOwner != null && currentOwner.dimension().equals(level.dimension())
                 && level.hasChunkAt(currentOwner.pos())) {

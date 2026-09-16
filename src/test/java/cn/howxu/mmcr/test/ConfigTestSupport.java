@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.test;
 
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 
 /** Provides configuration setup that simulates entering a world in tests.
@@ -11,7 +11,7 @@ public final class ConfigTestSupport {
     }
 
     public static void setMachineWorkMode(MachineWorkMode mode) {
-        CommonConfig.MACHINE_WORK_MODE.clearCache();
-        CommonConfig.MACHINE_WORK_MODE.set(mode);
+        ServerConfig.MACHINE_WORK_MODE.clearCache();
+        ServerConfig.MACHINE_WORK_MODE.set(mode);
     }
 }

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.async;
 
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -28,11 +29,10 @@ import java.util.function.IntSupplier;
  */
 public final class MachineAsyncCoordinator {
     private static final Map<ServerLevel, MachineAsyncCoordinator> COORDINATORS = new WeakHashMap<>();
-    private static final int WORKER_COUNT = Math.min(Math.max(Runtime.getRuntime().availableProcessors() / 4, 4), 8);
+    private static final int WORKER_COUNT = ServerConfig.asyncWorkerCount();
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
     private static final int MAX_STALLED_FENCE_PASSES = 5;
-    private static final long WORKER_PROGRESS_WAIT_MILLIS = 10L;
 
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
@@ -305,7 +305,7 @@ public final class MachineAsyncCoordinator {
         synchronized (progressMonitor) {
             if (progress.get() != progressBefore) return;
             try {
-                progressMonitor.wait(WORKER_PROGRESS_WAIT_MILLIS);
+                progressMonitor.wait(ServerConfig.asyncWorkerProgressWaitMillis());
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
             }

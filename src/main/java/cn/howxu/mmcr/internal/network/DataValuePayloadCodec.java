@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.data.DataValueType;
+import cn.howxu.mmcr.config.CommonConfig;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 import java.math.BigDecimal;
@@ -131,25 +132,37 @@ public final class DataValuePayloadCodec {
 
     private static void writeString(RegistryFriendlyByteBuf buf, String value) {
         if (value == null) throw new IllegalArgumentException("Data value string must not be null");
-        buf.writeUtf(value, PktMachineStatePayload.MAX_STRING_LENGTH);
+        buf.writeUtf(value, maxStringLength());
     }
 
     private static String readString(RegistryFriendlyByteBuf buf) {
-        return buf.readUtf(PktMachineStatePayload.MAX_STRING_LENGTH);
+        return buf.readUtf(maxStringLength());
     }
 
     private static void writeCount(RegistryFriendlyByteBuf buf, int count, String name) {
-        if (count < 0 || count > MAX_ENTRIES) throw new IllegalArgumentException("Invalid " + name + " count: " + count);
+        if (count < 0 || count > maxEntries()) throw new IllegalArgumentException("Invalid " + name + " count: " + count);
         buf.writeVarInt(count);
     }
 
     private static int readCount(RegistryFriendlyByteBuf buf, String name) {
         int count = buf.readVarInt();
-        if (count < 0 || count > MAX_ENTRIES) throw new IllegalArgumentException("Invalid " + name + " count: " + count);
+        if (count < 0 || count > maxEntries()) throw new IllegalArgumentException("Invalid " + name + " count: " + count);
         return count;
     }
 
     private static void validateDepth(int depth) {
-        if (depth < 0 || depth > MAX_DEPTH) throw new IllegalArgumentException("Invalid data value depth: " + depth);
+        if (depth < 0 || depth > maxDepth()) throw new IllegalArgumentException("Invalid data value depth: " + depth);
+    }
+
+    private static int maxEntries() {
+        return CommonConfig.valueOrDefault(CommonConfig.DATA_VALUE_MAX_ENTRIES, MAX_ENTRIES);
+    }
+
+    private static int maxDepth() {
+        return CommonConfig.valueOrDefault(CommonConfig.DATA_VALUE_MAX_DEPTH, MAX_DEPTH);
+    }
+
+    private static int maxStringLength() {
+        return CommonConfig.valueOrDefault(CommonConfig.MAX_STRING_LENGTH, PktMachineStatePayload.MAX_STRING_LENGTH);
     }
 }

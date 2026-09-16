@@ -60,3 +60,4 @@ gradle/wrapper/*
 gradlew
 gradlew.bat
 wiki/*
+plans/*

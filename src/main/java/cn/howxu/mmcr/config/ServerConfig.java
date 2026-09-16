@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.config;
 
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /** Defines server-authoritative MMCR configuration values.
@@ -15,6 +16,21 @@ public final class ServerConfig {
     public static final int DEFAULT_STRUCTURE_SENTINEL_COUNT = 16;
     public static final int DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS = 524_288;
     public static final int DEFAULT_MAX_REQUESTS_PER_TICK = 1024;
+    public static final int DEFAULT_STRUCTURE_SAFETY_CHECK_INTERVAL_TICKS = 120;
+    public static final int DEFAULT_STRUCTURE_SAFETY_SCAN_BATCHES = 40;
+    public static final int DEFAULT_MODULE_FALLBACK_SCAN_INTERVAL_TICKS = 60;
+    public static final int DEFAULT_LINK_APPEARANCE_CHECK_INTERVAL_TICKS = 40;
+    public static final int DEFAULT_LINK_DATA_STORAGE_CHECK_INTERVAL_TICKS = 40;
+    public static final int DEFAULT_LINK_NETWORK_INTERFACE_HEARTBEAT_INTERVAL_TICKS = 40;
+    public static final int DEFAULT_LINK_SMART_INTERFACE_CHECK_INTERVAL_TICKS = 20;
+    public static final int DEFAULT_AUTO_IO_MIN_DELAY_TICKS = 5;
+    public static final int DEFAULT_AUTO_IO_MAX_DELAY_TICKS = 60;
+    public static final int DEFAULT_AUTO_IO_SUCCESS_DELAY_STEP_TICKS = 5;
+    public static final int DEFAULT_ASSEMBLY_MAX_BLOCKS_PER_OPERATION = MultiblockAssemblyService.MAX_BLOCKS_PER_OPERATION;
+    public static final int DEFAULT_ASYNC_WORKER_COUNT = Math.min(Math.max(Runtime.getRuntime().availableProcessors() / 4, 4), 8);
+    public static final int DEFAULT_ASYNC_WORKER_PROGRESS_WAIT_MS = 10;
+    public static final int DEFAULT_FACTORY_IDLE_TIMEOUT_TICKS = 200;
+    public static final int DEFAULT_TERMINAL_CONTROLLER_ACCESS_RADIUS = 96;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue TERMINAL_MAX_DEMOLISH_BLOCKS;
     public static final ModConfigSpec.IntValue BUILD_BLOCKS_PER_TICK;
@@ -25,15 +41,58 @@ public final class ServerConfig {
     public static final ModConfigSpec.IntValue STRUCTURE_SYNC_MAX_BLOCKS;
     public static final ModConfigSpec.DoubleValue ENERGY_CONSUMPTION_MULTIPLIER;
     public static final ModConfigSpec.IntValue MAX_REQUESTS_PER_TICK;
+    public static final ModConfigSpec.IntValue STRUCTURE_SAFETY_CHECK_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue STRUCTURE_SAFETY_SCAN_BATCHES;
+    public static final ModConfigSpec.IntValue MODULE_FALLBACK_SCAN_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue LINK_APPEARANCE_CHECK_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue LINK_DATA_STORAGE_CHECK_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue LINK_NETWORK_INTERFACE_HEARTBEAT_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue LINK_SMART_INTERFACE_CHECK_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue AUTO_IO_MIN_DELAY_TICKS;
+    public static final ModConfigSpec.IntValue AUTO_IO_MAX_DELAY_TICKS;
+    public static final ModConfigSpec.IntValue AUTO_IO_SUCCESS_DELAY_STEP_TICKS;
+    public static final ModConfigSpec.IntValue ASSEMBLY_MAX_BLOCKS_PER_OPERATION;
+    public static final ModConfigSpec.EnumValue<MachineWorkMode> MACHINE_WORK_MODE;
+    public static final ModConfigSpec.IntValue ASYNC_WORKER_COUNT;
+    public static final ModConfigSpec.IntValue ASYNC_WORKER_PROGRESS_WAIT_MS;
+    public static final ModConfigSpec.IntValue FACTORY_IDLE_TIMEOUT_TICKS;
+    public static final ModConfigSpec.IntValue TERMINAL_CONTROLLER_ACCESS_RADIUS;
     public static final ModConfigSpec SPEC;
 
     static {
         var builder = new ModConfigSpec.Builder();
 
+        builder.push("machine");
+        MACHINE_WORK_MODE = builder
+                .comment("Machine execution mode")
+                .worldRestart()
+                .defineEnum("work_mode", MachineWorkMode.ASYNC);
+        builder.pop();
+
         builder.push("terminal");
         TERMINAL_MAX_DEMOLISH_BLOCKS = builder
                 .comment("Maximum blocks removed by one terminal demolish operation")
                 .defineInRange("max_demolish_blocks", DEFAULT_TERMINAL_MAX_DEMOLISH_BLOCKS, 1, 1_000_000);
+        TERMINAL_CONTROLLER_ACCESS_RADIUS = builder
+                .comment("Maximum distance from a bound controller at which a terminal may operate")
+                .defineInRange("controller_access_radius", DEFAULT_TERMINAL_CONTROLLER_ACCESS_RADIUS, 1, 512);
+        builder.pop();
+
+        builder.push("async");
+        ASYNC_WORKER_COUNT = builder
+                .comment("Worker threads used for asynchronous machine execution; requires restarting the server process")
+                .worldRestart()
+                .defineInRange("worker_count", DEFAULT_ASYNC_WORKER_COUNT, 1, 256);
+        ASYNC_WORKER_PROGRESS_WAIT_MS = builder
+                .comment("Milliseconds to wait for asynchronous worker progress before another fence pass")
+                .worldRestart()
+                .defineInRange("worker_progress_wait_ms", DEFAULT_ASYNC_WORKER_PROGRESS_WAIT_MS, 1, 1_000);
+        builder.pop();
+
+        builder.push("factory");
+        FACTORY_IDLE_TIMEOUT_TICKS = builder
+                .comment("Ticks an idle non-core factory thread is kept before it is released")
+                .defineInRange("idle_timeout_ticks", DEFAULT_FACTORY_IDLE_TIMEOUT_TICKS, 1, 1_000_000);
         builder.pop();
 
         builder.push("build");
@@ -58,6 +117,53 @@ public final class ServerConfig {
         STRUCTURE_SENTINEL_ENABLED = builder
                 .comment("Whether deterministic structure sentinel checks are enabled")
                 .define("sentinel_enabled", true);
+        STRUCTURE_SAFETY_CHECK_INTERVAL_TICKS = builder
+                .comment("Ticks between formed-structure safety checks")
+                .defineInRange("safety_check_interval_ticks", DEFAULT_STRUCTURE_SAFETY_CHECK_INTERVAL_TICKS, 1, 6_000);
+        STRUCTURE_SAFETY_SCAN_BATCHES = builder
+                .comment("Batches used by one formed-structure safety check")
+                .defineInRange("safety_scan_batches", DEFAULT_STRUCTURE_SAFETY_SCAN_BATCHES, 1, 1_024);
+        builder.pop();
+
+        builder.push("module");
+        MODULE_FALLBACK_SCAN_INTERVAL_TICKS = builder
+                .comment("Ticks between fallback scans for module coupler connections")
+                .defineInRange("fallback_scan_interval_ticks", DEFAULT_MODULE_FALLBACK_SCAN_INTERVAL_TICKS, 1, 6_000);
+        builder.pop();
+
+        builder.push("link");
+        LINK_APPEARANCE_CHECK_INTERVAL_TICKS = builder
+                .comment("Ticks between linked appearance controller checks")
+                .defineInRange("appearance_check_interval_ticks", DEFAULT_LINK_APPEARANCE_CHECK_INTERVAL_TICKS, 1, 6_000);
+        LINK_DATA_STORAGE_CHECK_INTERVAL_TICKS = builder
+                .comment("Ticks between data storage controller binding checks")
+                .defineInRange("data_storage_check_interval_ticks", DEFAULT_LINK_DATA_STORAGE_CHECK_INTERVAL_TICKS, 1, 6_000);
+        LINK_NETWORK_INTERFACE_HEARTBEAT_INTERVAL_TICKS = builder
+                .comment("Ticks between network interface owner heartbeats")
+                .defineInRange("network_interface_heartbeat_interval_ticks",
+                        DEFAULT_LINK_NETWORK_INTERFACE_HEARTBEAT_INTERVAL_TICKS, 1, 6_000);
+        LINK_SMART_INTERFACE_CHECK_INTERVAL_TICKS = builder
+                .comment("Ticks between smart interface controller binding checks")
+                .defineInRange("smart_interface_check_interval_ticks",
+                        DEFAULT_LINK_SMART_INTERFACE_CHECK_INTERVAL_TICKS, 1, 6_000);
+        builder.pop();
+
+        builder.push("auto_io");
+        AUTO_IO_MIN_DELAY_TICKS = builder
+                .comment("Minimum ticks between automatic IO transfer attempts")
+                .defineInRange("min_delay_ticks", DEFAULT_AUTO_IO_MIN_DELAY_TICKS, 1, 6_000);
+        AUTO_IO_MAX_DELAY_TICKS = builder
+                .comment("Maximum ticks between automatic IO transfer attempts")
+                .defineInRange("max_delay_ticks", DEFAULT_AUTO_IO_MAX_DELAY_TICKS, 1, 6_000);
+        AUTO_IO_SUCCESS_DELAY_STEP_TICKS = builder
+                .comment("Delay reduction per successful automatic IO transfer")
+                .defineInRange("success_delay_step_ticks", DEFAULT_AUTO_IO_SUCCESS_DELAY_STEP_TICKS, 1, 6_000);
+        builder.pop();
+
+        builder.push("assembly");
+        ASSEMBLY_MAX_BLOCKS_PER_OPERATION = builder
+                .comment("Maximum blocks handled by one build or demolish operation")
+                .defineInRange("max_blocks_per_operation", DEFAULT_ASSEMBLY_MAX_BLOCKS_PER_OPERATION, 1, 1_000_000);
         builder.pop();
 
         builder.push("energy");
@@ -79,5 +185,83 @@ public final class ServerConfig {
     }
 
     private ServerConfig() {
+    }
+
+    public static int structureSafetyCheckIntervalTicks() {
+        return valueOrDefault(STRUCTURE_SAFETY_CHECK_INTERVAL_TICKS, DEFAULT_STRUCTURE_SAFETY_CHECK_INTERVAL_TICKS);
+    }
+
+    public static int structureSafetyScanBatches() {
+        return valueOrDefault(STRUCTURE_SAFETY_SCAN_BATCHES, DEFAULT_STRUCTURE_SAFETY_SCAN_BATCHES);
+    }
+
+    public static int moduleFallbackScanIntervalTicks() {
+        return valueOrDefault(MODULE_FALLBACK_SCAN_INTERVAL_TICKS, DEFAULT_MODULE_FALLBACK_SCAN_INTERVAL_TICKS);
+    }
+
+    public static int linkAppearanceCheckIntervalTicks() {
+        return valueOrDefault(LINK_APPEARANCE_CHECK_INTERVAL_TICKS, DEFAULT_LINK_APPEARANCE_CHECK_INTERVAL_TICKS);
+    }
+
+    public static int linkDataStorageCheckIntervalTicks() {
+        return valueOrDefault(LINK_DATA_STORAGE_CHECK_INTERVAL_TICKS, DEFAULT_LINK_DATA_STORAGE_CHECK_INTERVAL_TICKS);
+    }
+
+    public static int linkNetworkInterfaceHeartbeatIntervalTicks() {
+        return valueOrDefault(LINK_NETWORK_INTERFACE_HEARTBEAT_INTERVAL_TICKS,
+                DEFAULT_LINK_NETWORK_INTERFACE_HEARTBEAT_INTERVAL_TICKS);
+    }
+
+    public static int linkSmartInterfaceCheckIntervalTicks() {
+        return valueOrDefault(LINK_SMART_INTERFACE_CHECK_INTERVAL_TICKS,
+                DEFAULT_LINK_SMART_INTERFACE_CHECK_INTERVAL_TICKS);
+    }
+
+    public static int autoIoMinDelayTicks() {
+        return valueOrDefault(AUTO_IO_MIN_DELAY_TICKS, DEFAULT_AUTO_IO_MIN_DELAY_TICKS);
+    }
+
+    public static int autoIoMaxDelayTicks() {
+        return Math.max(autoIoMinDelayTicks(), valueOrDefault(AUTO_IO_MAX_DELAY_TICKS, DEFAULT_AUTO_IO_MAX_DELAY_TICKS));
+    }
+
+    public static int autoIoSuccessDelayStepTicks() {
+        return valueOrDefault(AUTO_IO_SUCCESS_DELAY_STEP_TICKS, DEFAULT_AUTO_IO_SUCCESS_DELAY_STEP_TICKS);
+    }
+
+    public static int assemblyMaxBlocksPerOperation() {
+        return valueOrDefault(ASSEMBLY_MAX_BLOCKS_PER_OPERATION, DEFAULT_ASSEMBLY_MAX_BLOCKS_PER_OPERATION);
+    }
+
+    public static MachineWorkMode machineWorkMode() {
+        try {
+            return MACHINE_WORK_MODE.get();
+        } catch (IllegalStateException ignored) {
+            return MachineWorkMode.ASYNC;
+        }
+    }
+
+    public static int asyncWorkerCount() {
+        return valueOrDefault(ASYNC_WORKER_COUNT, DEFAULT_ASYNC_WORKER_COUNT);
+    }
+
+    public static long asyncWorkerProgressWaitMillis() {
+        return valueOrDefault(ASYNC_WORKER_PROGRESS_WAIT_MS, DEFAULT_ASYNC_WORKER_PROGRESS_WAIT_MS);
+    }
+
+    public static int factoryIdleTimeoutTicks() {
+        return valueOrDefault(FACTORY_IDLE_TIMEOUT_TICKS, DEFAULT_FACTORY_IDLE_TIMEOUT_TICKS);
+    }
+
+    public static int terminalControllerAccessRadius() {
+        return valueOrDefault(TERMINAL_CONTROLLER_ACCESS_RADIUS, DEFAULT_TERMINAL_CONTROLLER_ACCESS_RADIUS);
+    }
+
+    private static int valueOrDefault(ModConfigSpec.IntValue value, int defaultValue) {
+        try {
+            return value.get();
+        } catch (IllegalStateException ignored) {
+            return defaultValue;
+        }
     }
 }

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.sync.JeiRuntimeReloadBridge;
 import cn.howxu.mmcr.internal.sync.MachineRecipeSyncCodec;
 import cn.howxu.mmcr.internal.sync.MachineStructureSyncCodec;
@@ -84,12 +85,12 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         buf.writeVarInt(FORMAT_VERSION);
         int maxStructureBlocks = MachineStructureSyncCodec.maximumBlockPatternCount();
         buf.writeVarInt(maxStructureBlocks);
-        writeMap(buf, snapshot.structures(), MAX_STRUCTURES,
+        writeMap(buf, snapshot.structures(), maxStructures(),
                 (structureBuf, structure) -> MachineStructureSyncCodec.encode(structureBuf, structure, maxStructureBlocks));
-        writeMap(buf, snapshot.recipes(), MAX_RECIPES, MachineRecipeSyncCodec::encode);
-        writeMap(buf, snapshot.controllerSpecs(), MAX_SPECS, CONTROLLER_SPEC_CODEC::encode);
-        writeMap(buf, snapshot.appearances(), MAX_SPECS, APPEARANCE_SPEC_CODEC::encode);
-        writeMap(buf, snapshot.machineRecipePools(), MAX_STRUCTURES, Identifier.STREAM_CODEC::encode);
+        writeMap(buf, snapshot.recipes(), maxRecipes(), MachineRecipeSyncCodec::encode);
+        writeMap(buf, snapshot.controllerSpecs(), maxSpecs(), CONTROLLER_SPEC_CODEC::encode);
+        writeMap(buf, snapshot.appearances(), maxSpecs(), APPEARANCE_SPEC_CODEC::encode);
+        writeMap(buf, snapshot.machineRecipePools(), maxStructures(), Identifier.STREAM_CODEC::encode);
         buf.writeVarLong(snapshot.contentVersion());
     }
 
@@ -100,12 +101,12 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         }
         int maxStructureBlocks = buf.readVarInt();
         if (maxStructureBlocks <= 0) throw new IllegalArgumentException("Invalid maximum block pattern count: " + maxStructureBlocks);
-        Map<Identifier, MachineStructureDefinition> structures = readMap(buf, MAX_STRUCTURES,
+        Map<Identifier, MachineStructureDefinition> structures = readMap(buf, maxStructures(),
                 structureBuf -> MachineStructureSyncCodec.decode(structureBuf, maxStructureBlocks));
-        Map<Identifier, MachineRecipe> recipes = readMap(buf, MAX_RECIPES, MachineRecipeSyncCodec::decode);
-        Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, MAX_SPECS, CONTROLLER_SPEC_CODEC::decode);
-        Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, MAX_SPECS, APPEARANCE_SPEC_CODEC::decode);
-        Map<Identifier, Identifier> machineRecipePools = readMap(buf, MAX_STRUCTURES, Identifier.STREAM_CODEC::decode);
+        Map<Identifier, MachineRecipe> recipes = readMap(buf, maxRecipes(), MachineRecipeSyncCodec::decode);
+        Map<Identifier, MachineControllerSpec> controllerSpecs = readMap(buf, maxSpecs(), CONTROLLER_SPEC_CODEC::decode);
+        Map<Identifier, MachineAppearanceSpec> appearances = readMap(buf, maxSpecs(), APPEARANCE_SPEC_CODEC::decode);
+        Map<Identifier, Identifier> machineRecipePools = readMap(buf, maxStructures(), Identifier.STREAM_CODEC::decode);
         validateMap(structures, (id, value) -> {
             if (!id.equals(value.machineId())) throw new IllegalArgumentException("Structure key does not match machine id: " + id);
         });
@@ -152,14 +153,14 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
     }
 
     private static void writeTooltip(RegistryFriendlyByteBuf buf, List<String> values) {
-        checkSize(values.size(), MAX_TOOLTIP_LINES, "tooltip line");
+        checkSize(values.size(), maxTooltipLines(), "tooltip line");
         buf.writeVarInt(values.size());
         for (String value : values) ByteBufCodecs.STRING_UTF8.encode(buf, value);
     }
 
     private static List<String> readTooltip(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_TOOLTIP_LINES, "tooltip line");
+        checkSize(count, maxTooltipLines(), "tooltip line");
         List<String> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) values.add(ByteBufCodecs.STRING_UTF8.decode(buf));
         return List.copyOf(values);
@@ -171,6 +172,22 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
 
     private static void checkSize(int size, int max, String label) {
         if (size < 0 || size > max) throw new IllegalArgumentException("Invalid " + label + " count: " + size);
+    }
+
+    private static int maxStructures() {
+        return CommonConfig.valueOrDefault(CommonConfig.RUNTIME_CONTENT_MAX_STRUCTURES, MAX_STRUCTURES);
+    }
+
+    private static int maxRecipes() {
+        return CommonConfig.valueOrDefault(CommonConfig.RUNTIME_CONTENT_MAX_RECIPES, MAX_RECIPES);
+    }
+
+    private static int maxSpecs() {
+        return CommonConfig.valueOrDefault(CommonConfig.RUNTIME_CONTENT_MAX_SPECS, MAX_SPECS);
+    }
+
+    private static int maxTooltipLines() {
+        return CommonConfig.valueOrDefault(CommonConfig.RUNTIME_CONTENT_MAX_TOOLTIP_LINES, MAX_TOOLTIP_LINES);
     }
 
     @FunctionalInterface

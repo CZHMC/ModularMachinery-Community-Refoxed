@@ -59,8 +59,9 @@ public final class PreviewScenePictureInPictureRenderer extends PictureInPicture
 
     @Override
     public void prepare(PreviewSceneRenderState state, GuiRenderState guiRenderState, int guiScale) {
-        int width = Math.max(1, state.x1() - state.x0()) * guiScale;
-        int height = Math.max(1, state.y1() - state.y0()) * guiScale;
+        float renderScale = state.owner().interactiveRenderScale();
+        int width = Math.max(1, Math.round((state.x1() - state.x0()) * guiScale * renderScale));
+        int height = Math.max(1, Math.round((state.y1() - state.y0()) * guiScale * renderScale));
         ensureTargets(width, height);
         GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
         GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;

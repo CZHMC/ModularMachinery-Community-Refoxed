@@ -17,7 +17,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -67,10 +67,10 @@ class AsyncFactoryExecutionTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        CommonConfig.SPEC.correct(config);
+        ServerConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach

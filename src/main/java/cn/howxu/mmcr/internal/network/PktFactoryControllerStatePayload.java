@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -51,10 +52,10 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         buf.writeVarInt(state.activeLaneCount());
         buf.writeLong(state.maxParallelism());
         buf.writeBoolean(state.paused());
-        buf.writeUtf(state.machineName(), MAX_STRING_LENGTH);
+        buf.writeUtf(state.machineName(), maxStringLength());
         buf.writeVarInt(state.parallelSlots());
         buf.writeVarInt(state.foundLevelIds().size());
-        for (String id : state.foundLevelIds()) buf.writeUtf(id, MAX_STRING_LENGTH);
+        for (String id : state.foundLevelIds()) buf.writeUtf(id, maxStringLength());
         FailureStatusCodec.write(buf, state.failure());
         buf.writeVarInt(state.lanes().size());
         for (CraftingStateSnapshot lane : state.lanes()) writeCrafting(buf, lane);
@@ -70,16 +71,16 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         int activeLaneCount = buf.readVarInt();
         long maxParallelism = buf.readLong();
         boolean paused = buf.readBoolean();
-        String machineName = buf.readUtf(MAX_STRING_LENGTH);
+        String machineName = buf.readUtf(maxStringLength());
         int parallelSlots = buf.readVarInt();
-        int levelSize = readCount(buf, MAX_LEVEL_SNAPSHOTS, "machine level");
+        int levelSize = readCount(buf, maxLevelSnapshots(), "machine level");
         List<String> foundLevelIds = new ArrayList<>(levelSize);
-        for (int i = 0; i < levelSize; i++) foundLevelIds.add(buf.readUtf(MAX_STRING_LENGTH));
+        for (int i = 0; i < levelSize; i++) foundLevelIds.add(buf.readUtf(maxStringLength()));
         ExecutionStatus failure = FailureStatusCodec.read(buf);
-        int laneSize = readCount(buf, MAX_LANE_SNAPSHOTS, "crafting lane");
+        int laneSize = readCount(buf, maxLaneSnapshots(), "crafting lane");
         List<CraftingStateSnapshot> lanes = new ArrayList<>(laneSize);
         for (int i = 0; i < laneSize; i++) lanes.add(readCrafting(buf));
-        int threadSize = readCount(buf, MAX_THREAD_SNAPSHOTS, "factory thread");
+        int threadSize = readCount(buf, maxThreadSnapshots(), "factory thread");
         List<FactoryRuntime.ThreadSnapshot> threads = new ArrayList<>(threadSize);
         Set<Integer> indexes = new HashSet<>(threadSize);
         for (int i = 0; i < threadSize; i++) {
@@ -97,10 +98,10 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
 
     private static void writeCrafting(RegistryFriendlyByteBuf buf, CraftingStateSnapshot state) {
         buf.writeBoolean(state.recipeId() != null);
-        if (state.recipeId() != null) buf.writeUtf(state.recipeId().toString(), MAX_STRING_LENGTH);
+        if (state.recipeId() != null) buf.writeUtf(state.recipeId().toString(), maxStringLength());
         CraftingStatus status = state.status();
         buf.writeVarInt(status.getStatus().ordinal());
-        buf.writeUtf(status.getUnlocMessage(), MAX_STRING_LENGTH);
+        buf.writeUtf(status.getUnlocMessage(), maxStringLength());
         FailureStatusCodec.write(buf, state.failure());
         buf.writeLong(state.structureVersion());
         buf.writeLong(state.capabilityVersion());
@@ -110,41 +111,41 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         buf.writeLong(state.parallelism());
         buf.writeLong(state.maxParallelism());
         buf.writeBoolean(state.recipeLocked());
-        buf.writeUtf(state.lockedRecipeId(), MAX_STRING_LENGTH);
+        buf.writeUtf(state.lockedRecipeId(), maxStringLength());
     }
 
     private static CraftingStateSnapshot readCrafting(RegistryFriendlyByteBuf buf) {
-        Identifier recipeId = buf.readBoolean() ? Identifier.parse(buf.readUtf(MAX_STRING_LENGTH)) : null;
+        Identifier recipeId = buf.readBoolean() ? Identifier.parse(buf.readUtf(maxStringLength())) : null;
         CraftingStatus.Status status = readEnum(CraftingStatus.Status.values(), buf.readVarInt(), "crafting status");
-        CraftingStatus craftingStatus = new CraftingStatus(status, buf.readUtf(MAX_STRING_LENGTH));
+        CraftingStatus craftingStatus = new CraftingStatus(status, buf.readUtf(maxStringLength()));
         ExecutionStatus failure = FailureStatusCodec.read(buf);
         return new CraftingStateSnapshot(recipeId, craftingStatus, failure, buf.readLong(), buf.readLong(), buf.readLong(),
                  buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(), buf.readBoolean(),
-                buf.readUtf(MAX_STRING_LENGTH));
+                buf.readUtf(maxStringLength()));
     }
 
     private static void writeThread(RegistryFriendlyByteBuf buf, FactoryRuntime.ThreadSnapshot thread) {
         buf.writeVarInt(thread.index());
-        buf.writeUtf(thread.laneId(), MAX_STRING_LENGTH);
+        buf.writeUtf(thread.laneId(), maxStringLength());
         buf.writeBoolean(thread.baseThread());
         buf.writeBoolean(thread.coreThread());
         buf.writeBoolean(thread.active());
-        buf.writeUtf(thread.recipeId(), MAX_STRING_LENGTH);
+        buf.writeUtf(thread.recipeId(), maxStringLength());
         buf.writeVarInt(thread.tick());
         buf.writeVarInt(thread.totalTick());
         buf.writeLong(thread.parallelism());
         FailureStatusCodec.write(buf, thread.failure());
         buf.writeBoolean(thread.locked());
-        buf.writeUtf(thread.lockedRecipeId(), MAX_STRING_LENGTH);
+        buf.writeUtf(thread.lockedRecipeId(), maxStringLength());
     }
 
     private static FactoryRuntime.ThreadSnapshot readThread(RegistryFriendlyByteBuf buf) {
         int index = buf.readVarInt();
-        String laneId = buf.readUtf(MAX_STRING_LENGTH);
+        String laneId = buf.readUtf(maxStringLength());
         boolean baseThread = buf.readBoolean();
         boolean coreThread = buf.readBoolean();
         boolean active = buf.readBoolean();
-        String recipeId = buf.readUtf(MAX_STRING_LENGTH);
+        String recipeId = buf.readUtf(maxStringLength());
         int tick = buf.readVarInt();
         int totalTick = buf.readVarInt();
         long parallelism = buf.readLong();
@@ -152,12 +153,12 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         ExecutionStatus failure = FailureStatusCodec.read(buf);
         return new FactoryRuntime.ThreadSnapshot(index, laneId, baseThread, coreThread, active, recipeId, tick,
                 totalTick, parallelism, failure, buf.readBoolean(),
-                buf.readUtf(MAX_STRING_LENGTH));
+                buf.readUtf(maxStringLength()));
     }
 
     private static void validateSnapshot(FactorySnapshot state) {
         if (state == null) throw new IllegalArgumentException("Factory snapshot is null");
-        if (state.laneLimit() < 1 || state.laneLimit() > MAX_THREAD_SNAPSHOTS) {
+        if (state.laneLimit() < 1 || state.laneLimit() > maxThreadSnapshots()) {
             throw new IllegalArgumentException("Invalid factory lane limit: " + state.laneLimit());
         }
         if (state.presentationLanes().size() != state.laneLimit()) {
@@ -167,8 +168,8 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
             throw new IllegalArgumentException("Invalid active factory lane count: " + state.activeLaneCount());
         }
         if (state.maxParallelism() < 1L || state.parallelSlots() < 0
-                || state.lanes().size() > MAX_LANE_SNAPSHOTS
-                || state.foundLevelIds().size() > MAX_LEVEL_SNAPSHOTS) {
+                || state.lanes().size() > maxLaneSnapshots()
+                || state.foundLevelIds().size() > maxLevelSnapshots()) {
             throw new IllegalArgumentException("Invalid factory snapshot values");
         }
         Set<Integer> indexes = new HashSet<>();
@@ -176,7 +177,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
             if (thread == null || thread.index() < 0 || thread.index() >= state.laneLimit() || !indexes.add(thread.index())) {
                 throw new IllegalArgumentException("Invalid factory thread snapshot index");
             }
-            if (thread.laneId().isBlank() || thread.laneId().length() > MAX_STRING_LENGTH) {
+            if (thread.laneId().isBlank() || thread.laneId().length() > maxStringLength()) {
                 throw new IllegalArgumentException("Invalid factory thread lane ID");
             }
             validateThread(thread.active(), thread.tick(), thread.totalTick(), thread.parallelism());
@@ -201,6 +202,22 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
     private static <T> T readEnum(T[] values, int ordinal, String name) {
         if (ordinal < 0 || ordinal >= values.length) throw new IllegalArgumentException("Invalid " + name + ": " + ordinal);
         return values[ordinal];
+    }
+
+    private static int maxThreadSnapshots() {
+        return CommonConfig.valueOrDefault(CommonConfig.FACTORY_STATE_MAX_THREAD_SNAPSHOTS, MAX_THREAD_SNAPSHOTS);
+    }
+
+    private static int maxLaneSnapshots() {
+        return CommonConfig.valueOrDefault(CommonConfig.FACTORY_STATE_MAX_LANE_SNAPSHOTS, MAX_LANE_SNAPSHOTS);
+    }
+
+    private static int maxLevelSnapshots() {
+        return CommonConfig.valueOrDefault(CommonConfig.FACTORY_STATE_MAX_LEVEL_SNAPSHOTS, MAX_LEVEL_SNAPSHOTS);
+    }
+
+    private static int maxStringLength() {
+        return CommonConfig.valueOrDefault(CommonConfig.MAX_STRING_LENGTH, MAX_STRING_LENGTH);
     }
 
     @Override

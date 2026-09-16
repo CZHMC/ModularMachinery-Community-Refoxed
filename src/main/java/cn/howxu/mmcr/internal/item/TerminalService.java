@@ -36,8 +36,6 @@ import java.util.OptionalInt;
  * @author howxu <dev@howxu.cn>
  */
 public final class TerminalService {
-    private static final int CONTROLLER_ACCESS_RADIUS = 6 * 16;
-
     private TerminalService() {}
 
     public record Result(boolean accepted, String messageKey) {}
@@ -218,9 +216,9 @@ public final class TerminalService {
     }
 
     private static boolean canAccess(ServerPlayer player, GlobalPos target) {
+        int radius = ServerConfig.terminalControllerAccessRadius();
         return player != null && target != null && player.level().dimension().equals(target.dimension())
-                && player.blockPosition().distSqr(target.pos())
-                <= CONTROLLER_ACCESS_RADIUS * CONTROLLER_ACCESS_RADIUS;
+                && player.blockPosition().distSqr(target.pos()) <= radius * radius;
     }
 
     private static boolean isHeldTerminal(ServerPlayer player, ItemStack stack) {
@@ -256,7 +254,7 @@ public final class TerminalService {
                 stages,
                 machine == null ? Component.translatable("gui.mmcr.terminal.no_controller")
                         : machine.displayName(),
-                previewLayers(pattern, PktTerminalStatePayload.MAX_PREVIEW_LAYERS), statusKey));
+                previewLayers(pattern, PktTerminalStatePayload.maxPreviewLayers()), statusKey));
     }
 
     private static List<Integer> currentPreviewLayers(MachineControllerBlockEntity controller, TerminalData data) {
@@ -264,7 +262,7 @@ public final class TerminalService {
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         List<Integer> stages = controller.availableStructureStages();
         return previewLayers(previewPattern(controller, data, structure, machine, stages),
-                PktTerminalStatePayload.MAX_PREVIEW_LAYERS);
+                PktTerminalStatePayload.maxPreviewLayers());
     }
 
     private static BlockArray previewPattern(MachineControllerBlockEntity controller, TerminalData data,

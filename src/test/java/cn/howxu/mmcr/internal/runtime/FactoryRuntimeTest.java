@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -95,10 +95,10 @@ class FactoryRuntimeTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        CommonConfig.SPEC.correct(config);
+        ServerConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @BeforeEach

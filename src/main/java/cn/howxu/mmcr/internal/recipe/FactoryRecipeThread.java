@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
@@ -42,8 +43,6 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 public final class FactoryRecipeThread extends RecipeThread {
-    public static final int IDLE_TIMEOUT_TICKS = 200;
-
     private final boolean coreThread;
     private final boolean baseThread;
     private final String threadName;
@@ -228,7 +227,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public boolean isTimedOut(boolean recipeLockUsed) {
-        return !baseThread && !coreThread && !recipeLockUsed && isIdle() && idleTicks >= IDLE_TIMEOUT_TICKS;
+        return !baseThread && !coreThread && !recipeLockUsed && isIdle()
+                && idleTicks >= ServerConfig.factoryIdleTimeoutTicks();
     }
     public void tickIdle() { idleTicks = isIdle() ? idleTicks + 1 : 0; }
 

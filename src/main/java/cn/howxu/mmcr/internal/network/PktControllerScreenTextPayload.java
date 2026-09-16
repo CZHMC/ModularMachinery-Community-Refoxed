@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import net.minecraft.core.BlockPos;
@@ -60,6 +61,9 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
     }
 
     private static void write(RegistryFriendlyByteBuf buffer, PktControllerScreenTextPayload payload) {
+        if (payload.lines.size() > maxLines()) {
+            throw new IllegalArgumentException("Too many controller screen text lines");
+        }
         buffer.writeBlockPos(payload.controllerPos);
         buffer.writeUtf(payload.laneId, MAX_LINE_ID_LENGTH);
         buffer.writeLong(payload.revision);
@@ -69,7 +73,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
             buffer.writeVarInt(line.scope().ordinal());
             Identifier.STREAM_CODEC.encode(buffer, line.lineId());
             ComponentSerialization.STREAM_CODEC.encode(buffer, line.text());
-            if (buffer.writerIndex() - textStart > MAX_ENCODED_TEXT_BYTES) {
+            if (buffer.writerIndex() - textStart > maxEncodedTextBytes()) {
                 throw new IllegalArgumentException("Encoded controller screen text is too large");
             }
         }
@@ -82,10 +86,10 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
         if (revision < 0L) throw new IllegalArgumentException("revision must not be negative");
 
         int lineCount = buffer.readVarInt();
-        if (lineCount < 0 || lineCount > MAX_LINES) {
+        if (lineCount < 0 || lineCount > maxLines()) {
             throw new IllegalArgumentException("Invalid controller screen text line count: " + lineCount);
         }
-        if (buffer.readableBytes() > MAX_ENCODED_TEXT_BYTES) {
+        if (buffer.readableBytes() > maxEncodedTextBytes()) {
             throw new IllegalArgumentException("Encoded controller screen text is too large");
         }
 
@@ -100,7 +104,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
                 throw new IllegalArgumentException("Duplicate controller screen text line");
             }
             Component text = ComponentSerialization.STREAM_CODEC.decode(buffer);
-            if (buffer.readerIndex() - textStart > MAX_ENCODED_TEXT_BYTES) {
+            if (buffer.readerIndex() - textStart > maxEncodedTextBytes()) {
                 throw new IllegalArgumentException("Encoded controller screen text is too large");
             }
             lines.add(new ControllerScreenTextSnapshot.Line(scope, lineId, text));
@@ -109,7 +113,7 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
     }
 
     private static void validateLines(List<ControllerScreenTextSnapshot.Line> lines) {
-        if (lines.size() > MAX_LINES) {
+        if (lines.size() > maxLines()) {
             throw new IllegalArgumentException("Too many controller screen text lines");
         }
         Set<LineKey> seen = new HashSet<>();
@@ -138,6 +142,14 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
             throw new IllegalArgumentException("Invalid controller screen text scope: " + ordinal);
         }
         return values[ordinal];
+    }
+
+    private static int maxLines() {
+        return CommonConfig.valueOrDefault(CommonConfig.SCREEN_TEXT_MAX_LINES, MAX_LINES);
+    }
+
+    private static int maxEncodedTextBytes() {
+        return CommonConfig.valueOrDefault(CommonConfig.SCREEN_TEXT_MAX_ENCODED_BYTES, MAX_ENCODED_TEXT_BYTES);
     }
 
     private record LineKey(ControllerScreenTextScope scope, Identifier lineId) {

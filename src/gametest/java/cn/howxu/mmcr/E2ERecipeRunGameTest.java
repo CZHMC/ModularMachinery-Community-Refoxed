@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -37,8 +37,8 @@ import java.util.Set;
 public class E2ERecipeRunGameTest {
 
     public void asyncIronCompressorRuns(GameTestHelper helper) {
-        CommonConfig.MACHINE_WORK_MODE.clearCache();
-        CommonConfig.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
+        ServerConfig.MACHINE_WORK_MODE.clearCache();
+        ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.ASYNC);
         ironCompressorRuns(helper);
     }
 

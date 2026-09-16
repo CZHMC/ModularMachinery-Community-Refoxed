@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.config.CommonConfig;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.storage.ValueInput;
@@ -67,7 +68,7 @@ public final class FailureStatusCodec {
         }
 
         Map<String, String> details = occurrence.details();
-        checkCount(details.size(), MAX_DETAILS, "failure detail");
+        checkCount(details.size(), maxDetails(), "failure detail");
         ValueOutput.ValueOutputList detailList = occurrenceOutput.childrenList("details");
         for (Map.Entry<String, String> entry : details.entrySet()) {
             ValueOutput detail = detailList.addChild();
@@ -98,7 +99,7 @@ public final class FailureStatusCodec {
         for (ValueInput frameInput : traceInputs) frames.add(readFrame(frameInput));
 
         ValueInput.ValueInputList detailInputs = occurrenceInput.childrenListOrEmpty("details");
-        int detailCount = count(detailInputs, MAX_DETAILS, "failure detail");
+        int detailCount = count(detailInputs, maxDetails(), "failure detail");
         Map<String, String> details = new LinkedHashMap<>(detailCount);
         for (ValueInput detailInput : detailInputs) {
             String key = getString(detailInput, "key");
@@ -143,7 +144,7 @@ public final class FailureStatusCodec {
         }
 
         Map<String, String> details = occurrence.details();
-        checkCount(details.size(), MAX_DETAILS, "failure detail");
+        checkCount(details.size(), maxDetails(), "failure detail");
         buffer.writeVarInt(details.size());
         for (Map.Entry<String, String> entry : details.entrySet()) {
             writeString(buffer, entry.getKey(), "failure detail key");
@@ -174,7 +175,7 @@ public final class FailureStatusCodec {
                 frames.add(new FailureTrace.Frame(frameSource, phase, recipeId, requirementIndex));
             }
 
-            int detailCount = readCount(buffer, MAX_DETAILS, "failure detail");
+            int detailCount = readCount(buffer, maxDetails(), "failure detail");
             Map<String, String> details = new LinkedHashMap<>(detailCount);
             for (int index = 0; index < detailCount; index++) {
                 details.put(readString(buffer, "failure detail key"),
@@ -261,12 +262,12 @@ public final class FailureStatusCodec {
 
     private static void writeString(RegistryFriendlyByteBuf buffer, String value, String name) {
         checkString(value, name);
-        buffer.writeUtf(value, MAX_STRING_LENGTH);
+        buffer.writeUtf(value, maxStringLength());
     }
 
     private static String readString(RegistryFriendlyByteBuf buffer, String name) {
         try {
-            String value = buffer.readUtf(MAX_STRING_LENGTH);
+            String value = buffer.readUtf(maxStringLength());
             checkString(value, name);
             return value;
         } catch (IllegalArgumentException exception) {
@@ -277,7 +278,7 @@ public final class FailureStatusCodec {
     }
 
     private static void checkString(String value, String name) {
-        if (value == null || value.length() > MAX_STRING_LENGTH) {
+        if (value == null || value.length() > maxStringLength()) {
             throw new IllegalArgumentException("Invalid " + name + " length");
         }
     }
@@ -309,5 +310,13 @@ public final class FailureStatusCodec {
 
     private static <T> T readEnum(RegistryFriendlyByteBuf buffer, T[] values, String name) {
         return getEnum(values, buffer.readVarInt(), name);
+    }
+
+    private static int maxDetails() {
+        return CommonConfig.valueOrDefault(CommonConfig.FAILURE_MAX_DETAILS, MAX_DETAILS);
+    }
+
+    private static int maxStringLength() {
+        return CommonConfig.valueOrDefault(CommonConfig.MAX_STRING_LENGTH, MAX_STRING_LENGTH);
     }
 }

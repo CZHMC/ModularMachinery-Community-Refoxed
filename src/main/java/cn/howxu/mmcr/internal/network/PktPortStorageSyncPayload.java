@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.sync.CapabilitySyncEntry;
 import cn.howxu.mmcr.api.capability.sync.CapabilitySyncRegistry;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
@@ -47,7 +48,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
         pos = pos == null ? BlockPos.ZERO : pos.immutable();
         IOPortKindView kindView = requireKind(kind);
         kind = kindView.id();
-        if (entries == null || entries.size() > MAX_ENTRIES || totalPayloadBytes(entries) > MAX_TOTAL_PAYLOAD_BYTES) {
+        if (entries == null || entries.size() > maxEntries() || totalPayloadBytes(entries) > maxPayloadBytes()) {
             throw new IllegalArgumentException("Invalid capability sync entry count");
         }
         entries = List.copyOf(entries);
@@ -182,13 +183,13 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
     }
 
     private static void writeCount(RegistryFriendlyByteBuf buffer, int count, String name) {
-        if (count < 0 || count > MAX_ENTRIES) throw new IllegalArgumentException("Invalid " + name + " entry count");
+        if (count < 0 || count > maxEntries()) throw new IllegalArgumentException("Invalid " + name + " entry count");
         buffer.writeVarInt(count);
     }
 
     private static int readCount(RegistryFriendlyByteBuf buffer, String name) {
         int count = buffer.readVarInt();
-        if (count < 0 || count > MAX_ENTRIES) throw new IllegalArgumentException("Invalid " + name + " entry count");
+        if (count < 0 || count > maxEntries()) throw new IllegalArgumentException("Invalid " + name + " entry count");
         return count;
     }
 
@@ -200,7 +201,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
 
     private static int checkedPayloadTotal(int totalBytes, int payloadLength) {
         if (payloadLength < 0 || payloadLength > CapabilitySyncEntry.MAX_PAYLOAD_BYTES
-                || payloadLength > MAX_TOTAL_PAYLOAD_BYTES - totalBytes) {
+                || payloadLength > maxPayloadBytes() - totalBytes) {
             throw new IllegalArgumentException("Invalid total capability sync payload size");
         }
         return totalBytes + payloadLength;
@@ -232,6 +233,14 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
         if (player.containerMenu instanceof CombinedPortMenu menu) return menu.owner() == port;
         if (player.containerMenu instanceof ExtendedCombinedMenu menu) return menu.owner() == port;
         return false;
+    }
+
+    private static int maxEntries() {
+        return CommonConfig.valueOrDefault(CommonConfig.PORT_STORAGE_MAX_ENTRIES, MAX_ENTRIES);
+    }
+
+    private static int maxPayloadBytes() {
+        return CommonConfig.valueOrDefault(CommonConfig.PORT_STORAGE_MAX_PAYLOAD_BYTES, MAX_TOTAL_PAYLOAD_BYTES);
     }
 
     /** Narrow view used by menu open-data validation without exposing registry implementation details. */

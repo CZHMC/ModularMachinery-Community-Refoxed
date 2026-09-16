@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.MultiblockPreviewClientHandler;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -45,11 +46,12 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
 
     public PktMultiblockPreviewPayload {
         controllerPos = controllerPos.immutable();
-        entries = List.copyOf(entries.size() > MAX_ENTRIES ? entries.subList(0, MAX_ENTRIES) : entries);
+        int maxEntries = maxEntries();
+        entries = List.copyOf(entries.size() > maxEntries ? entries.subList(0, maxEntries) : entries);
     }
 
     public PktMultiblockPreviewPayload(MultiblockPreviewSnapshot snapshot) {
-        this(snapshot.dimension(), snapshot.controllerPos(), snapshot.entries(), DURATION_TICKS);
+        this(snapshot.dimension(), snapshot.controllerPos(), snapshot.entries(), configuredDurationTicks());
     }
 
     public static PktMultiblockPreviewPayload clear(ResourceKey<Level> dimension, BlockPos controllerPos) {
@@ -59,14 +61,14 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
     private static void write(RegistryFriendlyByteBuf buf, PktMultiblockPreviewPayload payload) {
         Identifier.STREAM_CODEC.encode(buf, payload.dimension.identifier());
         buf.writeBlockPos(payload.controllerPos);
-        ByteBufCodecs.collection(ArrayList::new, ENTRY_CODEC, MAX_ENTRIES).encode(buf, new ArrayList<>(payload.entries));
+        ByteBufCodecs.collection(ArrayList::new, ENTRY_CODEC, maxEntries()).encode(buf, new ArrayList<>(payload.entries));
         ByteBufCodecs.VAR_INT.encode(buf, payload.durationTicks);
     }
 
     private static PktMultiblockPreviewPayload read(RegistryFriendlyByteBuf buf) {
         Identifier dimension = Identifier.STREAM_CODEC.decode(buf);
         BlockPos controllerPos = buf.readBlockPos();
-        List<MultiblockPreviewSnapshot.Entry> entries = ByteBufCodecs.collection(ArrayList::new, ENTRY_CODEC, MAX_ENTRIES).decode(buf);
+        List<MultiblockPreviewSnapshot.Entry> entries = ByteBufCodecs.collection(ArrayList::new, ENTRY_CODEC, maxEntries()).decode(buf);
         int durationTicks = ByteBufCodecs.VAR_INT.decode(buf);
         return new PktMultiblockPreviewPayload(ResourceKey.create(Registries.DIMENSION, dimension), controllerPos, entries, durationTicks);
     }
@@ -107,5 +109,13 @@ public record PktMultiblockPreviewPayload(ResourceKey<Level> dimension, BlockPos
 
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> MultiblockPreviewClientHandler.show(dimension, controllerPos, entries, durationTicks));
+    }
+
+    public static int maxEntries() {
+        return CommonConfig.valueOrDefault(CommonConfig.PREVIEW_MAX_ENTRIES, MAX_ENTRIES);
+    }
+
+    private static int configuredDurationTicks() {
+        return CommonConfig.valueOrDefault(CommonConfig.PREVIEW_DURATION_TICKS, DURATION_TICKS);
     }
 }

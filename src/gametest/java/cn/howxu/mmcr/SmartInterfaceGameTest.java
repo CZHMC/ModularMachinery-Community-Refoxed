@@ -1,7 +1,7 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -28,8 +28,8 @@ import java.util.Set;
 public class SmartInterfaceGameTest {
 
     public void bindsDefaultValueAndWritesRecipeOutput(GameTestHelper helper) {
-        CommonConfig.MACHINE_WORK_MODE.clearCache();
-        CommonConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        ServerConfig.MACHINE_WORK_MODE.clearCache();
+        ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         BlockPos controllerPos = new BlockPos(1, 1, 1);
         BlockPos interfacePos = controllerPos.offset(1, 0, 0);
         helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()

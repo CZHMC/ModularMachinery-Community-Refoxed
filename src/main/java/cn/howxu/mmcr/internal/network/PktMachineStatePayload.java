@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
@@ -58,7 +59,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         primaryFluid = primaryFluid == null ? FluidStack.EMPTY : primaryFluid.copy();
         primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
         dataStorageValues = Map.copyOf(dataStorageValues == null ? Map.of() : dataStorageValues);
-        if (installedModuleCount < 0 || installedModuleCount > MAX_INSTALLED_MODULES
+        if (installedModuleCount < 0 || installedModuleCount > maxInstalledModules()
                 || tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
                 || factoryThreadCount < 0 || activeFactoryThreadCount < 0 || parallelControllerCount < 0
                 || maxParallelControllerCount < 0 || totalStoredEnergy < 0L || totalCapacityEnergy < 0L) {
@@ -129,24 +130,24 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             StreamCodec.of(PktMachineStatePayload::write, PktMachineStatePayload::read);
 
     private static void write(RegistryFriendlyByteBuf buf, PktMachineStatePayload payload) {
-        if (payload.foundLevelIds.size() > MAX_LEVEL_SNAPSHOTS) {
+        if (payload.foundLevelIds.size() > maxLevelSnapshots()) {
             throw new IllegalArgumentException("Invalid machine level count: " + payload.foundLevelIds.size());
         }
         buf.writeBlockPos(payload.pos);
-        buf.writeUtf(payload.recipeName, MAX_STRING_LENGTH);
+        buf.writeUtf(payload.recipeName, maxStringLength());
         buf.writeBoolean(payload.formed);
         buf.writeBoolean(payload.active);
         buf.writeVarInt(payload.foundLevelIds.size());
-        for (String id : payload.foundLevelIds) buf.writeUtf(id, MAX_STRING_LENGTH);
+        for (String id : payload.foundLevelIds) buf.writeUtf(id, maxStringLength());
         buf.writeBoolean(payload.recipeLocked);
-        buf.writeUtf(payload.lockedRecipeId, MAX_STRING_LENGTH);
-        buf.writeUtf(payload.machineId, MAX_STRING_LENGTH);
+        buf.writeUtf(payload.lockedRecipeId, maxStringLength());
+        buf.writeUtf(payload.machineId, maxStringLength());
         buf.writeVarInt(payload.controllerRole);
         buf.writeVarInt(payload.installedModuleCount);
         buf.writeBoolean(payload.moduleConnected);
-        buf.writeUtf(payload.connectedHostId, MAX_STRING_LENGTH);
+        buf.writeUtf(payload.connectedHostId, maxStringLength());
         buf.writeVarInt(payload.craftingStatus.ordinal());
-        buf.writeUtf(payload.craftingMessage, MAX_STRING_LENGTH);
+        buf.writeUtf(payload.craftingMessage, maxStringLength());
         FailureStatusCodec.write(buf, payload.failure);
         buf.writeBoolean(payload.structureAreaLoaded);
         buf.writeBoolean(payload.redstonePaused);
@@ -168,25 +169,25 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
 
     private static PktMachineStatePayload read(RegistryFriendlyByteBuf buf) {
         BlockPos pos = buf.readBlockPos();
-        String recipeName = buf.readUtf(MAX_STRING_LENGTH);
+        String recipeName = buf.readUtf(maxStringLength());
         boolean formed = buf.readBoolean();
         boolean active = buf.readBoolean();
         int levelCount = buf.readVarInt();
-        if (levelCount < 0 || levelCount > MAX_LEVEL_SNAPSHOTS) throw new IllegalArgumentException("Invalid machine level count");
+        if (levelCount < 0 || levelCount > maxLevelSnapshots()) throw new IllegalArgumentException("Invalid machine level count");
         List<String> foundLevelIds = new ArrayList<>(levelCount);
-        for (int i = 0; i < levelCount; i++) foundLevelIds.add(buf.readUtf(MAX_STRING_LENGTH));
+        for (int i = 0; i < levelCount; i++) foundLevelIds.add(buf.readUtf(maxStringLength()));
         boolean recipeLocked = buf.readBoolean();
-        String lockedRecipeId = buf.readUtf(MAX_STRING_LENGTH);
-        String machineId = buf.readUtf(MAX_STRING_LENGTH);
+        String lockedRecipeId = buf.readUtf(maxStringLength());
+        String machineId = buf.readUtf(maxStringLength());
         int controllerRole = buf.readVarInt();
         int installedModuleCount = buf.readVarInt();
-        if (installedModuleCount < 0 || installedModuleCount > MAX_INSTALLED_MODULES) {
+        if (installedModuleCount < 0 || installedModuleCount > maxInstalledModules()) {
             throw new IllegalArgumentException("Invalid installed module count");
         }
         boolean moduleConnected = buf.readBoolean();
-        String connectedHostId = buf.readUtf(MAX_STRING_LENGTH);
+        String connectedHostId = buf.readUtf(maxStringLength());
         CraftingStatus.Status status = readEnum(CraftingStatus.Status.values(), buf.readVarInt(), "crafting status");
-        String craftingMessage = buf.readUtf(MAX_STRING_LENGTH);
+        String craftingMessage = buf.readUtf(maxStringLength());
         ExecutionStatus failure = FailureStatusCodec.read(buf);
         boolean structureAreaLoaded = buf.readBoolean();
         boolean redstonePaused = buf.readBoolean();
@@ -226,5 +227,17 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
     private static <T> T readEnum(T[] values, int ordinal, String name) {
         if (ordinal < 0 || ordinal >= values.length) throw new IllegalArgumentException("Invalid " + name + ": " + ordinal);
         return values[ordinal];
+    }
+
+    private static int maxLevelSnapshots() {
+        return CommonConfig.valueOrDefault(CommonConfig.MACHINE_STATE_MAX_LEVEL_SNAPSHOTS, MAX_LEVEL_SNAPSHOTS);
+    }
+
+    private static int maxInstalledModules() {
+        return CommonConfig.valueOrDefault(CommonConfig.MACHINE_STATE_MAX_INSTALLED_MODULES, MAX_INSTALLED_MODULES);
+    }
+
+    static int maxStringLength() {
+        return CommonConfig.valueOrDefault(CommonConfig.MAX_STRING_LENGTH, MAX_STRING_LENGTH);
     }
 }

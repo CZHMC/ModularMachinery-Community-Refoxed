@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.client.TerminalClientHandler;
 import cn.howxu.mmcr.internal.item.TerminalData;
 import io.netty.buffer.ByteBuf;
@@ -28,8 +29,6 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
     public static final Type<PktTerminalStatePayload> TYPE = new Type<>(MMCR.id("terminal_state"));
     private static final StreamCodec<ByteBuf, List<Integer>> STAGES_CODEC =
             ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list());
-    private static final StreamCodec<ByteBuf, List<Integer>> PREVIEW_LAYERS_CODEC =
-            ByteBufCodecs.collection(ArrayList::new, ByteBufCodecs.VAR_INT, MAX_PREVIEW_LAYERS);
     public static final StreamCodec<RegistryFriendlyByteBuf, PktTerminalStatePayload> STREAM_CODEC =
             StreamCodec.of(PktTerminalStatePayload::write, PktTerminalStatePayload::read);
 
@@ -38,7 +37,7 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
         stages = List.copyOf(stages == null ? List.of() : stages);
         machineName = Objects.requireNonNull(machineName, "machineName");
         previewLayers = List.copyOf(previewLayers == null ? List.of() : previewLayers);
-        if (previewLayers.size() > MAX_PREVIEW_LAYERS) throw new IllegalArgumentException("Too many preview layers");
+        if (previewLayers.size() > maxPreviewLayers()) throw new IllegalArgumentException("Too many preview layers");
         statusKey = Objects.requireNonNull(statusKey, "statusKey");
     }
 
@@ -68,14 +67,27 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
         ByteBufCodecs.BOOL.encode(buffer, payload.storageAvailable);
         STAGES_CODEC.encode(buffer, payload.stages);
         ComponentSerialization.STREAM_CODEC.encode(buffer, payload.machineName);
-        PREVIEW_LAYERS_CODEC.encode(buffer, payload.previewLayers);
+        buffer.writeVarInt(payload.previewLayers.size());
+        for (int layer : payload.previewLayers) buffer.writeVarInt(layer);
         ByteBufCodecs.STRING_UTF8.encode(buffer, payload.statusKey);
     }
 
     private static PktTerminalStatePayload read(RegistryFriendlyByteBuf buffer) {
         return new PktTerminalStatePayload(TerminalData.STREAM_CODEC.decode(buffer),
                 ByteBufCodecs.BOOL.decode(buffer), ByteBufCodecs.BOOL.decode(buffer), STAGES_CODEC.decode(buffer),
-                ComponentSerialization.STREAM_CODEC.decode(buffer), PREVIEW_LAYERS_CODEC.decode(buffer),
+                ComponentSerialization.STREAM_CODEC.decode(buffer), readPreviewLayers(buffer),
                 ByteBufCodecs.STRING_UTF8.decode(buffer));
+    }
+
+    private static List<Integer> readPreviewLayers(RegistryFriendlyByteBuf buffer) {
+        int count = buffer.readVarInt();
+        if (count < 0 || count > maxPreviewLayers()) throw new IllegalArgumentException("Too many preview layers");
+        List<Integer> layers = new ArrayList<>(count);
+        for (int index = 0; index < count; index++) layers.add(buffer.readVarInt());
+        return List.copyOf(layers);
+    }
+
+    public static int maxPreviewLayers() {
+        return CommonConfig.valueOrDefault(CommonConfig.TERMINAL_STATE_MAX_PREVIEW_LAYERS, MAX_PREVIEW_LAYERS);
     }
 }

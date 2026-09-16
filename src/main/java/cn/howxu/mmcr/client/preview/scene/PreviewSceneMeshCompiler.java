@@ -6,6 +6,7 @@
  */
 package cn.howxu.mmcr.client.preview.scene;
 
+import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
@@ -56,12 +57,10 @@ import net.minecraft.util.Util;
  * @author howxu <dev@howxu.cn>
  */
 public final class PreviewSceneMeshCompiler {
-    private static final int SINGLE_THREAD_PREVIEW_LIMIT = 80_000;
-
     private PreviewSceneMeshCompiler() { }
 
     static int workerCount(int stateCount) {
-        return stateCount <= SINGLE_THREAD_PREVIEW_LIMIT ? 1 : 2;
+        return stateCount <= ClientConfig.sceneParallelCompileThreshold() ? 1 : 2;
     }
 
     static List<Partition> partitions(int size, int count) {

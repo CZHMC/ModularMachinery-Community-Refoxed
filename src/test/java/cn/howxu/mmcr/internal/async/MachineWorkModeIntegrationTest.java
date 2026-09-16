@@ -12,7 +12,7 @@ import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -61,11 +61,11 @@ class MachineWorkModeIntegrationTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        CommonConfig.SPEC.correct(config);
+        ServerConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
                 .getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach
@@ -126,7 +126,7 @@ class MachineWorkModeIntegrationTest {
         assertThat(mainStepQueued.await(1, TimeUnit.SECONDS)).isTrue();
         assertThat(hasPendingMainStep(coordinator)).isTrue();
 
-        CommonConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         controller.tickRuntimeWork(level, controller.getBlockPos());
         coordinator.pumpMainThreadSteps();
 

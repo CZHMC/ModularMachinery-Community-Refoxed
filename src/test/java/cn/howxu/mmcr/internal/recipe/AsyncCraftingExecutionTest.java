@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
@@ -42,10 +42,10 @@ class AsyncCraftingExecutionTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        CommonConfig.SPEC.correct(config);
+        ServerConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @Test

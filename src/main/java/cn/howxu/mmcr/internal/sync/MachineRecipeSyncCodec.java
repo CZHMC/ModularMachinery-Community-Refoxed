@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.config.CommonConfig;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
@@ -48,7 +49,6 @@ public final class MachineRecipeSyncCodec {
     private static final int MAX_OUTPUTS = 4096;
     private static final int MAX_MODIFIERS = 1024;
     private static final int MAX_REQUIRED_HOSTS = 1024;
-    private static final int MAX_TAGS = 1024;
     private static final int FORMAT_MARKER = -1;
     private static final int FORMAT_VERSION = 3;
 
@@ -102,7 +102,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeRequirements(RegistryFriendlyByteBuf buf, List<MachineRequirement> values) {
-        checkSize(values.size(), MAX_REQUIREMENTS, "requirement");
+        checkSize(values.size(), maxRequirements(), "requirement");
         buf.writeVarInt(values.size());
         for (MachineRequirement value : values) {
             writeRequirement(buf, value);
@@ -111,7 +111,7 @@ public final class MachineRecipeSyncCodec {
 
     private static List<MachineRequirement> readRequirements(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_REQUIREMENTS, "requirement");
+        checkSize(count, maxRequirements(), "requirement");
         List<MachineRequirement> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             values.add(readRequirement(buf));
@@ -142,14 +142,14 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeOutputs(RegistryFriendlyByteBuf buf, List<MachineOutput> values) {
-        checkSize(values.size(), MAX_OUTPUTS, "output");
+        checkSize(values.size(), maxOutputs(), "output");
         buf.writeVarInt(values.size());
         for (MachineOutput value : values) writeOutput(buf, value);
     }
 
     private static List<MachineOutput> readOutputs(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_OUTPUTS, "output");
+        checkSize(count, maxOutputs(), "output");
         List<MachineOutput> values = new ArrayList<>(count);
         for (int index = 0; index < count; index++) values.add(readOutput(buf));
         return List.copyOf(values);
@@ -230,7 +230,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeModifiers(RegistryFriendlyByteBuf buf, List<RecipeModifier> values) {
-        checkSize(values.size(), MAX_MODIFIERS, "modifier");
+        checkSize(values.size(), maxModifiers(), "modifier");
         buf.writeVarInt(values.size());
         for (RecipeModifier value : values) {
             writeJsonWithRegistryCodec(buf, RecipeModifier.CODEC, value);
@@ -239,7 +239,7 @@ public final class MachineRecipeSyncCodec {
 
     private static List<RecipeModifier> readModifiers(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_MODIFIERS, "modifier");
+        checkSize(count, maxModifiers(), "modifier");
         List<RecipeModifier> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             values.add(readJsonWithRegistryCodec(buf, RecipeModifier.CODEC));
@@ -248,7 +248,7 @@ public final class MachineRecipeSyncCodec {
     }
 
     private static void writeRequiredHosts(RegistryFriendlyByteBuf buf, Set<Identifier> values) {
-        checkSize(values.size(), MAX_REQUIRED_HOSTS, "required host");
+        checkSize(values.size(), maxRequiredHosts(), "required host");
         buf.writeVarInt(values.size());
         for (Identifier value : values) {
             Identifier.STREAM_CODEC.encode(buf, value);
@@ -257,7 +257,7 @@ public final class MachineRecipeSyncCodec {
 
     private static Set<Identifier> readRequiredHosts(RegistryFriendlyByteBuf buf) {
         int count = buf.readVarInt();
-        checkSize(count, MAX_REQUIRED_HOSTS, "required host");
+        checkSize(count, maxRequiredHosts(), "required host");
         Set<Identifier> values = new LinkedHashSet<>();
         for (int i = 0; i < count; i++) {
             values.add(Identifier.STREAM_CODEC.decode(buf));
@@ -267,6 +267,22 @@ public final class MachineRecipeSyncCodec {
 
     private static void checkSize(int size, int max, String label) {
         if (size < 0 || size > max) throw new IllegalArgumentException("Invalid " + label + " count: " + size);
+    }
+
+    private static int maxRequirements() {
+        return CommonConfig.valueOrDefault(CommonConfig.RECIPE_SYNC_MAX_REQUIREMENTS, MAX_REQUIREMENTS);
+    }
+
+    private static int maxOutputs() {
+        return CommonConfig.valueOrDefault(CommonConfig.RECIPE_SYNC_MAX_OUTPUTS, MAX_OUTPUTS);
+    }
+
+    private static int maxModifiers() {
+        return CommonConfig.valueOrDefault(CommonConfig.RECIPE_SYNC_MAX_MODIFIERS, MAX_MODIFIERS);
+    }
+
+    private static int maxRequiredHosts() {
+        return CommonConfig.valueOrDefault(CommonConfig.RECIPE_SYNC_MAX_REQUIRED_HOSTS, MAX_REQUIRED_HOSTS);
     }
 
     private static List<String> readStringList(RegistryFriendlyByteBuf buf, int max, String label) {

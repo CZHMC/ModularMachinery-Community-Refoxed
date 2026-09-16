@@ -48,7 +48,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.config.CommonConfig;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
@@ -110,11 +110,11 @@ class MachineBehaviorRuntimeTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         CommentedConfig config = CommentedConfig.inMemory();
-        CommonConfig.SPEC.correct(config);
+        ServerConfig.SPEC.correct(config);
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig")
                 .getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach

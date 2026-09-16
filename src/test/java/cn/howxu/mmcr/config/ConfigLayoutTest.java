@@ -14,13 +14,13 @@ class ConfigLayoutTest {
     @Test
     void assigns_values_to_their_client_common_and_server_sections() {
         assertThat(ClientConfig.PREVIEW_RENDER_RADIUS.getPath()).isEqualTo(List.of("preview", "render_radius"));
-        assertThat(CommonConfig.MACHINE_WORK_MODE.getPath()).isEqualTo(List.of("machine", "work_mode"));
+        assertThat(ServerConfig.MACHINE_WORK_MODE.getPath()).isEqualTo(List.of("machine", "work_mode"));
         assertThat(ServerConfig.BUILD_BLOCKS_PER_TICK.getPath()).isEqualTo(List.of("build", "blocks_per_tick"));
         assertThat(ServerConfig.MAX_REQUESTS_PER_TICK.getPath()).isEqualTo(List.of("network", "max_requests_per_tick"));
     }
 
     @Test
     void machine_work_mode_requires_a_world_restart() {
-        assertThat(CommonConfig.MACHINE_WORK_MODE.getSpec().restartType()).isEqualTo(RestartType.WORLD);
+        assertThat(ServerConfig.MACHINE_WORK_MODE.getSpec().restartType()).isEqualTo(RestartType.WORLD);
     }
 }

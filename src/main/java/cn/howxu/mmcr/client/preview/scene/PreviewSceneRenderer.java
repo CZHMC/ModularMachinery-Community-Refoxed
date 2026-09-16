@@ -86,7 +86,7 @@ public final class PreviewSceneRenderer {
     }
 
     public void render(PreviewSceneRenderContext context, PreviewCamera camera, BlockHitResult hoverHit,
-                       BlockHitResult selectedHit, boolean fullQuality) {
+                       BlockHitResult selectedHit, boolean renderTranslucent, boolean renderBlockEntities) {
         assertRenderThread();
         if (closed) return;
         PreviewSceneCamera sceneCamera = PreviewSceneCamera.from(camera, 1, 1);
@@ -99,15 +99,13 @@ public final class PreviewSceneRenderer {
         }
         PreviewSceneMeshCache.FullCache owner = meshes.current();
         if (owner instanceof PreviewSceneMeshCache.Meshes cache) {
-            if (fullQuality && compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
+            if (renderTranslucent && compileState.pendingKind() == SceneCompileKind.TRANSLUCENT_ONLY) {
                 compileTranslucent(cache, sceneCamera);
             }
             draw(cache, ChunkSectionLayer.SOLID);
             draw(cache, ChunkSectionLayer.CUTOUT);
-            if (fullQuality) {
-                drawTranslucent(cache);
-                submitBlockEntities(cache, context, sceneCamera);
-            }
+            if (renderTranslucent) drawTranslucent(cache);
+            if (renderBlockEntities) submitBlockEntities(cache, context, sceneCamera);
             drawOutlines(context, hoverHit, selectedHit);
         }
     }

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.preview;
 
+import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderState;
 import cn.howxu.mmcr.client.preview.scene.PreviewScenePictureInPictureRenderer;
 import cn.howxu.mmcr.client.preview.scene.PreviewSceneRenderer;
@@ -127,7 +128,13 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     }
 
     public void renderScene(PreviewSceneRenderContext context, PreviewCamera camera) {
-        scene.render(context, camera, hoverHit, selectedHit, !interactive);
+        boolean renderTranslucent = !interactive || !ClientConfig.skipTranslucentDuringInteraction();
+        boolean renderBlockEntities = !interactive || !ClientConfig.skipBlockEntitiesDuringInteraction();
+        scene.render(context, camera, hoverHit, selectedHit, renderTranslucent, renderBlockEntities);
+    }
+
+    public float interactiveRenderScale() {
+        return interactive ? (float) ClientConfig.interactiveRenderScale() : 1.0F;
     }
 
     void markDirty() {
