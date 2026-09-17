@@ -227,13 +227,11 @@ public final class MachineDefinitionConverter {
     }
 
     private static MachineAppearanceSpec toAppearanceSpec(AppearanceSpec spec) {
-        MachineAppearanceSpec base = spec.machineBasicBlock() == null
-                ? MachineAppearanceSpec.defaults()
-                : MachineAppearanceSpec.fromBasicBlock(spec.machineBasicBlock());
+        MachineAppearanceSpec base = MachineAppearanceSpec.defaults();
         return new MachineAppearanceSpec(
-                base.machineBasicBlock(),
-                spec.controllerBaseTexture() != null ? spec.controllerBaseTexture() : base.controllerBaseTexture(),
-                spec.formedPortBaseTexture() != null ? spec.formedPortBaseTexture() : base.formedPortBaseTexture());
+                spec.machineBasicBlock() != null ? spec.machineBasicBlock() : base.machineBasicBlock(),
+                spec.controllerBaseTexture(),
+                spec.formedPortBaseTexture());
     }
 
     private static PortRequirementSpec toPortRequirementSpec(PortRequirements requirements) {

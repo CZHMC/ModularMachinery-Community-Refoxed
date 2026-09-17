@@ -71,11 +71,9 @@ public final class ControllerScreenTextEventJS implements KubeEvent {
 
     static Identifier parseIdentifier(String value, String name) {
         requireText(value, name);
-        try {
-            return Identifier.parse(value);
-        } catch (RuntimeException exception) {
-            throw new IllegalArgumentException("Invalid " + name + ": " + value, exception);
-        }
+        Identifier identifier = Identifier.tryParse(value);
+        if (identifier == null) throw new IllegalArgumentException("Invalid " + name + ": " + value);
+        return identifier;
     }
 
     static ControllerScreenTextHandler handler(Consumer<ControllerScreenTextEventJS> handler) {

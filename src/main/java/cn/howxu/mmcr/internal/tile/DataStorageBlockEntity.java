@@ -63,7 +63,7 @@ public final class DataStorageBlockEntity extends LinkedAppearanceBlockEntity {
         controllerPosition = controllerPos.immutable();
         controllerMachine = machineId;
         if (changed) {
-            linkControllerAppearance(controllerPosition, null);
+            linkControllerAppearanceSource(controllerPosition, null);
             setChanged();
         }
         return true;

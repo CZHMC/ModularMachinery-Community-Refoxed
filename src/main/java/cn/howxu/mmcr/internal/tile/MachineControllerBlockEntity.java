@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
@@ -2773,7 +2774,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         List<UpgradeBusBlockEntity> upgradeBuses = upgradeBusComponents(matchedPattern);
         bindUpgradeBuses(upgradeBuses);
         runtime.publishUpgradeBusState(upgradeBusSnapshots(upgradeBuses));
-        Identifier formedTexture = matchedMachine.appearance().formedPortBaseTexture();
+        MachineAppearanceSpec.TextureSource formedTexture = matchedMachine.appearance().formedPortTextureSource();
         List<ProcessingComponent> nextComponents = new ArrayList<>();
         Set<BlockPos> nextLinkedPortPositions = new HashSet<>();
         nextLinkedPortPositions.addAll(boundDataStorages.keySet());
@@ -2809,7 +2810,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .limit(matchedMachine.networkInterface().maxCount()).toList()) {
             if (level.getBlockEntity(worldPos) instanceof NetworkInterfaceBlockEntity networkInterface
                     && networkInterface.claimOwner(networkOwner)) {
-                networkInterface.linkControllerAppearance(getBlockPos(), formedTexture);
+                networkInterface.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextNetworkInterfacePositions.add(worldPos.immutable());
             }
         }
@@ -2821,7 +2822,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (level.getBlockEntity(worldPos) instanceof UpgradeBusBlockEntity bus) {
-                bus.linkControllerAppearance(getBlockPos(), formedTexture);
+                bus.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
                 continue;
             }
@@ -2833,14 +2834,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 continue;
             }
             if (level.getBlockEntity(worldPos) instanceof ParallelControllerBlockEntity parallel) {
-                parallel.linkControllerAppearance(getBlockPos(), matchedMachine.appearance().formedPortBaseTexture());
+                parallel.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
                 nextComponents.add(new ProcessingComponent(null, parallel, worldPos, relativePos, matchedPattern.tagsAt(relativePos), null));
                 continue;
             }
             if (level.getBlockEntity(worldPos) instanceof FactorySchedulerBlockEntity scheduler) {
                 scheduler.bindOwner(this);
-                scheduler.linkControllerAppearance(getBlockPos(), matchedMachine.appearance().formedPortBaseTexture());
+                scheduler.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
                 nextComponents.add(new ProcessingComponent(null, scheduler, worldPos, relativePos, matchedPattern.tagsAt(relativePos), null));
                 continue;
@@ -2848,7 +2849,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
 
             if (tile instanceof IOPortBlockEntity port) {
-                port.linkControllerAppearance(getBlockPos(), formedTexture);
+                port.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
             }
             var component = tile.provideComponent();

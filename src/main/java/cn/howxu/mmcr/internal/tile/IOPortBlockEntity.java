@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -607,6 +608,12 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         markAutoIOCacheDirty();
     }
 
+    @Override
+    protected MachineAppearanceSpec.TextureSource resolveLinkedAppearance(
+            TreeMap<BlockPos, MachineAppearanceSpec.TextureSource> linkedControllers) {
+        return linkedControllers.isEmpty() ? DEFAULT_APPEARANCE_SOURCE : linkedControllers.firstEntry().getValue();
+    }
+
     private static final class AutoIOState {
         private final EnumSet<Direction> candidateSides = EnumSet.noneOf(Direction.class);
         private int successCounter;
@@ -614,10 +621,4 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         private int ticksUntilTransfer;
     }
 
-    @Override
-    protected Identifier resolveLinkedAppearance(TreeMap<BlockPos, Identifier> linkedControllers) {
-        return linkedControllers.isEmpty()
-                ? DEFAULT_APPEARANCE_BASE_TEXTURE
-                : linkedControllers.get(linkedControllers.firstKey());
-    }
 }

@@ -80,8 +80,7 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
         List<MachineRecipeJson.RecipeJsonException> errors = new ArrayList<>();
         for (Map.Entry<Identifier, Resource> entry : resourceManager.listResources("recipes", path -> path.getPath().endsWith(".json")).entrySet()) {
             Identifier resourceLocation = entry.getKey();
-            Identifier recipeId = Identifier.fromNamespaceAndPath(resourceLocation.getNamespace(),
-                    resourceLocation.getPath().substring("recipes/".length(), resourceLocation.getPath().length() - ".json".length()));
+            Identifier recipeId = recipeIdFromResource(resourceLocation);
             try (Reader reader = entry.getValue().openAsReader()) {
                 JsonElement element = JsonParser.parseReader(reader);
                 if (!element.isJsonObject()) continue;
@@ -99,6 +98,14 @@ public final class MachineRecipeDataReloadListener extends ContextAwareReloadLis
         }
         Map<Identifier, MachineRecipe> validRecipes = validateAndFilter(recipes, errors);
         return new PreparedRecipes(Map.copyOf(validRecipes), List.copyOf(errors));
+    }
+
+    static Identifier recipeIdFromResource(Identifier resourceId) {
+        String path = resourceId.getPath();
+        if (!path.startsWith("recipes/") || !path.endsWith(".json")) {
+            throw new IllegalArgumentException("Expected recipe resource under recipes/ ending in .json: " + resourceId);
+        }
+        return resourceId.withPath(path.substring("recipes/".length(), path.length() - ".json".length()));
     }
 
     void applySnapshot(Map<Identifier, MachineRecipe> recipes) {

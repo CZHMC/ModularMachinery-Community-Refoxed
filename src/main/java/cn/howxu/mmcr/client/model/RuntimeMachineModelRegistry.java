@@ -147,7 +147,7 @@ public final class RuntimeMachineModelRegistry {
 
     static DynamicOverlayBakedModel.TextureSet portTexturesForTest(IOPortKind kind,
                                                                     MachineAppearanceSpec appearance) {
-        return DynamicOverlayBakedModel.portTextures(null, appearance.formedPortBaseTexture(),
+        return DynamicOverlayBakedModel.portTextures(null, appearance.formedPortTextureSource(),
                 DynamicOverlayTextures.portOverlayTexture(kind));
     }
 

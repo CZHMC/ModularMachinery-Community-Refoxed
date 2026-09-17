@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -30,23 +31,29 @@ import java.util.TreeMap;
  * @author howxu <dev@howxu.cn>
  */
 public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
-    protected static final Identifier DEFAULT_APPEARANCE_BASE_TEXTURE = MMCR.id("block/basic_casing");
-    private static final String APPEARANCE_BASE_TEXTURE_KEY = "AppearanceBaseTexture";
     private static final String LINKED_CONTROLLERS_KEY = "LinkedControllers";
     private static final String LINKED_CONTROLLER_X_KEY = "X";
     private static final String LINKED_CONTROLLER_Y_KEY = "Y";
     private static final String LINKED_CONTROLLER_Z_KEY = "Z";
-    private static final String LINKED_CONTROLLER_TEXTURE_KEY = "Texture";
-    private Identifier appearanceBaseTexture = DEFAULT_APPEARANCE_BASE_TEXTURE;
-    private final TreeMap<BlockPos, Identifier> linkedControllers = new TreeMap<>(BlockPos::compareTo);
+    private static final String LINKED_CONTROLLER_SOURCE_BLOCK_KEY = "SourceBlock";
+    private static final String LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY = "Texture";
+    protected static final MachineAppearanceSpec.TextureSource DEFAULT_APPEARANCE_SOURCE =
+            MachineAppearanceSpec.defaults().formedPortTextureSource();
+    private MachineAppearanceSpec.TextureSource appearanceSource = DEFAULT_APPEARANCE_SOURCE;
+    private final TreeMap<BlockPos, MachineAppearanceSpec.TextureSource> linkedControllers = new TreeMap<>(BlockPos::compareTo);
     private int controllerLinkCheckCounter;
 
     protected LinkedAppearanceBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
     }
 
+    public MachineAppearanceSpec.TextureSource appearanceSource() {
+        return appearanceSource;
+    }
+
     public Identifier appearanceBaseTexture() {
-        return appearanceBaseTexture;
+        Identifier overrideTexture = appearanceSource.overrideTexture();
+        return overrideTexture == null ? MMCR.id("block/basic_casing") : overrideTexture;
     }
 
     public @Nullable BlockPos linkedControllerPos() {
@@ -57,9 +64,14 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         return Set.copyOf(linkedControllers.keySet());
     }
 
-    public void linkControllerAppearance(BlockPos controllerPos, Identifier texture) {
-        linkedControllers.put(controllerPos.immutable(), texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture);
+    public void linkControllerAppearanceSource(BlockPos controllerPos, @Nullable MachineAppearanceSpec.TextureSource source) {
+        linkedControllers.put(controllerPos.immutable(), source == null ? DEFAULT_APPEARANCE_SOURCE : source);
         refreshLinkedAppearance();
+    }
+
+    public void linkControllerAppearance(BlockPos controllerPos, @Nullable Identifier texture) {
+        linkControllerAppearanceSource(controllerPos, texture == null ? null : new MachineAppearanceSpec.TextureSource(
+                DEFAULT_APPEARANCE_SOURCE.blockId(), texture));
     }
 
     public void unlinkControllerAppearance(BlockPos controllerPos) {
@@ -67,12 +79,12 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         refreshLinkedAppearance();
     }
 
-    public void setAppearanceBaseTexture(Identifier texture) {
-        Identifier resolvedTexture = texture == null ? DEFAULT_APPEARANCE_BASE_TEXTURE : texture;
-        if (resolvedTexture.equals(appearanceBaseTexture)) {
+    public void setAppearanceSource(@Nullable MachineAppearanceSpec.TextureSource source) {
+        MachineAppearanceSpec.TextureSource resolvedSource = source == null ? DEFAULT_APPEARANCE_SOURCE : source;
+        if (resolvedSource.equals(appearanceSource)) {
             return;
         }
-        appearanceBaseTexture = resolvedTexture;
+        appearanceSource = resolvedSource;
         setChanged();
         if (level != null) {
             requestModelDataUpdate();
@@ -80,15 +92,23 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         }
     }
 
-    public void resetAppearanceBaseTexture() {
+    public void setAppearanceBaseTexture(@Nullable Identifier texture) {
+        setAppearanceSource(texture == null ? null : new MachineAppearanceSpec.TextureSource(
+                DEFAULT_APPEARANCE_SOURCE.blockId(), texture));
+    }
+
+    public void resetAppearanceSource() {
         linkedControllers.clear();
         refreshLinkedAppearance();
+    }
+
+    public void resetAppearanceBaseTexture() {
+        resetAppearanceSource();
     }
 
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
-        output.putString(APPEARANCE_BASE_TEXTURE_KEY, appearanceBaseTexture.toString());
         var controllers = output.childrenList(LINKED_CONTROLLERS_KEY);
         for (var entry : linkedControllers.entrySet()) {
             var controller = entry.getKey();
@@ -96,7 +116,11 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             controllerOutput.putInt(LINKED_CONTROLLER_X_KEY, controller.getX());
             controllerOutput.putInt(LINKED_CONTROLLER_Y_KEY, controller.getY());
             controllerOutput.putInt(LINKED_CONTROLLER_Z_KEY, controller.getZ());
-            controllerOutput.putString(LINKED_CONTROLLER_TEXTURE_KEY, entry.getValue().toString());
+            controllerOutput.putString(LINKED_CONTROLLER_SOURCE_BLOCK_KEY, entry.getValue().blockId().toString());
+            Identifier overrideTexture = entry.getValue().overrideTexture();
+            if (overrideTexture != null) {
+                controllerOutput.putString(LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY, overrideTexture.toString());
+            }
         }
     }
 
@@ -109,16 +133,21 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
                     controllerInput.getIntOr(LINKED_CONTROLLER_X_KEY, 0),
                     controllerInput.getIntOr(LINKED_CONTROLLER_Y_KEY, 0),
                     controllerInput.getIntOr(LINKED_CONTROLLER_Z_KEY, 0));
-            String texture = controllerInput.getStringOr(LINKED_CONTROLLER_TEXTURE_KEY, DEFAULT_APPEARANCE_BASE_TEXTURE.toString());
-            linkedControllers.put(controllerPos, texture.isBlank() ? DEFAULT_APPEARANCE_BASE_TEXTURE : Identifier.parse(texture));
+            String sourceBlock = controllerInput.getStringOr(LINKED_CONTROLLER_SOURCE_BLOCK_KEY,
+                    DEFAULT_APPEARANCE_SOURCE.blockId().toString());
+            String overrideTexture = controllerInput.getStringOr(LINKED_CONTROLLER_OVERRIDE_TEXTURE_KEY, "");
+            linkedControllers.put(controllerPos, new MachineAppearanceSpec.TextureSource(
+                    sourceBlock.isBlank() ? DEFAULT_APPEARANCE_SOURCE.blockId() : Identifier.parse(sourceBlock),
+                    overrideTexture.isBlank() ? null : Identifier.parse(overrideTexture)));
         }
-        appearanceBaseTexture = resolveLinkedAppearance(linkedControllers);
+        appearanceSource = resolveLinkedAppearance(linkedControllers);
     }
 
     @Override
     public ModelData getModelData() {
         return ModelData.builder()
-                .with(MachineModelDataKeys.PORT_BASE_TEXTURE, appearanceBaseTexture)
+                .with(MachineModelDataKeys.PORT_BASE_TEXTURE, appearanceSource.overrideTexture())
+                .with(MachineModelDataKeys.PORT_TEXTURE_SOURCE, appearanceSource)
                 .build();
     }
 
@@ -165,15 +194,16 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         }
     }
 
-    protected Identifier resolveLinkedAppearance(TreeMap<BlockPos, Identifier> linkedControllers) {
+    protected MachineAppearanceSpec.TextureSource resolveLinkedAppearance(
+            TreeMap<BlockPos, MachineAppearanceSpec.TextureSource> linkedControllers) {
         return linkedControllers.size() == 1
                 ? linkedControllers.firstEntry().getValue()
-                : DEFAULT_APPEARANCE_BASE_TEXTURE;
+                : DEFAULT_APPEARANCE_SOURCE;
     }
 
     private void refreshLinkedAppearance() {
-        setAppearanceBaseTexture(linkedControllers.isEmpty()
-                ? DEFAULT_APPEARANCE_BASE_TEXTURE
+        setAppearanceSource(linkedControllers.isEmpty()
+                ? DEFAULT_APPEARANCE_SOURCE
                 : resolveLinkedAppearance(linkedControllers));
         setChanged();
     }

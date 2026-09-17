@@ -147,7 +147,7 @@ public record MachineRegistration(
     public static String defaultDisplayNameKey(Identifier id, String explicitKey) {
         if (id == null) throw new IllegalArgumentException("id null");
         if (explicitKey != null && !explicitKey.isBlank()) return explicitKey;
-        return "machine." + id.getNamespace() + "." + id.getPath();
+        return id.toLanguageKey("machine");
     }
 
     private static Set<Identifier> copyAcceptedModuleIds(Set<Identifier> acceptedModuleIds) {

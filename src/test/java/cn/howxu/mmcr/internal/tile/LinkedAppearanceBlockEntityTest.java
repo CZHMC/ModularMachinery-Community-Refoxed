@@ -37,6 +37,7 @@ class LinkedAppearanceBlockEntityTest {
         controller.putInt("X", 1);
         controller.putInt("Y", 2);
         controller.putInt("Z", 3);
+        controller.putString("SourceBlock", MMCR.id("test_casing").toString());
         controller.putString("Texture", MMCR.id("block/test_casing").toString());
         controllers.add(controller);
         serialized.put("LinkedControllers", controllers);

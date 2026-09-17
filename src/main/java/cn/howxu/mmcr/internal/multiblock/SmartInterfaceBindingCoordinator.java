@@ -36,14 +36,14 @@ public final class SmartInterfaceBindingCoordinator {
         StructureSnapshot structure = controller.currentStructureSnapshot();
         Machine machine = structure.machine();
         if (machine == null) return;
-        var controllerAppearance = machine.appearance().formedPortBaseTexture();
+        var controllerAppearance = machine.appearance().formedPortTextureSource();
         var ordered = interfaces.stream().sorted(Comparator.comparing(SmartInterfaceBlockEntity::getBlockPos)).toList();
         for (SmartInterfaceBlockEntity smartInterface : ordered) {
             if (smartInterface.machineId().isPresent() && !smartInterface.machineId().orElseThrow().equals(machine.registryName())) {
                 smartInterface.releaseController(controllerPos);
             }
             if (smartInterface.claimController(controllerPos, machine.registryName(), types, shared)) {
-                smartInterface.linkControllerAppearance(controllerPos, controllerAppearance);
+                smartInterface.linkControllerAppearanceSource(controllerPos, controllerAppearance);
                 return;
             }
         }

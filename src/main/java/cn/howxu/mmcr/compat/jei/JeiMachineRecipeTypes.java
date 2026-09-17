@@ -20,7 +20,7 @@ public final class JeiMachineRecipeTypes {
 
     public static IRecipeType<MachineRecipeDisplay> forPool(Identifier poolId) {
         return TYPES.computeIfAbsent(poolId, id -> IRecipeType.create(
-                Identifier.fromNamespaceAndPath(id.getNamespace(), "recipe_pool/" + id.getPath()),
+                id.withPath("recipe_pool/" + id.getPath()),
                 MachineRecipeDisplay.class));
     }
 

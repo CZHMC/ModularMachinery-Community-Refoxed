@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.block.dispatch.BlockModelRotation;
@@ -80,13 +81,12 @@ public final class DynamicOverlayItemModel implements ItemModel {
         layer.prepareQuadList().addAll(quads.build().getAll());
     }
 
-    private BaseModel baseModel(Identifier modelId, Identifier baseTexture) {
+    private BaseModel baseModel(Identifier modelId, DynamicOverlayBakedModel.FaceTextures baseTextures) {
         var model = modelBaker.getModel(modelId);
         var textures = model.getTopTextureSlots();
         QuadCollection.Builder quads = new QuadCollection.Builder();
-        Material.Baked base = material(baseTexture);
         for (Direction direction : Direction.values()) {
-            DynamicOverlayModelLoader.addFace(quads, direction, base, 0.0f, true);
+            DynamicOverlayModelLoader.addFace(quads, direction, material(baseTextures.forFace(direction)), 0.0f, true);
         }
         var renderProperties = ModelRenderProperties.fromResolvedModel(modelBaker, model, textures);
         List<BakedQuad> builtQuads = quads.build().getAll();
@@ -123,7 +123,7 @@ public final class DynamicOverlayItemModel implements ItemModel {
             Identifier machineId,
             IOPortKind portKind,
             Identifier baseModel,
-            Identifier baseTexture,
+            DynamicOverlayBakedModel.FaceTextures baseTexture,
             Identifier overlayTexture,
             EnumSet<Direction> overlayFaces) {
         static Description controller(Identifier machineId) {
@@ -134,13 +134,15 @@ public final class DynamicOverlayItemModel implements ItemModel {
 
         static Description port(IOPortKind kind) {
             Identifier overlay = DynamicOverlayTextures.portOverlayTexture(kind);
-            DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(MMCR.id("runtime_port_item"), null, overlay);
+            DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(MMCR.id("runtime_port_item"),
+                    (MachineAppearanceSpec.TextureSource) null, overlay);
             return new Description(DynamicOverlayBakedModel.Kind.PORT, null, kind,
                     MMCR.id("block/dynamic_io_port"), textures.base(), textures.overlay(), EnumSet.allOf(Direction.class));
         }
 
         static Description portOverlay(Identifier overlay) {
-            DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(MMCR.id("runtime_port_item"), null, overlay);
+            DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(MMCR.id("runtime_port_item"),
+                    (MachineAppearanceSpec.TextureSource) null, overlay);
             return new Description(DynamicOverlayBakedModel.Kind.PORT, null, null,
                     MMCR.id("block/dynamic_io_port"), textures.base(), textures.overlay(), EnumSet.allOf(Direction.class));
         }

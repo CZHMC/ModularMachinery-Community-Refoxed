@@ -28,6 +28,14 @@ public record AppearanceSpec(
         private Identifier controllerBaseTexture;
         private Identifier formedPortBaseTexture;
 
+        public Builder appearance(Identifier machineBasicBlock) {
+            return machineBasicBlock(machineBasicBlock);
+        }
+
+        public Builder appearance(String machineBasicBlock) {
+            return appearance(Identifier.parse(machineBasicBlock));
+        }
+
         public Builder machineBasicBlock(Identifier machineBasicBlock) {
             this.machineBasicBlock = Objects.requireNonNull(machineBasicBlock, "machineBasicBlock");
             return this;

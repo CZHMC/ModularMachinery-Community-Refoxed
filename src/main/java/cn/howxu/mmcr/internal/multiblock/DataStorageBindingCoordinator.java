@@ -26,7 +26,7 @@ public final class DataStorageBindingCoordinator {
                 storage.releaseController(controller.getBlockPos());
                 continue;
             }
-            storage.linkControllerAppearance(controller.getBlockPos(), machine.appearance().formedPortBaseTexture());
+            storage.linkControllerAppearanceSource(controller.getBlockPos(), machine.appearance().formedPortTextureSource());
             selected = true;
         }
     }

@@ -256,7 +256,7 @@ class RuntimeContentSnapshotTest {
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
         Identifier machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(1);
+        buf.writeVarInt(2);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buf, machineId);
@@ -274,7 +274,7 @@ class RuntimeContentSnapshotTest {
         Identifier key = MMCR.id("runtime_test_machine");
         Identifier structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(1);
+        buf.writeVarInt(2);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buf, key);
@@ -293,7 +293,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void runtimeContentPayloadRejectsUnknownPayloadVersion() {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(2);
+        buf.writeVarInt(3);
 
         assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
                 .isInstanceOf(IllegalArgumentException.class)

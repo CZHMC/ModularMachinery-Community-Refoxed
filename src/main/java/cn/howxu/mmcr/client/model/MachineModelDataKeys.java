@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.model;
 
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.model.data.ModelProperty;
 
@@ -11,6 +12,7 @@ import net.neoforged.neoforge.model.data.ModelProperty;
 public final class MachineModelDataKeys {
     public static final ModelProperty<Identifier> MACHINE_ID = new ModelProperty<>();
     public static final ModelProperty<Identifier> PORT_BASE_TEXTURE = new ModelProperty<>();
+    public static final ModelProperty<MachineAppearanceSpec.TextureSource> PORT_TEXTURE_SOURCE = new ModelProperty<>();
 
     private MachineModelDataKeys() {
     }

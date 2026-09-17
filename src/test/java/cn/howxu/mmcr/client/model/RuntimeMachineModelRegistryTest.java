@@ -1,12 +1,14 @@
 package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.model.data.ModelData;
 import org.junit.jupiter.api.BeforeAll;
@@ -43,7 +45,7 @@ class RuntimeMachineModelRegistryTest {
 
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
-        assertThat(description.baseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(description.baseTexture().forFace(Direction.NORTH)).isEqualTo(MMCR.id("block/basic_casing"));
         assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_network_interface"));
     }
 
@@ -54,7 +56,7 @@ class RuntimeMachineModelRegistryTest {
 
         ModelData data = entity.getModelData();
 
-        assertThat(data.get(MachineModelDataKeys.PORT_BASE_TEXTURE))
-                .isEqualTo(MMCR.id("block/basic_casing"));
+        assertThat(data.get(MachineModelDataKeys.PORT_TEXTURE_SOURCE))
+                .isEqualTo(MachineAppearanceSpec.defaults().formedPortTextureSource());
     }
 }

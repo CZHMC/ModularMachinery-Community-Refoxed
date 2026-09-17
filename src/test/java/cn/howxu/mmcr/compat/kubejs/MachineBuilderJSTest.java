@@ -475,8 +475,8 @@ class MachineBuilderJSTest {
 
         assertThat(registration.appearance()).isEqualTo(new MachineAppearanceSpec(
                 Identifier.parse("kubejs:steel_casing"),
-                Identifier.parse("kubejs:block/steel_casing"),
-                Identifier.parse("kubejs:block/steel_casing")));
+                null,
+                null));
     }
 
     @Test
@@ -492,8 +492,8 @@ class MachineBuilderJSTest {
 
         assertThat(registration.appearance()).isEqualTo(new MachineAppearanceSpec(
                 Identifier.withDefaultNamespace("bricks"),
-                Identifier.withDefaultNamespace("block/bricks"),
-                Identifier.withDefaultNamespace("block/bricks")));
+                null,
+                null));
     }
 
     @Test

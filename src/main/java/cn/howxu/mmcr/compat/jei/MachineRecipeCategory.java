@@ -92,7 +92,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     public MachineRecipeCategory(IGuiHelper guiHelper, Identifier poolId, Identifier iconMachineId) {
         this.guiHelper = guiHelper;
-        this.title = Component.translatable("recipe_pool." + poolId.getNamespace() + "." + poolId.getPath());
+        this.title = Component.translatable(poolId.toLanguageKey("recipe_pool"));
         this.recipeType = JeiMachineRecipeTypes.forPool(poolId);
         this.icon = guiHelper.createDrawableItemLike(ModBlocks.controllerFor(iconMachineId).get());
         this.slotBackground = guiHelper.getSlotDrawable();

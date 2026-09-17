@@ -99,8 +99,8 @@ public final class MachineAppearanceCache {
             try {
                 replacement.put(Identifier.parse(key), new MachineAppearanceSpec(
                         Identifier.parse(values[0]),
-                        Identifier.parse(values[1]),
-                        Identifier.parse(values[2])));
+                        values[1].isEmpty() ? null : Identifier.parse(values[1]),
+                        values[2].isEmpty() ? null : Identifier.parse(values[2])));
             } catch (RuntimeException exception) {
                 MMCR.LOG.warn("Ignoring invalid machine appearance entry '{}'", key, exception);
             }
@@ -117,8 +117,8 @@ public final class MachineAppearanceCache {
         Properties properties = new Properties();
         snapshot.forEach((id, spec) -> properties.setProperty(id.toString(), String.join(",",
                 spec.machineBasicBlock().toString(),
-                spec.controllerBaseTexture().toString(),
-                spec.formedPortBaseTexture().toString())));
+                spec.controllerBaseTexture() == null ? "" : spec.controllerBaseTexture().toString(),
+                spec.formedPortBaseTexture() == null ? "" : spec.formedPortBaseTexture().toString())));
 
         try {
             Path parent = path.getParent();

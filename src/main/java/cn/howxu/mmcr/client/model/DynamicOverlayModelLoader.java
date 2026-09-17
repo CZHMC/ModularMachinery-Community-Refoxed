@@ -58,18 +58,17 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         DynamicOverlayBakedModel.TextureSet textures = textures(level, pos, state);
         QuadCollection.Builder quads = new QuadCollection.Builder();
 
-        Material.Baked base = material(textures.base());
         Material.Baked overlay = material(textures.overlay());
         Direction overlayFace = overlayFace(state);
         Direction rollFacing = rollFacing(state);
         for (Direction direction : Direction.values()) {
-            addFace(quads, direction, base, 0.0f, true);
+            addFace(quads, direction, material(textures.base().forFace(direction)), 0.0f, true);
             if (direction == overlayFace || overlayFace == null) {
                 addFace(quads, direction, rollFacing, overlay, OVERLAY_GROW, false);
             }
         }
 
-        parts.add(new SimpleModelWrapper(quads.build(), true, base));
+        parts.add(new SimpleModelWrapper(quads.build(), true, material(textures.base().forFace(Direction.NORTH))));
     }
 
     @Override
@@ -87,8 +86,8 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER) {
             return DynamicOverlayBakedModel.controllerTextures(machineId);
         }
-        Identifier base = level.getModelData(pos).get(MachineModelDataKeys.PORT_BASE_TEXTURE);
-        return DynamicOverlayBakedModel.portTextures(machineId, base, portOverlayTexture(state));
+        var source = level.getModelData(pos).get(MachineModelDataKeys.PORT_TEXTURE_SOURCE);
+        return DynamicOverlayBakedModel.portTextures(machineId, source, portOverlayTexture(state));
     }
 
     private Direction overlayFace(BlockState state) {

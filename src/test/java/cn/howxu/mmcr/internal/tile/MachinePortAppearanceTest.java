@@ -76,13 +76,13 @@ class MachinePortAppearanceTest {
         port.linkControllerAppearance(new BlockPos(12, 4, 12), texture);
 
         var tag = port.getUpdateTag(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
-        assertThat(tag.getString("AppearanceBaseTexture")).contains(texture.toString());
         var linkedControllers = tag.getListOrEmpty("LinkedControllers");
         assertThat(linkedControllers).hasSize(1);
         var linkedController = linkedControllers.getCompound(0).orElseThrow();
         assertThat(linkedController.getIntOr("X", 0)).isEqualTo(12);
         assertThat(linkedController.getIntOr("Y", 0)).isEqualTo(4);
         assertThat(linkedController.getIntOr("Z", 0)).isEqualTo(12);
+        assertThat(linkedController.getStringOr("SourceBlock", "")).isEqualTo(MMCR.id("basic_casing").toString());
         assertThat(linkedController.getStringOr("Texture", "")).isEqualTo(texture.toString());
     }
 

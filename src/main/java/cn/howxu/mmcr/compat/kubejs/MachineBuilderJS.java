@@ -615,10 +615,16 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                         .fullyRotationallySymmetric(registration.controllerSpec().fullyRotationallySymmetric())
                         .requireVerticalFacing(registration.controllerSpec().requireVerticalFacing())
                         .tooltip(registration.controllerSpec().tooltip().toArray(String[]::new)))
-                .appearance(appearance -> appearance
-                        .machineBasicBlock(registration.appearance().machineBasicBlock())
-                        .controllerBaseTexture(registration.appearance().controllerBaseTexture())
-                        .formedPortBaseTexture(registration.appearance().formedPortBaseTexture()))
+                .appearance(appearance -> {
+                    appearance.machineBasicBlock(registration.appearance().machineBasicBlock());
+                    if (registration.appearance().controllerBaseTexture() != null) {
+                        appearance.controllerBaseTexture(registration.appearance().controllerBaseTexture());
+                    }
+                    if (registration.appearance().formedPortBaseTexture() != null) {
+                        appearance.formedPortBaseTexture(registration.appearance().formedPortBaseTexture());
+                    }
+                    return appearance;
+                })
                 .factory(factory -> factory
                         .hasFactory(factoryThreadLimit > 1)
                         .threadLimit(factoryThreadLimit))
@@ -678,13 +684,11 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     private MachineAppearanceSpec appearanceSpec() {
-        MachineAppearanceSpec base = machineBasicBlock == null
-                ? MachineAppearanceSpec.defaults()
-                : MachineAppearanceSpec.fromBasicBlock(machineBasicBlock);
+        MachineAppearanceSpec base = MachineAppearanceSpec.defaults();
         return new MachineAppearanceSpec(
-                base.machineBasicBlock(),
-                controllerBaseTexture != null ? controllerBaseTexture : base.controllerBaseTexture(),
-                formedPortBaseTexture != null ? formedPortBaseTexture : base.formedPortBaseTexture());
+                machineBasicBlock != null ? machineBasicBlock : base.machineBasicBlock(),
+                controllerBaseTexture,
+                formedPortBaseTexture);
     }
 
     private static cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType toPublicSmartInterfaceType(

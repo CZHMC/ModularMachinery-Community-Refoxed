@@ -14,6 +14,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -133,7 +134,7 @@ class InterfaceBlockItemTest {
             DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(
                     null, port.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE), description.overlayTexture());
 
-            assertThat(textures.base()).as(id).isEqualTo(linkedTexture);
+            assertThat(textures.base().forFace(Direction.NORTH)).as(id).isEqualTo(linkedTexture);
         }
     }
 

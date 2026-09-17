@@ -13,6 +13,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -21,9 +22,10 @@ public record PktMachineAppearancePayload(Map<Identifier, MachineAppearanceSpec>
     private static final int MAX_SPECS = 4096;
     private static final StreamCodec<RegistryFriendlyByteBuf, MachineAppearanceSpec> SPEC_CODEC = StreamCodec.composite(
             Identifier.STREAM_CODEC, MachineAppearanceSpec::machineBasicBlock,
-            Identifier.STREAM_CODEC, MachineAppearanceSpec::controllerBaseTexture,
-            Identifier.STREAM_CODEC, MachineAppearanceSpec::formedPortBaseTexture,
-            MachineAppearanceSpec::new);
+            ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.controllerBaseTexture()),
+            ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.formedPortBaseTexture()),
+            (blockId, controllerTexture, portTexture) -> new MachineAppearanceSpec(blockId,
+                    controllerTexture.orElse(null), portTexture.orElse(null)));
 
     public static final Type<PktMachineAppearancePayload> TYPE = new Type<>(MMCR.id("machine_appearance"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktMachineAppearancePayload> STREAM_CODEC =

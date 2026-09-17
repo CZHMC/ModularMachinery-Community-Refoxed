@@ -61,8 +61,7 @@ public record MachineControllerSpec(
 
     public static MachineControllerSpec defaultsFor(Identifier machineId) {
         if (machineId == null) throw new IllegalArgumentException("machineId null");
-        String controllerPath = machineId.getPath() + "_controller";
-        Identifier controllerId = Identifier.fromNamespaceAndPath(machineId.getNamespace(), controllerPath);
+        Identifier controllerId = machineId.withPath(machineId.getPath() + "_controller");
         Identifier basicController = MMCR.id("block/basic_controller");
         Identifier basicCasing = MMCR.id("block/basic_casing");
         return new MachineControllerSpec(
