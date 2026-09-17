@@ -13,22 +13,22 @@ Modular Machinery Community Edition on newer Minecraft! Enjoy brand-new features
 '''
 
 [[mixins]]
-config="mmcr.mixins.json"
+config="mixins/mmcr.mixins.json"
 
 [[mixins]]
-config="mmcr.jei.mixins.json"
+config="mixins/extras/mmcr.jei.mixins.json"
 requiredMods=["jei"]
 
 [[mixins]]
-config="mmcr.kubejs.mixins.json"
+config="mixins/extras/mmcr.kubejs.mixins.json"
 requiredMods=["kubejs"]
 
 [[mixins]]
-config="mmcr.ae2.mixins.json"
+config="mixins/extras/mmcr.ae2.mixins.json"
 requiredMods=["ae2"]
 
 [[mixins]]
-config="mmcr.extendedae.mixins.json"
+config="mixins/extras/mmcr.extendedae.mixins.json"
 requiredMods=["extendedae"]
 
 [[dependencies.${mod_id}]]
@@ -48,7 +48,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="jei"
 type="optional"
-versionRange="[29.21.0,)"
+versionRange="[29.21.0.65,)"
 ordering="AFTER"
 side="BOTH"
 
@@ -62,27 +62,27 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="jade"
 type="optional"
-versionRange="*"
+versionRange="[26.1.3+neoforge,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="ae2"
 type="optional"
-versionRange="*"
+versionRange="[26.1.11-SNAPSHOT,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="extendedae"
 type="optional"
-versionRange="[26.1-1.0.3,)"
+versionRange="[26.1-1.0.3-neoforge,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="mekanism"
 type="optional"
-versionRange="*"
+versionRange="[10.8.0,)"
 ordering="AFTER"
 side="BOTH"

@@ -654,7 +654,7 @@
   "gui.mmcr.failure.chemical_output_blocked": "化学品输出受阻",
   "gui.mmcr.failure.chemical_type_mismatch": "化学品类型不匹配",
   "gui.mmcr.failure.chemical_radioactivity_rejected": "放射性化学品被拒绝",
-  "gui.mmcr.failure.heat_temperature_insufficient": "热量温度不足",
+  "gui.mmcr.failure.heat_temperature_insufficient": "温度不足",
   "gui.mmcr.failure.heat_input_missing": "缺少热量输入",
   "gui.mmcr.failure.heat_output_blocked": "热量输出受阻",
   "gui.mmcr.failure.unknown": "未知失败",

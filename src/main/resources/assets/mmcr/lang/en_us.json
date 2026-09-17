@@ -654,7 +654,7 @@
   "gui.mmcr.failure.chemical_output_blocked": "Chemical output is blocked",
   "gui.mmcr.failure.chemical_type_mismatch": "Chemical type mismatch",
   "gui.mmcr.failure.chemical_radioactivity_rejected": "Radioactive chemical rejected",
-  "gui.mmcr.failure.heat_temperature_insufficient": "Heat temperature is insufficient",
+  "gui.mmcr.failure.heat_temperature_insufficient": "Temperature is insufficient",
   "gui.mmcr.failure.heat_input_missing": "Heat input is missing",
   "gui.mmcr.failure.heat_output_blocked": "Heat output is blocked",
   "gui.mmcr.failure.unknown": "Unknown failure",
