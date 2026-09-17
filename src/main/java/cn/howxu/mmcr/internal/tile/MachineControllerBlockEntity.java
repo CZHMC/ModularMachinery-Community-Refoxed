@@ -1658,24 +1658,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         Machine matchedMachine = structure.machine();
-        BlockArray matchedPattern = structure.pattern();
-        if (matchedMachine != null && matchedPattern != null && structure.facing() == facing) {
-            if (structure.matchedStage() > 0) {
-                for (CandidatePattern candidatePattern : candidatePatterns(matchedMachine, facing)) {
-                    if (candidatePattern.stageNumber() > structure.matchedStage()
-                            && tryFormMachine(matchedMachine, facing, candidatePattern)) return;
-                    if (structureWorkSnapshot().scan() != null) return;
-                }
-            }
-            CandidatePattern currentPattern = new CandidatePattern(structure.compiledPattern(), matchedPattern,
-                    structure.rollFacing());
-            if (tryFormMachine(matchedMachine, facing, currentPattern)) return;
-            if (structureWorkSnapshot().scan() != null) return;
+        if (matchedMachine != null && structure.pattern() != null && structure.facing() == facing) {
             boolean compiledAreaLoaded = !hasCompiledFacing(structure.compiledPattern(), facing)
                     || StructureMatcher.isAreaLoaded(structure.compiledPattern(), facing, level, getBlockPos());
             if (!compiledAreaLoaded) {
                 pauseActiveForUnloadedStructure();
                 return;
+            }
+            for (CandidatePattern candidatePattern : candidatePatterns(matchedMachine, facing)) {
+                if (tryFormMachine(matchedMachine, facing, candidatePattern)) return;
+                if (structureWorkSnapshot().scan() != null) return;
             }
             if (structure.formed()) {
                 Machine retryMachine = matchedMachine != null ? matchedMachine : configuredMachine;
