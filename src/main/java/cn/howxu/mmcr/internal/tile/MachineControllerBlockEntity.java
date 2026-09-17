@@ -2202,7 +2202,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     scanResult.mismatch().orElse(null));
             clearStructureScan();
             publishStructureWork(state -> state.withPendingInvalidation(false));
-            if (currentRuntimeSnapshot().structure().formed()) resetMachine(true, true, false);
+            if (currentRuntimeSnapshot().structure().formed()
+                    && candidatePattern.stageNumber() == currentRuntimeSnapshot().structure().matchedStage()) {
+                resetMachine(true, true, false);
+            }
             publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + structureCheckIntervalTicks()));
             return false;
         }
@@ -2254,7 +2257,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             recordStructureMismatch(candidate, getBlockState().getValue(MachineControllerBlock.FACING),
                     candidatePattern.pattern(), replacements, candidatePattern.compiled() != null && candidatePattern.compiled().stateSensitive(),
                     scanResult.mismatch().orElse(null));
-            if (currentRuntimeSnapshot().structure().formed()) resetMachine(true, true, false);
+            if (currentRuntimeSnapshot().structure().formed()
+                    && candidatePattern.stageNumber() == currentRuntimeSnapshot().structure().matchedStage()) {
+                resetMachine(true, true, false);
+            }
             publishStructureWork(state -> state.withPendingInvalidation(false)
                     .withNextCheckTick(level.getGameTime() + structureCheckIntervalTicks()));
             return;
