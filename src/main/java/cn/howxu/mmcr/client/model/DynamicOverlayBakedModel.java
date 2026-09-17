@@ -137,11 +137,15 @@ public final class DynamicOverlayBakedModel {
         BASE_TEXTURES.clear();
     }
 
-    private static FaceTextures resolveBase(MachineAppearanceSpec.TextureSource source) {
+    static FaceTextures resolveBase(MachineAppearanceSpec.TextureSource source) {
         if (source.overrideTexture() != null) {
             return FaceTextures.uniform(source.overrideTexture());
         }
-        return BASE_TEXTURES.computeIfAbsent(source, DynamicOverlayBakedModel::resolveSourceBlockTextures);
+        try {
+            return BASE_TEXTURES.computeIfAbsent(source, DynamicOverlayBakedModel::resolveSourceBlockTextures);
+        } catch (NullPointerException exception) {
+            return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
+        }
     }
 
     private static FaceTextures resolveSourceBlockTextures(MachineAppearanceSpec.TextureSource source) {
