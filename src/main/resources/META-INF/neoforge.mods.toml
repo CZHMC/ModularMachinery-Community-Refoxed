@@ -69,7 +69,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="ae2"
 type="optional"
-versionRange="[26.1.11-SNAPSHOT,)"
+versionRange="[26.1.10-beta,)"
 ordering="AFTER"
 side="BOTH"
 
