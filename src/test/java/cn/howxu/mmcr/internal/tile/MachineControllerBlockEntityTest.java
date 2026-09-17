@@ -12,7 +12,12 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -92,6 +97,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.AfterEach;
@@ -805,6 +811,62 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.structureSnapshot().version()).isGreaterThan(formedVersion);
         assertThat(controller.structureSnapshot().dirty()).isTrue();
         assertThat(controller.structureWorkSnapshotForTesting().componentRefreshRequired()).isTrue();
+    }
+
+    @Test
+    void expandStructure_blockDirty_after_forming_lowest_stage_keeps_lowest_stage() throws Exception {
+        BlockPos controllerPos = new BlockPos(0, 0, 0);
+        Identifier machineId = MMCR.id("expand_structure_block_dirty");
+        BlockArray firstStage = new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPos(3, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        BlockArray secondStage = new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPos(3, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        MachineControllerBlockEntity controller = expandStructureControllerWith(machineId, controllerPos, firstStage, secondStage);
+        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(machineId), 1);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.setStructureScanBatchesForTesting(2);
+        RuntimeTestFixtures.advanceGameTime(level);
+
+        controller.handleStructureBlockChanged(controllerPos.offset(1, 0, 0));
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.tickStructure(level, controllerPos);
+        for (int tick = 0; tick < 16 && controller.structureWorkSnapshotForTesting().scan() != null; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.tickStructure(level, controllerPos);
+        }
+
+        assertThat(controller.structureSnapshot().formed()).isTrue();
+        assertThat(controller.structureSnapshot().matchedStage()).isEqualTo(1);
+    }
+
+    private MachineControllerBlockEntity expandStructureControllerWith(Identifier machineId, BlockPos controllerPos,
+                                                                  BlockArray firstStage, BlockArray secondStage) throws Exception {
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).expandableStructure().build());
+        MachineStructureDefinition definition = new MachineStructureDefinition(machineId, List.of(
+                new MachineStructureDefinition.Declaration(MachineStructureDefinition.Declaration.Kind.FULL,
+                        firstStage, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
+                        MachineStructureRequirements.EMPTY),
+                new MachineStructureDefinition.Declaration(MachineStructureDefinition.Declaration.Kind.FULL,
+                        secondStage, PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(),
+                        MachineStructureRequirements.EMPTY)));
+        MachineStructureRegistry.replaceDynamic(Map.of(machineId, definition));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        controller.setMachine(MachineRegistry.getMachine(machineId));
+        var controllerState = controller.getBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH);
+        setField(BlockEntity.class, controller, "blockState", controllerState);
+        Level level = LevelStub.create(Map.of(
+                controllerPos, controllerState.getBlock(),
+                controllerPos.offset(1, 0, 0), Blocks.IRON_BLOCK,
+                controllerPos.offset(3, 0, 0), Blocks.IRON_BLOCK), List.of(controller));
+        controller.setLevel(level);
+        return controller;
     }
 
     @Test
