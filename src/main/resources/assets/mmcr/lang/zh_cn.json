@@ -406,6 +406,8 @@
   "message.mmcr.terminal.no_machine": "无法解析控制器对应的机器",
   "message.mmcr.terminal.invalid_preview_layer": "所选预览层不属于当前结构",
   "message.mmcr.terminal.switched": "切换到: %s",
+  "message.mmcr.terminal.check_requested": "已请求结构检查",
+  "message.mmcr.terminal.stage_check_formed": "等级 %s 已完全成型",
 
   "gui.mmcr.terminal.all": "全部",
   "gui.mmcr.terminal.build": "搭建",

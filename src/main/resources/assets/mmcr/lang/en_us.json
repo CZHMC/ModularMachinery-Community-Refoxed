@@ -406,6 +406,8 @@
   "message.mmcr.terminal.no_machine": "Could not resolve the controller machine",
   "message.mmcr.terminal.invalid_preview_layer": "The selected preview layer is not part of the current structure",
   "message.mmcr.terminal.switched": "Switched to: %s",
+  "message.mmcr.terminal.check_requested": "Structure check requested",
+  "message.mmcr.terminal.stage_check_formed": "Stage %s is fully formed",
 
   "gui.mmcr.terminal.all": "All",
   "gui.mmcr.terminal.build": "Build",

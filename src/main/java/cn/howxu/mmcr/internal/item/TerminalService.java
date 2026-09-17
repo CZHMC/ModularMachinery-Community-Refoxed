@@ -138,7 +138,7 @@ public final class TerminalService {
             }
             case CHECK -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
-                controller.requestImmediateStructureCheck(player);
+                controller.verifyStage(player, data.stage());
                 return accepted(player, stack, "message.mmcr.terminal.check_requested");
             }
             case BUILD, DEMOLISH -> {

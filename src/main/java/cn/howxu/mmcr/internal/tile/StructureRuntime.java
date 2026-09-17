@@ -600,6 +600,7 @@ public final class StructureRuntime {
         scanMachine = null;
         scanCandidate = null;
         scanStartedTick = Long.MIN_VALUE;
+        scanSteppedTick = Long.MIN_VALUE;
     }
 
     void invalidateScan(StructureMatcher.InvalidationReason reason) {

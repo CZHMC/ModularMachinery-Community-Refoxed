@@ -623,6 +623,41 @@ public class MachineControllerBlockEntity extends BlockEntity {
         publishRuntimeState();
     }
 
+    public void verifyStage(@Nullable ServerPlayer diagnosticPlayer, int stageNumber) {
+        Machine machine = boundMachine().orElse(null);
+        if (machine == null || level == null) return;
+        BlockArray pattern;
+        try {
+            pattern = assemblyPattern(machine, stageNumber);
+        } catch (IllegalArgumentException ignored) {
+            return;
+        }
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        CompiledMachinePattern stageCompiled = MachineRegistry.getCompiledStages(machine.registryName())
+                .stream().filter(s -> s != null && s.stageNumber() == stageNumber).findFirst().orElse(null);
+        Direction rollFacing = stageCompiled == null || !facing.getAxis().isVertical() ? Direction.SOUTH
+                : BlockRotator.normalizedRoll(facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING));
+        var replacements = replacementsFor(machine, stageCompiled, facing, pattern, rollFacing);
+        boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
+        matcherInvocationCountForTesting++;
+        boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
+                ? StructureMatcher.matchesCompiled(stageCompiled, facing, rollFacing, level,
+                getBlockPos(), replacements, stateSensitive)
+                : StructureMatcher.matchesRotated(pattern, level, getBlockPos(), replacements, stateSensitive);
+        if (matches) {
+            if (diagnosticPlayer != null) {
+                diagnosticPlayer.sendSystemMessage(Component.translatable("message.mmcr.terminal.stage_check_formed",
+                        Component.literal(String.valueOf(stageNumber)).withStyle(ChatFormatting.GREEN)));
+            }
+            return;
+        }
+        StructureMatcher.Mismatch firstMismatch = StructureMatcher.firstMismatch(pattern, level, getBlockPos(),
+                replacements, stateSensitive).orElse(null);
+        if (diagnosticPlayer != null && firstMismatch != null) {
+            sendStructureMismatchDiagnostic(diagnosticPlayer, firstMismatch);
+        }
+    }
+
     public int matcherInvocationCountForTesting() { return matcherInvocationCountForTesting; }
     public int scanBatchCountForTesting() { return scanBatchCountForTesting; }
     public int structureSafetyCheckCountForTesting() { return structureSafetyCheckCountForTesting; }
@@ -2137,78 +2172,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine validationMachine = stageCompiled == null ? candidate : stageCompiled.machine();
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
-        StructureWorkSnapshot work = structureWorkSnapshot();
-        if (!work.checkActive() || (rotatedPattern.pattern().size() <= structureScanBatches()
-                && !work.diagnosticRequested())) {
-            matcherInvocationCountForTesting++;
-            boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
-                    ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
-                    getBlockPos(), replacements, stateSensitive)
-                    : StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements, stateSensitive);
-            if (!matches) {
-                recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive);
-                return false;
-            }
-            return validateAndFormMachine(candidate, facing, candidatePattern, validationMachine, rotatedPattern,
-                    stageCompiled, replacements);
-        }
-        if (!isPatternAreaLoaded(rotatedPattern)) return false;
-        if (work.scanSteppedTick() == level.getGameTime()) return false;
-        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(structureScanBatches(),
-                structureSentinelEnabled(), structureSentinelCount());
-        int scanBatchSize = rotatedPattern.isEmpty() ? 0
-                : (rotatedPattern.pattern().size() + options.batchCount() - 1) / options.batchCount();
-        CompiledMachinePattern.ScanPlan scanPlan = stageCompiled == null || !hasCompiledFacing(stageCompiled, facing)
-                ? null : stageCompiled.scanPlan(facing, Math.min(options.sentinelCount(), scanBatchSize));
-        StructureMatcher.ScanState scan = StructureMatcher.beginScan(currentRuntimeSnapshot().structure().version(), facing, candidatePattern.rollFacing(),
-                candidatePattern.stageNumber(), rotatedPattern, rotatedPattern, replacements, stateSensitive,
-                options, rotatedPattern == work.previousMismatchPattern() ? work.previousMismatch() : null,
-                scanPlan, runtime.structureChunkStateEpoch());
-        runtime.startStructureScan(scan, candidate, candidatePattern, level.getGameTime(), level.getGameTime());
-        ACTIVE_STRUCTURE_SCANS.add(this);
-        if (invalidateActiveStructureScanIfIdentityChanged()) {
-            clearStructureScan();
+        matcherInvocationCountForTesting++;
+        boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
+                ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
+                getBlockPos(), replacements, stateSensitive)
+                : StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements, stateSensitive);
+        if (!matches) {
+            StructureMatcher.Mismatch firstMismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(),
+                    replacements, stateSensitive).orElse(null);
+            recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive, firstMismatch);
+            sendRequestedStructureDiagnostic(firstMismatch);
             return false;
         }
-        scanBatchCountForTesting++;
-        scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
-        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(serverLevel(), getBlockPos());
-        if (scanResult.inProgress()) {
-            publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L)
-                    .withCheckReason(work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK
-                            ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION));
-            return false;
-        }
-        if (scanResult.status() == StructureMatcher.ScanStatus.INVALIDATED) {
-            clearStructureDiagnosticRequest();
-            clearStructureScan();
-            publishStructureWork(state -> state.withPendingInvalidation(false));
-            return false;
-        }
-        if (scanResult.status() == StructureMatcher.ScanStatus.MISMATCH) {
-            publishStructureWork(state -> state.withPreviousMismatch(scanResult.mismatch().orElse(null), rotatedPattern));
-            if (scanResult.mismatch().isPresent()) {
-                sendRequestedStructureDiagnostic(scanResult.mismatch().get());
-            }
-            recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive,
-                    scanResult.mismatch().orElse(null));
-            clearStructureScan();
-            publishStructureWork(state -> state.withPendingInvalidation(false));
-            if (currentRuntimeSnapshot().structure().formed()
-                    && candidatePattern.stageNumber() == currentRuntimeSnapshot().structure().matchedStage()) {
-                resetMachine(true, true, false);
-            }
-            publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + structureCheckIntervalTicks()));
-            return false;
-        }
-        if (structureWorkSnapshot().pendingInvalidation()) {
-            clearStructureScan();
-            publishStructureWork(state -> state.withPendingInvalidation(false));
-            runtime.requestStructureCheck();
-            return false;
-        }
-        clearStructureScan();
-        publishStructureWork(state -> state.withPendingInvalidation(false).withPreviousMismatch(null, null));
         return validateAndFormMachine(candidate, facing, candidatePattern, validationMachine, rotatedPattern,
                 stageCompiled, replacements);
     }
