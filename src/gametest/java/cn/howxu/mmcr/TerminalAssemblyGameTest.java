@@ -422,31 +422,28 @@ public class TerminalAssemblyGameTest {
         List<MultiblockAssemblyService.Placement> template = template(controller);
         MultiblockAssemblyService.Placement changedPlacement = template.getLast();
         BlockPos changedPos = changedPlacement.pos();
-        controller.setStructureScanBatchesForTesting(5);
         controller.setStructureCheckIntervalForTesting(1);
         for (MultiblockAssemblyService.Placement placement : template) {
             helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
         }
-        helper.runAtTickTime(1, controller::requestImmediateStructureCheck);
+        helper.runAtTickTime(1, () -> controller.serverTick());
         helper.runAtTickTime(3, () -> {
-            controller.serverTick();
-            int cursorBeforeMutation = controller.structureScanCursorForTesting();
-            helper.assertTrue(cursorBeforeMutation >= 0,
-                    "The structure scan is still active before the mutation");
+            helper.assertTrue(controller.structureSnapshot().formed(), "Structure forms after the first check");
+            int matcherBeforeMutation = controller.matcherInvocationCountForTesting();
             helper.getLevel().setBlock(changedPos, Blocks.AIR.defaultBlockState(), 3);
             controller.onStructureBlockChanged(changedPos);
-            helper.assertTrue(controller.isPendingStructureInvalidationForTesting(),
-                    "A block change during the scan records pending invalidation");
-            helper.getLevel().setBlock(changedPos, changedPlacement.state(), 3);
-            controller.onStructureBlockChanged(changedPos);
-            // The first partial scan is discarded before the restored pattern is scanned again.
+            helper.runAtTickTime(4, () -> controller.serverTick());
             helper.runAtTickTime(20, () -> {
-                helper.assertTrue(controller.scanBatchCountForTesting() >= 9,
-                        "A fresh scan runs after the pending invalidation");
-                helper.assertTrue(controller.scanBatchCountForTesting() > cursorBeforeMutation,
-                        "The invalidated scan does not reuse its old cursor as the final result");
-                helper.assertTrue(controller.structureSnapshot().formed(), "The restored structure forms after a fresh scan");
-                helper.succeed();
+                helper.assertTrue(controller.matcherInvocationCountForTesting() > matcherBeforeMutation,
+                        "A block change drives a fresh full match recheck");
+                helper.getLevel().setBlock(changedPos, changedPlacement.state(), 3);
+                controller.onStructureBlockChanged(changedPos);
+                helper.runAtTickTime(22, () -> controller.serverTick());
+                helper.runAtTickTime(40, () -> {
+                    helper.assertTrue(controller.structureSnapshot().formed(),
+                            "Restoring the block lets the structure form again on the next recheck");
+                    helper.succeed();
+                });
             });
         });
     }

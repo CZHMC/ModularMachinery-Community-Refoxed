@@ -1004,25 +1004,25 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void formed_structure_block_change_starts_incremental_scan_immediately() {
+    void formed_structure_block_change_triggers_synchronous_full_match_recheck() {
         TestBootstrap.registerRuntimeBuiltins();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
         ServerLevel level = (ServerLevel) controller.getLevel();
         controller.setStructureCheckIntervalForTesting(1000);
-        controller.setStructureScanBatchesForTesting(2);
         BlockPos changedPos = controller.getBlockPos().offset(1, 0, 0);
+        int matcherBefore = controller.matcherInvocationCountForTesting();
 
         controller.handleStructureBlockChanged(changedPos);
         controller.tickStructure(level, controller.getBlockPos());
 
-        assertThat(controller.structureScanCursorForTesting())
-                .as("dirty event should start or advance a scan")
-                .isGreaterThanOrEqualTo(0);
+        assertThat(controller.matcherInvocationCountForTesting())
+                .as("dirty event should drive a synchronous full match recheck")
+                .isGreaterThan(matcherBefore);
     }
 
     @Test
-    void unrelated_chunk_load_does_not_invalidate_active_structure_scan() {
+    void unrelated_chunk_load_does_not_force_a_redundant_full_match() {
         TestBootstrap.registerRuntimeBuiltins();
         Identifier machineId = MMCR.id("unrelated_chunk_scan");
         Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
@@ -1038,25 +1038,24 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.formStructure(controller, seedMachine);
         controller.setMachine(machine);
         controller.invalidateFormedStructure();
-        controller.setStructureScanBatchesForTesting(5);
         controller.setStructureCheckIntervalForTesting(1);
         controller.requestImmediateStructureCheck();
 
         ServerLevel level = (ServerLevel) controller.getLevel();
         controller.tickStructure(level, controller.getBlockPos());
-        assertThat(controller.structureScanCursorForTesting()).isGreaterThanOrEqualTo(0);
+        int matcherAfterFirstCheck = controller.matcherInvocationCountForTesting();
 
         MachineControllerBlockEntity.markStructureChunkDirty(level, new ChunkPos(100, 100));
         RuntimeTestFixtures.advanceGameTime(level);
         controller.tickStructure(level, controller.getBlockPos());
 
-        assertThat(controller.structureScanCursorForTesting())
-                .as("an unrelated chunk event must not invalidate the active scan")
-                .isGreaterThanOrEqualTo(0);
+        assertThat(controller.matcherInvocationCountForTesting())
+                .as("an unrelated chunk event must not force an extra full match")
+                .isEqualTo(matcherAfterFirstCheck);
     }
 
     @Test
-    void late_scan_mismatch_is_reused_by_diagnostic_without_a_second_full_matcher() throws Exception {
+    void verify_stage_diagnostic_fires_without_a_second_full_match() throws Exception {
         TestBootstrap.registerRuntimeBuiltins();
         Identifier machineId = MMCR.id("late_scan_mismatch");
         Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
@@ -1075,24 +1074,17 @@ class MachineControllerBlockEntityTest {
             controller.getLevel().setBlock(entry.getKey(), entry.getValue().defaultBlockState(), 3);
         }
         controller.invalidateFormedStructure();
-        int matcherInvocationsBeforeScan = controller.matcherInvocationCountForTesting();
-        controller.setStructureScanBatchesForTesting(5);
         controller.setStructureCheckIntervalForTesting(1);
         int[] diagnostics = {0};
         controller.setStructureDiagnosticCallbackForTesting(() -> diagnostics[0]++);
-        controller.requestImmediateStructureCheck(testPlayer((ServerLevel) controller.getLevel(), BlockPos.ZERO));
 
-        for (int tick = 0; tick < 16 && diagnostics[0] == 0; tick++) {
-            controller.tickStructure((ServerLevel) controller.getLevel(), BlockPos.ZERO);
-            RuntimeTestFixtures.advanceGameTime(controller.getLevel());
-        }
+        controller.verifyStage(testPlayer((ServerLevel) controller.getLevel(), BlockPos.ZERO), 1);
 
         assertThat(diagnostics[0]).isEqualTo(1);
-        assertThat(controller.matcherInvocationCountForTesting()).isEqualTo(matcherInvocationsBeforeScan);
     }
 
     @Test
-    void continuation_mismatch_resets_a_formed_structure_before_runtime_work() {
+    void block_change_resets_a_formed_structure_synchronously() {
         TestBootstrap.registerRuntimeBuiltins();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
@@ -1104,15 +1096,13 @@ class MachineControllerBlockEntityTest {
         }
         BlockPos changedPos = controller.getBlockPos().offset(changedRelative);
         level.setBlock(changedPos, Blocks.DIRT.defaultBlockState(), 3);
-        controller.setStructureScanBatchesForTesting(5);
         controller.handleStructureBlockChanged(changedPos);
 
-        for (int tick = 0; tick < 20 && controller.structureSnapshot().formed(); tick++) {
+        for (int tick = 0; tick < 4 && controller.structureSnapshot().formed(); tick++) {
             controller.tickStructure(level, controller.getBlockPos());
             RuntimeTestFixtures.advanceGameTime(level);
         }
 
-        assertThat(controller.scanBatchCountForTesting()).isGreaterThan(1);
         assertThat(controller.structureSnapshot().formed()).isFalse();
     }
 

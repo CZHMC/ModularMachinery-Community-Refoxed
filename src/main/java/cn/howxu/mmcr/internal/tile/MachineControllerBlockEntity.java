@@ -653,9 +653,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         StructureMatcher.Mismatch firstMismatch = StructureMatcher.firstMismatch(pattern, level, getBlockPos(),
                 replacements, stateSensitive).orElse(null);
-        if (diagnosticPlayer != null && firstMismatch != null) {
-            sendStructureMismatchDiagnostic(diagnosticPlayer, firstMismatch);
+        if (diagnosticPlayer != null) {
+            publishStructureWork(state -> state.withDiagnostic(true, diagnosticPlayer.getUUID(),
+                    level instanceof ServerLevel serverLevel ? serverLevel.dimension() : null));
         }
+        sendRequestedStructureDiagnostic(firstMismatch);
     }
 
     public int matcherInvocationCountForTesting() { return matcherInvocationCountForTesting; }
