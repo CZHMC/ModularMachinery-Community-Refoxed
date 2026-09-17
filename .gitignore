@@ -61,3 +61,6 @@ gradlew
 gradlew.bat
 wiki/*
 plans/*
+
+example/startup_scripts/issue/*
+example/server_scripts/issue/*
