@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.extendedae;
 
+import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -23,6 +24,13 @@ public interface ExtendedAEContributor {
     boolean isPort(String id);
 
     boolean openMenu(ServerPlayer player, Level level, BlockPos pos);
+
+    /**
+     * Routes an AE2 sub-menu return back to the matching ExtendedAE main menu.
+     *
+     * @return {@code true} if the contributor claimed the {@code kind} and dispatched a return.
+     */
+    boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind);
 
     @Nullable
     Identifier portOverlayTexture(IOPortKind kind);

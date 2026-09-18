@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.extendedae;
 
+import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -38,6 +39,11 @@ final class UnavailableExtendedAEContributor implements ExtendedAEContributor {
 
     @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
+        return false;
+    }
+
+    @Override
+    public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) {
         return false;
     }
 

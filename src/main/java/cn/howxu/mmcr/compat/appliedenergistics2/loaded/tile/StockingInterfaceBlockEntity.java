@@ -20,17 +20,22 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.me.storage.NullInventory;
+import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
+import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
+import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -133,6 +138,17 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public BlockEntity getBlockEntity() {
         return this;
+    }
+
+    @Override
+    public void returnToMainMenu(Player player, ISubMenu subMenu) {
+        ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
+        if (contributor.available() && contributor.isPort(kind.id())
+                && player instanceof ServerPlayer serverPlayer) {
+            contributor.returnToMainMenu(serverPlayer, subMenu, kind);
+            return;
+        }
+        InterfaceLogicHost.super.returnToMainMenu(player, subMenu);
     }
 
     @Override

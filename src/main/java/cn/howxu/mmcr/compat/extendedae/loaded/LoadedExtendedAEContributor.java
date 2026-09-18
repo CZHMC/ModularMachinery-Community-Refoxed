@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.extendedae.loaded;
 import appeng.api.AECapabilities;
 import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.IGridConnectedBlockEntity;
+import appeng.menu.ISubMenu;
 import appeng.menu.MenuOpener;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.MMCR;
@@ -58,6 +59,19 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
             return MenuOpener.open(ContainerExInterface.TYPE_OVERSIZE, player, MenuLocators.forBlockEntity(host));
         }
         return MenuOpener.open(ContainerExInterface.TYPE, player, MenuLocators.forBlockEntity(host));
+    }
+
+    @Override
+    public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) {
+        if (!KINDS.contains(kind)) return false;
+        var locator = subMenu.getLocator();
+        if (kind == ExtendedPatternInterfaceKind.INSTANCE) {
+            return MenuOpener.returnTo(ContainerExPatternProvider.TYPE, player, locator);
+        }
+        if (isOversize(kind)) {
+            return MenuOpener.returnTo(ContainerExInterface.TYPE_OVERSIZE, player, locator);
+        }
+        return MenuOpener.returnTo(ContainerExInterface.TYPE, player, locator);
     }
 
     @Override
