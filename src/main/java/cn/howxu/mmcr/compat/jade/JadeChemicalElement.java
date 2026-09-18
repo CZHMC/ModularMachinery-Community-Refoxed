@@ -21,8 +21,8 @@ public final class JadeChemicalElement extends ProgressOverlayElement {
 
     private final Identifier spriteLocation;
     private final int tint;
-    private int width;
-    private int height;
+    private final int width;
+    private final int height;
 
     // 方形
     public JadeChemicalElement(Identifier spriteLocation, int tint, int size) {
@@ -47,11 +47,9 @@ public final class JadeChemicalElement extends ProgressOverlayElement {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null) return;
         TextureAtlasSprite sprite = minecraft.getAtlasManager()
                 .getAtlasOrThrow(AtlasIds.BLOCKS)
                 .getSprite(spriteLocation);
-        if (sprite == null) return;
         RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
         int drawX = floatingRect == null ? getX() : (int) floatingRect.getX();
         int drawY = floatingRect == null ? getY() : (int) floatingRect.getY();
