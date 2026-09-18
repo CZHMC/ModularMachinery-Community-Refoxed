@@ -21,12 +21,14 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBloc
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import com.glodblock.github.extendedae.common.EAESingletons;
 import com.glodblock.github.extendedae.container.ContainerExInterface;
 import com.glodblock.github.extendedae.container.ContainerExPatternProvider;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -72,6 +74,18 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
             return MenuOpener.returnTo(ContainerExInterface.TYPE_OVERSIZE, player, locator);
         }
         return MenuOpener.returnTo(ContainerExInterface.TYPE, player, locator);
+    }
+
+    @Override
+    public @Nullable ItemStack mainMenuIcon(IOPortKind kind) {
+        if (!KINDS.contains(kind)) return null;
+        if (isOversize(kind)) {
+            return new ItemStack(EAESingletons.OVERSIZE_INTERFACE);
+        }
+        if (kind == ExtendedPatternInterfaceKind.INSTANCE) {
+            return new ItemStack(EAESingletons.EX_PATTERN_PROVIDER);
+        }
+        return new ItemStack(EAESingletons.EX_INTERFACE);
     }
 
     @Override

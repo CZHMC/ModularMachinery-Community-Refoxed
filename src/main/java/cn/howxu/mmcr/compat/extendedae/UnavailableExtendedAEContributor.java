@@ -6,6 +6,7 @@ import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.jetbrains.annotations.Nullable;
@@ -45,6 +46,11 @@ final class UnavailableExtendedAEContributor implements ExtendedAEContributor {
     @Override
     public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) {
         return false;
+    }
+
+    @Override
+    public @Nullable ItemStack mainMenuIcon(IOPortKind kind) {
+        return null;
     }
 
     @Override

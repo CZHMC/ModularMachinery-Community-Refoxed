@@ -6,6 +6,7 @@ import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.jetbrains.annotations.Nullable;
@@ -31,6 +32,13 @@ public interface ExtendedAEContributor {
      * @return {@code true} if the contributor claimed the {@code kind} and dispatched a return.
      */
     boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind);
+
+    /**
+     * @return the ExtendedAE main-menu icon for {@code kind}, or {@code null} if the contributor does not
+     *         claim the kind so the host can fall back to the AE2 default.
+     */
+    @Nullable
+    ItemStack mainMenuIcon(IOPortKind kind);
 
     @Nullable
     Identifier portOverlayTexture(IOPortKind kind);

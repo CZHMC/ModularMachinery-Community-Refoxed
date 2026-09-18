@@ -24,6 +24,8 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -99,7 +101,12 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public ItemStack getMainMenuIcon() {
-        return AEBlocks.INTERFACE.stack();
+        ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
+        ItemStack icon = contributor.mainMenuIcon(kind);
+        if (icon != null) return icon;
+        ItemStack fallback = AEBlocks.INTERFACE.stack();
+        fallback.set(DataComponents.CUSTOM_NAME, Component.translatable("container.mmcr." + kind.id()));
+        return fallback;
     }
 
     @Override
