@@ -137,6 +137,9 @@ public final class GameTestRegistry {
         register(event, "terminal_expandable_missing_materials_stage_one", 100, helper -> new TerminalAssemblyGameTest().defaultBuildMissingMaterialsExcludeStageTwo(helper));
         register(event, "terminal_build_missing_stage_one_partial", 100, helper -> new TerminalAssemblyGameTest().survivalBuildRejectsWhenStageOneMaterialsAreMissing(helper));
         register(event, "terminal_build_already_formed_multi_stage", 100, helper -> new TerminalAssemblyGameTest().buildAlreadyFormedMultiStageReportsSpecificStage(helper));
+        register(event, "terminal_build_completion_only_selected_stage", 100, helper -> new TerminalAssemblyGameTest().buildCompletionVerifiesOnlySelectedStageForMultiStageMachine(helper));
+        register(event, "terminal_build_completion_no_stage_message_single_stage", 100, helper -> new TerminalAssemblyGameTest().buildCompletionOmitsStageFormedMessageForSingleStageMachine(helper));
+        register(event, "terminal_verify_stage_no_message_single_stage", 100, helper -> new TerminalAssemblyGameTest().verifyStageSuppressesFormMessageForSingleStageMachine(helper));
         register(event, "terminal_build_across_ticks_duplicate", 200,
                 helper -> new TerminalAssemblyGameTest().buildCompletesAcrossTicksAndRejectsDuplicateSubmission(helper));
         register(event, "terminal_build_structure_diagnostic", 100,

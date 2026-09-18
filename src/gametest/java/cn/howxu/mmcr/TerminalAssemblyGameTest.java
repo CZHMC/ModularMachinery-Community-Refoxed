@@ -40,6 +40,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -410,8 +411,99 @@ public class TerminalAssemblyGameTest {
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(diagnostics[0] == 1,
-                    "Completed terminal builds request a structure diagnostic when the structure is still invalid");
+                    "Completed terminal builds request a structure diagnostic for the selected stage: deliveries="
+                            + diagnostics[0]);
             helper.succeed();
+        });
+    }
+
+    public void buildCompletionVerifiesOnlySelectedStageForMultiStageMachine(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.setStructureScanBatchesForTesting(ServerConfig.DEFAULT_STRUCTURE_SCAN_BATCHES);
+        controller.setBuildBlocksPerTickForTesting(1);
+        Machine machine = controller.boundMachine().orElseThrow();
+        List<MultiblockAssemblyService.Placement> stage1Template = MultiblockAssemblyService.createTemplatePlacements(
+                controller.getBlockPos(), controller.assemblyPattern(machine, 1));
+        BlockPos stage2OnlyPos = stageOnlyPos(controller, machine, 2, stage1Template);
+        int[] diagnostics = {0};
+        controller.setStructureDiagnosticCallbackForTesting(() -> diagnostics[0]++);
+
+        MultiblockAssemblyService.build(servicePlayer(helper), controller, 1,
+                new PlayerInventoryStructureItemSource(servicePlayer(helper)), true, Map.of());
+
+        helper.runAtTickTime(20, () -> {
+            helper.assertTrue(diagnostics[0] == 0,
+                    "After a stage-1 build completes successfully, no higher-stage diagnostic is sent: deliveries="
+                            + diagnostics[0]);
+            helper.assertTrue(helper.getLevel().getBlockState(stage2OnlyPos).isAir(),
+                    "Stage-2-only positions remain untouched for a stage-1 build");
+            helper.succeed();
+        });
+    }
+
+    public void buildCompletionOmitsStageFormedMessageForSingleStageMachine(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        controller.setStructureCheckIntervalForTesting(1);
+        controller.setBuildBlocksPerTickForTesting(ServerConfig.DEFAULT_BUILD_BLOCKS_PER_TICK);
+        List<Component> sentMessages = new ArrayList<>();
+        ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                new GameProfile(UUID.nameUUIDFromBytes("mmcr-terminal-gametest-singlestage".getBytes(StandardCharsets.UTF_8)),
+                        "mmcr-terminal-singlestage"),
+                ClientInformation.createDefault()) {
+            @Override
+            public void sendSystemMessage(Component message) {
+                sentMessages.add(message);
+            }
+        };
+        MultiblockAssemblyService.build(player, controller, 1,
+                new PlayerInventoryStructureItemSource(player), true, Map.of());
+
+        helper.runAtTickTime(4, () -> {
+            boolean stageFormedSent = sentMessages.stream()
+                    .anyMatch(component -> component.getString().contains("等级")
+                            || component.getString().toLowerCase().contains("stage"));
+            helper.assertTrue(!stageFormedSent,
+                    "Single-stage build completion never broadcasts a stage-formed message: messages=" + sentMessages);
+            helper.succeed();
+        });
+    }
+
+    public void verifyStageSuppressesFormMessageForSingleStageMachine(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        List<MultiblockAssemblyService.Placement> template = template(controller);
+        for (MultiblockAssemblyService.Placement placement : template) {
+            helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
+        }
+        List<Component> sentMessages = new ArrayList<>();
+        ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                new GameProfile(UUID.nameUUIDFromBytes("mmcr-terminal-gametest-singlestage-verify".getBytes(StandardCharsets.UTF_8)),
+                        "mmcr-terminal-singlestage-verify"),
+                ClientInformation.createDefault()) {
+            @Override
+            public void sendSystemMessage(Component message) {
+                sentMessages.add(message);
+            }
+        };
+        helper.runAtTickTime(2, () -> {
+            controller.verifyStage(player, 1);
+            helper.runAtTickTime(1, () -> {
+                boolean stageFormedSent = sentMessages.stream()
+                        .anyMatch(component -> component.getString().contains("等级")
+                                || component.getString().toLowerCase().contains("stage"));
+                helper.assertTrue(!stageFormedSent,
+                        "Single-stage verifyStage emits no stage-formed chatter: messages=" + sentMessages);
+                helper.succeed();
+            });
         });
     }
 

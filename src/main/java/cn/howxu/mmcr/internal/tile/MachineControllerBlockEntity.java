@@ -645,7 +645,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 getBlockPos(), replacements, stateSensitive)
                 : StructureMatcher.matchesRotated(pattern, level, getBlockPos(), replacements, stateSensitive);
         if (matches) {
-            if (diagnosticPlayer != null) {
+            if (diagnosticPlayer != null && availableStructureStages().size() > 1) {
                 diagnosticPlayer.sendSystemMessage(Component.translatable("message.mmcr.terminal.stage_check_formed",
                         Component.literal(String.valueOf(stageNumber)).withStyle(ChatFormatting.GREEN)));
             }
@@ -1565,9 +1565,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         } else if (task != null) {
             task.refundRequirements().forEach(stack -> new PlayerInventoryStructureItemSink(owner).accept(stack));
             if (owner.connection != null) task.takeCompletionReport().ifPresent(owner::sendSystemMessage);
+            int builtStage = task.stage();
             buildTaskOwner = null;
             buildTaskAge = 0;
-            requestImmediateStructureCheck(owner);
+            verifyStage(owner, builtStage);
+            requestImmediateStructureCheck(null);
         }
         return true;
     }
