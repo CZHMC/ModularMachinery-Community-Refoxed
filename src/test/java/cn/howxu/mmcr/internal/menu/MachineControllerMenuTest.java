@@ -48,7 +48,7 @@ class MachineControllerMenuTest {
                 List.of("mmcr:steel"), true, "mmcr:locked_recipe", "mmcr:test_cube", 2, 3, true,
                 "mmcr:host", CraftingStatus.Status.CRAFTING, "", null, true, false,
                 4, 20, 6, 8, true, 2, 1, 2, 3, 100, 1000,
-                 new FluidStack(Fluids.WATER, 250), FluidStack.EMPTY, Map.of()));
+                 new FluidStack(Fluids.WATER, 250), FluidStack.EMPTY, Map.of(), 0, 1));
 
         assertThat(menu.isFormed()).isTrue();
         assertThat(menu.hasActiveRecipe()).isTrue();
@@ -69,7 +69,7 @@ class MachineControllerMenuTest {
                 List.of(), false, "", "mmcr:test_cube", 0, 0, false, "",
                 CraftingStatus.Status.CRAFTING, "", null, true, false,
                 1, 20, 4, 4, false, 0, 0, 1, 4, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of()));
+                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1));
 
         menu.setData(6, 0);
 
@@ -109,7 +109,7 @@ class MachineControllerMenuTest {
                 List.of(), false, "", "mmcr:module", 2, 0, false, "",
                 CraftingStatus.Status.IDLE, "", null, true, false,
                 0, 0, 0, 1, false, 0, 0, 0, 0, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of()));
+                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1));
 
         assertThat(menu.isModuleController()).isTrue();
         assertThat(menu.connectedHostId()).isEmpty();

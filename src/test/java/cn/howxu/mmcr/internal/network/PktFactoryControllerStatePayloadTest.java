@@ -65,7 +65,7 @@ class PktFactoryControllerStatePayloadTest {
         FactoryRuntime.ThreadSnapshot thread = new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true,
                 "mmcr:long_lane", 1, 20, parallelism, (ExecutionStatus) null, false, "");
         FactorySnapshot snapshot = new FactorySnapshot(false, true, List.of(lane), 1, 1, parallelism,
-                false, List.of(thread), "", 0, null, List.of());
+                false, List.of(thread), "", 0, null, List.of(), 0, 1);
         RegistryFriendlyByteBuf buffer = buffer();
 
         PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer,
@@ -84,7 +84,7 @@ class PktFactoryControllerStatePayloadTest {
         FactoryRuntime.ThreadSnapshot thread = new FactoryRuntime.ThreadSnapshot(0, "base", true, false, false,
                 "", 0, 0, 1, failure, false, "");
         FactorySnapshot snapshot = new FactorySnapshot(false, false, List.of(lane), 1, 0, 1L,
-                false, List.of(thread), "", 0, failure, List.of());
+                false, List.of(thread), "", 0, failure, List.of(), 0, 1);
         RegistryFriendlyByteBuf buffer = buffer();
 
         PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer,
@@ -123,7 +123,7 @@ class PktFactoryControllerStatePayloadTest {
          FactorySnapshot snapshot = new FactorySnapshot(false, false, List.of(), 1, 0, 1L,
                 false, List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "", 0, null,
                 IntStream.range(0, PktFactoryControllerStatePayload.MAX_LEVEL_SNAPSHOTS + 1)
-                        .mapToObj(Integer::toString).toList());
+                        .mapToObj(Integer::toString).toList(), 0, 1);
 
         assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer(),
                 new PktFactoryControllerStatePayload(BlockPos.ZERO, snapshot)))
@@ -159,7 +159,7 @@ class PktFactoryControllerStatePayloadTest {
     @Test
     void encoder_rejects_incomplete_presentation_lanes() {
          FactorySnapshot snapshot = new FactorySnapshot(false, false, List.of(), 2, 0, 1L,
-                false, List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "", 0, null, List.of());
+                false, List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "", 0, null, List.of(), 0, 1);
 
         assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer(),
                 new PktFactoryControllerStatePayload(BlockPos.ZERO, snapshot)))
@@ -170,6 +170,7 @@ class PktFactoryControllerStatePayloadTest {
     void decoder_rejects_active_lane_count_above_lane_limit() {
         RegistryFriendlyByteBuf buffer = header(1, 2, 1L, 0, 1);
         writeThread(buffer, 0);
+        appendStageFooter(buffer);
 
         assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -181,6 +182,7 @@ class PktFactoryControllerStatePayloadTest {
         for (int[] values : List.of(new int[]{-1, 0, 1}, new int[]{2, 1, 1}, new int[]{0, 1, 0})) {
             RegistryFriendlyByteBuf buffer = header(1, 0, 1L, 0, 1);
             writeThread(buffer, 0, values[0], values[1], values[2]);
+            appendStageFooter(buffer);
 
             assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
                     .isInstanceOf(IllegalArgumentException.class);
@@ -193,6 +195,7 @@ class PktFactoryControllerStatePayloadTest {
             RegistryFriendlyByteBuf buffer = header(2, 0, 1L, 0, 2);
         writeThread(buffer, 0);
         writeThread(buffer, 0);
+        appendStageFooter(buffer);
 
         assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -215,12 +218,12 @@ class PktFactoryControllerStatePayloadTest {
                  IntStream.range(0, count).mapToObj(index -> new FactoryRuntime.ThreadSnapshot(index,
                          index == 0 ? "base" : "factory-" + index, index == 0, false, false,
                          "", 0, 0, 1, (ExecutionStatus) null, false, "")).toList(),
-                 "", 0, null, List.of());
+                 "", 0, null, List.of(), 0, 1);
     }
 
     private static FactorySnapshot snapshot(ExecutionStatus failure) {
          return new FactorySnapshot(false, false, List.of(), 1, 0, 1L, false,
-                List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "", 0, failure, List.of());
+                List.of(FactoryRuntime.ThreadSnapshot.idleBase()), "", 0, failure, List.of(), 0, 1);
     }
 
     private static ExecutionStatus failure(int detailCount) {
@@ -251,6 +254,11 @@ class PktFactoryControllerStatePayloadTest {
         buffer.writeVarInt(0);
         buffer.writeVarInt(threadCount);
         return buffer;
+    }
+
+    private static void appendStageFooter(RegistryFriendlyByteBuf buffer) {
+        buffer.writeVarInt(0);
+        buffer.writeVarInt(1);
     }
 
     private static void writeFactoryHeader(RegistryFriendlyByteBuf buffer, int laneLimit, int activeLaneCount,

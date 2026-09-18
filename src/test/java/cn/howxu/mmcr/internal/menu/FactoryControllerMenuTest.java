@@ -56,7 +56,7 @@ class FactoryControllerMenuTest {
     void current_parallelism_uses_the_selected_active_thread() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 24L, false,
-                List.of(activeThread(0, 12), activeThread(1, 8)), "Factory", 0, null, List.of()));
+                List.of(activeThread(0, 12), activeThread(1, 8)), "Factory", 0, null, List.of(), 0, 1));
 
         menu.selectThread(1);
 
@@ -69,7 +69,7 @@ class FactoryControllerMenuTest {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
          menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 2, 0, 1L, false,
                 List.of(lockedThread(0, false, ""), lockedThread(1, true, "mmcr:locked")),
-                "Factory", 0, null, List.of()));
+                "Factory", 0, null, List.of(), 0, 1));
 
         assertThat(menu.selectedRecipeLocked()).isFalse();
         menu.selectThread(1);
@@ -83,7 +83,7 @@ class FactoryControllerMenuTest {
          menu.applySnapshot(new FactorySnapshot(true, false, List.of(), 1, 0, 1L, false,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, true, false, false, "", 0, 0, 1,
                         "gui.mmcr.controller.failure.missing_input", false, "")),
-                "Factory", 0, null, List.of()));
+                "Factory", 0, null, List.of(), 0, 1));
 
         assertThat(menu.currentParallelism()).isZero();
         assertThat(menu.selectedThread().lastFailureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_input");
@@ -102,7 +102,7 @@ class FactoryControllerMenuTest {
     private static FactorySnapshot snapshot(int... indexes) {
          return new FactorySnapshot(true, false, List.of(), indexes.length, 0, 1L, false,
                 Arrays.stream(indexes).mapToObj(index -> lockedThread(index, false, "")).toList(),
-                "", 0, null, List.of());
+                "", 0, null, List.of(), 0, 1);
     }
 
     private static FactoryRuntime.ThreadSnapshot activeThread(int index, int parallelism) {

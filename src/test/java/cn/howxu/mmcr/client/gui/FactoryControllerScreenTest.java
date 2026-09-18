@@ -75,7 +75,7 @@ class FactoryControllerScreenTest {
                                 1, (ExecutionStatus) null, false, ""),
                         new FactoryRuntime.ThreadSnapshot(1, "factory-1", false, false, false, "", 0, 0, 1,
                                 (ExecutionStatus) null, false, "")),
-                "Factory", 0, failure(MMCR.id("failure")), List.of()));
+                "Factory", 0, failure(MMCR.id("failure")), List.of(), 0, 1));
 
         assertThat(FactoryControllerScreen.selectedFailureUnloc(menu)).isEmpty();
     }
@@ -139,7 +139,7 @@ class FactoryControllerScreenTest {
                                 "mmcr:recipe_0", 1, 20, 1, (ExecutionStatus) null, false, ""),
                         new FactoryRuntime.ThreadSnapshot(1, "lane-1", false, false, true,
                                 "mmcr:recipe_1", 2, 20, 1, (ExecutionStatus) null, false, "")),
-                "Factory", 0, null, List.of()));
+                "Factory", 0, null, List.of(), 0, 1));
         ControllerScreenTextSnapshot.Line first = new ControllerScreenTextSnapshot.Line(
                 ControllerScreenTextScope.CONTROLLER, MMCR.id("factory_lane_0"), Component.literal("lane 0"));
         ControllerScreenTextSnapshot.Line second = new ControllerScreenTextSnapshot.Line(
@@ -224,7 +224,7 @@ class FactoryControllerScreenTest {
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 3, 2, 8L, true,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true, "mmcr:recipe", 20, 20,
                         4, failure(MMCR.id("selected_failure")), false, "")),
-                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList()));
+                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList(), 0, 1));
          return menu;
     }
 

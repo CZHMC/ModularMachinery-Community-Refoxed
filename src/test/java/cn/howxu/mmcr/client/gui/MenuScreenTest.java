@@ -186,7 +186,7 @@ class MenuScreenTest {
                 List.of(levelId.toString()), false, "", "mmcr:test_cube", 2, 3, true,
                 "mmcr:host", CraftingStatus.Status.CRAFTING, "", failure, true, true,
                 4, 20, 6, 8, false, 0, 0, 2, 3, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of()));
+                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1));
 
         assertThat(MachineControllerScreen.detailLines(menu)).containsExactly(
                 new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")

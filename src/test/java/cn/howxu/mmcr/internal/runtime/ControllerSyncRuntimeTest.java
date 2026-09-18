@@ -506,7 +506,7 @@ class ControllerSyncRuntimeTest {
         CraftingStateSnapshot crafting = new CraftingStateSnapshot(MMCR.id("crafting_recipe"),
                 CraftingStatus.working(), null, 7L, 8L, 9L, 3, 20, 2, 8, true, "mmcr:crafting_recipe");
         FactorySnapshot factory = new FactorySnapshot(true, true, List.of(crafting), 2, 1, 8L,
-                false, List.of(activeLane, idleLane), "factory", 3, failure, List.of("mmcr:steel"));
+                false, List.of(activeLane, idleLane), "factory", 3, failure, List.of("mmcr:steel"), 1, 1);
         StructureSnapshot structure = new StructureSnapshot(null, null, null, null, null,
                 Direction.SOUTH, 1, true, 7L, null, null, null, false, true, Set.of());
         return new ControllerRuntimeSnapshot(structure, 8L, 9L, 10L, Map.of(), Map.of(), Set.of(),

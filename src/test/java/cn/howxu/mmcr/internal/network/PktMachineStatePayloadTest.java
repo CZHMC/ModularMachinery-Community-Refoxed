@@ -143,12 +143,13 @@ class PktMachineStatePayloadTest {
     void machine_state_rejects_negative_or_oversized_installed_module_count() {
         assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
                 "", 0, -1, false, "", CraftingStatus.Status.IDLE, "", null, true, false,
-                0, 0, 0, 1, false, 0, 0, 0, 0, 0L, 0L, FluidStack.EMPTY, FluidStack.EMPTY, Map.of()))
+                0, 0, 0, 1, false, 0, 0, 0, 0, 0L, 0L, FluidStack.EMPTY, FluidStack.EMPTY, Map.of(),
+                0, 1))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
                 "", 0, PktMachineStatePayload.MAX_INSTALLED_MODULES + 1, false, "", CraftingStatus.Status.IDLE,
                 "", null, true, false, 0, 0, 0, 1, false, 0, 0, 0, 0, 0L, 0L,
-                FluidStack.EMPTY, FluidStack.EMPTY, Map.of())).isInstanceOf(IllegalArgumentException.class);
+                FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -188,7 +189,7 @@ class PktMachineStatePayloadTest {
                 "mmcr:machine", 0, 0, false, "", CraftingStatus.Status.IDLE,
                 "", failure, true, false, 0, 10, parallelism, maxParallelism, false, 0, 0, 0,
                 maxParallelControllerCount, 0L, 0L,
-                FluidStack.EMPTY, FluidStack.EMPTY, dataStorageValues);
+                FluidStack.EMPTY, FluidStack.EMPTY, dataStorageValues, 0, 1);
     }
 
     private static ExecutionStatus failure(int detailCount) {
