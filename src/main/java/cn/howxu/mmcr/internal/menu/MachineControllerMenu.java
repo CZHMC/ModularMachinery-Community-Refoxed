@@ -366,6 +366,18 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     public BlockPos controllerPos() { return pos; }
 
+    public int matchedStage() {
+        if (clientSnapshot != null) return clientSnapshot.matchedStage();
+        MachineStateSnapshot state = localState();
+        return state == null ? 0 : state.matchedStage();
+    }
+
+    public int stageCount() {
+        if (clientSnapshot != null) return clientSnapshot.stageCount();
+        MachineStateSnapshot state = localState();
+        return state == null ? 1 : state.stageCount();
+    }
+
     public static int controllerRoleSyncValue(MachineControllerBlockEntity controller) {
         return controller == null ? 0 : SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).controllerRole();
     }

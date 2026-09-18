@@ -116,6 +116,26 @@ class MachineControllerMenuTest {
         assertThat(menu.installedModuleCount()).isZero();
     }
 
+    @Test
+    void matched_stage_accessor_reads_from_client_snapshot() {
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "", true, false,
+                List.of(), false, "", "", 0, 0, false, "", CraftingStatus.Status.IDLE, "", null,
+                true, false, 0, 0, 0, 1, false, 0, 0, 0, 0, 0, 0,
+                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 4, 10));
+
+        assertThat(menu.matchedStage()).isEqualTo(4);
+        assertThat(menu.stageCount()).isEqualTo(10);
+    }
+
+    @Test
+    void matched_stage_accessor_falls_back_when_no_snapshot_present() {
+        MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+
+        assertThat(menu.matchedStage()).isZero();
+        assertThat(menu.stageCount()).isEqualTo(1);
+    }
+
     private static RegistryFriendlyByteBuf menuBuffer(BlockPos pos, Identifier machineId,
                                                       Identifier connectedHostId, int role,
                                                       boolean formed, int installedModules) {
