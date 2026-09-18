@@ -21,7 +21,7 @@ dependencies {
     // runtimeOnly "curse.maven:geckolib-388172:8327201"
 
     // spark
-    runtimeOnly "curse.maven:spark-361579:8275631"
+    // runtimeOnly ""
     // Oritech
     // runtimeOnly "curse.maven:oritech-1030830:8571095"
     // pipez 1.2.31+26.1.2
@@ -45,7 +45,7 @@ dependencies {
     // runtimeOnly "maven.modrinth:bsJhdceD:jJ23wJ7U"
 
     // sodium
-    localRuntime "curse.maven:sodium-394468:8396481"
+
 
     // mekanism from howxu maven, recently it's unusable
     localRuntime "mekanism:Mekanism:26.1.2-10.8.0.homebaked"

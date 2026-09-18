@@ -21,7 +21,6 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -393,30 +392,6 @@ public class MachineControllerMenu extends AbstractMachineMenu {
 
     private static @Nullable Identifier readOptionalIdentifier(FriendlyByteBuf buf) {
         return buf.readBoolean() ? Identifier.STREAM_CODEC.decode(buf) : null;
-    }
-
-    public long totalStoredEnergy() {
-        if (clientSnapshot != null) return clientSnapshot.totalStoredEnergy();
-        MachineStateSnapshot state = localState();
-        return state == null ? 0L : state.totalStoredEnergy();
-    }
-
-    public long totalCapacityEnergy() {
-        if (clientSnapshot != null) return clientSnapshot.totalCapacityEnergy();
-        MachineStateSnapshot state = localState();
-        return state == null ? 0L : state.totalCapacityEnergy();
-    }
-
-    public FluidStack primaryFluid() {
-        if (clientSnapshot != null) return clientSnapshot.primaryFluid();
-        MachineStateSnapshot state = localState();
-        return state == null ? FluidStack.EMPTY : state.primaryFluid();
-    }
-
-    public FluidStack primaryOutputFluid() {
-        if (clientSnapshot != null) return clientSnapshot.primaryOutputFluid();
-        MachineStateSnapshot state = localState();
-        return state == null ? FluidStack.EMPTY : state.primaryOutputFluid();
     }
 
     private @Nullable MachineStateSnapshot localState() {

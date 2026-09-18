@@ -16,7 +16,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
-import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import cn.howxu.mmcr.test.TestBootstrap;
 import org.junit.jupiter.api.BeforeAll;
@@ -143,13 +142,13 @@ class PktMachineStatePayloadTest {
     void machine_state_rejects_negative_or_oversized_installed_module_count() {
         assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
                 "", 0, -1, false, "", CraftingStatus.Status.IDLE, "", null, true, false,
-                0, 0, 0, 1, false, 0, 0, 0, 0, 0L, 0L, FluidStack.EMPTY, FluidStack.EMPTY, Map.of(),
+                0, 0, 0, 1, false, 0, 0, 0, 0, Map.of(),
                 0, 1))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PktMachineStatePayload(BlockPos.ZERO, "", false, false, List.of(), false, "",
                 "", 0, PktMachineStatePayload.MAX_INSTALLED_MODULES + 1, false, "", CraftingStatus.Status.IDLE,
-                "", null, true, false, 0, 0, 0, 1, false, 0, 0, 0, 0, 0L, 0L,
-                FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1)).isInstanceOf(IllegalArgumentException.class);
+                "", null, true, false, 0, 0, 0, 1, false, 0, 0, 0, 0,
+                Map.of(), 0, 1)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -188,8 +187,7 @@ class PktMachineStatePayloadTest {
         return new PktMachineStatePayload(BlockPos.ZERO, "mmcr:recipe", true, true, levels, false, "",
                 "mmcr:machine", 0, 0, false, "", CraftingStatus.Status.IDLE,
                 "", failure, true, false, 0, 10, parallelism, maxParallelism, false, 0, 0, 0,
-                maxParallelControllerCount, 0L, 0L,
-                FluidStack.EMPTY, FluidStack.EMPTY, dataStorageValues, 0, 1);
+                maxParallelControllerCount, dataStorageValues, 0, 1);
     }
 
     private static ExecutionStatus failure(int detailCount) {

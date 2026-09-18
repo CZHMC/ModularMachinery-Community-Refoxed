@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
-import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.List;
 
@@ -39,10 +38,6 @@ public record MachineStateSnapshot(
         long maxParallelControllerCount,
         List<ControllerRuntimeSnapshot.ComponentPresentation> components,
         List<ControllerRuntimeSnapshot.CapabilityPresentation> capabilities,
-        long totalStoredEnergy,
-        long totalCapacityEnergy,
-        FluidStack primaryFluid,
-        FluidStack primaryOutputFluid,
         int matchedStage,
         int stageCount) {
 
@@ -56,22 +51,11 @@ public record MachineStateSnapshot(
         craftingMessage = craftingMessage == null ? "" : craftingMessage;
         components = List.copyOf(components == null ? List.of() : components);
         capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
-        primaryFluid = primaryFluid == null ? FluidStack.EMPTY : primaryFluid.copy();
-        primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
         if (installedModuleCount < 0 || tick < 0 || totalTick < 0 || tick > totalTick
                 || parallelism < 0 || maxParallelism < 1 || factoryThreadCount < 0
                 || activeFactoryThreadCount < 0 || parallelControllerCount < 0 || maxParallelControllerCount < 0
-                || totalStoredEnergy < 0L || totalCapacityEnergy < 0L
                 || matchedStage < 0 || stageCount < 1) {
             throw new IllegalArgumentException("Invalid machine presentation values");
         }
-    }
-
-    public FluidStack primaryFluid() {
-        return primaryFluid.copy();
-    }
-
-    public FluidStack primaryOutputFluid() {
-        return primaryOutputFluid.copy();
     }
 }

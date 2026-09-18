@@ -8,7 +8,6 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashMap;
@@ -32,7 +31,6 @@ public record ControllerRuntimeSnapshot(
         Set<BlockPos> linkedPortPositions,
         ModuleConnectionStatus moduleConnectionStatus,
         int installedModuleCount,
-        ComponentRuntime.CapabilityAggregate capabilityAggregate,
         CraftingStateSnapshot crafting,
         FactorySnapshot factory,
         List<ComponentPresentation> componentPresentations,
@@ -54,7 +52,6 @@ public record ControllerRuntimeSnapshot(
                                      long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
                                      Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
-                                     ComponentRuntime.CapabilityAggregate capabilityAggregate,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
                                      List<ComponentPresentation> componentPresentations,
                                      List<CapabilityPresentation> capabilityPresentations, List<String> foundLevelIds,
@@ -62,7 +59,7 @@ public record ControllerRuntimeSnapshot(
                                      boolean factoryControllerPresent, int parallelControllerCount,
                                      long maxParallelControllerCount, long maxParallelism) {
         this(structure, capabilityVersion, modifierVersion, stateVersion, foundModifiers, foundLevels,
-                linkedPortPositions, moduleConnectionStatus, installedModuleCount, capabilityAggregate, crafting,
+                linkedPortPositions, moduleConnectionStatus, installedModuleCount, crafting,
                 factory, componentPresentations, capabilityPresentations, foundLevelIds, machineId, machineName,
                 controllerRole, factorySupported, factoryControllerPresent, parallelControllerCount,
                 maxParallelControllerCount, maxParallelism, List.of(), 0L, Map.of());
@@ -72,7 +69,6 @@ public record ControllerRuntimeSnapshot(
                                      long modifierVersion, long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
                                      Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
-                                     ComponentRuntime.CapabilityAggregate capabilityAggregate,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
                                      List<ComponentPresentation> componentPresentations,
                                      List<CapabilityPresentation> capabilityPresentations, List<String> foundLevelIds,
@@ -81,7 +77,7 @@ public record ControllerRuntimeSnapshot(
                                      long maxParallelControllerCount, long maxParallelism,
                                      Map<String, DataValue> dataStorageValues) {
         this(structure, capabilityVersion, modifierVersion, stateVersion, foundModifiers, foundLevels,
-                linkedPortPositions, moduleConnectionStatus, installedModuleCount, capabilityAggregate,
+                linkedPortPositions, moduleConnectionStatus, installedModuleCount,
                 crafting, factory, componentPresentations, capabilityPresentations, foundLevelIds,
                 machineId, machineName, controllerRole, factorySupported, factoryControllerPresent,
                 parallelControllerCount, maxParallelControllerCount, maxParallelism, List.of(), 0L,
@@ -101,8 +97,6 @@ public record ControllerRuntimeSnapshot(
         moduleConnectionStatus = moduleConnectionStatus == null
                 ? ModuleConnectionStatus.disconnected() : moduleConnectionStatus;
         if (installedModuleCount < 0) throw new IllegalArgumentException("installedModuleCount must not be negative");
-        capabilityAggregate = capabilityAggregate == null
-                ? new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null) : capabilityAggregate;
         crafting = crafting == null ? CraftingStateSnapshot.empty(structure.version(), capabilityVersion, modifierVersion) : crafting;
         factory = factory == null ? FactorySnapshot.empty() : factory;
         componentPresentations = List.copyOf(componentPresentations == null ? List.of() : componentPresentations);
@@ -119,22 +113,6 @@ public record ControllerRuntimeSnapshot(
 
     private static <K, V> Map<K, V> immutableMap(Map<K, V> values) {
         return Collections.unmodifiableMap(new LinkedHashMap<>(values));
-    }
-
-    public long totalStoredEnergy() {
-        return capabilityAggregate.storedEnergy();
-    }
-
-    public long totalCapacityEnergy() {
-        return capabilityAggregate.energyCapacity();
-    }
-
-    public FluidStack primaryFluid() {
-        return capabilityAggregate.primaryFluid();
-    }
-
-    public FluidStack primaryOutputFluid() {
-        return capabilityAggregate.primaryOutputFluid();
     }
 
     @Override

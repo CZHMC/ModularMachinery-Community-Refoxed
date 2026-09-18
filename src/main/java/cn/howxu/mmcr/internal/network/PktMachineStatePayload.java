@@ -16,7 +16,6 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
-import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
@@ -38,9 +37,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                        int tick, int totalTick, long parallelism, long maxParallelism,
                                       boolean factoryControllerPresent, int factoryThreadCount,
                                        int activeFactoryThreadCount, int parallelControllerCount,
-                                        long maxParallelControllerCount, long totalStoredEnergy,
-                                       long totalCapacityEnergy, FluidStack primaryFluid,
-                                       FluidStack primaryOutputFluid, Map<String, DataValue> dataStorageValues,
+                                        long maxParallelControllerCount, Map<String, DataValue> dataStorageValues,
                                        int matchedStage, int stageCount)
         implements CustomPacketPayload {
     public static final int MAX_LEVEL_SNAPSHOTS = 1024;
@@ -57,24 +54,14 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         connectedHostId = connectedHostId == null ? "" : connectedHostId;
         craftingStatus = craftingStatus == null ? CraftingStatus.Status.IDLE : craftingStatus;
         craftingMessage = craftingMessage == null ? "" : craftingMessage;
-        primaryFluid = primaryFluid == null ? FluidStack.EMPTY : primaryFluid.copy();
-        primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
         dataStorageValues = Map.copyOf(dataStorageValues == null ? Map.of() : dataStorageValues);
         if (installedModuleCount < 0 || installedModuleCount > maxInstalledModules()
                 || tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
                 || factoryThreadCount < 0 || activeFactoryThreadCount < 0 || parallelControllerCount < 0
-                || maxParallelControllerCount < 0 || totalStoredEnergy < 0L || totalCapacityEnergy < 0L
+                || maxParallelControllerCount < 0
                 || matchedStage < 0 || stageCount < 1) {
             throw new IllegalArgumentException("Invalid machine presentation progress");
         }
-    }
-
-    public FluidStack primaryFluid() {
-        return primaryFluid.copy();
-    }
-
-    public FluidStack primaryOutputFluid() {
-        return primaryOutputFluid.copy();
     }
 
     public static PktMachineStatePayload from(BlockPos pos, ControllerRuntimeSnapshot runtime) {
@@ -88,8 +75,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 machineState.tick(), machineState.totalTick(), machineState.parallelism(), machineState.maxParallelism(),
                 machineState.factoryControllerPresent(), machineState.factoryThreadCount(),
                 machineState.activeFactoryThreadCount(), machineState.parallelControllerCount(),
-                machineState.maxParallelControllerCount(), machineState.totalStoredEnergy(),
-                machineState.totalCapacityEnergy(), machineState.primaryFluid(), machineState.primaryOutputFluid(),
+                machineState.maxParallelControllerCount(),
                 runtime.dataStorageValues(),
                 machineState.matchedStage(), machineState.stageCount());
     }
@@ -121,10 +107,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || current.activeFactoryThreadCount != previous.activeFactoryThreadCount
                 || current.parallelControllerCount != previous.parallelControllerCount
                 || current.maxParallelControllerCount != previous.maxParallelControllerCount
-                || current.totalStoredEnergy != previous.totalStoredEnergy
-                || current.totalCapacityEnergy != previous.totalCapacityEnergy
-                || !FluidStack.matches(current.primaryFluid, previous.primaryFluid)
-                || !FluidStack.matches(current.primaryOutputFluid, previous.primaryOutputFluid)
                 || !current.dataStorageValues.equals(previous.dataStorageValues)
                 || current.matchedStage != previous.matchedStage
                 || current.stageCount != previous.stageCount;
@@ -165,10 +147,6 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         buf.writeVarInt(payload.activeFactoryThreadCount);
         buf.writeVarInt(payload.parallelControllerCount);
          buf.writeLong(payload.maxParallelControllerCount);
-        buf.writeLong(payload.totalStoredEnergy);
-        buf.writeLong(payload.totalCapacityEnergy);
-        FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryFluid);
-        FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryOutputFluid);
         DataValuePayloadCodec.writeMap(buf, payload.dataStorageValues);
         buf.writeVarInt(payload.matchedStage);
         buf.writeVarInt(payload.stageCount);
@@ -204,8 +182,7 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 redstonePaused,
                  buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(),
                  buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readLong(),
-                buf.readLong(), buf.readLong(), FluidStack.OPTIONAL_STREAM_CODEC.decode(buf),
-                 FluidStack.OPTIONAL_STREAM_CODEC.decode(buf), DataValuePayloadCodec.readMap(buf),
+                DataValuePayloadCodec.readMap(buf),
                  buf.readVarInt(), buf.readVarInt());
     }
 

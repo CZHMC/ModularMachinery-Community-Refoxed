@@ -38,7 +38,7 @@ configurations {
 
 apply from: "$rootDir/gradle/scripts/jars.gradle"
 apply from: "$rootDir/gradle/scripts/repositories.gradle"
-apply from: "$rootDir/dependencies.gradle"
+apply from: "$rootDir/gradle/scripts/dependencies.gradle"
 apply from: "$rootDir/gradle/scripts/resources.gradle"
 apply from: "$rootDir/gradle/scripts/runs.gradle"
 apply from: "$rootDir/gradle/scripts/publishing.gradle"

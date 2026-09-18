@@ -30,7 +30,6 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.connection.ConnectionType;
-import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -196,8 +195,7 @@ class PktRecipeLockPayloadTest {
     private static PktMachineStatePayload machineState(boolean locked, String recipeId) {
         return new PktMachineStatePayload(new BlockPos(1, 2, 3), "", true, false,
                 List.of(), locked, recipeId, "", 0, 0, false, "", CraftingStatus.Status.IDLE, "", null,
-                true, false, 0, 0, 1, 1, false, 0, 0, 0, 0, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1);
+                true, false, 0, 0, 1, 1, false, 0, 0, 0, 0, Map.of(), 0, 1);
     }
 
     private static TestServerLevel serverLevel(MachineControllerBlockEntity controller) throws Exception {

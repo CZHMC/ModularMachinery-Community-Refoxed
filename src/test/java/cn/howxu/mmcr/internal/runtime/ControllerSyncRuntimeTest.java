@@ -42,9 +42,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
-import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.connection.ConnectionType;
-import net.minecraft.world.level.material.Fluids;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -154,7 +152,6 @@ class ControllerSyncRuntimeTest {
                 null, false, true, Set.of());
         ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(structure, 0L, 0L, 0L,
                 Map.of(), Map.of(), Set.of(), ModuleConnectionStatus.notRequired(), 0,
-                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 CraftingStateSnapshot.empty(1L, 0L, 0L), FactorySnapshot.empty(),
                 List.of(), List.of(), List.of(), machineId.toString(), "Sync Tick", 0,
                 false, false, 0, 0, 1, Map.of());
@@ -172,7 +169,6 @@ class ControllerSyncRuntimeTest {
         ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
                 StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.disconnected(), 0,
-                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 CraftingStateSnapshot.empty(0L, 0L, 0L), FactorySnapshot.empty(),
                 List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 1, values);
 
@@ -297,7 +293,7 @@ class ControllerSyncRuntimeTest {
         ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(base.structure(), base.capabilityVersion(),
                 base.modifierVersion(), base.stateVersion(), base.foundModifiers(), base.foundLevels(),
                 base.linkedPortPositions(), base.moduleConnectionStatus(), base.installedModuleCount(),
-                base.capabilityAggregate(), crafting, FactorySnapshot.empty(), base.componentPresentations(),
+                crafting, FactorySnapshot.empty(), base.componentPresentations(),
                 base.capabilityPresentations(), base.foundLevelIds(), base.machineId(), base.machineName(),
                 base.controllerRole(), false, false, 0, 32, 32, base.dataStorageValues());
 
@@ -312,7 +308,7 @@ class ControllerSyncRuntimeTest {
         ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(base.structure(), base.capabilityVersion(),
                 base.modifierVersion(), base.stateVersion(), base.foundModifiers(), base.foundLevels(),
                 base.linkedPortPositions(), base.moduleConnectionStatus(), base.installedModuleCount(),
-                base.capabilityAggregate(), base.crafting(), base.factory(), base.componentPresentations(),
+                base.crafting(), base.factory(), base.componentPresentations(),
                 base.capabilityPresentations(), base.foundLevelIds(), base.machineId(), base.machineName(),
                 base.controllerRole(), true, true, base.parallelControllerCount(), base.maxParallelControllerCount(), 32,
                 base.dataStorageValues());
@@ -461,18 +457,6 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
-    void clientPayloadSnapshotsDoNotRetainMutableFluidValuesOrRequireAnOwner() {
-        ControllerRuntimeSnapshot runtime = runtimeSnapshot();
-        PktMachineStatePayload payload = PktMachineStatePayload.from(new BlockPos(3, 4, 5), runtime);
-        FluidStack fluid = payload.primaryFluid();
-        fluid.setAmount(1);
-
-        assertThat(payload.primaryFluid().getAmount()).isEqualTo(250);
-        assertThat(payload.pos()).isEqualTo(new BlockPos(3, 4, 5));
-        assertThat(payload.factoryThreadCount()).isEqualTo(2);
-    }
-
-    @Test
     void finalFactoryPayloadRoundTripsAllLaneAndLevelStateWithoutAnOwnerBlockEntity() {
         PktFactoryControllerStatePayload payload = new PktFactoryControllerStatePayload(BlockPos.ZERO,
                 new ControllerSyncRuntime().factoryState(runtimeSnapshot(false)));
@@ -511,8 +495,6 @@ class ControllerSyncRuntimeTest {
                 Direction.SOUTH, 1, true, 7L, null, null, null, false, true, Set.of());
         return new ControllerRuntimeSnapshot(structure, 8L, 9L, 10L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.connected(MMCR.id("host")), 2,
-                new ComponentRuntime.CapabilityAggregate(250L, 1000L,
-                        new FluidStack(Fluids.WATER, 250), new FluidStack(Fluids.LAVA, 100)),
                 crafting, factory, List.of(), List.of(), List.of("mmcr:steel"), "mmcr:machine", "machine", 1,
                 true, true, 1, 2, 8, Map.of());
     }

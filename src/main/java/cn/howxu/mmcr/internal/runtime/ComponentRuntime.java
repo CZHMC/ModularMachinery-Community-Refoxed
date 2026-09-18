@@ -31,8 +31,6 @@ import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
@@ -62,7 +60,6 @@ public final class ComponentRuntime {
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();
-    private CapabilityAggregate capabilityAggregate = new CapabilityAggregate(0L, 0L, null, null);
     private long capabilityVersion;
     private long modifierVersion;
     private long stateVersion;
@@ -93,16 +90,13 @@ public final class ComponentRuntime {
         List<CapabilityIdentity> nextIdentity = capabilityState.identity();
         boolean componentsChanged = !this.components.equals(nextComponents);
         boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
-        CapabilityAggregate nextAggregate = capabilityAggregate(nextCapabilities);
-        boolean capabilityValuesChanged = !capabilityAggregate.equals(nextAggregate);
         this.components = nextComponents;
         if (componentsChanged) {
             stateVersion++;
             componentPresentationEpoch++;
         }
         this.capabilities = nextCapabilities;
-        this.capabilityAggregate = nextAggregate;
-        if (capabilitiesChanged || capabilityValuesChanged) capabilityPresentationEpoch++;
+        if (capabilitiesChanged) capabilityPresentationEpoch++;
         if (capabilitiesChanged) {
             this.capabilityIdentity = nextIdentity;
             capabilityVersion++;
@@ -331,12 +325,7 @@ public final class ComponentRuntime {
                 : Optional.empty();
     }
 
-    public CapabilityAggregate capabilityAggregate() {
-        return capabilityAggregate;
-    }
-
     public void markCapabilityPresentationChanged() {
-        capabilityAggregate = capabilityAggregate(capabilities);
         capabilityPresentationEpoch++;
     }
 
@@ -507,36 +496,6 @@ public final class ComponentRuntime {
                 capability.type() == null ? null : capability.type().id(), direction, amount, capacity, slots);
     }
 
-    private static CapabilityAggregate capabilityAggregate(List<MachineCapability> capabilities) {
-        long storedEnergy = 0L;
-        long energyCapacity = 0L;
-        FluidStack primaryFluid = FluidStack.EMPTY;
-        FluidStack primaryOutputFluid = FluidStack.EMPTY;
-        for (MachineCapability capability : capabilities) {
-            LongValueStorage energy = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
-            ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
-            if (energy != null) {
-                storedEnergy = saturatedAdd(storedEnergy, energy.amount());
-                energyCapacity = saturatedAdd(energyCapacity, energy.capacity());
-            } else if (resourceStorage != null
-                    && resourceStorage.resourceType() == FluidResource.class) {
-                for (int slot = 0; slot < resourceStorage.size(); slot++) {
-                    Object resource = resourceStorage.resource(slot);
-                    if (!(resource instanceof FluidResource fluidResource) || fluidResource.isEmpty()) continue;
-                    FluidStack stack = fluidResource.toStack((int) Math.min(resourceStorage.amount(slot), Integer.MAX_VALUE));
-                    if (stack.isEmpty()) continue;
-                    if (capability.view().directions().supports(IOType.INPUT) && primaryFluid.isEmpty()) {
-                        primaryFluid = stack;
-                    }
-                    if (capability.view().directions().supports(IOType.OUTPUT) && primaryOutputFluid.isEmpty()) {
-                        primaryOutputFluid = stack;
-                    }
-                }
-            }
-        }
-        return new CapabilityAggregate(storedEnergy, energyCapacity, primaryFluid, primaryOutputFluid);
-    }
-
     private static long saturatedAdd(long current, long value) {
         return value > 0L && current > Long.MAX_VALUE - value ? Long.MAX_VALUE : current + value;
     }
@@ -554,25 +513,6 @@ public final class ComponentRuntime {
 
         private static Object storageIdentity(CapabilityStorage storage) {
             return storage;
-        }
-    }
-
-    /**
-     * Immutable capability-level aggregate used by controller presentation callers.
-     */
-    public record CapabilityAggregate(long storedEnergy, long energyCapacity,
-                                      FluidStack primaryFluid, FluidStack primaryOutputFluid) {
-        public CapabilityAggregate {
-            primaryFluid = primaryFluid == null ? FluidStack.EMPTY : primaryFluid.copy();
-            primaryOutputFluid = primaryOutputFluid == null ? FluidStack.EMPTY : primaryOutputFluid.copy();
-        }
-
-        public FluidStack primaryFluid() {
-            return primaryFluid.copy();
-        }
-
-        public FluidStack primaryOutputFluid() {
-            return primaryOutputFluid.copy();
         }
     }
 }

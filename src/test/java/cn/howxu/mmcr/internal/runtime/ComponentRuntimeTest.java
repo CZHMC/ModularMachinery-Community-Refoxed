@@ -42,8 +42,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -211,20 +209,6 @@ class ComponentRuntimeTest {
     }
 
     @Test
-    void energy_aggregate_saturates_when_multiple_long_capabilities_are_full() {
-        LongValueStorage firstStorage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
-        LongValueStorage secondStorage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
-        firstStorage.setAmount(Long.MAX_VALUE);
-        secondStorage.setAmount(Long.MAX_VALUE);
-        ComponentRuntime runtime = new ComponentRuntime();
-        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(
-                new TestCapability("first", firstStorage), new TestCapability("second", secondStorage))), "energy")));
-
-        assertThat(runtime.capabilityAggregate().storedEnergy()).isEqualTo(Long.MAX_VALUE);
-        assertThat(runtime.capabilityAggregate().energyCapacity()).isEqualTo(Long.MAX_VALUE);
-    }
-
-    @Test
     void resource_presentation_saturates_multi_slot_long_amounts_and_capacity() {
         LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
                 ItemResource.class, 2, Long.MAX_VALUE, resource -> resource.isEmpty(), () -> {});
@@ -252,21 +236,6 @@ class ComponentRuntimeTest {
                 .extracting(ControllerRuntimeSnapshot.CapabilityPresentation::ioType)
                 .containsExactlyInAnyOrder(IOType.INPUT, IOType.OUTPUT);
         assertThat(new MachineIoView(new CapabilitySnapshot(List.of(capability))).displays()).hasSize(2);
-    }
-
-    @Test
-    void bidirectional_fluid_capability_publishes_both_primary_aggregate_roles() {
-        LongResourceStorage<FluidResource> storage = new LongResourceStorage<>(
-                FluidResource.class, 1, 100L, resource -> resource.isEmpty(), () -> {});
-        storage.setContents(0, FluidResource.of(Fluids.WATER), 20L);
-        MachineCapability capability = new TestCapability("bidirectional_fluid", storage,
-                CapabilityDirections.bidirectional());
-        ComponentRuntime runtime = new ComponentRuntime();
-
-        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(capability)), "fluid")));
-
-        assertThat(runtime.capabilityAggregate().primaryFluid().getAmount()).isEqualTo(20);
-        assertThat(runtime.capabilityAggregate().primaryOutputFluid().getAmount()).isEqualTo(20);
     }
 
     @Test
@@ -358,7 +327,6 @@ class ComponentRuntimeTest {
         ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
                 StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.disconnected(), 0,
-                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 CraftingStateSnapshot.empty(0L, 0L, 0L), FactorySnapshot.empty(),
                 List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 1, Map.of());
         FactorySearchContext context = new FactorySearchContext(snapshot, null, null, null,
@@ -393,7 +361,7 @@ class ComponentRuntimeTest {
         ControllerRuntimeSnapshot snapshot = new ControllerRuntimeSnapshot(
                 StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.connected(hostId), 2,
-                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null), CraftingStateSnapshot.empty(0L, 0L, 0L),
+                CraftingStateSnapshot.empty(0L, 0L, 0L),
                 FactorySnapshot.empty(), List.of(), List.of(), List.of(), "", "", 0,
                 false, false, 0, 0, 1, Map.of());
 

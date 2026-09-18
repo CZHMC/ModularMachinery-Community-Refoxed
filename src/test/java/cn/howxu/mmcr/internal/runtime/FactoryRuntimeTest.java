@@ -1545,11 +1545,11 @@ class FactoryRuntimeTest {
     }
 
     private static ControllerRuntimeSnapshot snapshotWithStateVersion(ControllerRuntimeSnapshot snapshot,
-                                                                       long stateVersion) {
+                                                                        long stateVersion) {
         return new ControllerRuntimeSnapshot(snapshot.structure(), snapshot.capabilityVersion(),
                 snapshot.modifierVersion(), stateVersion, snapshot.foundModifiers(), snapshot.foundLevels(),
                 snapshot.linkedPortPositions(), snapshot.moduleConnectionStatus(), snapshot.installedModuleCount(),
-                snapshot.capabilityAggregate(), snapshot.crafting(), snapshot.factory(),
+                snapshot.crafting(), snapshot.factory(),
                 snapshot.componentPresentations(), snapshot.capabilityPresentations(), snapshot.foundLevelIds(),
                 snapshot.machineId(), snapshot.machineName(), snapshot.controllerRole(), snapshot.factorySupported(),
                 snapshot.factoryControllerPresent(), snapshot.parallelControllerCount(),

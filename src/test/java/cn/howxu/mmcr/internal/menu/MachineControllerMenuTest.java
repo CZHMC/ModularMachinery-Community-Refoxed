@@ -14,8 +14,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.level.material.Fluids;
-import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -47,8 +45,7 @@ class MachineControllerMenuTest {
         menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "mmcr:recipe", true, true,
                 List.of("mmcr:steel"), true, "mmcr:locked_recipe", "mmcr:test_cube", 2, 3, true,
                 "mmcr:host", CraftingStatus.Status.CRAFTING, "", null, true, false,
-                4, 20, 6, 8, true, 2, 1, 2, 3, 100, 1000,
-                 new FluidStack(Fluids.WATER, 250), FluidStack.EMPTY, Map.of(), 0, 1));
+                4, 20, 6, 8, true, 2, 1, 2, 3, Map.of(), 0, 1));
 
         assertThat(menu.isFormed()).isTrue();
         assertThat(menu.hasActiveRecipe()).isTrue();
@@ -59,7 +56,6 @@ class MachineControllerMenuTest {
         assertThat(menu.maxParallelism()).isEqualTo(8);
         assertThat(menu.factoryThreadCount()).isEqualTo(2);
         assertThat(menu.installedModuleCount()).isEqualTo(3);
-        assertThat(menu.primaryFluid().getAmount()).isEqualTo(250);
     }
 
     @Test
@@ -68,8 +64,7 @@ class MachineControllerMenuTest {
         menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "mmcr:recipe", true, true,
                 List.of(), false, "", "mmcr:test_cube", 0, 0, false, "",
                 CraftingStatus.Status.CRAFTING, "", null, true, false,
-                1, 20, 4, 4, false, 0, 0, 1, 4, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1));
+                1, 20, 4, 4, false, 0, 0, 1, 4, Map.of(), 0, 1));
 
         menu.setData(6, 0);
 
@@ -108,8 +103,7 @@ class MachineControllerMenuTest {
         menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(7, 8, 9), "", true, false,
                 List.of(), false, "", "mmcr:module", 2, 0, false, "",
                 CraftingStatus.Status.IDLE, "", null, true, false,
-                0, 0, 0, 1, false, 0, 0, 0, 0, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1));
+                0, 0, 0, 1, false, 0, 0, 0, 0, Map.of(), 0, 1));
 
         assertThat(menu.isModuleController()).isTrue();
         assertThat(menu.connectedHostId()).isEmpty();
@@ -121,8 +115,7 @@ class MachineControllerMenuTest {
         MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
         menu.applyClientSnapshot(new PktMachineStatePayload(new BlockPos(3, 4, 5), "", true, false,
                 List.of(), false, "", "", 0, 0, false, "", CraftingStatus.Status.IDLE, "", null,
-                true, false, 0, 0, 0, 1, false, 0, 0, 0, 0, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 4, 10));
+                true, false, 0, 0, 0, 1, false, 0, 0, 0, 0, Map.of(), 4, 10));
 
         assertThat(menu.matchedStage()).isEqualTo(4);
         assertThat(menu.stageCount()).isEqualTo(10);

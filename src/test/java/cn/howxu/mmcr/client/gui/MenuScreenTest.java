@@ -30,7 +30,6 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForgeMod;
-import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.FluidType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -185,8 +184,7 @@ class MenuScreenTest {
                 BlockPos.ZERO, "mmcr:recipe", true, true,
                 List.of(levelId.toString()), false, "", "mmcr:test_cube", 2, 3, true,
                 "mmcr:host", CraftingStatus.Status.CRAFTING, "", failure, true, true,
-                4, 20, 6, 8, false, 0, 0, 2, 3, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1));
+                4, 20, 6, 8, false, 0, 0, 2, 3, Map.of(), 0, 1));
 
         assertThat(MachineControllerScreen.detailLines(menu)).containsExactly(
                 new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")

@@ -46,10 +46,6 @@ public final class ControllerSyncRuntime {
                 runtime.maxParallelControllerCount(),
                 runtime.componentPresentations(),
                 runtime.capabilityPresentations(),
-                runtime.totalStoredEnergy(),
-                runtime.totalCapacityEnergy(),
-                runtime.primaryFluid(),
-                runtime.primaryOutputFluid(),
                 runtime.structure().matchedStage(),
                 stageCount(runtime));
     }

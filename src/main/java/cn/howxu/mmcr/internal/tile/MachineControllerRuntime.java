@@ -222,7 +222,7 @@ public final class MachineControllerRuntime {
         workingSnapshot = new ControllerRuntimeSnapshot(structureSnapshot, components.capabilityVersion(),
                 components.modifierVersion(), components.stateVersion(), components.foundModifiers(), components.foundLevels(),
                 components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
-                components.capabilityAggregate(), craftingState, factorySnapshot, components.componentPresentations(),
+                craftingState, factorySnapshot, components.componentPresentations(),
                 components.capabilityPresentations(), foundLevelIds(), machine == null ? "" : machine.registryName().toString(),
                 machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
                 parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine),

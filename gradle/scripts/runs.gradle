@@ -9,6 +9,12 @@ runs {
     client {
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         arguments.addAll('--username', "howxu")
+        dependencies {
+            // spark
+            runtime("curse.maven:spark-361579:8275631")
+            // sodium
+            runtime("curse.maven:sodium-394468:8396481")
+        }
     }
 
     server {

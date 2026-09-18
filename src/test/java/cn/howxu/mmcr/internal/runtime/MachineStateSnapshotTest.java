@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.test.TestBootstrap;
-import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +27,7 @@ class MachineStateSnapshotTest {
                 false, true, false, "", List.<String>of(), false, "",
                 "", 0, 0, false, "", CraftingStatus.Status.IDLE, "",
                 null, 0, 0, 0L, 1L, false, false, 0, 0, 0, 0L,
-                List.of(), List.of(), 0L, 0L, FluidStack.EMPTY, FluidStack.EMPTY,
+                List.of(), List.of(),
                 matchedStage, stageCount);
     }
 

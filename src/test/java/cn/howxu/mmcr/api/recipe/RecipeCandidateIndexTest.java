@@ -423,7 +423,6 @@ class RecipeCandidateIndexTest {
         return new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 0L, 0L, 0L,
                 Map.of(), Map.of(), Set.of(),
                 moduleConnectionStatus, 0,
-                new ComponentRuntime.CapabilityAggregate(0L, 0L, null, null),
                 CraftingStateSnapshot.empty(0L, 0L, 0L),
                 FactorySnapshot.empty(), List.of(), List.of(), List.of(),
                 "", "", 0, false, false, 0, 0, 1, Map.of());

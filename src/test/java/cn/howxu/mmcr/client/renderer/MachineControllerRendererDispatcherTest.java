@@ -121,7 +121,7 @@ class MachineControllerRendererDispatcherTest {
 
     private static ControllerRuntimeSnapshot snapshot(Identifier machine, StructureSnapshot structure) {
         return new ControllerRuntimeSnapshot(structure, 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
-                null, 0, null, null, null, List.of(), List.of(), List.of(),
+                null, 0, null, null, List.of(), List.of(), List.of(),
                 machine.toString(), "", 0, false, false, 0, 0L, 1L);
     }
 

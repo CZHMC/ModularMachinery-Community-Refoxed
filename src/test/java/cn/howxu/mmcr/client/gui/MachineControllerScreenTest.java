@@ -25,7 +25,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
-import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -182,8 +181,7 @@ class MachineControllerScreenTest {
         menu.applyClientSnapshot(new PktMachineStatePayload(
                 CONTROLLER_POS, "mmcr:recipe", formed, true, List.of(), true, "mmcr:locked_recipe",
                 machineId.toString(), 0, 0, false, "", CraftingStatus.Status.CRAFTING, "", FAILURE,
-                true, false, 4, 20, 6, 8, false, 0, 0, 2, 3, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), matchedStage, stageCount));
+                true, false, 4, 20, 6, 8, false, 0, 0, 2, 3, Map.of(), matchedStage, stageCount));
         return menu;
     }
 
