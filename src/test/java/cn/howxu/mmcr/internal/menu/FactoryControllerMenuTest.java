@@ -99,6 +99,16 @@ class FactoryControllerMenuTest {
         assertThat(menu.slots.get(27).y).isEqualTo(189);
     }
 
+    @Test
+    void matched_stage_accessor_reads_from_snapshot() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 24L, false,
+                List.of(activeThread(0, 12), activeThread(1, 8)), "Factory", 0, null, List.of(), 4, 10));
+
+        assertThat(menu.matchedStage()).isEqualTo(4);
+        assertThat(menu.stageCount()).isEqualTo(10);
+    }
+
     private static FactorySnapshot snapshot(int... indexes) {
          return new FactorySnapshot(true, false, List.of(), indexes.length, 0, 1L, false,
                 Arrays.stream(indexes).mapToObj(index -> lockedThread(index, false, "")).toList(),
