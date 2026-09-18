@@ -125,6 +125,11 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         return Component.translatable("gui.mmcr.controller.parallel_slots", Component.literal(NUMBER_FORMAT.format(parallelSlots)));
     }
 
+    static Component matchedStageLine(int matchedStage) {
+        return Component.translatable("gui.mmcr.controller.matched_stage",
+                Component.literal(NUMBER_FORMAT.format(matchedStage)));
+    }
+
     private static Component parallelLine(long parallelism, long maxParallelism) {
         return Component.translatable("gui.mmcr.controller.parallel", Component.literal(NUMBER_FORMAT.format(parallelism)),
                 Component.literal(NUMBER_FORMAT.format(maxParallelism)));
@@ -163,6 +168,9 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                         .append(Component.literal(" "))
                         .append(Component.translatable(controllerStatusKey(menu.isFormed(), selected.active()))),
                 controllerStatusColor(menu.isFormed(), selected.active())));
+        if (menu.isFormed() && menu.matchedStage() > 0 && menu.stageCount() > 1) {
+            lines.add(new ControllerTextLine(matchedStageLine(menu.matchedStage()), STATUS_LABEL_COLOR));
+        }
         for (Component levelLine : levelLines(menu.foundLevelIds())) {
             lines.add(new ControllerTextLine(levelLine, STATUS_LABEL_COLOR));
         }

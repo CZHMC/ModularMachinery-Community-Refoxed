@@ -184,6 +184,42 @@ class FactoryControllerScreenTest {
     }
 
     @Test
+    void matched_stage_line_appears_after_status_when_formed_multi_stage() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,
+                List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true,
+                        "mmcr:recipe", 1, 20, 1, (ExecutionStatus) null, false, "")),
+                "Factory", 0, null, List.of(), 4, 10));
+
+        assertThat(FactoryControllerScreen.detailLines(menu))
+                .extracting(ControllerTextLine::text)
+                .contains(FactoryControllerScreen.matchedStageLine(4));
+    }
+
+    @Test
+    void matched_stage_line_absent_when_not_formed() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactorySnapshot(false, false, List.of(), 2, 0, 1L, false,
+                List.of(), "Factory", 0, null, List.of(), 0, 10));
+
+        assertThat(FactoryControllerScreen.detailLines(menu))
+                .noneMatch(line -> line.text().equals(FactoryControllerScreen.matchedStageLine(0)));
+    }
+
+    @Test
+    void matched_stage_line_absent_for_single_stage_machine() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 1, 1L, false,
+                List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true,
+                        "mmcr:recipe", 1, 20, 1, (ExecutionStatus) null, false, "")),
+                "Factory", 0, null, List.of(), 1, 1));
+
+        assertThat(FactoryControllerScreen.detailLines(menu))
+                .extracting(ControllerTextLine::text)
+                .doesNotContain(FactoryControllerScreen.matchedStageLine(1));
+    }
+
+    @Test
     void factory_detail_rows_use_scaled_pose_coordinates() {
         assertThat(FactoryControllerScreen.detailTextY(34)).isEqualTo(40);
     }
