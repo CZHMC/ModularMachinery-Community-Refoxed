@@ -250,6 +250,29 @@ class MultiblockAssemblyServiceTest {
         assertEquals(List.of(BlockPos.ZERO), removed.stream().map(MultiblockAssemblyService.Removal::pos).toList());
     }
 
+    @Test
+    void buildTaskExposesTheStageItWasCreatedFor() {
+        List<MultiblockAssemblyService.Placement> placements = List.of(
+                new MultiblockAssemblyService.Placement(BlockPos.ZERO, Blocks.STONE.defaultBlockState(),
+                        Items.STONE.getDefaultInstance()));
+
+        MultiblockAssemblyService.BuildTask explicitStage = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, 2, placements, 1, false);
+
+        assertEquals(2, explicitStage.stage());
+    }
+
+    @Test
+    void legacyCreateFallsBackToStageOne() {
+        MultiblockAssemblyService.BuildTask legacy = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, List.of(), 1);
+        MultiblockAssemblyService.BuildTask legacyWithReservation = MultiblockAssemblyService.BuildTask.create(
+                BlockPos.ZERO, List.of(), 1, true);
+
+        assertEquals(1, legacy.stage());
+        assertEquals(1, legacyWithReservation.stage());
+    }
+
     private static ItemStack itemStack(Item item, int count) {
         return new ItemStack(Holder.direct(item, DataComponentMap.EMPTY), count);
     }

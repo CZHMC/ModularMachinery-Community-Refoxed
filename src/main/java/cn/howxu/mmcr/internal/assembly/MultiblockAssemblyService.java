@@ -61,6 +61,7 @@ public final class MultiblockAssemblyService {
 
     public static final class BuildTask {
         private final BlockPos controllerKey;
+        private final int stage;
         private final List<Placement> placements;
         private final int budget;
         private final boolean reservedMaterial;
@@ -69,8 +70,9 @@ public final class MultiblockAssemblyService {
         private int placedCount;
         private boolean completionReported;
 
-        private BuildTask(BlockPos controllerKey, List<Placement> placements, int budget, boolean reservedMaterial) {
+        private BuildTask(BlockPos controllerKey, int stage, List<Placement> placements, int budget, boolean reservedMaterial) {
             this.controllerKey = controllerKey.immutable();
+            this.stage = stage;
             this.placements = placements.stream()
                     .map(placement -> new Placement(placement.pos(), placement.state(), placement.requirement().copy(), placement.predicate()))
                     .toList();
@@ -78,18 +80,27 @@ public final class MultiblockAssemblyService {
             this.reservedMaterial = reservedMaterial;
         }
 
-        public static BuildTask create(BlockPos controllerKey, List<Placement> placements, int budget) {
-            return create(controllerKey, placements, budget, true);
+        public static BuildTask create(BlockPos controllerKey, int stage, List<Placement> placements, int budget,
+                                       boolean reservedMaterial) {
+            if (budget < 1) throw new IllegalArgumentException("budget must be positive");
+            return new BuildTask(controllerKey, stage, placements, budget, reservedMaterial);
         }
 
         public static BuildTask create(BlockPos controllerKey, List<Placement> placements, int budget,
                                        boolean reservedMaterial) {
-            if (budget < 1) throw new IllegalArgumentException("budget must be positive");
-            return new BuildTask(controllerKey, placements, budget, reservedMaterial);
+            return create(controllerKey, 1, placements, budget, reservedMaterial);
+        }
+
+        public static BuildTask create(BlockPos controllerKey, List<Placement> placements, int budget) {
+            return create(controllerKey, 1, placements, budget, true);
         }
 
         public BlockPos controllerKey() {
             return controllerKey;
+        }
+
+        public int stage() {
+            return stage;
         }
 
         public int advance(Predicate<Placement> placementAction) {
