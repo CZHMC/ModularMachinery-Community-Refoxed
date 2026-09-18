@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.appliedenergistics2;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
+import appeng.menu.ISubMenu;
 import com.mojang.serialization.Lifecycle;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
@@ -32,6 +33,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -91,7 +93,6 @@ class ExtendedAEBridgeTest {
                         "eae_me_extended_stocking_input_interface",
                         "eae_me_extended_output_interface",
                         "eae_me_oversize_input_interface",
-                        "eae_me_oversize_stocking_input_interface",
                         "eae_me_oversize_output_interface",
                         "eae_me_extended_pattern_interface");
         assertThat(contributor.portKinds())
@@ -267,6 +268,16 @@ class ExtendedAEBridgeTest {
         }
 
         @Override
+        public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) {
+            throw unexpectedDelegation();
+        }
+
+        @Override
+        public @Nullable ItemStack mainMenuIcon(IOPortKind kind) {
+            throw unexpectedDelegation();
+        }
+
+        @Override
         public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
             throw unexpectedDelegation();
         }
@@ -313,6 +324,16 @@ class ExtendedAEBridgeTest {
         }
 
         @Override
+        public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) {
+            throw unexpectedDelegation();
+        }
+
+        @Override
+        public @Nullable ItemStack mainMenuIcon(IOPortKind kind) {
+            throw unexpectedDelegation();
+        }
+
+        @Override
         public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
             throw unexpectedDelegation();
         }
@@ -350,6 +371,8 @@ class ExtendedAEBridgeTest {
             return false;
         }
 
+        @Override public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) { return false; }
+        @Override public @Nullable ItemStack mainMenuIcon(IOPortKind kind) { return null; }
         @Override public @Nullable Identifier portOverlayTexture(IOPortKind kind) { return null; }
         @Override public void registerCapabilities(RegisterCapabilitiesEvent event) {}
         @Override public void registerJadeCommon(IWailaCommonRegistration registration) {}
