@@ -42,7 +42,9 @@ public record MachineStateSnapshot(
         long totalStoredEnergy,
         long totalCapacityEnergy,
         FluidStack primaryFluid,
-        FluidStack primaryOutputFluid) {
+        FluidStack primaryOutputFluid,
+        int matchedStage,
+        int stageCount) {
 
     public MachineStateSnapshot {
         activeRecipe = activeRecipe == null ? "" : activeRecipe;
@@ -59,7 +61,8 @@ public record MachineStateSnapshot(
         if (installedModuleCount < 0 || tick < 0 || totalTick < 0 || tick > totalTick
                 || parallelism < 0 || maxParallelism < 1 || factoryThreadCount < 0
                 || activeFactoryThreadCount < 0 || parallelControllerCount < 0 || maxParallelControllerCount < 0
-                || totalStoredEnergy < 0L || totalCapacityEnergy < 0L) {
+                || totalStoredEnergy < 0L || totalCapacityEnergy < 0L
+                || matchedStage < 0 || stageCount < 1) {
             throw new IllegalArgumentException("Invalid machine presentation values");
         }
     }

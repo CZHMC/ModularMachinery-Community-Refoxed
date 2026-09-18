@@ -40,7 +40,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                                        int activeFactoryThreadCount, int parallelControllerCount,
                                         long maxParallelControllerCount, long totalStoredEnergy,
                                        long totalCapacityEnergy, FluidStack primaryFluid,
-                                       FluidStack primaryOutputFluid, Map<String, DataValue> dataStorageValues)
+                                       FluidStack primaryOutputFluid, Map<String, DataValue> dataStorageValues,
+                                       int matchedStage, int stageCount)
         implements CustomPacketPayload {
     public static final int MAX_LEVEL_SNAPSHOTS = 1024;
     public static final int MAX_FAILURE_DETAIL_ENTRIES = FailureStatusCodec.MAX_DETAILS;
@@ -62,7 +63,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         if (installedModuleCount < 0 || installedModuleCount > maxInstalledModules()
                 || tick < 0 || totalTick < 0 || tick > totalTick || parallelism < 0 || maxParallelism < 1
                 || factoryThreadCount < 0 || activeFactoryThreadCount < 0 || parallelControllerCount < 0
-                || maxParallelControllerCount < 0 || totalStoredEnergy < 0L || totalCapacityEnergy < 0L) {
+                || maxParallelControllerCount < 0 || totalStoredEnergy < 0L || totalCapacityEnergy < 0L
+                || matchedStage < 0 || stageCount < 1) {
             throw new IllegalArgumentException("Invalid machine presentation progress");
         }
     }
@@ -88,7 +90,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 machineState.activeFactoryThreadCount(), machineState.parallelControllerCount(),
                 machineState.maxParallelControllerCount(), machineState.totalStoredEnergy(),
                 machineState.totalCapacityEnergy(), machineState.primaryFluid(), machineState.primaryOutputFluid(),
-                runtime.dataStorageValues());
+                runtime.dataStorageValues(),
+                machineState.matchedStage(), machineState.stageCount());
     }
 
     public static boolean stateChanged(PktMachineStatePayload current, PktMachineStatePayload previous) {
@@ -122,7 +125,9 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                 || current.totalCapacityEnergy != previous.totalCapacityEnergy
                 || !FluidStack.matches(current.primaryFluid, previous.primaryFluid)
                 || !FluidStack.matches(current.primaryOutputFluid, previous.primaryOutputFluid)
-                || !current.dataStorageValues.equals(previous.dataStorageValues);
+                || !current.dataStorageValues.equals(previous.dataStorageValues)
+                || current.matchedStage != previous.matchedStage
+                || current.stageCount != previous.stageCount;
     }
 
     public static final Type<PktMachineStatePayload> TYPE = new Type<>(MMCR.id("machine_state"));
@@ -165,6 +170,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
         FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryFluid);
         FluidStack.OPTIONAL_STREAM_CODEC.encode(buf, payload.primaryOutputFluid);
         DataValuePayloadCodec.writeMap(buf, payload.dataStorageValues);
+        buf.writeVarInt(payload.matchedStage);
+        buf.writeVarInt(payload.stageCount);
     }
 
     private static PktMachineStatePayload read(RegistryFriendlyByteBuf buf) {
@@ -198,7 +205,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
                  buf.readVarInt(), buf.readVarInt(), buf.readLong(), buf.readLong(),
                  buf.readBoolean(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readLong(),
                 buf.readLong(), buf.readLong(), FluidStack.OPTIONAL_STREAM_CODEC.decode(buf),
-                 FluidStack.OPTIONAL_STREAM_CODEC.decode(buf), DataValuePayloadCodec.readMap(buf));
+                 FluidStack.OPTIONAL_STREAM_CODEC.decode(buf), DataValuePayloadCodec.readMap(buf),
+                 buf.readVarInt(), buf.readVarInt());
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

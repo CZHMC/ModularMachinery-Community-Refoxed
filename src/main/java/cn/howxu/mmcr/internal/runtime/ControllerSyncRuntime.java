@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 
 import java.util.List;
@@ -48,7 +49,9 @@ public final class ControllerSyncRuntime {
                 runtime.totalStoredEnergy(),
                 runtime.totalCapacityEnergy(),
                 runtime.primaryFluid(),
-                runtime.primaryOutputFluid());
+                runtime.primaryOutputFluid(),
+                runtime.structure().matchedStage(),
+                stageCount(runtime));
     }
 
     public FactorySnapshot factoryState(ControllerRuntimeSnapshot runtime) {
@@ -58,7 +61,8 @@ public final class ControllerSyncRuntime {
         return new FactorySnapshot(runtime.structure().formed(), factory.active(), factory.lanes(),
                 factory.laneLimit(), factory.activeLaneCount(), runtime.maxParallelism(),
                 factory.paused(), factory.presentationLanes(), runtime.machineName(),
-                runtime.parallelControllerCount(), failure, runtime.foundLevelIds());
+                runtime.parallelControllerCount(), failure, runtime.foundLevelIds(),
+                runtime.structure().matchedStage(), stageCount(runtime));
     }
 
     public boolean factoryControllerPresent(ControllerRuntimeSnapshot runtime) {
@@ -100,6 +104,15 @@ public final class ControllerSyncRuntime {
     public long maxParallelControllerCount(ControllerRuntimeSnapshot runtime) {
         require(runtime);
         return runtime.maxParallelControllerCount();
+    }
+
+    private static int stageCount(ControllerRuntimeSnapshot runtime) {
+        Machine machine = runtime.structure().machine() == null
+                ? runtime.structure().configuredMachine()
+                : runtime.structure().machine();
+        if (machine == null) return 1;
+        List<MachineStructureStage> stages = machine.structureStages();
+        return stages == null || stages.isEmpty() ? 1 : stages.size();
     }
 
     public String activeRecipe(ControllerRuntimeSnapshot runtime) {

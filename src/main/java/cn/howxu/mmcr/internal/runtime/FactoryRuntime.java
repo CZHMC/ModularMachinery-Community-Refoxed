@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -712,9 +713,22 @@ public final class FactoryRuntime {
                 .filter(state -> state.recipeId() != null || state.failure() != null)
                 .toList();
         int activeCount = activeLaneCount();
+        int matchedStage = 0;
+        int stageCount = 1;
+        if (controller != null) {
+            ControllerRuntimeSnapshot runtimeSnapshot = controller.runtimeSnapshot();
+            matchedStage = runtimeSnapshot.structure().matchedStage();
+            Machine machine = runtimeSnapshot.structure().machine() == null
+                    ? runtimeSnapshot.structure().configuredMachine()
+                    : runtimeSnapshot.structure().machine();
+            if (machine != null) {
+                List<MachineStructureStage> stages = machine.structureStages();
+                stageCount = stages == null || stages.isEmpty() ? 1 : stages.size();
+            }
+        }
         cachedSnapshot = new FactorySnapshot(false, activeCount > 0, laneSnapshots, laneLimit,
                 activeCount, Math.max(1L, perThreadParallelLimit), paused, threadSnapshots(), "", 0, failure,
-                List.of());
+                List.of(), matchedStage, stageCount);
         cachedSnapshotEpoch = factoryStateEpoch;
         return cachedSnapshot;
     }

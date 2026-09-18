@@ -22,7 +22,9 @@ public record FactorySnapshot(
         String machineName,
         int parallelSlots,
         @Nullable ExecutionStatus failure,
-        List<String> foundLevelIds) {
+        List<String> foundLevelIds,
+        int matchedStage,
+        int stageCount) {
 
     public FactorySnapshot {
         machineName = machineName == null ? "" : machineName;
@@ -33,10 +35,12 @@ public record FactorySnapshot(
         presentationLanes = List.copyOf(presentationLanes == null ? List.of() : presentationLanes);
         if (parallelSlots < 0) throw new IllegalArgumentException("parallelSlots must not be negative");
         foundLevelIds = List.copyOf(foundLevelIds == null ? List.of() : foundLevelIds);
+        if (matchedStage < 0) throw new IllegalArgumentException("matchedStage must not be negative");
+        if (stageCount < 1) throw new IllegalArgumentException("stageCount must be positive");
     }
 
     public static FactorySnapshot empty() {
         return new FactorySnapshot(false, false, List.of(), 1, 0, 1L,
-                false, List.of(), "", 0, null, List.of());
+                false, List.of(), "", 0, null, List.of(), 0, 1);
     }
 }
