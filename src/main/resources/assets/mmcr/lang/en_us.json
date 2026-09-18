@@ -185,6 +185,7 @@
   "gui.mmcr.controller.last_failure": "Last Failure: %s",
   "gui.mmcr.controller.level": "%s: %s",
   "gui.mmcr.controller.machine": "Machine: %s",
+  "gui.mmcr.controller.matched_stage": "Stage: %s",
   "gui.mmcr.controller.module_connected": "Connected: %s",
   "gui.mmcr.controller.module_unconnected": "Offline",
   "gui.mmcr.controller.parallel": "Parallel: %s / %s",

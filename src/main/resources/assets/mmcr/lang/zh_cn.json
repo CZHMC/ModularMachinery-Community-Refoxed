@@ -185,6 +185,7 @@
   "gui.mmcr.controller.last_failure": "上次失败: %s",
   "gui.mmcr.controller.level": "%s: %s",
   "gui.mmcr.controller.machine": "机器: %s",
+  "gui.mmcr.controller.matched_stage": "成型层级: %s",
   "gui.mmcr.controller.module_connected": "已连接：%s",
   "gui.mmcr.controller.module_unconnected": "离线",
   "gui.mmcr.controller.parallel": "并行数: %s / %s",
