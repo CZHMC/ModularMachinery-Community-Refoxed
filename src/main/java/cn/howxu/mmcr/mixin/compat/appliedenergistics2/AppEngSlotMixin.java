@@ -62,11 +62,13 @@ public abstract class AppEngSlotMixin {
 
     @Unique
     private boolean mmcr$syncStockingDisplay(ItemStack stack) {
-        if (getMenu() instanceof InterfaceMenu menu
-                && menu.getHost() instanceof StockingInterfaceBlockEntity host) {
+        var menu = getMenu();
+        if (menu == null) return false;
+        Object host = menu.getTarget();
+        if (host instanceof StockingInterfaceBlockEntity stockingHost
+                && getInventory() instanceof ConfigMenuInventory wrapper) {
             GenericStack mirrorStack = GenericStack.unwrapItemStack(stack);
-            if (!(getInventory() instanceof ConfigMenuInventory wrapper)) return false;
-            if (mirrorStack != null && wrapper.getDelegate() == host.getInterfaceLogic().getStorage()) {
+            if (mirrorStack != null && wrapper.getDelegate() == stockingHost.getInterfaceLogic().getStorage()) {
                 wrapper.getDelegate().setStack(((Slot) (Object) this).getSlotIndex(), mirrorStack);
                 return true;
             }
@@ -90,16 +92,19 @@ public abstract class AppEngSlotMixin {
 
     @Unique
     private boolean mmcr$isLockedDisplaySlot() {
-        if (!(getMenu() instanceof InterfaceMenu menu)
-                || !(getInventory() instanceof ConfigMenuInventory wrapper)) {
+        var menu = getMenu();
+        if (menu == null || !(getInventory() instanceof ConfigMenuInventory wrapper)) {
             return false;
         }
-        Object host = menu.getHost();
+        Object host = menu.getTarget();
         if (host instanceof StockingInterfaceBlockEntity stocking) {
             return wrapper.getDelegate() == stocking.getInterfaceLogic().getStorage();
         }
-        return InterfaceMenuPolicy.isOutputStorageSlot(host, wrapper)
-                && !InterfaceMenuPolicy.isExtractableOutputStorageSlot(host, wrapper);
+        if (menu instanceof InterfaceMenu) {
+            return InterfaceMenuPolicy.isOutputStorageSlot(host, wrapper)
+                    && !InterfaceMenuPolicy.isExtractableOutputStorageSlot(host, wrapper);
+        }
+        return false;
     }
 
     @Unique

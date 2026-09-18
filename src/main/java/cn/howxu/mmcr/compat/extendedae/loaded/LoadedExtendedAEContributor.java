@@ -40,10 +40,12 @@ import snownee.jade.api.IWailaCommonRegistration;
  * @author howxu <dev@howxu.cn>
  */
 public final class LoadedExtendedAEContributor implements ExtendedAEContributor {
+    // OversizeStockingInputInterfaceKind is intentionally excluded until its UI behavior stabilizes;
+    // the kind class is retained so the implementation can be re-enabled without re-deriving it.
     private static final List<IOPortKind> KINDS = List.of(
             ExtendedInputInterfaceKind.INSTANCE, ExtendedStockingInputInterfaceKind.INSTANCE,
             ExtendedOutputInterfaceKind.INSTANCE, OversizeInputInterfaceKind.INSTANCE,
-            OversizeStockingInputInterfaceKind.INSTANCE, OversizeOutputInterfaceKind.INSTANCE,
+            OversizeOutputInterfaceKind.INSTANCE,
             ExtendedPatternInterfaceKind.INSTANCE);
 
     @Override public boolean available() { return true; }
@@ -108,7 +110,6 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
         registerInterface(event, ExtendedInputInterfaceKind.INSTANCE.id(), InputInterfaceBlockEntity.class, true);
         registerInterface(event, OversizeInputInterfaceKind.INSTANCE.id(), InputInterfaceBlockEntity.class, true);
         registerInterface(event, ExtendedStockingInputInterfaceKind.INSTANCE.id(), StockingInterfaceBlockEntity.class, false);
-        registerInterface(event, OversizeStockingInputInterfaceKind.INSTANCE.id(), StockingInterfaceBlockEntity.class, false);
         registerInterface(event, ExtendedOutputInterfaceKind.INSTANCE.id(), OutputInterfaceBlockEntity.class, false);
         registerInterface(event, OversizeOutputInterfaceKind.INSTANCE.id(), OutputInterfaceBlockEntity.class, false);
         BlockEntityType<?> type = type(ExtendedPatternInterfaceKind.INSTANCE.id());

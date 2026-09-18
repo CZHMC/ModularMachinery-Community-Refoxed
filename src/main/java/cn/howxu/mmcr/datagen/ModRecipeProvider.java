@@ -446,7 +446,6 @@ public final class ModRecipeProvider extends RecipeProvider {
         ItemLike extendedStockingInput = ModItems.ITEMS.get("eae_me_extended_stocking_input_interface").get();
         ItemLike extendedOutput = ModItems.ITEMS.get("eae_me_extended_output_interface").get();
         ItemLike oversizeInput = ModItems.ITEMS.get("eae_me_oversize_input_interface").get();
-        ItemLike oversizeStockingInput = ModItems.ITEMS.get("eae_me_oversize_stocking_input_interface").get();
         ItemLike oversizeOutput = ModItems.ITEMS.get("eae_me_oversize_output_interface").get();
         ItemLike extendedPattern = ModItems.ITEMS.get("eae_me_extended_pattern_interface").get();
         ItemLike extendedAeInterface = externalItem("extendedae", "ex_interface");
@@ -456,7 +455,6 @@ public final class ModRecipeProvider extends RecipeProvider {
         shapeless(extendedStockingInput, 1).requires(stockingInput).requires(extendedAeInterface).save(whenLoaded("ae2", "extendedae"));
         shapeless(extendedOutput, 1).requires(output).requires(extendedAeInterface).save(whenLoaded("ae2", "extendedae"));
         shapeless(oversizeInput, 1).requires(extendedInput).requires(oversizeAeInterface).save(whenLoaded("ae2", "extendedae"));
-        shapeless(oversizeStockingInput, 1).requires(extendedStockingInput).requires(oversizeAeInterface).save(whenLoaded("ae2", "extendedae"));
         shapeless(oversizeOutput, 1).requires(extendedOutput).requires(oversizeAeInterface).save(whenLoaded("ae2", "extendedae"));
         shapeless(extendedPattern, 1)
                 .requires(pattern)
