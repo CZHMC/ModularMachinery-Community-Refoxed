@@ -219,6 +219,12 @@ public final class MultiblockAssemblyService {
                 .toList();
         placements = limitOperation(placements);
         if (placements.isEmpty()) {
+            int matchedStage = controller.structureSnapshot().formed() ? controller.structureSnapshot().matchedStage() : 0;
+            List<Integer> availableStages = controller.availableStructureStages();
+            if (availableStages.size() > 1 && matchedStage == stage) {
+                return new Result(InteractionResult.SUCCESS, 0,
+                        new ComponentKey("message.mmcr.terminal.build.none.staged", stage));
+            }
             return new Result(InteractionResult.SUCCESS, 0, new ComponentKey("message.mmcr.terminal.build.none"));
         }
         if (controller.hasActiveBuildTask()) {
@@ -231,7 +237,7 @@ public final class MultiblockAssemblyService {
             }
             source.extractAll(aggregateRequirements(placements));
         }
-        BuildTask task = BuildTask.create(controller.getBlockPos(), placements,
+        BuildTask task = BuildTask.create(controller.getBlockPos(), stage, placements,
                 controller.buildBlocksPerTick(), !freeBuild);
         if (!controller.startBuildTask(task, player)) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));

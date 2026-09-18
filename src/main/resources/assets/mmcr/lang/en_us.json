@@ -396,6 +396,7 @@
   "message.mmcr.terminal.cleared": "Terminal data cleared",
   "message.mmcr.terminal.build.missing": "Missing required structure blocks",
   "message.mmcr.terminal.build.none": "Structure already formed",
+  "message.mmcr.terminal.build.none.staged": "Structure already formed: Stage %s",
   "message.mmcr.terminal.build.success": "Built %s blocks",
   "message.mmcr.terminal.build.accepted": "Build task accepted for %s blocks",
   "message.mmcr.terminal.build.completed": "Build task completed: %s blocks placed",

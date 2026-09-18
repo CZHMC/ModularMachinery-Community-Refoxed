@@ -396,6 +396,7 @@
   "message.mmcr.terminal.cleared": "已清空终端数据",
   "message.mmcr.terminal.build.missing": "缺少搭建所需方块",
   "message.mmcr.terminal.build.none": "结构已成型",
+  "message.mmcr.terminal.build.none.staged": "结构已成型: 等级 %s",
   "message.mmcr.terminal.build.success": "已搭建 %s 个方块",
   "message.mmcr.terminal.build.accepted": "已接受搭建任务，共 %s 个方块",
   "message.mmcr.terminal.build.completed": "搭建任务已完成，共放置 %s 个方块",

@@ -42,6 +42,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -503,6 +504,35 @@ public class TerminalAssemblyGameTest {
                     .sum();
             helper.assertTrue(dropped == template.size(),
                     "A disconnected builder receives every unplaced reserved material as drops");
+            helper.succeed();
+        });
+    }
+
+    public void buildAlreadyFormedMultiStageReportsSpecificStage(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("expandable_structure_stages")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("expandable_structure_stages")));
+        Machine machine = controller.boundMachine().orElseThrow();
+        List<MultiblockAssemblyService.Placement> stage1Template = MultiblockAssemblyService.createTemplatePlacements(
+                controller.getBlockPos(), controller.assemblyPattern(machine, 1));
+        for (MultiblockAssemblyService.Placement placement : stage1Template) {
+            helper.getLevel().setBlock(placement.pos(), placement.state(), 3);
+        }
+        helper.runAtTickTime(2, () -> {
+            helper.assertTrue(controller.structureSnapshot().formed(), "Stage 1 structure forms before terminal build");
+            helper.assertTrue(controller.structureSnapshot().matchedStage() == 1,
+                    "Controller matched stage 1 before terminal build");
+
+            MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(servicePlayer(helper), controller,
+                    1, new PlayerInventoryStructureItemSource(servicePlayer(helper)), true, Map.of());
+
+            helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS,
+                    "Build on an already-formed stage still reports success");
+            helper.assertTrue(result.message().key().equals("message.mmcr.terminal.build.none.staged"),
+                    "Already-formed multi-stage build reports a stage-specific message");
+            helper.assertTrue(result.message().args().length == 1 && result.message().args()[0].equals(1),
+                    "The stage-specific message carries the requested stage number");
             helper.succeed();
         });
     }
