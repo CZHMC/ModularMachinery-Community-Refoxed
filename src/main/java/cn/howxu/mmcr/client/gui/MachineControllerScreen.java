@@ -102,6 +102,9 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         boolean tickMachine = menu.isTickMachine();
         List<ControllerTextLine> lines = new ArrayList<>();
         lines.add(statusLine(menu.isFormed(), menu.hasActiveRecipe()));
+        if (menu.isFormed() && menu.matchedStage() > 0 && menu.stageCount() > 1) {
+            lines.add(new ControllerTextLine(matchedStageLine(menu.matchedStage()), STATUS_LABEL_COLOR));
+        }
         for (String levelId : menu.foundLevelIds()) {
             MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
             if (level == null) continue;
@@ -155,6 +158,11 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
 
     static Component parallelSlotLine(int parallelSlots) {
         return Component.translatable("gui.mmcr.controller.parallel_slots", Component.literal(NUMBER_FORMAT.format(parallelSlots)));
+    }
+
+    static Component matchedStageLine(int matchedStage) {
+        return Component.translatable("gui.mmcr.controller.matched_stage",
+                Component.literal(NUMBER_FORMAT.format(matchedStage)));
     }
 
     static int progressPercent(int tick, int totalTick) {

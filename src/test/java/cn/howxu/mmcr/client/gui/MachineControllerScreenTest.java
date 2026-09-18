@@ -124,6 +124,32 @@ class MachineControllerScreenTest {
     }
 
     @Test
+    void matched_stage_line_appears_after_status_when_formed_multi_stage() {
+        MachineControllerMenu menu = menuWithState(MMCR.id("test_cube"), true, 4, 10);
+
+        assertThat(MachineControllerScreen.detailLines(menu))
+                .extracting(ControllerTextLine::text)
+                .contains(MachineControllerScreen.matchedStageLine(4));
+    }
+
+    @Test
+    void matched_stage_line_absent_when_not_formed() {
+        MachineControllerMenu menu = menuWithState(MMCR.id("test_cube"), false, 0, 10);
+
+        assertThat(MachineControllerScreen.detailLines(menu))
+                .noneMatch(line -> line.text().equals(MachineControllerScreen.matchedStageLine(0)));
+    }
+
+    @Test
+    void matched_stage_line_absent_for_single_stage_machine() {
+        MachineControllerMenu menu = menuWithState(MMCR.id("test_cube"), true, 1, 1);
+
+        assertThat(MachineControllerScreen.detailLines(menu))
+                .extracting(ControllerTextLine::text)
+                .doesNotContain(MachineControllerScreen.matchedStageLine(1));
+    }
+
+    @Test
     void ordinary_controller_viewport_wraps_long_external_text() throws Exception {
         MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS);
         ControllerScreenTextCache.replace(CONTROLLER_POS, 1L,
@@ -146,13 +172,18 @@ class MachineControllerScreenTest {
     }
 
     private static MachineControllerMenu menuWithState(Identifier machineId) {
+        return menuWithState(machineId, true, 0, 1);
+    }
+
+    private static MachineControllerMenu menuWithState(Identifier machineId, boolean formed,
+                                                       int matchedStage, int stageCount) {
         MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(null, null), CONTROLLER_POS,
                 machineId, null, 0, true, 0);
         menu.applyClientSnapshot(new PktMachineStatePayload(
-                CONTROLLER_POS, "mmcr:recipe", true, true, List.of(), true, "mmcr:locked_recipe",
+                CONTROLLER_POS, "mmcr:recipe", formed, true, List.of(), true, "mmcr:locked_recipe",
                 machineId.toString(), 0, 0, false, "", CraftingStatus.Status.CRAFTING, "", FAILURE,
                 true, false, 4, 20, 6, 8, false, 0, 0, 2, 3, 0, 0,
-                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), 0, 1));
+                 FluidStack.EMPTY, FluidStack.EMPTY, Map.of(), matchedStage, stageCount));
         return menu;
     }
 
