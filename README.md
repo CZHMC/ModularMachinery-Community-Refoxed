@@ -1,4 +1,4 @@
-# Modular Machinery Community: Refoxed
+# Modular Machinery: Community Refoxed
 
 **Currently, this mod is still under development !**
 
