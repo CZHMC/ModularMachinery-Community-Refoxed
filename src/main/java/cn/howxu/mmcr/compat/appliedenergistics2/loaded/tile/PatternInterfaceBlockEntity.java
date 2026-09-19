@@ -32,6 +32,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestRes
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
+import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongFunction;
 
 /**
  * MMCR IO port hosting AE2's native pattern-provider logic.
@@ -130,6 +132,41 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
                 .toList();
         return MachineControllerBlockEntity.reserveNextPatternStart(controllers, nextPatternController,
                 getBlockPos(), patternOutputs, requestCapabilities);
+    }
+
+    /** Reserves a batch across linked controllers without changing AE2 provider selection. */
+    public PatternStartBatchReservation reservePatternStarts(List<MachineOutput> patternOutputs, long requestedParallelism,
+                                                             LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
+        if (level == null) return PatternStartBatchReservation.unavailable();
+        List<MachineControllerBlockEntity> controllers = linkedControllerPositions().stream()
+                .sorted(BlockPos::compareTo)
+                .map(level::getBlockEntity)
+                .filter(MachineControllerBlockEntity.class::isInstance)
+                .map(MachineControllerBlockEntity.class::cast)
+                .toList();
+        return MachineControllerBlockEntity.reserveNextPatternStarts(controllers, nextPatternController,
+                getBlockPos(), patternOutputs, requestedParallelism, capabilitiesForParallelism);
+    }
+
+    /** Returns the currently idle linked-controller capacity expressed in pattern operations. */
+    public long maxPatternBatchSize() {
+        if (level == null) return 0L;
+        long capacity = 0L;
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)) continue;
+            var snapshot = controller.runtimeSnapshot();
+            if (!snapshot.structure().formed() || controller.isRedstonePaused()) continue;
+            long controllerCapacity;
+            if (controller.hasFactoryController()) {
+                controllerCapacity = (long) (snapshot.factory().laneLimit() - snapshot.factory().activeLaneCount())
+                        * snapshot.maxParallelism();
+            } else {
+                controllerCapacity = snapshot.crafting().recipeId() == null ? 1L : 0L;
+            }
+            if (controllerCapacity > Long.MAX_VALUE - capacity) return Long.MAX_VALUE;
+            capacity += controllerCapacity;
+        }
+        return capacity;
     }
 
     @Override

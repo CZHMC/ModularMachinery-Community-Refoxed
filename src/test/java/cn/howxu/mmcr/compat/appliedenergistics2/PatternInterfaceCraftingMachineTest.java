@@ -14,6 +14,10 @@ import appeng.core.definitions.ItemDefinition;
 import appeng.crafting.pattern.AEProcessingPattern;
 import appeng.items.misc.MissingContentItem;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
@@ -26,12 +30,14 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -129,6 +135,30 @@ class PatternInterfaceCraftingMachineTest {
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
         assertThat(host.getLogic().getReturnInv().getStack(0))
                 .isEqualTo(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 3L));
+    }
+
+    @Test
+    void partitions_one_ae2_input_counter_across_linked_controller_batch() {
+        PatternInterfaceBlockEntity host = patternHost();
+        List<MachineControllerBlockEntity> controllers = linkedControllers(host);
+        MachineControllerBlockEntity first = controllers.get(0);
+        MachineControllerBlockEntity second = controllers.get(1);
+        host.linkControllerAppearance(first.getBlockPos(), null);
+        host.linkControllerAppearance(second.getBlockPos(), null);
+        formForPattern(first, true);
+        formForPattern(second, true);
+        MachineRecipe recipe = recipe("bridge_batch", Items.IRON_NUGGET, 2);
+        RecipeRegistry.registerStatic(recipe);
+        KeyCounter request = counter(Items.IRON_INGOT, 10L);
+
+        assertThat(new PatternInterfaceCraftingMachine(host).pushBatchPattern(
+                processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, 2L, null)).isTrue();
+
+        assertThat(first.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(second.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
+        assertThat(host.getLogic().getReturnInv().getStack(0))
+                .isEqualTo(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 6L));
     }
 
     @Test
@@ -271,6 +301,25 @@ class PatternInterfaceCraftingMachineTest {
 
     private static PatternInterfaceBlockEntity patternHost() {
         return PatternInterfaceKind.INSTANCE.entityFactory().create(PATTERN_PORT, Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    private static List<MachineControllerBlockEntity> linkedControllers(PatternInterfaceBlockEntity host) {
+        MachineControllerBlockEntity first = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        MachineControllerBlockEntity second = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), new BlockPos(1, 0, 0));
+        Level level = LevelStub.create(Map.of(
+                first.getBlockPos(), ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
+                second.getBlockPos(), ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
+                host.getBlockPos(), ModBlocks.BLOCKS.get(host.kind().id()).get()), List.of(first, second, host));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("test_cube"), "runtime test", new BlockArray(Map.of()));
+        for (MachineControllerBlockEntity controller : List.of(first, second)) {
+            controller.setLevel(level);
+            controller.setMachine(machine);
+            controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                    new MachineComponent(host.kind(), host.ioType()), host, host.getBlockPos(), host.getBlockPos(), (String) null)));
+            controller.refreshModuleConnectionState();
+        }
+        host.setLevel(level);
+        return List.of(first, second);
     }
 
     private static boolean ae2KeyTypesAreInitialized() {

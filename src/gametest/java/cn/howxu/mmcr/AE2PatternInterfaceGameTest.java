@@ -4,15 +4,22 @@ import appeng.api.config.Actionable;
 import appeng.api.config.LockCraftingMode;
 import appeng.api.config.Settings;
 import appeng.api.networking.GridHelper;
+import appeng.api.networking.IGrid;
+import appeng.api.networking.IGridNode;
+import appeng.api.networking.crafting.CalculationStrategy;
+import appeng.api.networking.crafting.ICraftingPlan;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.crafting.PatternDetailsHelper;
+import appeng.blockentity.crafting.CraftingBlockEntity;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
 import appeng.helpers.patternprovider.PatternProviderLogic;
+import appeng.me.cluster.implementations.CraftingCPUCluster;
+import appeng.me.helpers.BaseActionSource;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
@@ -20,6 +27,8 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -54,6 +63,11 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -147,6 +161,113 @@ public class AE2PatternInterfaceGameTest {
                     "Pattern-started MMCR recipe sends its output to ME storage");
             helper.assertTrue(patternPort.getLogic().getCraftingLockedReason() == LockCraftingMode.NONE,
                     "Pattern output returns through native logic and releases AE2's result lock");
+            helper.succeed();
+        });
+    }
+
+    public void craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(GameTestHelper helper) {
+        Identifier machineId = MMCR.id("ae2_cpu_batch_factory_test");
+        Identifier recipeId = MMCR.id("ae2_cpu_batch_factory_recipe");
+        BlockPos patternPortPos = new BlockPos(0, 1, 0);
+        BlockPos factoryPos = new BlockPos(1, 0, 0);
+        BlockPos factoryPos2 = new BlockPos(2, 0, 0);
+        BlockPos meChestPos = new BlockPos(4, 0, 0);
+        BlockPos energyPos = new BlockPos(4, 0, 2);
+        AtomicBoolean batchPushed = new AtomicBoolean();
+
+        helper.assertTrue(AE2Bridge.get().available(), "AE2 must be loaded for CPU batch integration");
+        helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        helper.setBlock(patternPortPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        helper.setBlock(factoryPos, ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        helper.setBlock(factoryPos2, ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        helper.setBlock(meChestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+
+        DynamicMachine machine = new DynamicMachine(machineId, "AE2 CPU Batch Factory Test", new BlockArray(Map.of(
+                new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get()),
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()),
+                new BlockPos(2, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 2);
+        if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
+        if (!RecipeRegistry.containsStatic(recipeId)) {
+            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 40,
+                    List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                            MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
+                    List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
+                    List.of(), 0, 1, false, false, false, Set.of()));
+        }
+
+        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO, MachineControllerBlockEntity.class);
+        controller.setMachine(machine);
+        controller.setStructureCheckIntervalForTesting(1);
+        MEChestBlockEntity meChest = helper.getBlockEntity(meChestPos, MEChestBlockEntity.class);
+        meChest.setCell(AEItems.ITEM_CELL_1K.stack());
+
+        helper.runAtTickTime(20, () -> {
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+            helper.assertTrue(patternPort.getMainNode().getNode() != null && meChest.getMainNode().getNode() != null
+                            && energy.getMainNode().getNode() != null,
+                    "Pattern interface, ME storage and energy cell initialize before submitting the job");
+            GridHelper.createConnection(patternPort.getMainNode().getNode(), meChest.getMainNode().getNode());
+            GridHelper.createConnection(patternPort.getMainNode().getNode(), energy.getMainNode().getNode());
+            controller.requestImmediateStructureCheck();
+        });
+
+        helper.succeedWhen(() -> {
+            PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
+            IGridNode node = patternPort.getMainNode().getNode();
+            if (node == null) {
+                helper.assertTrue(false, "Pattern interface grid node still initializing");
+                return;
+            }
+            IGrid grid = node.getGrid();
+            if (grid == null) {
+                helper.assertTrue(false, "Pattern interface not yet joined the AE2 grid");
+                return;
+            }
+            if (!controller.structureSnapshot().formed() || !controller.hasFactoryController()) {
+                helper.assertTrue(false, "Factory machine is not yet formed");
+                return;
+            }
+            if (controller.factorySchedulerThreadCount() < 2) {
+                helper.assertTrue(false, "Factory must expose at least two factory scheduler threads");
+                return;
+            }
+            long maxParallelism = controller.runtimeSnapshot().maxParallelism();
+            if (maxParallelism < 1L) {
+                helper.assertTrue(false, "Factory runtime must expose a positive parallelism");
+                return;
+            }
+            if (batchPushed.compareAndSet(false, true)) {
+                patternPort.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
+                        List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
+                        List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L))));
+                patternPort.getLogic().updatePatterns();
+                KeyCounter[] requests = new KeyCounter[]{
+                        new KeyCounter(),
+                        new KeyCounter(),
+                        new KeyCounter(),
+                        new KeyCounter(),
+                        new KeyCounter(),
+                        new KeyCounter(),
+                        new KeyCounter(),
+                        new KeyCounter(),
+                        new KeyCounter()
+                };
+                requests[0].add(AEItemKey.of(Items.IRON_INGOT), 2L);
+                var pattern = patternPort.getLogic().getAvailablePatterns().getFirst();
+                helper.assertTrue(patternPort.craftingMachine().pushBatchPattern(pattern, requests, 2L, null),
+                        "Pattern interface MMCR crafting machine accepts a two-operation batch dispatch");
+                return;
+            }
+            helper.assertTrue(controller.runtimeSnapshot().factory().activeLaneCount() >= 2,
+                    "Factory starts at least two lanes after a single CPU scheduling operation");
+            helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
+                            Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 1L,
+                    "The pushed pattern's output returns through the AE2 pattern interface into ME storage");
             helper.succeed();
         });
     }

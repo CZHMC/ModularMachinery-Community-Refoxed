@@ -97,6 +97,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryTickResult;
 import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
+import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.tile.StructureRuntime.StructureWorkSnapshot;
@@ -154,6 +155,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
+import java.util.function.LongFunction;
 
 public class MachineControllerBlockEntity extends BlockEntity {
 
@@ -294,6 +296,51 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return PatternStartReservation.unavailable();
     }
 
+    /** Admits as many pattern starts as this controller can reserve for a single external batch. */
+    public PatternStartBatchReservation reservePatternStarts(BlockPos sourcePort, List<MachineOutput> patternOutputs,
+                                                             long requestedParallelism,
+                                                             LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
+        if (requestedParallelism <= 0L || capabilitiesForParallelism == null) {
+            return PatternStartBatchReservation.unavailable();
+        }
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        if (sourcePort == null || patternOutputs == null || !snapshot.structure().formed()
+                || !snapshot.structure().structureAreaLoaded() || redstonePaused
+                || !snapshot.linkedPortPositions().contains(sourcePort)) {
+            return PatternStartBatchReservation.unavailable();
+        }
+        for (MachineRecipe recipe : recipesForMachine()) {
+            if (!patternOutputsMatch(recipe, snapshot, patternOutputs)) continue;
+            if (!hasFactoryController()) {
+                PatternStartReservation reservation = reservePatternStart(sourcePort, patternOutputs,
+                        capabilitiesForParallelism.apply(1L));
+                return reservation.status() == PatternStartReservation.Status.RESERVED
+                        ? PatternStartBatchReservation.reserved(List.of(reservation))
+                        : PatternStartBatchReservation.unavailable();
+            }
+            FactoryRecipeScheduler scheduler = factoryScheduler();
+            scheduler.setThreadLimit(effectiveFactoryThreadLimit());
+            FactoryRuntime factory = runtime.factoryRuntime();
+            Machine machine = snapshot.structure().machine() == null
+                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+            factory.syncCoreLanes(this, machine, recipesForMachine());
+            List<PatternStartReservation> reservations = new ArrayList<>();
+            long remaining = requestedParallelism;
+            while (remaining > 0L) {
+                long parallelism = Math.min(remaining, snapshot.maxParallelism());
+                FactoryRuntime.PatternLane lane = factory.reservePatternStart(recipe, parallelism,
+                        capabilitiesForParallelism.apply(parallelism));
+                if (lane == null) break;
+                reservations.add(PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(),
+                        lane.preparedStart(), () -> factory.releasePatternStart(lane)));
+                remaining -= lane.preparedStart().plan().parallelism();
+            }
+            return reservations.isEmpty() ? PatternStartBatchReservation.unavailable()
+                    : PatternStartBatchReservation.reserved(reservations);
+        }
+        return PatternStartBatchReservation.unavailable();
+    }
+
     /**
      * Rotates only the already selected linked-controller group; AE2 remains responsible for provider priority.
      */
@@ -317,6 +364,39 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return reservation.afterCommit(() -> nextController.set(successor));
         }
         return PatternStartReservation.unavailable();
+    }
+
+    /** Reserves one batch across linked controllers and advances rotation only after it commits. */
+    public static PatternStartBatchReservation reserveNextPatternStarts(List<MachineControllerBlockEntity> controllers,
+                                                                         AtomicInteger nextController,
+                                                                         BlockPos sourcePort,
+                                                                         List<MachineOutput> patternOutputs,
+                                                                         long requestedParallelism,
+                                                                         LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
+        if (controllers == null || controllers.isEmpty() || nextController == null || requestedParallelism <= 0L
+                || capabilitiesForParallelism == null) return PatternStartBatchReservation.unavailable();
+        int first = Math.floorMod(nextController.get(), controllers.size());
+        List<PatternStartReservation> reservations = new ArrayList<>();
+        long remaining = requestedParallelism;
+        int lastIndex = -1;
+        for (int offset = 0; offset < controllers.size() && remaining > 0L; offset++) {
+            int index = (first + offset) % controllers.size();
+            MachineControllerBlockEntity controller = controllers.get(index);
+            if (controller == null) continue;
+            PatternStartBatchReservation batch = controller.reservePatternStarts(sourcePort, patternOutputs, remaining,
+                    capabilitiesForParallelism);
+            if (batch.status() != PatternStartBatchReservation.Status.RESERVED) continue;
+            reservations.addAll(batch.reservations());
+            remaining -= batch.parallelism();
+            lastIndex = index;
+        }
+        if (remaining > 0L) {
+            reservations.forEach(PatternStartReservation::rollback);
+            return PatternStartBatchReservation.unavailable();
+        }
+        int successor = (lastIndex + 1) % controllers.size();
+        reservations.get(reservations.size() - 1).afterCommit(() -> nextController.set(successor));
+        return PatternStartBatchReservation.reserved(reservations);
     }
 
     public void onPatternStartCommitted() {

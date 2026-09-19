@@ -8,7 +8,12 @@
     "ConfigInventoryAccessor",
     "InterfaceMenuMixin",
     "InterfaceLogicMixin",
-    "PatternProviderLogicMixin"
+    "PatternProviderLogicMixin",
+    "PatternProviderLogicBatchAccessMixin",
+    "ExecutingCraftingJobAccessor",
+    "ExecutingCraftingJobTaskProgressAccessor",
+    "ElapsedTimeTrackerAccessor",
+    "CraftingCpuLogicMixin"
   ],
   "client": [
     "InterfaceScreenMixin",

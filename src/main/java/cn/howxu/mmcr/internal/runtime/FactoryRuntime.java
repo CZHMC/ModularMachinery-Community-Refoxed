@@ -779,6 +779,30 @@ public final class FactoryRuntime {
         return reservation;
     }
 
+    /** Reserves enough idle lanes to cover one pattern batch, or releases every partial reservation. */
+    public List<PatternLane> reservePatternStarts(MachineRecipe recipe, long requestedParallelism,
+                                                  List<MachineCapability> requestCapabilities) {
+        if (requestedParallelism <= 0L) return List.of();
+        long maxParallelism = controller.currentRuntimeSnapshot().maxParallelism();
+        cn.howxu.mmcr.MMCR.LOG.info("[factory reserve] requested={} maxParallelism={} laneCount={}",
+                requestedParallelism, maxParallelism, lanes.size());
+        List<PatternLane> reservations = new ArrayList<>();
+        long remaining = requestedParallelism;
+        while (remaining > 0L) {
+            PatternLane reservation = reservePatternStart(recipe, Math.min(remaining, maxParallelism), requestCapabilities);
+            if (reservation == null) {
+                cn.howxu.mmcr.MMCR.LOG.info("[factory reserve] failed at remaining={} after {} reservations",
+                        remaining, reservations.size());
+                reservations.forEach(this::releasePatternStart);
+                return List.of();
+            }
+            reservations.add(reservation);
+            remaining -= reservation.preparedStart().plan().parallelism();
+        }
+        cn.howxu.mmcr.MMCR.LOG.info("[factory reserve] reserved {} lanes", reservations.size());
+        return List.copyOf(reservations);
+    }
+
     public void releasePatternStart(PatternLane reservation) {
         if (reservation == null) return;
         for (FactoryRecipeThread lane : lanes) {

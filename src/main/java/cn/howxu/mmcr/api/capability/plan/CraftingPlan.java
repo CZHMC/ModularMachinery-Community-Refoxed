@@ -71,6 +71,12 @@ public final class CraftingPlan {
         }
     }
 
+    /** Commits this plan into a caller-owned transaction. */
+    public boolean commit(TransactionContext transaction) {
+        if (failure != null) return false;
+        return commitOperations(Objects.requireNonNull(transaction, "transaction"), ignored -> true);
+    }
+
     public boolean commitInputs() {
         return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT);
     }

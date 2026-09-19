@@ -16,7 +16,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestSta
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
-import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
+import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -44,30 +44,76 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     @Override
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, Direction ejectionDirection) {
+        return pushBatchPattern(patternDetails, inputHolders, 1L, ejectionDirection);
+    }
+
+    public long maxBatchSize(IPatternDetails patternDetails) {
+        return patternDetails instanceof AEProcessingPattern && hasSupportedInputs((AEProcessingPattern) patternDetails)
+                ? host.maxPatternBatchSize() : 0L;
+    }
+
+    public boolean pushBatchPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, long batchSize,
+                                    Direction ejectionDirection) {
         if (!(patternDetails instanceof AEProcessingPattern pattern)) return false;
         List<MachineOutput> outputs = outputs(pattern);
-        if (outputs == null || !hasSupportedInputs(pattern)) return false;
-
-        try {
-            PatternRequestState requestState = new PatternRequestState(inputHolders, 2);
-            PatternRequestResourceStorage<ItemResource> itemRequest = AE2ResourceFamilies.ITEM.patternRequestView(requestState);
-            PatternRequestResourceStorage<FluidResource> fluidRequest = AE2ResourceFamilies.FLUID.patternRequestView(requestState);
-            List<MachineCapability> requestCapabilities = List.of(
-                    new ItemBusCapability(itemRequest, IOType.INPUT),
-                    new FluidHatchCapability(fluidRequest, IOType.INPUT));
-            PatternStartReservation reservation = host.reservePatternStart(outputs, requestCapabilities);
-            if (reservation.status() != PatternStartReservation.Status.RESERVED) return false;
-
-            try (reservation) {
-                return reservation.commit(transaction -> {
-                    boolean itemsAccepted = itemRequest.accept(host.itemReturnStorage(), transaction);
-                    boolean fluidsAccepted = fluidRequest.accept(host.fluidReturnStorage(), transaction);
-                    if (!itemsAccepted || !fluidsAccepted) throw ReturnCapacityException.INSTANCE;
-                });
-            }
-        } catch (RuntimeException exception) {
+        if (batchSize <= 0L || outputs == null || !hasSupportedInputs(pattern)) {
+            cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] rejected: batchSize={} outputs={} supportedInputs={}",
+                    batchSize, outputs != null, hasSupportedInputs(pattern));
             return false;
         }
+
+        try {
+            PatternRequestState originalRequest = new PatternRequestState(inputHolders, 1);
+            List<LaneRequest> laneRequests = new ArrayList<>();
+            PatternStartBatchReservation reservation = host.reservePatternStarts(outputs, batchSize, parallelism -> {
+                PatternRequestState requestState = new PatternRequestState(slice(inputHolders, parallelism, batchSize), 2);
+                PatternRequestResourceStorage<ItemResource> itemRequest = AE2ResourceFamilies.ITEM.patternRequestView(requestState);
+                PatternRequestResourceStorage<FluidResource> fluidRequest = AE2ResourceFamilies.FLUID.patternRequestView(requestState);
+                laneRequests.add(new LaneRequest(itemRequest, fluidRequest));
+                return List.of(new ItemBusCapability(itemRequest, IOType.INPUT),
+                        new FluidHatchCapability(fluidRequest, IOType.INPUT));
+            });
+            cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] reservation status={} parallelism={} requested={}",
+                    reservation.status(), reservation.parallelism(), batchSize);
+            if (reservation.status() != PatternStartBatchReservation.Status.RESERVED
+                    || reservation.parallelism() != batchSize) return false;
+
+            try (reservation) {
+                boolean committed = reservation.commit(transaction -> {
+                    for (LaneRequest request : laneRequests) {
+                        boolean itemsAccepted = request.itemRequest().accept(host.itemReturnStorage(), transaction);
+                        boolean fluidsAccepted = request.fluidRequest().accept(host.fluidReturnStorage(), transaction);
+                        if (!itemsAccepted || !fluidsAccepted) throw ReturnCapacityException.INSTANCE;
+                    }
+                    originalRequest.acceptAll(transaction);
+                });
+                cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] commit result={} laneRequests={}", committed, laneRequests.size());
+                return committed;
+            }
+        } catch (RuntimeException exception) {
+            cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] exception: {}", exception.toString());
+            return false;
+        }
+    }
+
+    private static KeyCounter[] slice(KeyCounter[] inputHolders, long parallelism, long batchSize) {
+        KeyCounter[] slice = new KeyCounter[inputHolders.length];
+        for (int index = 0; index < inputHolders.length; index++) {
+            KeyCounter source = inputHolders[index];
+            KeyCounter target = new KeyCounter();
+            for (var entry : source) {
+                long amount = entry.getLongValue();
+                long scaled = Math.multiplyExact(amount, parallelism);
+                if (scaled % batchSize != 0L) throw new IllegalArgumentException("Pattern inputs cannot be split exactly");
+                target.add(entry.getKey(), scaled / batchSize);
+            }
+            slice[index] = target;
+        }
+        return slice;
+    }
+
+    private record LaneRequest(PatternRequestResourceStorage<ItemResource> itemRequest,
+                               PatternRequestResourceStorage<FluidResource> fluidRequest) {
     }
 
     @Override

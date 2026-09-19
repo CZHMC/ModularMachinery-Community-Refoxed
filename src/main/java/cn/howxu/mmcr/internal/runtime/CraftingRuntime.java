@@ -157,6 +157,15 @@ public final class CraftingRuntime {
     public boolean commitPatternStart(PreparedStart prepared, Consumer<TransactionContext> transactionWrites) {
         if (!patternStartReserved || active() || prepared == null) return false;
         if (!prepared.plan().commit(transactionWrites)) return false;
+        activatePatternStart(prepared);
+        return true;
+    }
+
+    boolean commitPatternPlan(PreparedStart prepared, TransactionContext transaction) {
+        return patternStartReserved && !active() && prepared != null && prepared.plan().commit(transaction);
+    }
+
+    void activatePatternStart(PreparedStart prepared) {
         activeRecipe = new ActiveMachineRecipe(prepared.recipe(), prepared.plan().parallelism(), prepared.effective());
         activeRecipe.setParallelism(prepared.plan().parallelism());
         startPlan = prepared.plan();
@@ -170,7 +179,6 @@ public final class CraftingRuntime {
         status = CraftingStatus.working();
         failure = null;
         controller.onPatternStartCommitted();
-        return true;
     }
 
     public record PreparedStart(MachineRecipe recipe, ControllerRuntimeSnapshot runtime,

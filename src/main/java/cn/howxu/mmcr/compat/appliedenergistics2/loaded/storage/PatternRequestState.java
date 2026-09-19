@@ -47,6 +47,14 @@ public final class PatternRequestState extends SnapshotJournal<PatternRequestSta
         active = false;
     }
 
+    /** Marks the original AE2 input counters consumed after every per-lane slice has committed. */
+    public void acceptAll(TransactionContext transaction) {
+        requireActive();
+        updateSnapshots(transaction);
+        for (KeyCounter inputHolder : inputHolders) inputHolder.clear();
+        active = false;
+    }
+
     KeyCounter[] inputHolders() {
         return inputHolders;
     }

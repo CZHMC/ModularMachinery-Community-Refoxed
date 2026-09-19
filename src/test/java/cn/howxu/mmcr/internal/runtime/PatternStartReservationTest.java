@@ -128,6 +128,27 @@ class PatternStartReservationTest {
     }
 
     @Test
+    void linked_controller_batch_reserves_every_controller_before_advancing_rotation() {
+        MachineControllerBlockEntity first = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineControllerBlockEntity second = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        formForPattern(first, true);
+        formForPattern(second, true);
+        MachineRecipe recipe = recipe("reservation_batch_rotation", List.of());
+        RecipeRegistry.registerStatic(recipe);
+        AtomicInteger cursor = new AtomicInteger();
+
+        PatternStartBatchReservation batch = MachineControllerBlockEntity.reserveNextPatternStarts(
+                List.of(first, second), cursor, PATTERN_PORT, List.of(), 2L, ignored -> List.of());
+
+        assertThat(cursor).hasValue(0);
+        assertThat(batch.parallelism()).isEqualTo(2L);
+        assertThat(batch.commit()).isTrue();
+        assertThat(cursor).hasValue(0);
+        assertThat(first.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(second.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+    }
+
+    @Test
     void linked_rotation_skips_an_unavailable_candidate_before_committing_the_next_controller() {
         MachineControllerBlockEntity unavailable = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineControllerBlockEntity available = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
@@ -312,6 +333,36 @@ class PatternStartReservationTest {
         PatternStartReservation retried = controller.reservePatternStart(PATTERN_PORT, List.of(), List.of());
         assertThat(retried.commit()).isTrue();
         assertThat(retried.laneId()).isEqualTo("base");
+    }
+
+    @Test
+    void factory_reserves_all_idle_lanes_for_one_pattern_batch() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(2);
+        MachineRecipe recipe = recipe("reservation_factory_batch", List.of());
+
+        List<FactoryRuntime.PatternLane> lanes = factory.reservePatternStarts(recipe, 2L, List.of());
+
+        assertThat(lanes).extracting(FactoryRuntime.PatternLane::laneId)
+                .containsExactly("base", "factory-0");
+    }
+
+    @Test
+    void batch_commit_starts_every_reserved_lane() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(2);
+        MachineRecipe recipe = recipe("reservation_factory_batch_commit", List.of());
+        List<PatternStartReservation> reservations = factory.reservePatternStarts(recipe, 2L, List.of()).stream()
+                .map(lane -> reservation(recipe, factory, lane)).toList();
+
+        PatternStartBatchReservation batch = PatternStartBatchReservation.reserved(reservations);
+
+        assertThat(batch.commit()).isTrue();
+        assertThat(factory.activeRuntimes()).hasSize(2);
     }
 
     @Test

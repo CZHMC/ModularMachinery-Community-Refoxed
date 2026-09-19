@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -60,6 +61,10 @@ public final class PatternStartReservation implements AutoCloseable {
         return laneId;
     }
 
+    long preparedParallelism() {
+        return preparedStart == null ? 0L : preparedStart.plan().parallelism();
+    }
+
     public boolean rolledBack() {
         return rolledBack;
     }
@@ -72,14 +77,27 @@ public final class PatternStartReservation implements AutoCloseable {
     public boolean commit(Consumer<TransactionContext> transactionWrites) {
         Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (status != Status.RESERVED || rolledBack) return false;
-        if (!runtime.commitPatternStart(preparedStart, transactionWrites)) {
-            rollback();
-            return false;
+        try (Transaction transaction = Transaction.openRoot()) {
+            if (!runtime.commitPatternPlan(preparedStart, transaction)) {
+                rollback();
+                return false;
+            }
+            transactionWrites.accept(transaction);
+            transaction.commit();
         }
+        activate();
+        return true;
+    }
+
+    boolean commitPlan(TransactionContext transaction) {
+        return status == Status.RESERVED && !rolledBack && runtime.commitPatternPlan(preparedStart, transaction);
+    }
+
+    void activate() {
+        runtime.activatePatternStart(preparedStart);
         release.run();
         status = Status.COMMITTED;
         afterCommit.run();
-        return true;
     }
 
     public PatternStartReservation afterCommit(Runnable action) {
