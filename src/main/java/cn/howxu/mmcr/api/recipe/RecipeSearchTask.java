@@ -84,7 +84,7 @@ public final class RecipeSearchTask {
     }
 
     public RecipeSearchResult compute() {
-        FailureReport failureReport = FailureReport.empty();
+        FailureReport failureReport = FailureReport.forRecipeSearch();
         List<MachineRecipe> ordered = searchCandidates();
 
         for (int recipeIndex = 0; recipeIndex < ordered.size(); recipeIndex++) {

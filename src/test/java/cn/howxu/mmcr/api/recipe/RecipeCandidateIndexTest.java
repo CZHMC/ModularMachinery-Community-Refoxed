@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.FailureReport;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -18,12 +19,15 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
+import cn.howxu.mmcr.internal.storage.BulkItemStorage;
+import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.Lifecycle;
 import java.util.Set;
 import net.minecraft.core.Holder;
@@ -47,6 +51,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.common.crafting.ICustomIngredient;
 import net.neoforged.neoforge.common.crafting.IngredientType;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
@@ -69,7 +74,7 @@ class RecipeCandidateIndexTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-        bindComponents(Items.IRON_INGOT, Items.GOLD_INGOT, Items.DIAMOND);
+        bindComponents(Items.IRON_INGOT, Items.GOLD_INGOT, Items.DIAMOND, Items.RAW_COPPER, Items.RAW_IRON);
         TestBootstrap.registerType(new LevelType(LEVEL_TYPE, Component.literal("Recipe Search Level")));
         TestBootstrap.registerLevel(new MachineLevel(LEVEL, LEVEL_TYPE, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
@@ -337,6 +342,52 @@ class RecipeCandidateIndexTest {
         assertThat(result.failure().details()).containsEntry("required", "1");
         assertThat(result.failure().details()).containsEntry("available", "0");
         assertThat(result.planningResult()).isNull();
+    }
+
+    @Test
+    void search_prefers_missing_output_after_a_feasible_input_over_unrelated_missing_inputs() {
+        BulkItemStorage storage = new BulkItemStorage(1, null);
+        ItemResource copper = ItemResource.of(Items.RAW_COPPER);
+        assertThat(storage.insert(copper, 1L, false)).isEqualTo(1L);
+        assertThat(storage.resource(0)).isEqualTo(copper);
+        assertThat(storage.amount(0)).isEqualTo(1L);
+        MachineRecipe copperRecipe = recipeWithRequirements("copper_missing_output", List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.RAW_COPPER), 1,
+                        ItemStack.EMPTY),
+                MachineRequirement.itemOutput(new ItemStack(Items.DIAMOND))));
+        MachineRecipe ironRecipe = itemRecipe("iron_missing_input", Ingredient.of(Items.RAW_IRON));
+        ItemBusCapability capability = new ItemBusCapability(storage, IOType.INPUT);
+
+        assertThat(new CraftingContext(new CapabilitySnapshot(List.of(capability))).planStartResult(copperRecipe, 1)
+                .failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
+
+        RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
+                List.of(copperRecipe, ironRecipe), null,
+                List.of(capability), List.of()).compute();
+
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failureReport().candidates()).extracting(FailureReport.Candidate::validity)
+                .containsExactlyInAnyOrder(0.5F, 1.5F);
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_OUTPUT);
+    }
+
+    @Test
+    void search_prefers_missing_energy_after_a_feasible_input_over_unrelated_missing_inputs() {
+        BulkItemStorage storage = new BulkItemStorage(1, null);
+        ItemResource copper = ItemResource.of(Items.RAW_COPPER);
+        assertThat(storage.insert(copper, 1L, false)).isEqualTo(1L);
+        MachineRecipe copperRecipe = recipeWithRequirements("copper_missing_energy", List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.RAW_COPPER), 1,
+                        ItemStack.EMPTY),
+                new EnergyRequirement(RecipeModifier.IOType.INPUT, 1)));
+        MachineRecipe ironRecipe = itemRecipe("iron_missing_input_for_energy", Ingredient.of(Items.RAW_IRON));
+
+        RecipeSearchResult result = new RecipeSearchTask(emptySnapshot(), MACHINE, 0L, 1L,
+                List.of(copperRecipe, ironRecipe), null,
+                List.of(new ItemBusCapability(storage, IOType.INPUT)), List.of()).compute();
+
+        assertThat(result.failure()).isNotNull();
+        assertThat(result.failure().reason()).isSameAs(BuiltinFailureReasons.MISSING_ENERGY);
     }
 
     @Test
