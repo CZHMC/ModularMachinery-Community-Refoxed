@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
@@ -95,7 +96,13 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     static List<ControllerTextLine> controllerTextLines(MachineControllerMenu menu) {
-        return ControllerScreenTextComposer.merge(detailLines(menu), ControllerScreenTextCache.linesAt(menu.controllerPos()));
+        List<ControllerTextLine> lines = new ArrayList<>(ControllerScreenTextComposer.merge(detailLines(menu),
+                ControllerScreenTextCache.linesAt(menu.controllerPos())));
+        if (menu.activeRecipeId() != null) {
+            lines.addAll(ControllerRecipeTextLines.forRecipe(RecipeRegistry.getRecipe(menu.activeRecipeId()),
+                    menu.currentParallelism()));
+        }
+        return List.copyOf(lines);
     }
 
     static List<ControllerTextLine> detailLines(MachineControllerMenu menu) {

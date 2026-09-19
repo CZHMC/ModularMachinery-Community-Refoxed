@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
@@ -157,8 +158,13 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     static List<ControllerTextLine> controllerTextLines(FactoryControllerMenu menu) {
-        return ControllerScreenTextComposer.merge(detailLines(menu),
-                ControllerScreenTextCache.linesAt(menu.controllerPos(), menu.selectedThread().laneId()));
+        List<ControllerTextLine> lines = new ArrayList<>(ControllerScreenTextComposer.merge(detailLines(menu),
+                ControllerScreenTextCache.linesAt(menu.controllerPos(), menu.selectedThread().laneId())));
+        FactoryRuntime.ThreadSnapshot thread = menu.selectedThread();
+        Identifier recipeId = Identifier.tryParse(thread.recipeId());
+        if (recipeId != null) lines.addAll(ControllerRecipeTextLines.forRecipe(RecipeRegistry.getRecipe(recipeId),
+                thread.parallelism()));
+        return List.copyOf(lines);
     }
 
     static List<ControllerTextLine> detailLines(FactoryControllerMenu menu) {

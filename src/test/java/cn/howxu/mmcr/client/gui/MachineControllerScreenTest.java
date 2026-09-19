@@ -165,6 +165,12 @@ class MachineControllerScreenTest {
                 assertThat(line.color()).isEqualTo(ControllerScreenTextComposer.DEFAULT_EXTERNAL_COLOR));
     }
 
+    @Test
+    void pageScrollMovesByTheVisibleLineCount() {
+        assertThat(AbstractScrollableTextScreen.scrollOffsetAfter(10, 30, 10, 1D, true)).isZero();
+        assertThat(AbstractScrollableTextScreen.scrollOffsetAfter(0, 30, 10, -1D, true)).isEqualTo(10);
+    }
+
     private static ControllerScreenTextSnapshot.Line line(String id, String text) {
         return new ControllerScreenTextSnapshot.Line(ControllerScreenTextScope.CONTROLLER,
                 Identifier.parse(id), Component.literal(text));

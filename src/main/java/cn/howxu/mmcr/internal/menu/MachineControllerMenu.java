@@ -234,6 +234,11 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? activeTotalTick.get() : state.totalTick();
     }
 
+    public @Nullable Identifier activeRecipeId() {
+        String recipeId = clientSnapshot != null ? clientSnapshot.recipeName() : "";
+        return recipeId.isEmpty() ? null : Identifier.tryParse(recipeId);
+    }
+
     public @Nullable String lastFailureMessage() {
         String failure;
         if (clientSnapshot != null) {

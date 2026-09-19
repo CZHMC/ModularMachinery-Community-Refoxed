@@ -50,6 +50,12 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         return clampScrollOffset(offset - (int) Math.signum(deltaY), lineCount, visibleLineCount);
     }
 
+    static int scrollOffsetAfter(int offset, int lineCount, int visibleLineCount, double deltaY,
+                                 boolean pageScroll) {
+        int step = pageScroll ? visibleLineCount : 1;
+        return clampScrollOffset(offset - (int) Math.signum(deltaY) * step, lineCount, visibleLineCount);
+    }
+
     static boolean containsViewport(TextViewport viewport, int left, int top, double mouseX, double mouseY) {
         double viewportLeft = left + viewport.x();
         double viewportTop = top + viewport.y();
@@ -125,7 +131,8 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
                 viewport.lineSpacing(), font.lineHeight);
         if (containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) {
             if (!hasScrollableOverflow(lineCount, visibleLines)) return false;
-            textScrollOffset = scrollOffsetAfter(textScrollOffset, lineCount, visibleLines, deltaY);
+            textScrollOffset = scrollOffsetAfter(textScrollOffset, lineCount, visibleLines, deltaY,
+                    minecraft.hasShiftDown());
             return true;
         }
         return handleAdditionalScroll(mouseX, mouseY, deltaX, deltaY)
