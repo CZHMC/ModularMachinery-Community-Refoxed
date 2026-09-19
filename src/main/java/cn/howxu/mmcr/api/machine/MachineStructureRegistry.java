@@ -110,7 +110,7 @@ public final class MachineStructureRegistry {
                 registration.maxParallelAmount(),
                 registration.allowParallelism(),
                 registration.allowMultithreading(),
-                1,
+                registration.factoryThreadLimit(),
                 List.of(),
                 registration.role(),
                 registration.acceptedModuleIds(),

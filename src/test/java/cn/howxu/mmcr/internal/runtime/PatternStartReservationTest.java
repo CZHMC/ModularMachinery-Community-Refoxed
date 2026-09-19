@@ -424,7 +424,7 @@ class PatternStartReservationTest {
 
     private static MachineRecipe recipe(String path, List<ItemRequirement> requirements) {
         return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), requirements);
+                List.of(), List.of(), List.of(), 0, 4, false, List.of(), requirements);
     }
 
     private static MachineRecipe recipeWithOutputs(String path, List<MachineOutput> outputs) {

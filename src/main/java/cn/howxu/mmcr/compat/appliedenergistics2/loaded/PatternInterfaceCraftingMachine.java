@@ -48,19 +48,17 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     }
 
     public long maxBatchSize(IPatternDetails patternDetails) {
-        return patternDetails instanceof AEProcessingPattern && hasSupportedInputs((AEProcessingPattern) patternDetails)
-                ? host.maxPatternBatchSize() : 0L;
+        if (!(patternDetails instanceof AEProcessingPattern pattern) || !hasSupportedInputs(pattern)) return 0L;
+        long machineCap = host.maxPatternBatchSize();
+        long recipeCap = host.maxRecipeBatchSize(outputs(pattern));
+        return Math.min(machineCap, recipeCap);
     }
 
     public boolean pushBatchPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, long batchSize,
                                     Direction ejectionDirection) {
         if (!(patternDetails instanceof AEProcessingPattern pattern)) return false;
         List<MachineOutput> outputs = outputs(pattern);
-        if (batchSize <= 0L || outputs == null || !hasSupportedInputs(pattern)) {
-            cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] rejected: batchSize={} outputs={} supportedInputs={}",
-                    batchSize, outputs != null, hasSupportedInputs(pattern));
-            return false;
-        }
+        if (batchSize <= 0L || outputs == null || !hasSupportedInputs(pattern)) return false;
 
         try {
             PatternRequestState originalRequest = new PatternRequestState(inputHolders, 1);
@@ -73,13 +71,11 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                 return List.of(new ItemBusCapability(itemRequest, IOType.INPUT),
                         new FluidHatchCapability(fluidRequest, IOType.INPUT));
             });
-            cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] reservation status={} parallelism={} requested={}",
-                    reservation.status(), reservation.parallelism(), batchSize);
             if (reservation.status() != PatternStartBatchReservation.Status.RESERVED
                     || reservation.parallelism() != batchSize) return false;
 
             try (reservation) {
-                boolean committed = reservation.commit(transaction -> {
+                return reservation.commit(transaction -> {
                     for (LaneRequest request : laneRequests) {
                         boolean itemsAccepted = request.itemRequest().accept(host.itemReturnStorage(), transaction);
                         boolean fluidsAccepted = request.fluidRequest().accept(host.fluidReturnStorage(), transaction);
@@ -87,11 +83,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                     }
                     originalRequest.acceptAll(transaction);
                 });
-                cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] commit result={} laneRequests={}", committed, laneRequests.size());
-                return committed;
             }
         } catch (RuntimeException exception) {
-            cn.howxu.mmcr.MMCR.LOG.info("[AE2 batch] exception: {}", exception.toString());
             return false;
         }
     }

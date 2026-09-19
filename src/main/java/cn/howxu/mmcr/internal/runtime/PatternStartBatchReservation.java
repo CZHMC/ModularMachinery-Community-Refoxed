@@ -55,23 +55,19 @@ public final class PatternStartBatchReservation implements AutoCloseable {
     public boolean commit(Consumer<TransactionContext> transactionWrites) {
         Objects.requireNonNull(transactionWrites, "transactionWrites");
         if (status != Status.RESERVED) return false;
-        cn.howxu.mmcr.MMCR.LOG.info("[batch commit] starting commit for {} lane reservations", reservations.size());
         try (Transaction transaction = Transaction.openRoot()) {
             for (PatternStartReservation reservation : reservations) {
                 if (reservation.commitPlan(transaction)) continue;
-                cn.howxu.mmcr.MMCR.LOG.info("[batch commit] commitPlan failed for lane {}", reservation.laneId());
                 rollback();
                 return false;
             }
             transactionWrites.accept(transaction);
             transaction.commit();
         } catch (RuntimeException exception) {
-            cn.howxu.mmcr.MMCR.LOG.info("[batch commit] exception during commit: {}", exception.toString());
             rollback();
             return false;
         }
         reservations.forEach(PatternStartReservation::activate);
-        cn.howxu.mmcr.MMCR.LOG.info("[batch commit] committed {} lane reservations", reservations.size());
         status = Status.COMMITTED;
         return true;
     }

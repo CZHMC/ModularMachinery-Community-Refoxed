@@ -152,6 +152,7 @@ public final class MachineDefinitionConverter {
                 .maxParallelAmount(definition.maxParallelism())
                 .allowModifiers(definition.allowModifiers())
                 .allowMultithreading(definition.allowMultithreading())
+                .factoryThreadLimit(definition.factory().threadLimit())
                 .networkInterface(definition.networkInterface())
                 .shareSmartInterfaces(definition.shareSmartInterfaces())
                 .behavior(definition.behavior());
@@ -330,9 +331,8 @@ public final class MachineDefinitionConverter {
     }
 
     private static void validateRegistrationFields(MachineDefinition definition) {
-        if (definition.factory().hasFactory() || definition.factory().threadLimit() != 1
-                || !definition.factory().threads().isEmpty()) {
-            throw new IllegalArgumentException("MachineRegistration cannot represent factory settings");
+        if (!definition.factory().threads().isEmpty()) {
+            throw new IllegalArgumentException("MachineRegistration cannot represent factory threads");
         }
         if (definition.failureAction() != RecipeFailureActions.getDefaultAction()) {
             throw new IllegalArgumentException("MachineRegistration cannot represent failure action");

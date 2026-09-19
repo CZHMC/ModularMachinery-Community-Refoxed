@@ -140,6 +140,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .recipePoolId(recipePoolId != null ? recipePoolId : id)
                 .allowModifiers(allowModifiers)
                 .allowMultithreading(allowMultithreading)
+                .factoryThreadLimit(factoryThreadLimit)
                 .allowParallelism(allowParallelism)
                 .maxParallelAmount(maxParallelAmount)
                 .runningSound(runningSoundId)

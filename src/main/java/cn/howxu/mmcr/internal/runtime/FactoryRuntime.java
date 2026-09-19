@@ -767,6 +767,11 @@ public final class FactoryRuntime {
     public @Nullable PatternLane reservePatternStart(MachineRecipe recipe, long requestedParallelism,
                                                      List<MachineCapability> requestCapabilities) {
         if (recipe == null || controller == null || paused) return null;
+        if (recipe.maxThreads() > 0) {
+            int activeForRecipe = activeRecipeCountFor(recipe.id());
+            int projected = activeForRecipe + 1 + patternStartReservations.size();
+            if (projected > recipe.maxThreads()) return null;
+        }
         for (FactoryRecipeThread lane : lanes) {
             PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities);
             if (reservation != null) return reservation;
@@ -784,22 +789,17 @@ public final class FactoryRuntime {
                                                   List<MachineCapability> requestCapabilities) {
         if (requestedParallelism <= 0L) return List.of();
         long maxParallelism = controller.currentRuntimeSnapshot().maxParallelism();
-        cn.howxu.mmcr.MMCR.LOG.info("[factory reserve] requested={} maxParallelism={} laneCount={}",
-                requestedParallelism, maxParallelism, lanes.size());
         List<PatternLane> reservations = new ArrayList<>();
         long remaining = requestedParallelism;
         while (remaining > 0L) {
             PatternLane reservation = reservePatternStart(recipe, Math.min(remaining, maxParallelism), requestCapabilities);
             if (reservation == null) {
-                cn.howxu.mmcr.MMCR.LOG.info("[factory reserve] failed at remaining={} after {} reservations",
-                        remaining, reservations.size());
                 reservations.forEach(this::releasePatternStart);
                 return List.of();
             }
             reservations.add(reservation);
             remaining -= reservation.preparedStart().plan().parallelism();
         }
-        cn.howxu.mmcr.MMCR.LOG.info("[factory reserve] reserved {} lanes", reservations.size());
         return List.copyOf(reservations);
     }
 
@@ -1127,6 +1127,10 @@ public final class FactoryRuntime {
             if (activeRecipe != null) counts.merge(activeRecipe.id(), 1, Integer::sum);
         }
         return counts;
+    }
+
+    public int activeRecipeCountFor(Identifier recipeId) {
+        return activeRecipeCounts().getOrDefault(recipeId, 0);
     }
 
     private static List<MachineRecipe> filterAvailableCandidates(List<MachineRecipe> candidates,

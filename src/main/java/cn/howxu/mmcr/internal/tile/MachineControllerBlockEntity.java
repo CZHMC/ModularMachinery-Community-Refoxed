@@ -1267,7 +1267,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
                 .sum();
         long extraThreads = Math.max(0L, (long) aggregatedThreads - 1L);
-        long effective = Math.max(1, machine.factoryThreadLimit()) + extraThreads + levelBonus;
+        long effective = Math.max(1L, (long) machine.factoryThreadLimit()) + extraThreads + levelBonus;
         return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, effective));
     }
 
@@ -3991,7 +3991,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         setMachine(resolved);
     }
 
-    private List<MachineRecipe> recipesForMachine() {
+    public List<MachineRecipe> recipesForMachine() {
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         Identifier machineId = machine == null ? null : machine.registryName();
@@ -4010,7 +4010,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return cachedCandidates;
     }
 
-    private boolean patternOutputsMatch(MachineRecipe recipe, ControllerRuntimeSnapshot snapshot,
+    public boolean patternOutputsMatch(MachineRecipe recipe, ControllerRuntimeSnapshot snapshot,
                                         List<MachineOutput> patternOutputs) {
         List<MachineOutput> remaining = new ArrayList<>(runtime.craftingRuntime()
                 .runtimeMachineOutputs(recipe, snapshot));

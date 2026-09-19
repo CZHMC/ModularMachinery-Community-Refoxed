@@ -7,6 +7,9 @@ import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.security.IActionSource;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
+import net.minecraft.resources.Identifier;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
@@ -158,8 +161,12 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
             if (!snapshot.structure().formed() || controller.isRedstonePaused()) continue;
             long controllerCapacity;
             if (controller.hasFactoryController()) {
-                controllerCapacity = (long) (snapshot.factory().laneLimit() - snapshot.factory().activeLaneCount())
-                        * snapshot.maxParallelism();
+                int factoryLaneLimit = snapshot.factory().laneLimit();
+                int factoryLaneCount = snapshot.factory().activeLaneCount();
+                long machineThreadLimit = Math.max(1, controller.effectiveFactoryThreadLimit());
+                long boundedLaneLimit = Math.min(factoryLaneLimit, machineThreadLimit);
+                controllerCapacity = Math.max(0L, boundedLaneLimit - factoryLaneCount)
+                        * Math.max(1L, snapshot.maxParallelism());
             } else {
                 controllerCapacity = snapshot.crafting().recipeId() == null ? 1L : 0L;
             }
@@ -167,6 +174,51 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
             capacity += controllerCapacity;
         }
         return capacity;
+    }
+
+    public int factoryLaneLimit() {
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)) continue;
+            return controller.effectiveFactoryThreadLimit();
+        }
+        return 1;
+    }
+
+    /** Returns the recipe-specific thread cap for the recipe whose outputs match. */
+    public long maxRecipeBatchSize(List<MachineOutput> patternOutputs) {
+        if (level == null) return 0L;
+        long capacity = 0L;
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)) continue;
+            var snapshot = controller.runtimeSnapshot();
+            if (!snapshot.structure().formed() || controller.isRedstonePaused()) continue;
+            if (!controller.hasFactoryController()) continue;
+            long parallelism = Math.max(1L, snapshot.maxParallelism());
+            List<MachineRecipe> recipes = controller.recipesForMachine();
+            for (int i = 0; i < recipes.size(); i++) {
+                MachineRecipe recipe = recipes.get(i);
+                if (recipe.maxThreads() <= 0) continue;
+                if (!controller.patternOutputsMatch(recipe, snapshot, patternOutputs)) continue;
+                int activeForRecipe = 0;
+                Identifier recipeId = recipe.id();
+                List<CraftingStateSnapshot> lanes = snapshot.factory().lanes();
+                for (int j = 0; j < lanes.size(); j++) {
+                    Identifier laneRecipeId = lanes.get(j).recipeId();
+                    if (laneRecipeId != null && laneRecipeId.equals(recipeId)) activeForRecipe++;
+                }
+                long cap = ((long) recipe.maxThreads() - activeForRecipe) * parallelism;
+                if (cap > capacity) capacity = cap;
+            }
+        }
+        return capacity;
+    }
+
+    public int factoryLaneCount() {
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)) continue;
+            return controller.runtimeSnapshot().factory().activeLaneCount();
+        }
+        return 0;
     }
 
     @Override

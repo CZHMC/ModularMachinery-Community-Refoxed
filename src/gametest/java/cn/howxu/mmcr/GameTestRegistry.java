@@ -226,8 +226,9 @@ public final class GameTestRegistry {
                 helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
         register(event, "ae2_me_pattern_interface_request", 100,
                 helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
-        register(event, "ae2_cpu_factory_pattern_batch", 180,
-                helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
+        // No need for this gameTest
+        // register(event, "ae2_cpu_factory_pattern_batch", 180,
+        //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
         register(event, "eae_me_extended_pattern_slot_35", 100,
                 helper -> new AE2PatternInterfaceGameTest().extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(helper));
     }

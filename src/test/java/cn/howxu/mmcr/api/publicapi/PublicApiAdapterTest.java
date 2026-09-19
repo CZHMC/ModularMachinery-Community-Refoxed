@@ -207,12 +207,12 @@ class PublicApiAdapterTest {
     @Test
     void legacy_registration_adapter_rejects_unrepresentable_factory_settings() {
         var definition = MachineBuilder.machine(MMCR.id("factory_registration"))
-                .factory(factory -> factory.hasFactory(true).threadLimit(2))
+                .factory(factory -> factory.thread("core", MMCR.id("any_recipe")))
                 .build();
 
         assertThatThrownBy(() -> MachineDefinitionConverter.toRegistration(definition))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("factory settings");
+                .hasMessageContaining("factory threads");
     }
 
     private static MachineStructureDefinition structureFor(Identifier machineId) {
