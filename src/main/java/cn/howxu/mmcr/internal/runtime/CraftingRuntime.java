@@ -1098,6 +1098,10 @@ public final class CraftingRuntime {
         return List.copyOf(source);
     }
 
+    public List<MachineRequirement> activeRequirements() {
+        return List.copyOf(effectiveRequirements());
+    }
+
     private int duration(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
         List<RecipeModifier> modifiers = new ArrayList<>(recipe.modifiers());
         modifiers.addAll(contextModifiers(runtime));

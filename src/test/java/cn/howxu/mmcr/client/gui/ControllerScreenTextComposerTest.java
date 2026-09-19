@@ -7,6 +7,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
 
@@ -46,6 +47,23 @@ class ControllerScreenTextComposerTest {
             assertThat(visualLine.text()).isInstanceOf(FormattedCharSequence.class);
         });
         assertThat(wrapped).isUnmodifiable();
+    }
+
+    @Test
+    void wrap_keeps_icon_metadata_only_on_the_first_wrapped_segment() throws Exception {
+        ControllerTextLine line = new ControllerTextLine(Component.literal("abcdefghij"), 0xFF123456,
+                new ControllerTextLine.ItemIcon(ItemStack.EMPTY), List.of(Component.literal("tip")));
+
+        List<ControllerScreenTextComposer.VisualLine> wrapped = ControllerScreenTextComposer.wrap(
+                testFont(), List.of(line), 17);
+
+        assertThat(wrapped).hasSize(2);
+        assertThat(wrapped.get(0).source()).isSameAs(line);
+        assertThat(wrapped.get(0).firstSegment()).isTrue();
+        assertThat(wrapped.get(0).textXOffset()).isEqualTo(line.textXOffset());
+        assertThat(wrapped.get(1).source()).isSameAs(line);
+        assertThat(wrapped.get(1).firstSegment()).isFalse();
+        assertThat(wrapped.get(1).textXOffset()).isZero();
     }
 
     static Font testFont() throws Exception {

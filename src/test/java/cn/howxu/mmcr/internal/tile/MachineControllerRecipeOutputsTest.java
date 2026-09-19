@@ -2,6 +2,12 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -82,5 +88,41 @@ class MachineControllerRecipeOutputsTest {
 
         assertThat(controller.recipeOutputs()).singleElement()
                 .satisfies(output -> assertThat(output.amount()).isEqualTo(Long.MAX_VALUE));
+    }
+
+    @Test
+    void runtimePresentationScalesOutputsEnergyAndHeatByParallelism() {
+        CraftingRuntime runtime = TestBootstrap.newCraftingRuntime();
+        TestBootstrap.configureCraftingWithPresentation(runtime,
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 3), 1F),
+                        new LoadedHeatOutput(2.5D)),
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 100L),
+                        new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 50L)), 4L);
+
+        ControllerRecipePresentation presentation = ControllerRecipePresentation.from(runtime);
+
+        assertThat(presentation.outputs()).extracting(MachineOutputAmount::amount).containsExactly(12L);
+        assertThat(presentation.energyInputPerTick()).isEqualTo(400L);
+        assertThat(presentation.energyOutputPerTick()).isEqualTo(200L);
+        assertThat(presentation.heatOutputPerTick()).isEqualTo(10D);
+    }
+
+    @Test
+    void factoryThreadPresentationContainsOnlyItsOwnOutputs() {
+        ControllerRecipePresentation first = new ControllerRecipePresentation(List.of(
+                new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_INGOT, 1), 1F), 3L)),
+                0L, 0L, 0D);
+        ControllerRecipePresentation second = new ControllerRecipePresentation(List.of(
+                new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 1), 1F), 5L)),
+                0L, 0L, 0D);
+
+        FactoryRuntime.ThreadSnapshot firstThread = new FactoryRuntime.ThreadSnapshot(0, "factory-0", true, false,
+                true, "mmcr:first", 1, 20, 3L, null, false, "", first);
+        FactoryRuntime.ThreadSnapshot secondThread = new FactoryRuntime.ThreadSnapshot(1, "factory-1", false, false,
+                true, "mmcr:second", 1, 20, 5L, null, false, "", second);
+
+        assertThat(firstThread.presentation().outputs()).containsExactly(first.outputs().getFirst());
+        assertThat(firstThread.presentation().outputs()).doesNotContainAnyElementsOf(second.outputs());
+        assertThat(secondThread.presentation().outputs()).containsExactly(second.outputs().getFirst());
     }
 }

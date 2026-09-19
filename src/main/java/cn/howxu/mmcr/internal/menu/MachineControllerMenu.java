@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -237,6 +238,12 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     public @Nullable Identifier activeRecipeId() {
         String recipeId = clientSnapshot != null ? clientSnapshot.recipeName() : "";
         return recipeId.isEmpty() ? null : Identifier.tryParse(recipeId);
+    }
+
+    public ControllerRecipePresentation recipePresentation() {
+        if (clientSnapshot != null) return clientSnapshot.recipePresentation();
+        MachineStateSnapshot state = localState();
+        return state == null ? ControllerRecipePresentation.empty() : state.recipePresentation();
     }
 
     public @Nullable String lastFailureMessage() {

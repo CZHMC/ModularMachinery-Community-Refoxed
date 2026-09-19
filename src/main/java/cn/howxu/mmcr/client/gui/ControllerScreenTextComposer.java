@@ -31,8 +31,11 @@ public final class ControllerScreenTextComposer {
     public static List<VisualLine> wrap(Font font, List<ControllerTextLine> lines, int width) {
         List<VisualLine> wrapped = new ArrayList<>();
         for (ControllerTextLine line : lines) {
-            for (FormattedCharSequence visualLine : font.split(line.text(), width)) {
-                wrapped.add(new VisualLine(visualLine, line.color()));
+            boolean firstSegment = true;
+            int lineWidth = Math.max(1, width - line.textXOffset());
+            for (FormattedCharSequence visualLine : font.split(line.text(), lineWidth)) {
+                wrapped.add(new VisualLine(visualLine, line.color(), line, firstSegment));
+                firstSegment = false;
             }
         }
         return List.copyOf(wrapped);
@@ -43,8 +46,14 @@ public final class ControllerScreenTextComposer {
      *
      * @param text the wrapped visual text
      * @param color the render color inherited from the logical line
+     * @param source the logical line that produced this visual line
+     * @param firstSegment whether this is the first visual segment of the logical line
      * @author howxu <dev@howxu.cn>
      */
-    public record VisualLine(FormattedCharSequence text, int color) {
+    public record VisualLine(FormattedCharSequence text, int color, ControllerTextLine source,
+                             boolean firstSegment) {
+        public int textXOffset() {
+            return firstSegment ? source.textXOffset() : 0;
+        }
     }
 }

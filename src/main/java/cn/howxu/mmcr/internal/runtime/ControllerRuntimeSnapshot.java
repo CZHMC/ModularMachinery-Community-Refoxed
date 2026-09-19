@@ -46,7 +46,8 @@ public record ControllerRuntimeSnapshot(
         long maxParallelism,
         List<ItemStack> upgradeItems,
         long upgradeContentRevision,
-        Map<String, DataValue> dataStorageValues) {
+        Map<String, DataValue> dataStorageValues,
+        ControllerRecipePresentation recipePresentation) {
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion, long modifierVersion,
                                      long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
@@ -62,7 +63,26 @@ public record ControllerRuntimeSnapshot(
                 linkedPortPositions, moduleConnectionStatus, installedModuleCount, crafting,
                 factory, componentPresentations, capabilityPresentations, foundLevelIds, machineId, machineName,
                 controllerRole, factorySupported, factoryControllerPresent, parallelControllerCount,
-                maxParallelControllerCount, maxParallelism, List.of(), 0L, Map.of());
+                maxParallelControllerCount, maxParallelism, List.of(), 0L, Map.of(),
+                ControllerRecipePresentation.empty());
+    }
+
+    public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion,
+                                     long modifierVersion, long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
+                                     Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
+                                     ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
+                                     CraftingStateSnapshot crafting, FactorySnapshot factory,
+                                     List<ComponentPresentation> componentPresentations,
+                                     List<CapabilityPresentation> capabilityPresentations, List<String> foundLevelIds,
+                                     String machineId, String machineName, int controllerRole, boolean factorySupported,
+                                      boolean factoryControllerPresent, int parallelControllerCount,
+                                      long maxParallelControllerCount, long maxParallelism,
+                                      Map<String, DataValue> dataStorageValues) {
+        this(structure, capabilityVersion, modifierVersion, stateVersion, foundModifiers, foundLevels,
+                linkedPortPositions, moduleConnectionStatus, installedModuleCount, crafting, factory,
+                componentPresentations, capabilityPresentations, foundLevelIds, machineId, machineName,
+                controllerRole, factorySupported, factoryControllerPresent, parallelControllerCount,
+                maxParallelControllerCount, maxParallelism, dataStorageValues, ControllerRecipePresentation.empty());
     }
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion,
@@ -75,13 +95,14 @@ public record ControllerRuntimeSnapshot(
                                      String machineId, String machineName, int controllerRole, boolean factorySupported,
                                      boolean factoryControllerPresent, int parallelControllerCount,
                                      long maxParallelControllerCount, long maxParallelism,
-                                     Map<String, DataValue> dataStorageValues) {
+                                     Map<String, DataValue> dataStorageValues,
+                                     ControllerRecipePresentation recipePresentation) {
         this(structure, capabilityVersion, modifierVersion, stateVersion, foundModifiers, foundLevels,
                 linkedPortPositions, moduleConnectionStatus, installedModuleCount,
                 crafting, factory, componentPresentations, capabilityPresentations, foundLevelIds,
                 machineId, machineName, controllerRole, factorySupported, factoryControllerPresent,
                 parallelControllerCount, maxParallelControllerCount, maxParallelism, List.of(), 0L,
-                dataStorageValues);
+                dataStorageValues, recipePresentation);
     }
 
     public ControllerRuntimeSnapshot {
@@ -106,6 +127,7 @@ public record ControllerRuntimeSnapshot(
         machineName = machineName == null ? "" : machineName;
         if (upgradeContentRevision < 0L) throw new IllegalArgumentException("Upgrade content revision must not be negative");
         upgradeItems = copyStacks(upgradeItems == null ? List.of() : upgradeItems);
+        recipePresentation = recipePresentation == null ? ControllerRecipePresentation.empty() : recipePresentation;
         if (controllerRole < 0 || parallelControllerCount < 0 || maxParallelControllerCount < 0 || maxParallelism < 1) {
             throw new IllegalArgumentException("Invalid controller presentation values");
         }

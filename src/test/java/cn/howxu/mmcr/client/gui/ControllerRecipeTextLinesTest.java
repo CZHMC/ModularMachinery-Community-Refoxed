@@ -4,10 +4,16 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +49,20 @@ class ControllerRecipeTextLinesTest {
     }
 
     @Test
+    void exactlySixtyFourOutputsDoesNotShowTheMoreMarker() {
+        List<MachineOutputAmount> outputs = IntStream.range(0, 64)
+                .mapToObj(index -> new MachineOutputAmount(
+                        new MachineOutput.ItemOutput(new ItemStack(Items.STONE, index + 1), 1F), index + 1L))
+                .toList();
+
+        List<ControllerTextLine> lines = ControllerRecipeTextLines.outputs(outputs);
+
+        assertThat(lines).hasSize(64);
+        assertThat(lines.getLast().text())
+                .isNotEqualTo(Component.translatable("gui.mmcr.controller.recipe_output.more"));
+    }
+
+    @Test
     void itemOutputUsesItsStackAsTheNativeIcon() {
         ItemStack stack = new ItemStack(Items.DIAMOND, 3);
 
@@ -66,6 +86,52 @@ class ControllerRecipeTextLinesTest {
 
         assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L))
                 .extracting(ControllerTextLine::text)
-                .anySatisfy(text -> assertThat(text.getString()).contains("6"));
+                .contains(Component.translatable("gui.mmcr.controller.recipe_output.item", "6 ",
+                        new ItemStack(Items.DIAMOND).getHoverName()));
+    }
+
+    @Test
+    void presentationCreatesSummaryTooltipsBeforeResourceOutputs() {
+        ControllerRecipePresentation presentation = new ControllerRecipePresentation(List.of(
+                new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 1), 1F), 3L)),
+                400L, 200L, 10D);
+
+        List<ControllerTextLine> lines = ControllerRecipeTextLines.create(presentation);
+
+        assertThat(lines).hasSize(4);
+        assertThat(lines.get(0).text()).isEqualTo(Component.translatable("gui.mmcr.controller.recipe.energy_input", "400"));
+        assertThat(lines.get(0).tooltip()).containsExactly(
+                Component.translatable("gui.mmcr.controller.recipe.energy_input_exact", "400"));
+        assertThat(lines.get(3).icon()).isInstanceOf(ControllerTextLine.ItemIcon.class);
+    }
+
+    @Test
+    void fluidAndChemicalOutputsUseNativeIconDescriptors() {
+        MekanismBridgeBootstrap.installForTesting(new MekanismBridge() {
+            @Override public boolean available() { return true; }
+            @Override public boolean supportsPortFamily(net.minecraft.resources.Identifier familyId) { return false; }
+            @Override public net.minecraft.resources.Identifier unavailableReason() { return null; }
+            @Override public void registerRecipeTypes(net.minecraft.resources.Identifier chemical,
+                                                      net.minecraft.resources.Identifier heatTemperature,
+                                                      net.minecraft.resources.Identifier heat) {}
+            @Override public ChemicalRenderData chemicalRenderData(net.minecraft.resources.Identifier chemicalId) {
+                return new ChemicalRenderData(chemicalId, 0xFFFFFFFF, Component.literal("Test chemical"));
+            }
+        });
+        try {
+            ControllerRecipePresentation presentation = new ControllerRecipePresentation(List.of(
+                    new MachineOutputAmount(new MachineOutput.FluidOutput(
+                            new FluidStack(Fluids.WATER, 1_000), 1F), 1_000L),
+                    new MachineOutputAmount(new LoadedChemicalOutput(MMCR.id("test_chemical"), 1L, 1F), 1L)),
+                    0L, 0L, 0D);
+
+            List<ControllerTextLine> lines = ControllerRecipeTextLines.create(presentation);
+
+            assertThat(lines).extracting(ControllerTextLine::icon)
+                    .anySatisfy(icon -> assertThat(icon).isInstanceOf(ControllerTextLine.FluidIcon.class))
+                    .anySatisfy(icon -> assertThat(icon).isInstanceOf(ControllerTextLine.ChemicalIcon.class));
+        } finally {
+            MekanismBridgeBootstrap.resetForTesting();
+        }
     }
 }

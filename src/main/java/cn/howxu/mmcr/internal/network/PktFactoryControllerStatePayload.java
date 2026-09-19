@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
@@ -71,6 +72,12 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         boolean active = buf.readBoolean();
         int laneLimit = buf.readVarInt();
         int activeLaneCount = buf.readVarInt();
+        if (laneLimit < 1 || laneLimit > maxThreadSnapshots()) {
+            throw new IllegalArgumentException("Invalid factory lane limit: " + laneLimit);
+        }
+        if (activeLaneCount < 0 || activeLaneCount > laneLimit) {
+            throw new IllegalArgumentException("Invalid active factory lane count: " + activeLaneCount);
+        }
         long maxParallelism = buf.readLong();
         boolean paused = buf.readBoolean();
         String machineName = buf.readUtf(maxStringLength());
@@ -140,6 +147,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         FailureStatusCodec.write(buf, thread.failure());
         buf.writeBoolean(thread.locked());
         buf.writeUtf(thread.lockedRecipeId(), maxStringLength());
+        ControllerRecipePresentation.write(buf, thread.presentation());
     }
 
     private static FactoryRuntime.ThreadSnapshot readThread(RegistryFriendlyByteBuf buf) {
@@ -156,7 +164,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         ExecutionStatus failure = FailureStatusCodec.read(buf);
         return new FactoryRuntime.ThreadSnapshot(index, laneId, baseThread, coreThread, active, recipeId, tick,
                 totalTick, parallelism, failure, buf.readBoolean(),
-                buf.readUtf(maxStringLength()));
+                buf.readUtf(maxStringLength()), ControllerRecipePresentation.read(buf));
     }
 
     private static void validateSnapshot(FactorySnapshot state) {

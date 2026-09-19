@@ -47,7 +47,7 @@ public final class ControllerSyncRuntime {
                 runtime.componentPresentations(),
                 runtime.capabilityPresentations(),
                 runtime.structure().matchedStage(),
-                stageCount(runtime));
+                stageCount(runtime), runtime.recipePresentation());
     }
 
     public FactorySnapshot factoryState(ControllerRuntimeSnapshot runtime) {

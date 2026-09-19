@@ -3,7 +3,6 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
@@ -68,7 +67,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE);
         graphics.text(font, title, (int) (titleLabelX / DETAIL_SCALE), (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
-        renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE));
+        renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE), mouseX, mouseY);
         graphics.pose().popMatrix();
     }
 
@@ -79,7 +78,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         extractTooltip(graphics, mouseX, mouseY);
     }
 
-    private void renderScrollableText(GuiGraphicsExtractor graphics, int x) {
+    private void renderScrollableText(GuiGraphicsExtractor graphics, int x, int mouseX, int mouseY) {
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
@@ -87,8 +86,9 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         for (int index = first; index < last; index++) {
             ControllerScreenTextComposer.VisualLine line = lines.get(index);
             int textY = detailTextY(textLineY(visibleTextRow(index)));
-            graphics.text(font, line.text(), x, textY, line.color(), true);
+            renderVisualLine(graphics, line, x, textY);
         }
+        renderScrollableTooltip(graphics, mouseX, mouseY);
     }
 
     static int detailTextY(int localY) {
@@ -98,10 +98,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     static List<ControllerTextLine> controllerTextLines(MachineControllerMenu menu) {
         List<ControllerTextLine> lines = new ArrayList<>(ControllerScreenTextComposer.merge(detailLines(menu),
                 ControllerScreenTextCache.linesAt(menu.controllerPos())));
-        if (menu.activeRecipeId() != null) {
-            lines.addAll(ControllerRecipeTextLines.forRecipe(RecipeRegistry.getRecipe(menu.activeRecipeId()),
-                    menu.currentParallelism()));
-        }
+        lines.addAll(ControllerRecipeTextLines.create(menu.recipePresentation()));
         return List.copyOf(lines);
     }
 

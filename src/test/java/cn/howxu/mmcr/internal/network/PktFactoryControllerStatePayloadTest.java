@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -293,5 +294,6 @@ class PktFactoryControllerStatePayloadTest {
         FailureStatusCodec.write(buffer, null);
         buffer.writeBoolean(false);
         buffer.writeUtf("");
+        ControllerRecipePresentation.write(buffer, ControllerRecipePresentation.empty());
     }
 }

@@ -685,12 +685,14 @@ public final class FactoryRuntime {
                     state.recipeId() == null ? "" : state.recipeId().toString(), lane.runtime().tickCount(),
                     lane.runtime().totalTick(), lane.runtime().active() ? lane.runtime().parallelism() : 1,
                     state.failure(), lockedRecipe != null,
-                    lockedRecipe == null ? "" : lockedRecipe.toString()));
+                    lockedRecipe == null ? "" : lockedRecipe.toString(),
+                    ControllerRecipePresentation.from(lane.runtime())));
         }
         while (snapshots.size() < laneLimit) {
             int index = snapshots.size();
             snapshots.add(new ThreadSnapshot(index, "idle-" + index, false, false, false,
-                    "", 0, 0, 1, (ExecutionStatus) null, false, ""));
+                    "", 0, 0, 1, (ExecutionStatus) null, false, "",
+                    ControllerRecipePresentation.empty()));
         }
         return List.copyOf(snapshots);
     }
@@ -1282,25 +1284,35 @@ public final class FactoryRuntime {
     /** Immutable runtime-owned lane snapshot. */
     public record ThreadSnapshot(int index, String laneId, boolean baseThread, boolean coreThread, boolean active,
                                  String recipeId, int tick, int totalTick, long parallelism,
-                                 @Nullable ExecutionStatus failure, boolean locked, String lockedRecipeId) {
+                                 @Nullable ExecutionStatus failure, boolean locked, String lockedRecipeId,
+                                 ControllerRecipePresentation presentation) {
         public ThreadSnapshot(int index, boolean baseThread, boolean coreThread, boolean active,
                               String recipeId, int tick, int totalTick, long parallelism,
                               String lastFailureUnloc, boolean locked, String lockedRecipeId) {
             this(index, index == 0 ? "base" : "factory-" + index, baseThread, coreThread, active,
-                    recipeId, tick, totalTick, parallelism, legacyFailure(lastFailureUnloc), locked, lockedRecipeId);
+                    recipeId, tick, totalTick, parallelism, legacyFailure(lastFailureUnloc), locked, lockedRecipeId,
+                    ControllerRecipePresentation.empty());
         }
 
         public ThreadSnapshot(int index, String laneId, boolean baseThread, boolean coreThread, boolean active,
                               String recipeId, int tick, int totalTick, long parallelism,
                               String lastFailureUnloc, boolean locked, String lockedRecipeId) {
             this(index, laneId, baseThread, coreThread, active, recipeId, tick, totalTick, parallelism,
-                    legacyFailure(lastFailureUnloc), locked, lockedRecipeId);
+                    legacyFailure(lastFailureUnloc), locked, lockedRecipeId, ControllerRecipePresentation.empty());
+        }
+
+        public ThreadSnapshot(int index, String laneId, boolean baseThread, boolean coreThread, boolean active,
+                              String recipeId, int tick, int totalTick, long parallelism,
+                              @Nullable ExecutionStatus failure, boolean locked, String lockedRecipeId) {
+            this(index, laneId, baseThread, coreThread, active, recipeId, tick, totalTick, parallelism,
+                    failure, locked, lockedRecipeId, ControllerRecipePresentation.empty());
         }
 
         public ThreadSnapshot {
             laneId = laneId == null ? "" : laneId;
             recipeId = recipeId == null ? "" : recipeId;
             lockedRecipeId = locked ? lockedRecipeId == null ? "" : lockedRecipeId : "";
+            presentation = presentation == null ? ControllerRecipePresentation.empty() : presentation;
         }
 
         /**
@@ -1325,7 +1337,7 @@ public final class FactoryRuntime {
 
         public static ThreadSnapshot idleBase() {
             return new ThreadSnapshot(0, "base", true, false, false, "", 0, 0, 1L,
-                    (ExecutionStatus) null, false, "");
+                    (ExecutionStatus) null, false, "", ControllerRecipePresentation.empty());
         }
     }
 }

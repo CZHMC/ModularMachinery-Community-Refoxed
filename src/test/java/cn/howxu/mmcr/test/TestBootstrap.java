@@ -40,6 +40,7 @@ import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
@@ -252,6 +253,8 @@ public final class TestBootstrap {
             fieldOnHierarchy(CraftingRuntime.class, "activeRecipe");
     private static final Field CRAFTING_EFFECTIVE_OUTPUTS_FIELD =
             fieldOnHierarchy(CraftingRuntime.class, "effectiveOutputs");
+    private static final Field CRAFTING_EFFECTIVE_REQUIREMENTS_FIELD =
+            fieldOnHierarchy(CraftingRuntime.class, "effectiveRequirements");
     private static final Field RECIPE_THREAD_RUNTIME_FIELD =
             fieldOnHierarchy(FactoryRecipeThread.class.getSuperclass(), "runtime");
 
@@ -269,7 +272,7 @@ public final class TestBootstrap {
     }
 
     private static void configureCraftingRuntimeWithOutputs(CraftingRuntime runtime,
-                                                            List<MachineOutput> outputs, long parallelism)
+                                                             List<MachineOutput> outputs, long parallelism)
             throws ReflectiveOperationException {
         if (parallelism <= 0L) throw new IllegalArgumentException("parallelism must be positive");
         ActiveMachineRecipe placeholder = (ActiveMachineRecipe)
@@ -278,6 +281,19 @@ public final class TestBootstrap {
         placeholder.setParallelism(parallelism);
         CRAFTING_ACTIVE_RECIPE_FIELD.set(runtime, placeholder);
         CRAFTING_EFFECTIVE_OUTPUTS_FIELD.set(runtime, List.copyOf(outputs));
+    }
+
+    public static void configureCraftingWithPresentation(CraftingRuntime runtime,
+                                                         List<MachineOutput> outputs,
+                                                         List<MachineRequirement> requirements,
+                                                         long parallelism) {
+        if (runtime == null) throw new IllegalArgumentException("runtime must not be null");
+        try {
+            configureCraftingRuntimeWithOutputs(runtime, outputs, parallelism);
+            CRAFTING_EFFECTIVE_REQUIREMENTS_FIELD.set(runtime, List.copyOf(requirements));
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to bind crafting presentation", exception);
+        }
     }
 
     private static sun.misc.Unsafe resolveUnsafe() {

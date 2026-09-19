@@ -24,6 +24,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -224,9 +225,10 @@ public final class MachineControllerRuntime {
                 components.linkedPortPositions(), components.moduleConnectionStatus(), components.installedModuleCount(),
                 craftingState, factorySnapshot, components.componentPresentations(),
                 components.capabilityPresentations(), foundLevelIds(), machine == null ? "" : machine.registryName().toString(),
-                machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
-                parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine),
-                components.upgradeItems(), components.upgradeContentRevision(), currentDataStorageValues());
+                 machine == null ? "" : machine.displayNameKey(), controllerRole, factorySupported, factoryControllerPresent,
+                 parallelControllerCount, maxParallelControllerCount, components.maxParallelism(machine),
+                 components.upgradeItems(), components.upgradeContentRevision(), currentDataStorageValues(),
+                 ControllerRecipePresentation.from(craftingRuntime()));
         workingStructureEpoch = structure.stateEpoch();
         workingCapabilityVersion = components.capabilityVersion();
         workingCapabilityPresentationEpoch = components.capabilityPresentationEpoch();

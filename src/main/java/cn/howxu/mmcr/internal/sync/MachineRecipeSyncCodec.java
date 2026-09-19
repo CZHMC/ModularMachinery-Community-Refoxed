@@ -155,7 +155,7 @@ public final class MachineRecipeSyncCodec {
         return List.copyOf(values);
     }
 
-    private static void writeOutput(RegistryFriendlyByteBuf buf, MachineOutput value) {
+    public static void writeOutput(RegistryFriendlyByteBuf buf, MachineOutput value) {
         OutputType<?> type = OutputRegistry.canonicalType(value.outputType());
         if (type == null) {
             throw new IllegalArgumentException("Output type is not registered canonically: " + value.outputType().id());
@@ -163,7 +163,7 @@ public final class MachineRecipeSyncCodec {
         writeTyped(buf, type.id(), type.syncCodec(), value, "output");
     }
 
-    private static MachineOutput readOutput(RegistryFriendlyByteBuf buf) {
+    public static MachineOutput readOutput(RegistryFriendlyByteBuf buf) {
         Identifier typeId = Identifier.STREAM_CODEC.decode(buf);
         int payloadSize = readPayloadSize(buf, "output");
         OutputType<?> type = OutputRegistry.typeFor(typeId);

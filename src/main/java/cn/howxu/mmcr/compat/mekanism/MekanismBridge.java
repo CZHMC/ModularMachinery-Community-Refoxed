@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -32,6 +33,10 @@ public interface MekanismBridge {
     boolean supportsPortFamily(Identifier familyId);
 
     Identifier unavailableReason();
+
+    default ChemicalRenderData chemicalRenderData(Identifier chemicalId) {
+        return null;
+    }
 
     void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat);
 
@@ -108,6 +113,12 @@ public interface MekanismBridge {
     enum PortType {
         CHEMICAL,
         HEAT
+    }
+
+    record ChemicalRenderData(Identifier spriteLocation, int tint, Component displayName) {
+        public ChemicalRenderData {
+            if (spriteLocation == null || displayName == null) throw new IllegalArgumentException("chemical data is incomplete");
+        }
     }
 
     @FunctionalInterface

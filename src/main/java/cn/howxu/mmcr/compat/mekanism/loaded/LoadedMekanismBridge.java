@@ -289,6 +289,16 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
+    public ChemicalRenderData chemicalRenderData(Identifier chemicalId) {
+        if (chemicalId == null) return null;
+        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+                ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemicalId));
+        if (holder == null || holder.isEmpty()) return null;
+        Chemical chemical = holder.get().value();
+        return new ChemicalRenderData(chemical.getIcon(), chemical.getTint(), chemical.getTextComponent());
+    }
+
+    @Override
     public void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat) {
         registerRequirement(LoadedChemicalRequirement.TYPE);
         registerRequirement(LoadedHeatRequirement.TEMPERATURE_TYPE);

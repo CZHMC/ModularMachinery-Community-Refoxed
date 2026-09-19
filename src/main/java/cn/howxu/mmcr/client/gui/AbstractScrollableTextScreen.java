@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.client.render.ChemicalGuiRenderer;
+import cn.howxu.mmcr.client.render.FluidGuiRenderer;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -123,6 +127,41 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         textScrollOffset = 0;
     }
 
+    protected final void renderVisualLine(GuiGraphicsExtractor graphics,
+                                          ControllerScreenTextComposer.VisualLine line, int x, int y) {
+        ControllerTextLine source = line.source();
+        if (line.firstSegment() && source.icon() != null) {
+            renderIcon(graphics, source.icon(), x, y - 3);
+        }
+        graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), true);
+    }
+
+    protected final void renderScrollableTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        TextViewport viewport = scrollableTextViewport();
+        if (!containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) return;
+        int row = (int) ((mouseY - topPos - viewport.y()) / (double) viewport.lineSpacing());
+        int index = firstVisibleTextLine() + row;
+        List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
+        if (row < 0 || index < 0 || index >= lines.size()) return;
+        List<Component> tooltip = lines.get(index).source().tooltip();
+        if (!tooltip.isEmpty()) graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
+    }
+
+    private static void renderIcon(GuiGraphicsExtractor graphics, ControllerTextLine.Icon icon, int x, int y) {
+        switch (icon) {
+            case ControllerTextLine.ItemIcon item -> graphics.fakeItem(item.stack(), x, y);
+            case ControllerTextLine.FluidIcon fluid -> FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, 10, 10);
+            case ControllerTextLine.ChemicalIcon chemical -> {
+                MekanismBridge.ChemicalRenderData data = MekanismBridge.get().chemicalRenderData(chemical.chemicalId());
+                if (data != null) {
+                    ChemicalGuiRenderer.drawChemical(graphics,
+                            new ChemicalGuiRenderer.ChemicalRenderState(data.spriteLocation(), data.tint(), 10),
+                            x, y, 10, 10);
+                }
+            }
+        }
+    }
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
         TextViewport viewport = scrollableTextViewport();
@@ -132,7 +171,7 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         if (containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) {
             if (!hasScrollableOverflow(lineCount, visibleLines)) return false;
             textScrollOffset = scrollOffsetAfter(textScrollOffset, lineCount, visibleLines, deltaY,
-                    minecraft.hasShiftDown());
+                    minecraft != null && minecraft.hasShiftDown());
             return true;
         }
         return handleAdditionalScroll(mouseX, mouseY, deltaX, deltaY)
