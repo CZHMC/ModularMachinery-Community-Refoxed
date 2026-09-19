@@ -131,6 +131,19 @@ class PortDefinitionRegistryTest {
     }
 
     @Test
+    void output_priority_uses_the_highest_declared_family_tier() {
+        IOPortKind kind = new PortKinds.CombinedKind("prioritized", IOType.OUTPUT,
+                List.of(
+                        new PortFamilyDescriptor(MMCR.id("item"), IOType.OUTPUT, 2, List.of("item")),
+                        new PortFamilyDescriptor(MMCR.id("fluid"), IOType.OUTPUT, 5, List.of("fluid"))),
+                PortKinds.ITEM_OUTPUT.entityFactory(), PortDefinition.of(id("prioritized"), List.of(
+                        binding("item", IOType.OUTPUT, PortTierPolicy.always()),
+                        binding("fluid", IOType.OUTPUT, PortTierPolicy.always()))));
+
+        assertThat(kind.outputPriority()).isEqualTo(5);
+    }
+
+    @Test
     void preserves_duplicate_bindings_for_the_same_capability_type() {
         CapabilityBinding first = binding("item", IOType.INPUT, PortTierPolicy.always());
         CapabilityBinding duplicate = binding("item", IOType.OUTPUT, PortTierPolicy.always());

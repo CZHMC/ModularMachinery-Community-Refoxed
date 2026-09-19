@@ -19,6 +19,7 @@ import cn.howxu.mmcr.util.SaturatingLong;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,6 +102,12 @@ public final class RequirementHandlerSupport {
 
     public static long scaled(long amount, long parallelism) {
         return SaturatingLong.multiply(amount, parallelism);
+    }
+
+    public static List<MachineCapability> prioritizedOutputCapabilities(List<MachineCapability> capabilities) {
+        return capabilities.stream()
+                .sorted(Comparator.comparingInt(MachineCapability::outputPriority).reversed())
+                .toList();
     }
 
     public static OutputSimulation outputSimulation(long requested, long accepted) {

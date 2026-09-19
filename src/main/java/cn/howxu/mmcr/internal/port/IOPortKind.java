@@ -72,6 +72,10 @@ public interface IOPortKind {
 
     default List<PortFamilyDescriptor> families() { return List.of(); }
 
+    default int outputPriority() {
+        return families().stream().mapToInt(PortFamilyDescriptor::detectionTier).max().orElse(0);
+    }
+
     /** 该 kind 的服务端 tick 钩子,用于 MEK 气体管道分发等。默认无。 */
     default void tick(IOPortBlockEntity be) {}
 

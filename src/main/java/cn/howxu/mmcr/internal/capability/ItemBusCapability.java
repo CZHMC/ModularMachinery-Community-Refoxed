@@ -153,6 +153,11 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     }
 
     @Override
+    public int outputPriority() {
+        return port == null ? 0 : port.kind().outputPriority();
+    }
+
+    @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
         return MachineCapability.super.facet(facetType);

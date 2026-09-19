@@ -44,10 +44,32 @@ class RequirementHandlerSupportTest {
                 .extracting(CapabilityRequests.ResourceAction::insert).isEqualTo(false);
     }
 
+    @Test
+    void prioritized_output_capabilities_sort_stably_without_mutating_the_source() {
+        RecordingCapability low = new RecordingCapability(1);
+        RecordingCapability firstEqual = new RecordingCapability(2);
+        RecordingCapability high = new RecordingCapability(3);
+        RecordingCapability secondEqual = new RecordingCapability(2);
+        List<MachineCapability> capabilities = List.of(low, firstEqual, high, secondEqual);
+
+        assertThat(RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities))
+                .containsExactly(high, firstEqual, secondEqual, low);
+        assertThat(capabilities).containsExactly(low, firstEqual, high, secondEqual);
+    }
+
     private static final class RecordingCapability implements MachineCapability, OperationFacet {
         private static final CapabilityType TYPE = new CapabilityType(
                 Identifier.fromNamespaceAndPath("mmcr_test", "resource_direction"));
         private CapabilityRequests.ResourceRequest<?> request;
+        private final int outputPriority;
+
+        private RecordingCapability() {
+            this(0);
+        }
+
+        private RecordingCapability(int outputPriority) {
+            this.outputPriority = outputPriority;
+        }
 
         @Override
         public CapabilityType type() {
@@ -77,6 +99,11 @@ class RequirementHandlerSupportTest {
                     return Set.of(OperationFacet.class);
                 }
             };
+        }
+
+        @Override
+        public int outputPriority() {
+            return outputPriority;
         }
 
         @Override

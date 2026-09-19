@@ -32,6 +32,10 @@ public interface MachineCapability {
 
     CapabilityView view();
 
+    default int outputPriority() {
+        return 0;
+    }
+
     /**
      * Looks up a facet declared by this capability.
      *

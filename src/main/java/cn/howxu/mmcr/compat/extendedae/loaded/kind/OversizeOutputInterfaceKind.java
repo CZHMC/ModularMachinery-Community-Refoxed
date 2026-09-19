@@ -30,6 +30,7 @@ public final class OversizeOutputInterfaceKind implements InterfaceLogicKind {
     @Override public String id() { return "eae_me_oversize_output_interface"; }
     @Override public IOType ioType() { return IOType.OUTPUT; }
     @Override public List<PortFamilyDescriptor> families() { return AE2ResourceFamilies.outputFamilies(); }
+    @Override public int outputPriority() { return Integer.MAX_VALUE; }
     @Override public BlockEntityType.BlockEntitySupplier<OutputInterfaceBlockEntity> entityFactory() { return (pos, state) -> new OutputInterfaceBlockEntity(pos, state, this); }
     @Override public PortDefinition definition() { return definition; }
     @Override public List<String> modDependencies() { return List.of("ae2", "extendedae"); }

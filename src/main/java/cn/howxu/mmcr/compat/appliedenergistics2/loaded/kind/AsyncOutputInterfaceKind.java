@@ -43,6 +43,11 @@ public final class AsyncOutputInterfaceKind implements InterfaceLogicKind {
     }
 
     @Override
+    public int outputPriority() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
     public BlockEntityType.BlockEntitySupplier<AsyncOutputInterfaceBlockEntity> entityFactory() {
         return (pos, state) -> new AsyncOutputInterfaceBlockEntity(pos, state, this);
     }

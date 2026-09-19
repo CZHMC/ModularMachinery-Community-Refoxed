@@ -54,9 +54,11 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        List<MachineCapability> plannedCapabilities = insert
+                ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
         IOType direction = IOType.valueOf(requirement.io().name());
         boolean allowPartialOutput = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        long maximum = energyMaximum(requirement.fePerTick(), insert, capabilities,
+        long maximum = energyMaximum(requirement.fePerTick(), insert, plannedCapabilities,
                 context.requestedParallelism(), allowPartialOutput);
         if (maximum <= 0) {
             return insert
@@ -71,10 +73,10 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                             requirement.fePerTick(), context.requestedParallelism())), "available", "0"));
         }
         return RequirementHandlerSupport.deferredPlan(context, maximum,
-                (parallelism, reservations) -> planOperations(requirement, capabilities, parallelism,
+                (parallelism, reservations) -> planOperations(requirement, plannedCapabilities, parallelism,
                         context, reservations, insert, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> planOperations(
-                        requirement, capabilities, parallelism, context, reservations, insert, direction,
+                        requirement, plannedCapabilities, parallelism, context, reservations, insert, direction,
                         allowPartialOutput, false)));
     }
 

@@ -78,6 +78,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -455,9 +456,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
             IOType direction = IOType.valueOf(requirement.io().name());
             List<ChemicalPort> ports = chemicalPorts(capabilities, direction);
+            List<ChemicalPort> plannedPorts = output
+                    ? ports.stream().sorted(Comparator.comparingInt(ChemicalPort::outputPriority).reversed()).toList()
+                    : ports;
             boolean resourceRadioactive = matcher.exactHolder() != null
                     && matcher.exactHolder().value().isRadioactive();
-            List<ChemicalPort> matchingPorts = ports.stream()
+            List<ChemicalPort> matchingPorts = plannedPorts.stream()
                     .filter(p -> p.radioactive() == resourceRadioactive)
                     .toList();
             boolean allowPartialOutput = output && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
@@ -506,9 +510,9 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             RequirementHandlerSupport.ConsumeProfile consumed = !output
                     ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), requestedParallelism) : null;
             RequirementPlan.OperationFactory operationFactory = (parallelism, reservations) -> planOperations(
-                    requirement, matcher, ports, parallelism, consumed, reservations, direction, allowPartialOutput, true);
+                    requirement, matcher, plannedPorts, parallelism, consumed, reservations, direction, allowPartialOutput, true);
             RequirementPlan.ReservationFactory reservationFactory = RequirementHandlerSupport.reservationFactory(
-                    (parallelism, reservations) -> planOperations(requirement, matcher, ports, parallelism,
+                    (parallelism, reservations) -> planOperations(requirement, matcher, plannedPorts, parallelism,
                             consumed, reservations, direction, allowPartialOutput, false));
             return RequirementHandlerSupport.deferredPlan(context, maximum, operationFactory, reservationFactory);
         }

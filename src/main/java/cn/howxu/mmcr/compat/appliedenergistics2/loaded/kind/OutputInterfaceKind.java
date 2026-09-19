@@ -60,6 +60,11 @@ public final class OutputInterfaceKind implements InterfaceLogicKind {
     }
 
     @Override
+    public int outputPriority() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
     public BlockEntityType.BlockEntitySupplier<OutputInterfaceBlockEntity> entityFactory() {
         return (pos, state) -> new OutputInterfaceBlockEntity(pos, state, this);
     }

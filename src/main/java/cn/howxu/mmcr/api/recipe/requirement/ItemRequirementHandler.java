@@ -81,6 +81,8 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
     public RequirementPlan plan(ItemRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
         long parallelism = context.requestedParallelism();
+        List<MachineCapability> plannedCapabilities = requirement.io() == RecipeModifier.IOType.OUTPUT
+                ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
         if (requirement.io() == RecipeModifier.IOType.OUTPUT
                 && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
@@ -90,7 +92,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         }
         boolean allowPartialOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                 && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        long maximum = itemMaximum(requirement, capabilities, parallelism, allowPartialOutput);
+        long maximum = itemMaximum(requirement, plannedCapabilities, parallelism, allowPartialOutput);
         if (maximum <= 0) {
             return requirement.io() == RecipeModifier.IOType.OUTPUT
                     ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
@@ -114,10 +116,10 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                 ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), parallelism) : null;
         IOType direction = IOType.valueOf(requirement.io().name());
         return RequirementHandlerSupport.deferredPlan(context, maximum,
-                (finalParallelism, reservations) -> planOperations(requirement, capabilities, finalParallelism,
+                (finalParallelism, reservations) -> planOperations(requirement, plannedCapabilities, finalParallelism,
                         context, consumed, reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
-                        requirement, capabilities, finalParallelism, context, consumed, reservations,
+                        requirement, plannedCapabilities, finalParallelism, context, consumed, reservations,
                         direction, allowPartialOutput, false)));
     }
 

@@ -4,6 +4,8 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterface
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedOutputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeOutputInterfaceKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -75,6 +77,14 @@ class AE2BridgeTest {
         assertThat(bridge.isPort("ae2_me_output_interface")).isTrue();
         assertThat(bridge.isPort("ae2_me_async_output_interface")).isTrue();
         assertThat(bridge.isPort("ae2_me_pattern_interface")).isTrue();
+    }
+
+    @Test
+    void output_interfaces_have_the_highest_output_priority() {
+        assertThat(OutputInterfaceKind.INSTANCE.outputPriority()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(AsyncOutputInterfaceKind.INSTANCE.outputPriority()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(ExtendedOutputInterfaceKind.INSTANCE.outputPriority()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(OversizeOutputInterfaceKind.INSTANCE.outputPriority()).isEqualTo(Integer.MAX_VALUE);
     }
 
     @Test

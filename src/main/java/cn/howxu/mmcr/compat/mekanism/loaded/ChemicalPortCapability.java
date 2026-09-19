@@ -128,6 +128,11 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
     }
 
     @Override
+    public int outputPriority() {
+        return port == null ? 0 : port.kind().outputPriority();
+    }
+
+    @Override
     @Nullable
     public Level level() {
         return port == null ? null : port.getLevel();
