@@ -1,6 +1,9 @@
 repositories {
-    // Mek repo
-    maven { url 'https://modmaven.dev/' }
+
+    maven { 
+        url 'https://modmaven.dev/' 
+    }
+    
     maven {
         // JEI repo
         name = "Jared's maven"
@@ -8,7 +11,7 @@ repositories {
     }
 
     maven {
-        // Modrinth for Rhino
+        // Modrinth
         url = "https://api.modrinth.com/maven"
     }
 
