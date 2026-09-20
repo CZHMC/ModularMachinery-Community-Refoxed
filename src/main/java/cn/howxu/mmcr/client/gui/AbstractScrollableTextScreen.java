@@ -131,7 +131,7 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
                                           ControllerScreenTextComposer.VisualLine line, int x, int y) {
         ControllerTextLine source = line.source();
         if (line.firstSegment() && source.icon() != null) {
-            renderIcon(graphics, source.icon(), x, y - 3);
+            renderIcon(graphics, source.icon(), x + source.leftIndent(), y);
         }
         graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), true);
     }
@@ -149,14 +149,20 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
 
     private static void renderIcon(GuiGraphicsExtractor graphics, ControllerTextLine.Icon icon, int x, int y) {
         switch (icon) {
-            case ControllerTextLine.ItemIcon item -> graphics.fakeItem(item.stack(), x, y);
-            case ControllerTextLine.FluidIcon fluid -> FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, 10, 10);
+            case ControllerTextLine.ItemIcon item -> {
+                graphics.pose().pushMatrix();
+                graphics.pose().translate(x, y);
+                graphics.pose().scale(9F / 16F, 9F / 16F);
+                graphics.fakeItem(item.stack(), 0, 0);
+                graphics.pose().popMatrix();
+            }
+            case ControllerTextLine.FluidIcon fluid -> FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, 9, 9);
             case ControllerTextLine.ChemicalIcon chemical -> {
                 MekanismBridge.ChemicalRenderData data = MekanismBridge.get().chemicalRenderData(chemical.chemicalId());
                 if (data != null) {
                     ChemicalGuiRenderer.drawChemical(graphics,
-                            new ChemicalGuiRenderer.ChemicalRenderState(data.spriteLocation(), data.tint(), 10),
-                            x, y, 10, 10);
+                            new ChemicalGuiRenderer.ChemicalRenderState(data.spriteLocation(), data.tint(), 9),
+                            x, y, 9, 9);
                 }
             }
         }

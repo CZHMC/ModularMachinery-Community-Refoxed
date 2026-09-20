@@ -98,11 +98,31 @@ class ControllerRecipeTextLinesTest {
 
         List<ControllerTextLine> lines = ControllerRecipeTextLines.create(presentation);
 
-        assertThat(lines).hasSize(4);
+        assertThat(lines).hasSize(5);
         assertThat(lines.get(0).text()).isEqualTo(Component.translatable("gui.mmcr.controller.recipe.energy_input", "400"));
         assertThat(lines.get(0).tooltip()).containsExactly(
                 Component.translatable("gui.mmcr.controller.recipe.energy_input_exact", "400"));
-        assertThat(lines.get(3).icon()).isInstanceOf(ControllerTextLine.ItemIcon.class);
+        assertThat(lines.get(3).text())
+                .isEqualTo(Component.translatable("gui.mmcr.controller.recipe_output.title"));
+        assertThat(lines.get(4).icon()).isInstanceOf(ControllerTextLine.ItemIcon.class);
+    }
+
+    @Test
+    void presentationAddsAnIndentedResourceOutputSectionAfterSummaries() {
+        ControllerRecipePresentation presentation = new ControllerRecipePresentation(List.of(
+                new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND), 1F), 1L)),
+                400L, 0L, 0D);
+
+        List<ControllerTextLine> lines = ControllerRecipeTextLines.create(presentation);
+
+        assertThat(lines).extracting(ControllerTextLine::text).containsExactly(
+                Component.translatable("gui.mmcr.controller.recipe.energy_input", "400"),
+                Component.translatable("gui.mmcr.controller.recipe_output.title"),
+                Component.translatable("gui.mmcr.controller.recipe_output.item", "",
+                        new ItemStack(Items.DIAMOND).getHoverName()));
+        assertThat(lines.get(0).leftIndent()).isZero();
+        assertThat(lines.get(1).leftIndent()).isZero();
+        assertThat(lines.get(2).leftIndent()).isEqualTo(4);
     }
 
     @Test

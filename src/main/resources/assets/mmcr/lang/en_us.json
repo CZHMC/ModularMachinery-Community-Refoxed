@@ -199,6 +199,7 @@
   "gui.mmcr.controller.recipe.heat_output": "Heat Output: %s/t",
   "gui.mmcr.controller.recipe.heat_output_exact": "Exact Heat Output: %s/t",
   "gui.mmcr.controller.recipe_output.item": "%s%s",
+  "gui.mmcr.controller.recipe_output.title": "Recipe Output:",
   "gui.mmcr.controller.recipe_output.fluid": "%s %s",
   "gui.mmcr.controller.recipe_output.chemical": "%s %s",
   "gui.mmcr.controller.recipe_output.more": "And more...",

@@ -53,7 +53,7 @@ public final class ControllerScreenTextComposer {
     public record VisualLine(FormattedCharSequence text, int color, ControllerTextLine source,
                              boolean firstSegment) {
         public int textXOffset() {
-            return firstSegment ? source.textXOffset() : 0;
+            return firstSegment ? source.textXOffset() : source.leftIndent();
         }
     }
 }

@@ -14,19 +14,25 @@ import java.util.List;
  * @param color the render color
  * @param icon optional native resource icon rendered before the text
  * @param tooltip tooltip shown for the line or its icon
+ * @param leftIndent left inset for the complete line
  * @author howxu <dev@howxu.cn>
  */
-public record ControllerTextLine(Component text, int color, Icon icon, List<Component> tooltip) {
+public record ControllerTextLine(Component text, int color, Icon icon, List<Component> tooltip, int leftIndent) {
     public ControllerTextLine(Component text, int color) {
-        this(text, color, null, List.of());
+        this(text, color, null, List.of(), 0);
+    }
+
+    public ControllerTextLine(Component text, int color, Icon icon, List<Component> tooltip) {
+        this(text, color, icon, tooltip, 0);
     }
 
     public ControllerTextLine {
         tooltip = List.copyOf(tooltip == null ? List.of() : tooltip);
+        if (leftIndent < 0) throw new IllegalArgumentException("leftIndent must be non-negative");
     }
 
     public int textXOffset() {
-        return icon == null ? 0 : icon.width() + 2;
+        return leftIndent + (icon == null ? 0 : icon.width() + 2);
     }
 
     public sealed interface Icon permits ItemIcon, FluidIcon, ChemicalIcon {
@@ -40,7 +46,7 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
 
         @Override
         public int width() {
-            return 10;
+            return 9;
         }
     }
 
@@ -51,7 +57,7 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
 
         @Override
         public int width() {
-            return 10;
+            return 9;
         }
     }
 
@@ -62,7 +68,7 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
 
         @Override
         public int width() {
-            return 10;
+            return 9;
         }
     }
 }

@@ -66,6 +66,19 @@ class ControllerScreenTextComposerTest {
         assertThat(wrapped.get(1).textXOffset()).isZero();
     }
 
+    @Test
+    void wrap_preserves_output_indent_after_the_icon_segment() throws Exception {
+        ControllerTextLine line = new ControllerTextLine(Component.literal("abcdefghij"), 0xFF123456,
+                new ControllerTextLine.ItemIcon(ItemStack.EMPTY), List.of(), 4);
+
+        List<ControllerScreenTextComposer.VisualLine> wrapped = ControllerScreenTextComposer.wrap(
+                testFont(), List.of(line), 23);
+
+        assertThat(wrapped).hasSize(2);
+        assertThat(wrapped.get(0).textXOffset()).isEqualTo(15);
+        assertThat(wrapped.get(1).textXOffset()).isEqualTo(4);
+    }
+
     static Font testFont() throws Exception {
         Unsafe unsafe = unsafe();
         Font font = (Font) unsafe.allocateInstance(Font.class);

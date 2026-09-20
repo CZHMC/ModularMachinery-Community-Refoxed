@@ -23,6 +23,7 @@ import java.util.List;
  */
 final class ControllerRecipeTextLines {
     static final int MAX_OUTPUT_LINES = 64;
+    private static final int OUTPUT_INDENT = 4;
 
     private ControllerRecipeTextLines() {
     }
@@ -46,7 +47,12 @@ final class ControllerRecipeTextLines {
             lines.add(summary("gui.mmcr.controller.recipe.heat_output",
                     "gui.mmcr.controller.recipe.heat_output_exact", compact, exact));
         }
-        lines.addAll(outputs(presentation.outputs()));
+        List<ControllerTextLine> outputs = outputs(presentation.outputs());
+        if (!outputs.isEmpty()) {
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.title"),
+                    MachineControllerScreen.STATUS_LABEL_COLOR));
+            lines.addAll(outputs);
+        }
         return List.copyOf(lines);
     }
 
@@ -59,7 +65,7 @@ final class ControllerRecipeTextLines {
         if (lines.size() > MAX_OUTPUT_LINES) {
             lines.subList(MAX_OUTPUT_LINES - 1, lines.size()).clear();
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.more"),
-                    MachineControllerScreen.STATUS_LABEL_COLOR));
+                    MachineControllerScreen.STATUS_LABEL_COLOR, null, List.of(), OUTPUT_INDENT));
         }
         return List.copyOf(lines);
     }
@@ -91,7 +97,8 @@ final class ControllerRecipeTextLines {
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.item", count,
                     item.stack().getHoverName()), MachineControllerScreen.STATUS_LABEL_COLOR,
                     new ControllerTextLine.ItemIcon(iconStack),
-                    List.of(item.stack().getHoverName(), Component.literal(ReadableNumber.formatExact(output.amount()))));
+                    List.of(item.stack().getHoverName(), Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    OUTPUT_INDENT);
         }
         if (output.output() instanceof MachineOutput.FluidOutput fluid) {
             FluidStack iconStack = fluid.stack().copy();
@@ -100,7 +107,8 @@ final class ControllerRecipeTextLines {
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.fluid", amount,
                     fluidName(fluid.stack())), MachineControllerScreen.STATUS_LABEL_COLOR,
                     new ControllerTextLine.FluidIcon(iconStack),
-                    List.of(fluidName(fluid.stack()), Component.literal(ReadableNumber.formatExact(output.amount()))));
+                    List.of(fluidName(fluid.stack()), Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    OUTPUT_INDENT);
         }
         if (output.output() instanceof LoadedChemicalOutput chemical) {
             MekanismBridge.ChemicalRenderData data = MekanismBridge.get().chemicalRenderData(chemical.id());
@@ -108,7 +116,8 @@ final class ControllerRecipeTextLines {
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.chemical",
                     fluidAmount(output.amount()), data.displayName()), MachineControllerScreen.STATUS_LABEL_COLOR,
                     new ControllerTextLine.ChemicalIcon(chemical.id(), output.amount()),
-                    List.of(data.displayName(), Component.literal(ReadableNumber.formatExact(output.amount()))));
+                    List.of(data.displayName(), Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    OUTPUT_INDENT);
         }
         throw new IllegalArgumentException("Unsupported controller recipe output: " + output.output().outputType().id());
     }
