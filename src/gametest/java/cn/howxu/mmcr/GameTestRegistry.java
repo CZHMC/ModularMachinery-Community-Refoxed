@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
+import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
@@ -231,6 +232,14 @@ public final class GameTestRegistry {
         //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
         register(event, "eae_me_extended_pattern_slot_35", 100,
                 helper -> new AE2PatternInterfaceGameTest().extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(helper));
+        register(event, "appflux_me_flux_input_interface", 100,
+                helper -> new AppliedFluxInterfaceGameTest().portBlocksResolveToFluxBlockEntities(helper));
+        register(event, "appflux_me_flux_input_grid_node", 100,
+                helper -> new AppliedFluxInterfaceGameTest().gridNodeHostsAreExposedAndExternalFeIsSuppressed(helper));
+        register(event, "appflux_me_flux_input_capability_family", 100,
+                helper -> new AppliedFluxInterfaceGameTest().fluxCapabilitiesBelongToEnergyFamilyWithoutTransferFacet(helper));
+        register(event, "appflux_me_flux_output_interface", 100,
+                helper -> new AppliedFluxInterfaceGameTest().controllerFormsWithFluxPortsAndResolvesEnergyFamily(helper));
     }
 
     public static void registerMachineDefinitions(MMCRMachineDefinationsEvent event) {
