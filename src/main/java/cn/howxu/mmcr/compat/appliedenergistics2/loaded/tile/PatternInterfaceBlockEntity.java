@@ -168,7 +168,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
                 controllerCapacity = Math.max(0L, boundedLaneLimit - factoryLaneCount)
                         * Math.max(1L, snapshot.maxParallelism());
             } else {
-                controllerCapacity = snapshot.crafting().recipeId() == null ? 1L : 0L;
+                controllerCapacity = snapshot.crafting().recipeId() == null ? snapshot.maxParallelism() : 0L;
             }
             if (controllerCapacity > Long.MAX_VALUE - capacity) return Long.MAX_VALUE;
             capacity += controllerCapacity;
@@ -192,13 +192,16 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
             if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)) continue;
             var snapshot = controller.runtimeSnapshot();
             if (!snapshot.structure().formed() || controller.isRedstonePaused()) continue;
-            if (!controller.hasFactoryController()) continue;
             long parallelism = Math.max(1L, snapshot.maxParallelism());
             List<MachineRecipe> recipes = controller.recipesForMachine();
             for (int i = 0; i < recipes.size(); i++) {
                 MachineRecipe recipe = recipes.get(i);
                 if (recipe.maxThreads() <= 0) continue;
                 if (!controller.patternOutputsMatch(recipe, snapshot, patternOutputs)) continue;
+                if (!controller.hasFactoryController()) {
+                    if (parallelism > capacity) capacity = parallelism;
+                    continue;
+                }
                 int activeForRecipe = 0;
                 Identifier recipeId = recipe.id();
                 List<CraftingStateSnapshot> lanes = snapshot.factory().lanes();
