@@ -1,9 +1,24 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
@@ -18,17 +33,24 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.ConfigTestSupport;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -118,6 +140,49 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
+    void async_start_prefetches_only_during_the_main_thread_shared_io_commit() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller,
+                new DynamicMachine(machineId, "async prefetch", new BlockArray(Map.of())));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        AsyncPrefetchNetworkCapability network = new AsyncPrefetchNetworkCapability(new BlockPos(1, 0, 0));
+        network.setLevel(level);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null, network,
+                network.getBlockPos(), network.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_execution_prefetch"), machineId, 2,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+
+        // The worker continuation has yielded lifecycle and screen-flush work, but shared IO is not resolved yet.
+        MachineAsyncCoordinator.get(level).completeTick();
+        assertThat(network.planCalls()).isZero();
+        assertThat(network.commitCalls()).isZero();
+        assertThat(network.planThread()).isNull();
+        assertThat(network.commitThread()).isNull();
+        assertThat(thread.runtime().active()).isFalse();
+
+        completeTick(controller);
+
+        assertThat(network.planCalls()).isEqualTo(1);
+        assertThat(network.commitCalls()).isEqualTo(1);
+        assertThat(network.committedAmount()).isEqualTo(4L);
+        assertThat(network.planThread()).isSameAs(Thread.currentThread());
+        assertThat(network.commitThread()).isSameAs(Thread.currentThread());
+        assertThat(thread.runtime().active()).isTrue();
+    }
+
+    @Test
     void async_finish_forwards_a_shared_io_restart_continuation() {
         AsyncExecutionContext context = new AsyncExecutionContext(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 0L));
         AsyncContinuation continuation = AsyncCraftingExecution.finish("base", 1L);
@@ -137,5 +202,116 @@ class AsyncCraftingExecutionTest {
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
         sharedIo.resolve(level);
         MachineAsyncCoordinator.get(level).completeTick(() -> sharedIo.resolve(level));
+    }
+
+    private static final class AsyncPrefetchNetworkCapability extends BlockEntity
+            implements CapabilityHost, MachineCapability, RecipeEnergyPrefetchFacet, ValueFacet<LongValueStorage> {
+        private final LongValueStorage storage = new LongValueStorage(100L, 100L, null);
+        private final CapabilityType type = new CapabilityType(EnergyRequirement.TYPE.id());
+        private final CapabilityView view = new CapabilityView() {
+            @Override
+            public CapabilityType type() {
+                return AsyncPrefetchNetworkCapability.this.type;
+            }
+
+            @Override
+            public CapabilityDirections directions() {
+                return CapabilityDirections.input();
+            }
+
+            @Override
+            public Set<Class<? extends CapabilityFacet>> facets() {
+                return Set.of(RecipeEnergyPrefetchFacet.class, ValueFacet.class);
+            }
+        };
+        private final AtomicInteger planCalls = new AtomicInteger();
+        private final AtomicInteger commitCalls = new AtomicInteger();
+        private final AtomicLong committedAmount = new AtomicLong();
+        private final AtomicReference<Thread> planThread = new AtomicReference<>();
+        private final AtomicReference<Thread> commitThread = new AtomicReference<>();
+
+        private AsyncPrefetchNetworkCapability(BlockPos pos) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), pos,
+                    ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+            storage.setAmount(100L);
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() {
+            return new CapabilitySnapshot(List.of(this));
+        }
+
+        @Override
+        public String reservationKey() {
+            return "test:async-prefetch-network";
+        }
+
+        @Override
+        public CapabilityDirections directions() {
+            return CapabilityDirections.input();
+        }
+
+        @Override
+        public Optional<PrefetchPlan> planPrefetch(long requestedAmount) {
+            planCalls.incrementAndGet();
+            planThread.set(Thread.currentThread());
+            return Optional.of(new PrefetchPlan(requestedAmount, transaction -> {
+                commitCalls.incrementAndGet();
+                commitThread.set(Thread.currentThread());
+                long extracted = storage.extract(requestedAmount, transaction);
+                if (extracted != requestedAmount) throw new IllegalStateException("async prefetch storage shortage");
+                committedAmount.addAndGet(extracted);
+                return CapabilityResult.successful();
+            }));
+        }
+
+        @Override
+        public void restoreReservation(long amount) {
+        }
+
+        @Override
+        public long releaseReservation(long amount) {
+            return amount;
+        }
+
+        @Override
+        public CapabilityType type() {
+            return type;
+        }
+
+        @Override
+        public CapabilityView view() {
+            return view;
+        }
+
+        @Override
+        public LongValueStorage storage() {
+            return storage;
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            return transaction -> CapabilityResult.successful();
+        }
+
+        private int planCalls() {
+            return planCalls.get();
+        }
+
+        private int commitCalls() {
+            return commitCalls.get();
+        }
+
+        private long committedAmount() {
+            return committedAmount.get();
+        }
+
+        private Thread planThread() {
+            return planThread.get();
+        }
+
+        private Thread commitThread() {
+            return commitThread.get();
+        }
     }
 }

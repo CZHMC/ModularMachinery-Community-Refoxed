@@ -58,7 +58,7 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
-    void start_yields_the_shared_io_reservation_without_completing_the_worker() {
+    void start_worker_only_yields_main_thread_steps_before_shared_io_commit() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", 1L);
 
         AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
@@ -76,6 +76,7 @@ class AsyncCraftingExecutionTest {
                 .isEqualTo(MainThreadStep.Kind.SCREEN_TEXT_FLUSH);
         AsyncContinuation.Yield.MainThread mainThread = (AsyncContinuation.Yield.MainThread) yield;
         assertThat(mainThread.step().kind()).isEqualTo(MainThreadStep.Kind.BEFORE_START);
+        assertThat(execution.workerPlannedOperationCount()).isZero();
         assertThat(mainThread.step().execute()).isInstanceOf(MainThreadStep.Result.Pending.class);
     }
 

@@ -84,6 +84,9 @@ public final class PatternStartReservation implements AutoCloseable {
             }
             transactionWrites.accept(transaction);
             transaction.commit();
+        } catch (RuntimeException exception) {
+            rollback();
+            return false;
         }
         activate();
         return true;

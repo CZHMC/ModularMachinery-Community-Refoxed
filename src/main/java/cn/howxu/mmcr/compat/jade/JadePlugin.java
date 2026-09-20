@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.runtime.JadeTextSupport;
@@ -22,6 +23,7 @@ public final class JadePlugin implements IWailaPlugin {
         registration.registerBlockDataProvider(MachineControllerDataProvider.INSTANCE, MachineControllerBlockEntity.class);
         registration.registerBlockDataProvider(RecipeOutputDataProvider.INSTANCE, MachineControllerBlockEntity.class);
         AE2Bridge.get().registerJadeCommon(registration);
+        AppliedFluxBridge.get().registerJadeCommon(registration);
     }
 
     @Override
@@ -33,5 +35,6 @@ public final class JadePlugin implements IWailaPlugin {
         registration.addConfig(ParallelControllerComponentProvider.UID, true);
         registration.registerBlockComponent(ParallelControllerComponentProvider.INSTANCE, ParallelControllerBlock.class);
         AE2Bridge.get().registerJadeClient(registration);
+        AppliedFluxBridge.get().registerJadeClient(registration);
     }
 }

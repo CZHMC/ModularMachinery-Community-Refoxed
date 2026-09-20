@@ -210,6 +210,7 @@ public final class ModRecipeProvider extends RecipeProvider {
 
         generatedPortRecipes();
         ae2InterfaceRecipes();
+        appliedFluxInterfaceRecipes();
 
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
                 .pattern("DBD")
@@ -460,6 +461,28 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .requires(pattern)
                 .requires(externalItem("extendedae", "ex_pattern_provider"))
                 .save(whenLoaded("ae2", "extendedae"));
+    }
+
+    private void appliedFluxInterfaceRecipes() {
+        if (!ModItems.ITEMS.containsKey("appflux_me_flux_input_interface")) return;
+        if (!ModItems.ITEMS.containsKey("appflux_me_flux_output_interface")) return;
+        ItemLike accessor = externalItem("appflux", "flux_accessor");
+        if (accessor == Items.AIR) return;
+        ItemLike input = ModItems.ITEMS.get("appflux_me_flux_input_interface").get();
+        ItemLike output = ModItems.ITEMS.get("appflux_me_flux_output_interface").get();
+
+        shaped(input, 1)
+                .pattern("A")
+                .pattern("B")
+                .define('A', accessor)
+                .define('B', ModBlocks.BASIC_CASING.get())
+                .save(whenLoaded("ae2", "appflux"));
+        shaped(output, 1)
+                .pattern("A")
+                .pattern("B")
+                .define('A', ModBlocks.BASIC_CASING.get())
+                .define('B', accessor)
+                .save(whenLoaded("ae2", "appflux"));
     }
 
     private ItemLike combinedRecipe(String resultId, String itemId, String fluidId) {

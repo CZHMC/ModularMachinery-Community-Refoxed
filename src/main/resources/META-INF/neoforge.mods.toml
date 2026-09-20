@@ -74,6 +74,13 @@ ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
+modId="appflux"
+type="optional"
+versionRange="[26.1-1.0.1-neoforge,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
 modId="extendedae"
 type="optional"
 versionRange="[26.1-1.0.3-neoforge,)"

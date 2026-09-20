@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
@@ -106,6 +107,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                 }
                 return InteractionResult.CONSUME;
             }
+            if (AppliedFluxBridge.get().isPort(kind.id())) return InteractionResult.CONSUME;
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) {
                 PortMenuKind menuKind = menuKindFor(kind.id());

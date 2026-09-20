@@ -79,6 +79,24 @@ class ModCapabilitiesTest {
     }
 
     @Test
+    void internal_only_binding_is_not_selected_for_native_transfer_registration() {
+        CapabilityBinding binding = CapabilityBinding.internalOnly(
+                new CapabilityType(MMCR.id("internal_only_test")), CapabilityDirections.input(), _ -> null,
+                PortTierPolicy.always());
+        PortDefinition definition = PortDefinition.of(MMCR.id("internal_only_test_port"), binding);
+        IOPortKind kind = new IOPortKind() {
+            @Override public String id() { return "internal_only_test_port"; }
+            @Override public IOType ioType() { return IOType.INPUT; }
+            @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+                return (_, _) -> null;
+            }
+            @Override public PortDefinition definition() { return definition; }
+        };
+
+        assertThat(ModCapabilities.nativeTransferBindings(kind, Set.of())).isEmpty();
+    }
+
+    @Test
     void native_resource_provider_exposes_resource_facet_without_transfer_facet() {
         ResourceOnlyCapability capability = new ResourceOnlyCapability();
         CapabilityBinding binding = new CapabilityBinding(capability.type(), CapabilityDirections.input(),

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.capability.plan;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
@@ -12,6 +13,7 @@ import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -116,6 +118,52 @@ class CraftingPlanTest {
         assertThat(plan.commit(transaction -> storage.set("value", DataValue.of(1), transaction))).isTrue();
         assertThat(value.value).isEqualTo(1);
         assertThat(storage.get("value")).contains(DataValue.of(1));
+    }
+
+    @Test
+    void input_operations_can_join_caller_owned_transaction() {
+        LongValueStorage storage = new LongValueStorage(10L, 10L, null);
+        CapabilityOperation input = transaction -> {
+            storage.insert(3L, transaction);
+            return CapabilityResult.successful();
+        };
+        CapabilityOperation output = transaction -> {
+            storage.insert(4L, transaction);
+            return CapabilityResult.successful();
+        };
+        CraftingPlan plan = new CraftingPlan(
+                List.of(new RequirementPlan(0, 1, List.of(input), null),
+                        new RequirementPlan(1, 1, List.of(output), null)),
+                1,
+                Map.of(0, RecipeModifier.IOType.INPUT, 1, RecipeModifier.IOType.OUTPUT));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.commitInputs(transaction)).isTrue();
+            assertThat(storage.amount()).isEqualTo(3L);
+            transaction.commit();
+        }
+
+        assertThat(storage.amount()).isEqualTo(3L);
+    }
+
+    @Test
+    void caller_owned_transaction_rolls_back_uncommitted_input_operations() {
+        LongValueStorage storage = new LongValueStorage(10L, 10L, null);
+        CapabilityOperation input = transaction -> {
+            storage.insert(3L, transaction);
+            return CapabilityResult.successful();
+        };
+        CraftingPlan plan = new CraftingPlan(
+                List.of(new RequirementPlan(0, 1, List.of(input), null)),
+                1,
+                Map.of(0, RecipeModifier.IOType.INPUT));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.commitInputs(transaction)).isTrue();
+            assertThat(storage.amount()).isEqualTo(3L);
+        }
+
+        assertThat(storage.amount()).isZero();
     }
 
     @Test

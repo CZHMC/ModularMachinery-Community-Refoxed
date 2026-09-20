@@ -53,7 +53,7 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
                     .filter(capability -> capability.directions().supports(IOType.OUTPUT)
                             && !capability.directions().supports(IOType.INPUT))
                     .flatMap(InterfaceJadeDataProvider::outputDisplays)
-                    .filter(display -> (display.label().equals("item") || display.label().equals("fluid"))
+                    .filter(display -> isSupportedDisplay(display.label())
                             && !display.value().equals("0"))
                     .forEach(display -> {
                         CompoundTag output = new CompoundTag();
@@ -90,7 +90,7 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
             String label = output.getStringOr(LABEL, "");
             String value = output.getStringOr(VALUE, "");
             String unit = output.getStringOr(UNIT, "");
-            if ((label.equals("item") || label.equals("fluid")) && !value.isEmpty()) {
+            if (isSupportedDisplay(label) && !value.isEmpty()) {
                 outputs.add(new OutputPresentation(label, value, unit));
             }
         }
@@ -98,6 +98,10 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
     }
 
     record OutputPresentation(String label, String value, String unit) {
+    }
+
+    private static boolean isSupportedDisplay(String label) {
+        return label.equals("item") || label.equals("fluid") || label.equals("energy");
     }
 
     private static int state(IGridNode node) {

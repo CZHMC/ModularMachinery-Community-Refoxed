@@ -81,6 +81,13 @@ public final class CraftingPlan {
         return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT);
     }
 
+    /** Commits only input operations into a caller-owned transaction. */
+    public boolean commitInputs(TransactionContext transaction) {
+        if (failure != null) return false;
+        return commitOperations(Objects.requireNonNull(transaction, "transaction"),
+                requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT);
+    }
+
     public boolean commitOutputs() {
         return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.OUTPUT);
     }

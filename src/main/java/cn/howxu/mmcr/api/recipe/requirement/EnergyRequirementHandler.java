@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.util.IOType;
@@ -59,7 +60,7 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         IOType direction = IOType.valueOf(requirement.io().name());
         boolean allowPartialOutput = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         long maximum = energyMaximum(requirement.fePerTick(), insert, plannedCapabilities,
-                context.requestedParallelism(), allowPartialOutput);
+                context.requestedParallelism(), allowPartialOutput, context.reservations());
         if (maximum <= 0) {
             return insert
                     ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
@@ -105,18 +106,21 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         List<CapabilityOperation> operations = new ArrayList<>();
         long requested = insert ? requestedAmount(requirement, parallelism) : 0L;
         long required = RequirementHandlerSupport.scaled(requirement.fePerTick(), parallelism);
-        List<EnergyAction> actions = reserveEnergy(required, parallelism, insert, capabilities, reservations);
+        List<EnergyAction> actions = reserveEnergy(required, parallelism, insert, capabilities, reservations,
+                materialize, operations);
         long accepted = energyAmount(actions);
         if (accepted < required && (!allowPartialOutput || !insert)) {
             FailureReason reason = insert ? BuiltinFailureReasons.MISSING_OUTPUT
                     : BuiltinFailureReasons.MISSING_ENERGY;
             return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
                     context, reason, Map.of("required", Long.toString(required),
-                            "available", Long.toString(accepted), "shortfall", Long.toString(required - accepted))),
+                            "available", Long.toString(accepted), "shortfall",
+                            Long.toString(required - accepted))),
                     RequirementHandlerSupport.outputSimulation(requested, accepted));
         }
         if (materialize) {
             for (EnergyAction action : actions) {
+                if (action.admissionOperation()) continue;
                 operations.add(action.capability().prepare(new CapabilityRequests.ValueRequest(
                         action.capability().view().type(), direction,
                         parallelism, action.amount(), insert)));
@@ -134,9 +138,9 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
     }
 
     private static long energyMaximum(long perBatch, boolean insert, List<MachineCapability> capabilities,
-                                      long requested, boolean allowPartialOutput) {
-        if (insert && allowPartialOutput) return hasEnergyCapacity(capabilities) ? requested : 0;
-        PlanningReservations reservations = new PlanningReservations();
+                                      long requested, boolean allowPartialOutput,
+                                      PlanningReservations reservations) {
+        if (insert && allowPartialOutput) return hasEnergyCapacity(capabilities, reservations) ? requested : 0;
         long lower = 0L;
         long upper = requested;
         while (lower < upper) {
@@ -145,13 +149,18 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
             if (canReserveEnergyBatches(perBatch, candidate, insert, capabilities, reservations)) lower = candidate;
             else upper = candidate - 1L;
         }
-        if (insert && lower == 0 && hasEnergyCapacity(capabilities)) return 1;
+        if (insert && lower == 0 && hasEnergyCapacity(capabilities, reservations)) return 1;
         return lower;
     }
 
-    private static boolean hasEnergyCapacity(List<MachineCapability> capabilities) {
-        PlanningReservations reservations = new PlanningReservations();
+    private static boolean hasEnergyCapacity(List<MachineCapability> capabilities,
+                                             PlanningReservations reservations) {
         for (MachineCapability capability : capabilities) {
+            EnergyOutputAdmissionFacet admission = outputAdmission(capability);
+            if (admission != null) {
+                if (admission.outputCapacity(reservations) > 0L) return true;
+                continue;
+            }
             LongValueStorage storage = energyStorage(capability);
             if (storage != null
                     && storage.transferLimit() > 0L
@@ -166,6 +175,15 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         long required = RequirementHandlerSupport.scaled(perBatch, batches);
         long available = 0L;
         for (MachineCapability capability : capabilities) {
+            if (insert) {
+                EnergyOutputAdmissionFacet admission = outputAdmission(capability);
+                if (admission != null) {
+                    available = RequirementHandlerSupport.saturatingAdd(available,
+                            Math.max(0L, admission.outputCapacity(reservations)));
+                    if (available >= required) return true;
+                    continue;
+                }
+            }
             LongValueStorage storage = energyStorage(capability);
             if (storage == null) continue;
             long transferable = Math.min(reservations.valueAvailable(storage, insert),
@@ -178,17 +196,31 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
 
     private static List<EnergyAction> reserveEnergy(long amount, long batches, boolean insert,
                                                     List<MachineCapability> capabilities,
-                                                    PlanningReservations reservations) {
+                                                    PlanningReservations reservations, boolean materialize,
+                                                    List<CapabilityOperation> operations) {
         long remaining = amount;
         List<EnergyAction> actions = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
+            if (insert) {
+                EnergyOutputAdmissionFacet admission = outputAdmission(capability);
+                if (admission != null) {
+                    if (admission.outputCapacity(reservations) < remaining) continue;
+                    EnergyOutputAdmissionFacet.OutputPlan planned = admission.planOutput(remaining, reservations,
+                            materialize);
+                    if (planned.accepted() != remaining) continue;
+                    if (materialize && planned.operation() != null) operations.add(planned.operation());
+                    actions.add(new EnergyAction(capability, remaining, true));
+                    remaining = 0L;
+                    break;
+                }
+            }
             LongValueStorage storage = energyStorage(capability);
             if (storage == null) continue;
             long available = reservations.valueAvailable(storage, insert);
             long moved = Math.min(remaining, Math.min(available,
                     RequirementHandlerSupport.scaled(storage.transferLimit(), batches)));
             if (moved <= 0L || !reservations.reserveValueTotal(storage, moved, insert)) continue;
-            actions.add(new EnergyAction(capability, moved));
+            actions.add(new EnergyAction(capability, moved, false));
             remaining -= moved;
             if (remaining == 0L) break;
         }
@@ -198,6 +230,10 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
     private static LongValueStorage energyStorage(MachineCapability capability) {
         ValueFacet<?> facet = capability == null ? null : capability.facet(ValueFacet.class).orElse(null);
         return facet != null && facet.storage() instanceof LongValueStorage storage ? storage : null;
+    }
+
+    private static EnergyOutputAdmissionFacet outputAdmission(MachineCapability capability) {
+        return capability == null ? null : capability.facet(EnergyOutputAdmissionFacet.class).orElse(null);
     }
 
     private static long energyAmount(List<EnergyAction> actions) {
@@ -210,6 +246,6 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         return RequirementHandlerSupport.scaled(requirement.fePerTick(), parallelism);
     }
 
-    private record EnergyAction(MachineCapability capability, long amount) {
+    private record EnergyAction(MachineCapability capability, long amount, boolean admissionOperation) {
     }
 }

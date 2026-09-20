@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
@@ -28,7 +29,9 @@ public final class DynamicOverlayTextures {
 
     public static Identifier portOverlayTexture(IOPortKind kind) {
         if (kind == null) return DynamicOverlayBakedModel.defaultPortOverlayTexture();
-        Identifier compatibilityOverlay = AE2Bridge.get().portOverlayTexture(kind);
+        Identifier compatibilityOverlay = AppliedFluxBridge.get().portOverlayTexture(kind);
+        if (compatibilityOverlay != null) return compatibilityOverlay;
+        compatibilityOverlay = AE2Bridge.get().portOverlayTexture(kind);
         if (compatibilityOverlay != null) return compatibilityOverlay;
         if (kind instanceof PortKinds.ChemicalKind chemical) {
             return chemicalOverlay(chemical);

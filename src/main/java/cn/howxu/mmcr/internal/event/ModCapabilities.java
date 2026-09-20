@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -54,6 +55,7 @@ public final class ModCapabilities {
         }
         MekanismBridge.get().registerCapabilities(event);
         AE2Bridge.get().registerCapabilities(event);
+        AppliedFluxBridge.get().registerCapabilities(event);
         event.registerBlockEntity(
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get("factory_controller").get(),
@@ -90,22 +92,33 @@ public final class ModCapabilities {
         for (CapabilityBinding binding : externalBindings) {
             context.bindings(binding.type()).forEach(exposure -> registerExternalPort(event, kind, binding, exposure));
         }
-        List<CapabilityBinding> nativeBindings = kind.definition().bindings().stream()
-                .filter(binding -> !externallyExposed.contains(binding.type()))
-                .toList();
+        List<CapabilityBinding> nativeBindings = nativeTransferBindings(kind, externallyExposed);
         if (!nativeBindings.isEmpty()) registerFacetProviders(event, kind, nativeBindings);
+    }
+
+    static List<CapabilityBinding> nativeTransferBindings(IOPortKind kind,
+                                                          Set<CapabilityType> externallyExposed) {
+        if (kind == null) return List.of();
+        Set<CapabilityType> exposed = externallyExposed == null ? Set.of() : externallyExposed;
+        return kind.definition().bindings().stream()
+                .filter(CapabilityBinding::nativeTransferExposure)
+                .filter(binding -> !exposed.contains(binding.type()))
+                .toList();
     }
 
     static List<CapabilityBinding> externalBindings(IOPortKind kind) {
         if (kind == null) return List.of();
         return kind.definition().bindings().stream()
+                .filter(CapabilityBinding::nativeTransferExposure)
                 .filter(binding -> binding.externalExposure().isPresent())
                 .toList();
     }
 
     private static void bindNativeExposures(ExternalCapabilityContext context) {
-        PortKinds.all().forEach(kind -> kind.definition().bindings().forEach(binding ->
-                binding.externalExposure().ifPresent(exposure -> bindExposure(context, binding.type(), exposure))));
+        PortKinds.all().forEach(kind -> kind.definition().bindings().stream()
+                .filter(CapabilityBinding::nativeTransferExposure)
+                .forEach(binding -> binding.externalExposure()
+                        .ifPresent(exposure -> bindExposure(context, binding.type(), exposure))));
     }
 
     private static <T> void bindExposure(ExternalCapabilityContext context, CapabilityType type,

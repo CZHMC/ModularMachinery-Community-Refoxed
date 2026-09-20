@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -980,6 +981,83 @@ class RequirementPlannerTest {
                     assertThat(simulation.accepted()).isEqualTo(50L);
                     assertThat(simulation.fit()).isEqualTo(OutputFit.PARTIAL);
                 });
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount()).isEqualTo(100L);
+    }
+
+    @Test
+    void energy_output_admission_reserves_capacity_and_materializes_operation() {
+        EnergyAdmissionCapability capability = new EnergyAdmissionCapability(8L, 0);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 8L)),
+                List.of(capability), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(capability.reservationCalls).isPositive();
+        assertThat(capability.materializedOperations).isEqualTo(1);
+        assertThat(result.plan().requirements()).singleElement()
+                .satisfies(plan -> assertThat(plan.operations()).isNotEmpty());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(capability.committedAmount).isEqualTo(8L);
+    }
+
+    @Test
+    void admission_output_requires_full_remaining_capacity_in_partial_mode() {
+        EnergyAdmissionCapability capability = new EnergyAdmissionCapability(3L, 0);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 5L)),
+                List.of(capability), new PlanningContext(1, 0, true));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(capability.planOutputCalls).isZero();
+        assertThat(result.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(5L);
+                    assertThat(simulation.accepted()).isZero();
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.NONE);
+                });
+    }
+
+    @Test
+    void output_priority_keeps_higher_priority_storage_before_admission() {
+        LongValueStorage storage = new LongValueStorage(5L, 5L, null);
+        StorageCapability ordinary = new StorageCapability(EnergyRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
+        EnergyAdmissionCapability admission = new EnergyAdmissionCapability(5L, -1);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 5L)),
+                List.of(admission, ordinary), new PlanningContext(1, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(admission.planOutputCalls).isZero();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount()).isEqualTo(5L);
+    }
+
+    @Test
+    void ordinary_partial_energy_output_is_not_disabled_by_another_admission_capability() {
+        LongValueStorage storage = new LongValueStorage(3L, 3L, null);
+        StorageCapability ordinary = new StorageCapability(EnergyRequirement.TYPE.id(),
+                CapabilityDirections.output(), storage);
+        EnergyAdmissionCapability admission = new EnergyAdmissionCapability(1L, -1);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 5L)),
+                List.of(admission, ordinary), new PlanningContext(1, 0, true));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.outputSimulations()).singleElement()
+                .satisfies(simulation -> {
+                    assertThat(simulation.requested()).isEqualTo(5L);
+                    assertThat(simulation.accepted()).isEqualTo(3L);
+                    assertThat(simulation.fit()).isEqualTo(OutputFit.PARTIAL);
+                });
+        assertThat(admission.planOutputCalls).isZero();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount()).isEqualTo(3L);
     }
 
     @Test
@@ -2353,6 +2431,93 @@ class RequirementPlannerTest {
             return new RequirementPlan(context.requirementIndex(), limit, List.of(), null,
                     (parallelism, reservations) -> new RequirementPlan.OperationPlan(
                             List.of(transaction -> CapabilityResult.successful()), null));
+        }
+    }
+
+    /**
+     * Energy output admission fixture that records reservation and operation behavior.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class EnergyAdmissionCapability implements MachineCapability, EnergyOutputAdmissionFacet {
+        private final CapabilityType type = new CapabilityType(EnergyRequirement.TYPE.id());
+        private final long capacity;
+        private final int outputPriority;
+        private final Object reservationIdentity = new Object();
+        private final Object reservationKey = new Object();
+        private final CapabilityView view = new CapabilityView() {
+            @Override
+            public CapabilityType type() {
+                return EnergyAdmissionCapability.this.type;
+            }
+
+            @Override
+            public CapabilityDirections directions() {
+                return EnergyAdmissionCapability.this.directions();
+            }
+
+            @Override
+            public Set<Class<? extends CapabilityFacet>> facets() {
+                return Set.of(EnergyOutputAdmissionFacet.class);
+            }
+        };
+        private int planOutputCalls;
+        private int reservationCalls;
+        private int materializedOperations;
+        private long committedAmount;
+
+        private EnergyAdmissionCapability(long capacity, int outputPriority) {
+            this.capacity = capacity;
+            this.outputPriority = outputPriority;
+        }
+
+        @Override
+        public CapabilityType type() {
+            return type;
+        }
+
+        @Override
+        public CapabilityDirections directions() {
+            return CapabilityDirections.output();
+        }
+
+        @Override
+        public CapabilityView view() {
+            return view;
+        }
+
+        @Override
+        public int outputPriority() {
+            return outputPriority;
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            throw new AssertionError("admission capability must not use generic energy operations");
+        }
+
+        @Override
+        public long outputCapacity(PlanningReservations reservations) {
+            return reservations.outputAvailable(reservationIdentity, reservationKey, capacity);
+        }
+
+        @Override
+        public OutputPlan planOutput(long requestedAmount, PlanningReservations reservations, boolean materialize) {
+            planOutputCalls++;
+            long accepted = Math.min(requestedAmount, outputCapacity(reservations));
+            if (accepted <= 0L) {
+                return new OutputPlan(0L, null);
+            }
+            if (!reservations.reserveOutput(reservationIdentity, reservationKey, accepted)) {
+                return new OutputPlan(0L, null);
+            }
+            reservationCalls++;
+            if (!materialize || accepted != requestedAmount) return new OutputPlan(accepted, null);
+            materializedOperations++;
+            return new OutputPlan(accepted, transaction -> {
+                committedAmount += accepted;
+                return CapabilityResult.successful();
+            });
         }
     }
 

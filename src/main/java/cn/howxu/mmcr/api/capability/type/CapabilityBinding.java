@@ -19,16 +19,24 @@ import java.util.Optional;
  * @param factory the factory used to create the hosted capability
  * @param tierPolicy the policy used to determine whether the binding is available at a tier
  * @param externalExposure the optional native capability provider exposed for this binding
+ * @param nativeTransferExposure whether this binding is exposed through native transfer capabilities
  * @author howxu <dev@howxu.cn>
  */
 public record CapabilityBinding(CapabilityType type,
                                 CapabilityDirections directions,
                                 CapabilityFactory factory,
                                 PortTierPolicy tierPolicy,
-                                Optional<ExternalExposure<?>> externalExposure) {
+                                Optional<ExternalExposure<?>> externalExposure,
+                                boolean nativeTransferExposure) {
     public CapabilityBinding(CapabilityType type, CapabilityDirections directions,
                              CapabilityFactory factory, PortTierPolicy tierPolicy) {
-        this(type, directions, factory, tierPolicy, Optional.empty());
+        this(type, directions, factory, tierPolicy, Optional.empty(), true);
+    }
+
+    public CapabilityBinding(CapabilityType type, CapabilityDirections directions,
+                             CapabilityFactory factory, PortTierPolicy tierPolicy,
+                             Optional<ExternalExposure<?>> externalExposure) {
+        this(type, directions, factory, tierPolicy, externalExposure, true);
     }
 
     @Deprecated(forRemoval = true)
@@ -40,7 +48,23 @@ public record CapabilityBinding(CapabilityType type,
     public CapabilityBinding(CapabilityType type, CapabilityDirections directions,
                              CapabilityFactory factory, PortTierPolicy tierPolicy,
                              ExternalExposure<?> externalExposure) {
-        this(type, directions, factory, tierPolicy, Optional.ofNullable(externalExposure));
+        this(type, directions, factory, tierPolicy, Optional.ofNullable(externalExposure), true);
+    }
+
+    /**
+     * Creates a binding with no external exposure and an explicit native transfer flag.
+     *
+     * @param type hosted capability type
+     * @param directions supported capability directions
+     * @param factory capability creation factory
+     * @param tierPolicy tier availability policy
+     * @param nativeTransferExposure whether native transfer providers may expose this binding
+     * @author howxu <dev@howxu.cn>
+     */
+    public CapabilityBinding(CapabilityType type, CapabilityDirections directions,
+                             CapabilityFactory factory, PortTierPolicy tierPolicy,
+                             boolean nativeTransferExposure) {
+        this(type, directions, factory, tierPolicy, Optional.empty(), nativeTransferExposure);
     }
 
     @Deprecated(forRemoval = true)
@@ -48,6 +72,21 @@ public record CapabilityBinding(CapabilityType type,
                              CapabilityFactory factory, PortTierPolicy tierPolicy,
                              ExternalExposure<?> externalExposure) {
         this(type, CapabilityDirections.of(ioType), factory, tierPolicy, externalExposure);
+    }
+
+    /**
+     * Creates a binding that remains available internally without native transfer registration.
+     *
+     * @param type hosted capability type
+     * @param directions supported capability directions
+     * @param factory capability creation factory
+     * @param tierPolicy tier availability policy
+     * @return an internally hosted binding
+     * @author howxu <dev@howxu.cn>
+     */
+    public static CapabilityBinding internalOnly(CapabilityType type, CapabilityDirections directions,
+                                                 CapabilityFactory factory, PortTierPolicy tierPolicy) {
+        return new CapabilityBinding(type, directions, factory, tierPolicy, false);
     }
 
     public CapabilityBinding {

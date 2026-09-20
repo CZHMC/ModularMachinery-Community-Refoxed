@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -44,6 +45,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
@@ -120,6 +122,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -471,6 +474,282 @@ class CraftingRuntimeTest {
 
         assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(6);
         assertThat(runtime.active()).isTrue();
+    }
+
+    @Test
+    void fluxPrefetchesTheWholeRecipeBeforeActivation() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(energyRecipe("runtime_flux_prefetch", 3, 2), 1).isCrafting()).isTrue();
+
+        assertThat(network.extracted()).isEqualTo(6L);
+        assertThat(network.reserved()).isEqualTo(6L);
+        assertThat(runtime.active()).isTrue();
+    }
+
+    @Test
+    void fluxPrefetchUsesTheSelectedParallelismForItsTotal() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(12L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(energyRecipe("runtime_flux_parallel", 3, 2, 4), 2).isCrafting()).isTrue();
+
+        assertThat(runtime.parallelism()).isEqualTo(2L);
+        assertThat(network.extracted()).isEqualTo(12L);
+    }
+
+    @Test
+    void incompleteFluxPrefetchDoesNotStartOrPartiallyExtract() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(5L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        runtime.start(energyRecipe("runtime_flux_shortage", 3, 2), 1);
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(network.extracted()).isZero();
+        assertThat(network.reserved()).isZero();
+    }
+
+    @Test
+    void prefetchedEnergyIsConsumedLocallyOnEachTick() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(energyRecipe("runtime_flux_local_tick", 3, 2), 1).isCrafting()).isTrue();
+        network.resetExtractionCounter();
+
+        runtime.tick();
+
+        assertThat(network.extracted()).isZero();
+        runtime.invalidate();
+        assertThat(network.released()).isEqualTo(4L);
+    }
+
+    @Test
+    void prefetchedEnergyIsReleasedOnceWhenTheRuntimeIsInvalidated() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(energyRecipe("runtime_flux_release", 3, 2), 1).isCrafting()).isTrue();
+        runtime.tick();
+        runtime.invalidate();
+        runtime.invalidate();
+
+        assertThat(network.released()).isEqualTo(4L);
+    }
+
+    @Test
+    void restoreReinstatesTheRemainingPrefetchReservation() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        MachineRecipe recipe = energyRecipe("runtime_flux_restore", 3, 2);
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(output);
+        network.clearReservations();
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(network.reserved()).isEqualTo(4L);
+        restored.invalidate();
+        assertThat(network.released()).isEqualTo(4L);
+    }
+
+    @Test
+    void restoreExcludesTheFinishPendingTickWhoseInputWasAlreadyCommitted() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        MachineRecipe recipe = energyRecipe("runtime_flux_restore_finish", 3, 2);
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        runtime.tick();
+        runtime.tick();
+        assertThat(runtime.finishPending()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(output);
+        network.clearReservations();
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isTrue();
+        assertThat(network.reserved()).isZero();
+        restored.invalidate();
+        assertThat(network.released()).isZero();
+    }
+
+    @Test
+    void restorePreservesEachFacetAllocationByReservationKey() {
+        PrefetchNetworkCapability first = new PrefetchNetworkCapability("test:first", 2L);
+        PrefetchNetworkCapability second = new PrefetchNetworkCapability("test:second", 4L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetworks(first, second);
+        MachineRecipe recipe = energyRecipe("runtime_flux_restore_first_facet", 3, 2);
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(output);
+        first.clearReservations();
+        second.clearReservations();
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(first.reserved()).isEqualTo(2L);
+        assertThat(second.reserved()).isEqualTo(4L);
+        restored.invalidate();
+        restored.invalidate();
+        assertThat(first.released()).isEqualTo(2L);
+        assertThat(second.released()).isEqualTo(4L);
+    }
+
+    @Test
+    void restoreCombinesMultipleEnergyRequirementsIntoOneFacetAllocation() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_flux_restore_combined"),
+                MMCR.id("test_cube"), 3, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new EnergyRequirement(1), new EnergyRequirement(1)));
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(output);
+        ListTag allocations = output.buildResult().getCompound("recipe").orElseThrow()
+                .getCompound("data").orElseThrow().getListOrEmpty("prefetched_energy_allocations");
+        network.clearReservations();
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(allocations).hasSize(1);
+        assertThat(allocations.getCompoundOrEmpty(0).getStringOr("key", "")).isEqualTo("test:prefetch");
+        assertThat(allocations.getCompoundOrEmpty(0).getLongOr("amount", -1L)).isEqualTo(4L);
+        assertThat(restored.active()).isTrue();
+        assertThat(network.reserved()).isEqualTo(4L);
+    }
+
+    @Test
+    void releaseFailureDoesNotReexecuteAnActivePrefetchAllocation() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.start(energyRecipe("runtime_flux_release_failure", 3, 2), 1).isCrafting()).isTrue();
+        network.failRelease();
+        runtime.invalidate();
+        runtime.invalidate();
+
+        assertThat(network.releaseCalls()).isEqualTo(1);
+    }
+
+    @Test
+    void restoreRejectsMalformedPrefetchAllocations() {
+        assertPrefetchRestoreFails("runtime_flux_restore_missing", data -> data.getListOrEmpty("prefetched_energy_allocations")
+                .getCompoundOrEmpty(0).putString("key", "test:missing"));
+        assertPrefetchRestoreFails("runtime_flux_restore_duplicate", data -> {
+            ListTag allocations = data.getListOrEmpty("prefetched_energy_allocations");
+            allocations.add(allocations.getCompoundOrEmpty(0).copy());
+        });
+        assertPrefetchRestoreFails("runtime_flux_restore_negative", data -> data.getListOrEmpty("prefetched_energy_allocations")
+                .getCompoundOrEmpty(0).putLong("amount", -1L));
+        assertPrefetchRestoreFails("runtime_flux_restore_type", data -> data.getListOrEmpty("prefetched_energy_allocations")
+                .getCompoundOrEmpty(0).putString("amount", "4"));
+        assertPrefetchRestoreFails("runtime_flux_restore_total", data -> data.getListOrEmpty("prefetched_energy_allocations")
+                .getCompoundOrEmpty(0).putLong("amount", 5L));
+    }
+
+    @Test
+    void restoreRollsBackFacetReservationsWhenAReservationRestoreThrows() {
+        PrefetchNetworkCapability first = new PrefetchNetworkCapability("test:first", 2L);
+        PrefetchNetworkCapability second = new PrefetchNetworkCapability("test:second", 4L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetworks(first, second);
+        MachineRecipe recipe = energyRecipe("runtime_flux_restore_exception", 3, 2);
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(output);
+        first.clearReservations();
+        second.clearReservations();
+        second.failRestore();
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
+        assertThat(first.released()).isZero();
+        assertThat(second.reserved()).isZero();
+        assertThat(second.released()).isEqualTo(4L);
+    }
+
+    @Test
+    void patternStartCommitsPrefetchesWithItsInputTransactionAndRollsBackPreparedReservations() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = energyRecipe("runtime_flux_pattern", 3, 2);
+
+        CraftingRuntime.PreparedStart prepared = runtime.preparePatternStart(recipe, 1, List.of());
+        assertThat(prepared).isNotNull();
+        assertThat(runtime.preparePatternStart(recipe, 1, List.of())).isNull();
+        CraftingRuntime.PreparedStart stale = new CraftingRuntime.PreparedStart(prepared.recipe(), prepared.runtime(),
+                prepared.effective(), prepared.plan(), prepared.prefetches());
+        assertThat(runtime.reservePatternStart()).isTrue();
+        assertThat(runtime.commitPatternStart(stale)).isFalse();
+        runtime.releasePatternStart();
+        assertThat(network.reserved()).isZero();
+
+        prepared = runtime.preparePatternStart(recipe, 1, List.of());
+        assertThat(runtime.reservePatternStart()).isTrue();
+        assertThat(runtime.commitPatternStart(prepared)).isTrue();
+        assertThat(network.extracted()).isEqualTo(6L);
+    }
+
+    @Test
+    void prefetchCommitFailureRollsBackEarlierInputOperationsAndPreservesItsStatus() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L, true);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(null, new TickCapabilityHost(network), BlockPos.ZERO, BlockPos.ZERO,
+                (String) null));
+        controller.componentRuntime().replaceComponents(components);
+        RuntimeTestFixtures.republish(controller);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_flux_commit_failure"), MMCR.id("test_cube"), 3,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.<MachineRequirement>of(input(Items.IRON_INGOT, 1), new EnergyRequirement(2)));
+
+        runtime.start(recipe, 1);
+
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(network.reserved()).isZero();
     }
 
     @Test
@@ -1481,6 +1760,31 @@ class CraftingRuntimeTest {
         }
     }
 
+    private static void assertPrefetchRestoreFails(String recipePath, Consumer<CompoundTag> mutation) {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
+        MachineRecipe recipe = energyRecipe(recipePath, 3, 2);
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        runtime.tick();
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        runtime.save(output);
+        CompoundTag data = output.buildResult().getCompound("recipe").orElseThrow()
+                .getCompound("data").orElseThrow();
+        mutation.accept(data);
+        network.clearReservations();
+
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), output.buildResult()), null);
+
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
+        assertThat(network.reserved()).isZero();
+        assertThat(network.released()).isZero();
+    }
+
     private static ItemStack item(ResourceStorage<ItemResource> storage, int slot) {
         ItemResource resource = storage.resource(slot);
         return resource == null || resource.isEmpty() ? ItemStack.EMPTY
@@ -1495,6 +1799,32 @@ class CraftingRuntimeTest {
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to access controller runtime", exception);
         }
+    }
+
+    private static MachineControllerBlockEntity controllerWithPrefetchNetwork(PrefetchNetworkCapability network) {
+        return controllerWithPrefetchNetworks(network);
+    }
+
+    private static MachineControllerBlockEntity controllerWithPrefetchNetworks(PrefetchNetworkCapability... networks) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        List<ProcessingComponent> components = new ArrayList<>();
+        for (int index = 0; index < networks.length; index++) {
+            components.add(new ProcessingComponent(null, new TickCapabilityHost(networks[index]),
+                    new BlockPos(index, 0, 0), new BlockPos(index, 0, 0), (String) null));
+        }
+        controller.componentRuntime().replaceComponents(components);
+        RuntimeTestFixtures.republish(controller);
+        return controller;
+    }
+
+    private static MachineRecipe energyRecipe(String path, int duration, long energyPerTick) {
+        return energyRecipe(path, duration, energyPerTick, 1);
+    }
+
+    private static MachineRecipe energyRecipe(String path, int duration, long energyPerTick, int maxParallelism) {
+        return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), duration,
+                List.of(), List.of(), List.of(), 0, maxParallelism, false, List.of(),
+                List.of(new EnergyRequirement(energyPerTick)));
     }
 
     private static final class HeatOutputProbePort extends HeatPortBlockEntity {
@@ -1593,6 +1923,153 @@ class CraftingRuntimeTest {
         @Override
         public CapabilitySnapshot capabilitySnapshot() {
             return snapshot;
+        }
+    }
+
+    private static final class PrefetchNetworkCapability implements MachineCapability, RecipeEnergyPrefetchFacet {
+        private final LongValueStorage storage;
+        private final String reservationKey;
+        private final CapabilityType type = new CapabilityType(MMCR.id("test_prefetch_network"));
+        private final CapabilityView view = new CapabilityView() {
+            @Override
+            public CapabilityType type() {
+                return PrefetchNetworkCapability.this.type;
+            }
+
+            @Override
+            public CapabilityDirections directions() {
+                return CapabilityDirections.input();
+            }
+
+            @Override
+            public Set<Class<? extends CapabilityFacet>> facets() {
+                return Set.of(RecipeEnergyPrefetchFacet.class);
+            }
+        };
+        private long planned;
+        private long reserved;
+        private long released;
+        private long releaseCalls;
+        private long extractionBaseline;
+        private final boolean failCommit;
+        private boolean failRestore;
+        private boolean failRelease;
+
+        private PrefetchNetworkCapability(long available) {
+            this("test:prefetch", available, false);
+        }
+
+        private PrefetchNetworkCapability(long available, boolean failCommit) {
+            this("test:prefetch", available, failCommit);
+        }
+
+        private PrefetchNetworkCapability(String reservationKey, long available) {
+            this(reservationKey, available, false);
+        }
+
+        private PrefetchNetworkCapability(String reservationKey, long available, boolean failCommit) {
+            storage = new LongValueStorage(available, available, null);
+            storage.setAmount(available);
+            this.reservationKey = reservationKey;
+            extractionBaseline = available;
+            this.failCommit = failCommit;
+        }
+
+        @Override
+        public String reservationKey() {
+            return reservationKey;
+        }
+
+        @Override
+        public Optional<PrefetchPlan> planPrefetch(long requestedAmount) {
+            long accepted = Math.min(Math.max(0L, requestedAmount), Math.max(0L, storage.amount() - planned));
+            if (accepted <= 0L) return Optional.empty();
+            planned += accepted;
+            return Optional.of(new PrefetchPlan(accepted, transaction -> {
+                long extracted = storage.extract(accepted, transaction);
+                if (extracted != accepted) return CapabilityResult.failure(ExecutionStatus.blocked(type.id(), type.id(),
+                        FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, type.id(),
+                                FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
+                if (failCommit) return CapabilityResult.failure(ExecutionStatus.blocked(type.id(), type.id(),
+                        FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, type.id(),
+                                FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
+                planned -= accepted;
+                reserved += accepted;
+                return CapabilityResult.successful();
+            }));
+        }
+
+        @Override
+        public void restoreReservation(long amount) {
+            long restored = Math.max(0L, amount);
+            if (failRestore) {
+                reserved += restored;
+                throw new IllegalStateException("expected restore failure");
+            }
+            if (planned >= restored) {
+                planned -= restored;
+            } else {
+                reserved += restored;
+            }
+        }
+
+        @Override
+        public long releaseReservation(long amount) {
+            releaseCalls++;
+            if (failRelease) throw new IllegalStateException("expected release failure");
+            long result = Math.min(Math.max(0L, amount), reserved);
+            reserved -= result;
+            released += result;
+            return result;
+        }
+
+        @Override
+        public CapabilityType type() {
+            return type;
+        }
+
+        @Override
+        public CapabilityView view() {
+            return view;
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            throw new UnsupportedOperationException("prefetch network has no generic operations");
+        }
+
+        private long extracted() {
+            return extractionBaseline - storage.amount();
+        }
+
+        private long reserved() {
+            return reserved;
+        }
+
+        private long released() {
+            return released;
+        }
+
+        private long releaseCalls() {
+            return releaseCalls;
+        }
+
+        private void resetExtractionCounter() {
+            extractionBaseline = storage.amount();
+        }
+
+        private void clearReservations() {
+            planned = 0L;
+            reserved = 0L;
+            released = 0L;
+        }
+
+        private void failRestore() {
+            failRestore = true;
+        }
+
+        private void failRelease() {
+            failRelease = true;
         }
     }
 
