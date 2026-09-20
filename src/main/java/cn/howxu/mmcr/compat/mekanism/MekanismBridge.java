@@ -38,6 +38,10 @@ public interface MekanismBridge {
         return null;
     }
 
+    default HeatDisplayData heatDisplayData(double kelvin) {
+        return new HeatDisplayData(kelvin, "K");
+    }
+
     void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat);
 
     default List<PortDeclaration> portDeclarations() {
@@ -118,6 +122,14 @@ public interface MekanismBridge {
     record ChemicalRenderData(Identifier spriteLocation, int tint, Component displayName) {
         public ChemicalRenderData {
             if (spriteLocation == null || displayName == null) throw new IllegalArgumentException("chemical data is incomplete");
+        }
+    }
+
+    record HeatDisplayData(double value, String unit) {
+        public HeatDisplayData {
+            if (!Double.isFinite(value) || unit == null || unit.isBlank()) {
+                throw new IllegalArgumentException("heat display data is incomplete");
+            }
         }
     }
 

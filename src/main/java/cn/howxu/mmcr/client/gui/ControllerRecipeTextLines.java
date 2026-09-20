@@ -42,10 +42,14 @@ final class ControllerRecipeTextLines {
                     ReadableNumber.formatExact(presentation.energyOutputPerTick())));
         }
         if (presentation.heatOutputPerTick() > 0D) {
-            String compact = formatHeat(presentation.heatOutputPerTick());
-            String exact = exactHeat(presentation.heatOutputPerTick());
-            lines.add(summary("gui.mmcr.controller.recipe.heat_output",
-                    "gui.mmcr.controller.recipe.heat_output_exact", compact, exact));
+            MekanismBridge.HeatDisplayData heat = MekanismBridge.get()
+                    .heatDisplayData(presentation.heatOutputPerTick());
+            String compact = formatHeat(heat.value());
+            String exact = exactHeat(heat.value());
+            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe.heat_output",
+                    compact, heat.unit()), MachineControllerScreen.STATUS_LABEL_COLOR, null,
+                    List.of(Component.translatable("gui.mmcr.controller.recipe.heat_output_exact",
+                            exact, heat.unit()))));
         }
         List<ControllerTextLine> outputs = outputs(presentation.outputs());
         if (!outputs.isEmpty()) {
@@ -107,7 +111,7 @@ final class ControllerRecipeTextLines {
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.fluid", amount,
                     fluidName(fluid.stack())), MachineControllerScreen.STATUS_LABEL_COLOR,
                     new ControllerTextLine.FluidIcon(iconStack),
-                    List.of(fluidName(fluid.stack()), Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    List.of(fluidName(fluid.stack()), exactFluidAmount(output.amount())),
                     OUTPUT_INDENT);
         }
         if (output.output() instanceof LoadedChemicalOutput chemical) {
@@ -116,7 +120,7 @@ final class ControllerRecipeTextLines {
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.chemical",
                     fluidAmount(output.amount()), data.displayName()), MachineControllerScreen.STATUS_LABEL_COLOR,
                     new ControllerTextLine.ChemicalIcon(chemical.id(), output.amount()),
-                    List.of(data.displayName(), Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    List.of(data.displayName(), exactFluidAmount(output.amount())),
                     OUTPUT_INDENT);
         }
         throw new IllegalArgumentException("Unsupported controller recipe output: " + output.output().outputType().id());
@@ -131,6 +135,11 @@ final class ControllerRecipeTextLines {
         return amount <= 10L
                 ? ReadableNumber.formatForSlot(amount, 0, "mB")
                 : ReadableNumber.formatForSlot(amount, 3, "B");
+    }
+
+    private static Component exactFluidAmount(long amount) {
+        return Component.translatable("gui.mmcr.controller.recipe_output.amount_mb",
+                ReadableNumber.formatExact(amount));
     }
 
     private static String formatHeat(double amount) {

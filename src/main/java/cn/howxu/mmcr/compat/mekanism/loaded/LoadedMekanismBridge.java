@@ -299,6 +299,13 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
+    public HeatDisplayData heatDisplayData(double kelvin) {
+        var unit = MekanismTemperatureDisplay.configuredUnit();
+        return new HeatDisplayData(MekanismTemperatureDisplay.fromKelvin(kelvin, unit),
+                MekanismTemperatureDisplay.symbol(unit));
+    }
+
+    @Override
     public void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat) {
         registerRequirement(LoadedChemicalRequirement.TYPE);
         registerRequirement(LoadedHeatRequirement.TEMPERATURE_TYPE);

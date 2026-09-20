@@ -29,6 +29,54 @@ ServerEvents.recipes( event => {
                 }
             },
             {
+                type: 'minecraft:fluid',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:lava',
+                    amount: 1000
+                }
+            },
+            {
+                type: 'minecraft:item',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:gold_ingot',
+                    count: 10
+                }
+            },
+            {
+                type: 'minecraft:item',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:diamond',
+                    count: 10
+                }
+            },
+            {
+                type: 'minecraft:item',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:coal',
+                    count: 10
+                }
+            },
+            {
+                type: 'minecraft:item',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:stick',
+                    count: 10
+                }
+            },
+            {
+                type: 'minecraft:item',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:water_bucket',
+                    count: 1
+                }
+            },
+            {
                 type: 'neoforge:energy', // No energy is consumed when no energy input is defined.
                 io: 'input',
                 fe_per_tick: 20
