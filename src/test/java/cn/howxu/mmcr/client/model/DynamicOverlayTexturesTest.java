@@ -5,6 +5,9 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2BridgeBootstrap;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
+import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridgeBootstrap;
+import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyInputKind;
+import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyOutputKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
@@ -84,6 +87,28 @@ class DynamicOverlayTexturesTest {
                     .isEqualTo(MMCR.id("block/appliedenergistics2/ae2_pattern_interface"));
         } finally {
             AE2BridgeBootstrap.resetForTesting();
+        }
+    }
+
+    @Test
+    void appFluxInputInterfaceUsesTheAppFluxInputOverlay() {
+        AppliedFluxBridgeBootstrap.installForTesting(AppliedFluxBridgeBootstrap.selectForTesting(true));
+        try {
+            assertThat(DynamicOverlayTextures.portOverlayTexture(FluxEnergyInputKind.INSTANCE))
+                    .isEqualTo(MMCR.id("block/appliedflux/appflux_input"));
+        } finally {
+            AppliedFluxBridgeBootstrap.resetForTesting();
+        }
+    }
+
+    @Test
+    void appFluxOutputInterfaceUsesTheAppFluxOutputOverlay() {
+        AppliedFluxBridgeBootstrap.installForTesting(AppliedFluxBridgeBootstrap.selectForTesting(true));
+        try {
+            assertThat(DynamicOverlayTextures.portOverlayTexture(FluxEnergyOutputKind.INSTANCE))
+                    .isEqualTo(MMCR.id("block/appliedflux/appflux_output"));
+        } finally {
+            AppliedFluxBridgeBootstrap.resetForTesting();
         }
     }
 

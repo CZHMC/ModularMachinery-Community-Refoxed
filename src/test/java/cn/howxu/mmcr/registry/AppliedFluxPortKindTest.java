@@ -40,8 +40,12 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
+import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -165,6 +169,76 @@ class AppliedFluxPortKindTest {
                 inputState, input, Direction.NORTH)).isNull();
         assertThat(ModCapabilities.ENERGY_BLOCK.getCapability(outputLevel, BlockPos.ZERO,
                 outputState, output, Direction.NORTH)).isNull();
+    }
+
+    @Test
+    @Order(4)
+    void appFluxOverlayTexturesAreBundledAlongsideTheI18nKeys() {
+        assertBundleTexture("block/appliedflux/appflux_input.png");
+        assertBundleTexture("block/appliedflux/appflux_output.png");
+        assertBundleTexture("block/appliedflux/appflux_output.png");
+
+        for (String key : List.of(
+                "config.jade.plugin_mmcr.appflux_me_flux_input_interface",
+                "config.jade.plugin_mmcr.appflux_me_flux_output_interface",
+                "jade.mmcr.ae2_input_interface_grid.connected",
+                "jade.mmcr.ae2_input_interface_grid.disconnected",
+                "jade.mmcr.ae2_input_interface_grid.energy",
+                "gui.mmcr.failure.appflux_unavailable",
+                "gui.mmcr.failure.appflux_input_missing",
+                "gui.mmcr.failure.appflux_output_blocked",
+                "gui.mmcr.failure.appflux_unsupported_request")) {
+            assertLangKeyPresent(key);
+        }
+    }
+
+    private static void assertBundleTexture(String relativePath) {
+        Path path = projectResource("src/main/resources/assets/mmcr/textures/" + relativePath);
+        assertThat(Files.isRegularFile(path))
+                .as("texture %s must be present at %s", relativePath, path)
+                .isTrue();
+        try {
+            long size = Files.size(path);
+            assertThat(size)
+                    .as("texture %s must not be empty", relativePath)
+                    .isPositive();
+        } catch (IOException exception) {
+            throw new AssertionError("Unable to read texture " + relativePath, exception);
+        }
+    }
+
+    private static void assertLangKeyPresent(String key) {
+        for (String suffix : List.of("en_us.json", "zh_cn.json")) {
+            Path path = projectResource("src/main/resources/assets/mmcr/lang/" + suffix);
+            assertThat(Files.isRegularFile(path))
+                    .as("language file %s must be present at %s", suffix, path)
+                    .isTrue();
+            try {
+                String content = Files.readString(path);
+                assertThat(content.contains(String.format(Locale.ROOT, "\"%s\"", key)))
+                        .as("language file %s must contain key %s", suffix, key)
+                        .isTrue();
+            } catch (IOException exception) {
+                throw new AssertionError("Unable to read language file " + suffix, exception);
+            }
+        }
+    }
+
+    private static Path projectResource(String relative) {
+        Path current = Path.of(".").toAbsolutePath();
+        for (int depth = 0; depth < 6; depth++) {
+            Path candidate = current.resolve(relative);
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+            Path gradleCandidate = current.resolve(relative);
+            if (Files.isRegularFile(gradleCandidate)) {
+                return gradleCandidate;
+            }
+            current = current.getParent();
+            if (current == null) break;
+        }
+        return Path.of(relative).toAbsolutePath();
     }
 
     private static void bindFluxEntityType(IOPortKind kind) {
