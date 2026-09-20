@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
@@ -84,9 +85,9 @@ public final class CraftingContext {
 
     public PlanningResult planInputs(MachineRecipe recipe, long parallelism,
                                      Set<Integer> consumedAtStart, Set<Integer> retainedInputs) {
-        return plan(recipe, parallelism, RecipeModifier.IOType.INPUT,
+        return plan(startRequirements(recipe), parallelism, RecipeModifier.IOType.INPUT,
                 consumedAtStart == null ? Set.of() : consumedAtStart,
-                retainedInputs == null ? Set.of() : retainedInputs);
+                retainedInputs == null ? Set.of() : retainedInputs, Map.of());
     }
 
     public PlanningResult planInputs(List<MachineRequirement> requirements, long parallelism,
@@ -136,12 +137,25 @@ public final class CraftingContext {
     }
 
     public CraftingPlan planStart(MachineRecipe recipe, long requestedParallelism) {
-        PlanningResult result = plan(recipe, requestedParallelism, null, Set.of(), Set.of());
+        List<MachineRequirement> requirements = startRequirements(recipe);
+        PlanningResult result = plan(requirements, requestedParallelism, null, Set.of(), Set.of(),
+                partialOutputPolicies(requirements, recipe.allowPartialOutputs()));
         return result.successful() ? result.plan() : null;
     }
 
     public PlanningResult planStartResult(MachineRecipe recipe, long requestedParallelism) {
-        return plan(recipe, requestedParallelism, null, Set.of(), Set.of());
+        List<MachineRequirement> requirements = startRequirements(recipe);
+        return plan(requirements, requestedParallelism, null, Set.of(), Set.of(),
+                partialOutputPolicies(requirements, recipe.allowPartialOutputs()));
+    }
+
+    private List<MachineRequirement> startRequirements(MachineRecipe recipe) {
+        List<MachineRequirement> requirements = recipe.runtimeRequirements(modifiers);
+        boolean hasPrefetch = capabilities.stream()
+                .anyMatch(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).isPresent());
+        if (!hasPrefetch) return requirements;
+        return requirements.stream().filter(requirement -> !(requirement instanceof EnergyRequirement energy
+                && energy.io() == RecipeModifier.IOType.INPUT)).toList();
     }
 
     public PlanningResult planStartRequirements(List<MachineRequirement> requirements, long requestedParallelism,

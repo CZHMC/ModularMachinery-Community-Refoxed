@@ -187,19 +187,20 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
         }
     }
 
+    @Override
+    public CapabilityResult consumeReservation(long amount, TransactionContext transaction) {
+        return extractLocal(amount, transaction);
+    }
+
     private CapabilityResult commitPrefetch(CapabilityOperation bridgeOperation, long requestedAmount,
                                             TransactionContext transaction) {
-        if (requestedAmount > buffer.storage().capacity() - buffer.amount()) {
-            return failure(BuiltinFailureReasons.MISSING_INPUT);
-        }
+        long cached = buffer.amount();
+        long capacity = buffer.storage().capacity();
+        if (requestedAmount > capacity - cached) return failure(BuiltinFailureReasons.MISSING_INPUT);
         try (Transaction nested = Transaction.open(transaction)) {
             CapabilityResult result = bridgeOperation.commit(nested);
-            if (result == null || !result.success()) {
-                return result == null ? failure(BuiltinFailureReasons.MISSING_INPUT) : result;
-            }
-            if (buffer.insert(requestedAmount, nested) != requestedAmount) {
-                return failure(BuiltinFailureReasons.MISSING_INPUT);
-            }
+            if (result == null || !result.success()) return result == null ? failure(BuiltinFailureReasons.MISSING_INPUT) : result;
+            if (buffer.insert(requestedAmount, nested) != requestedAmount) return failure(BuiltinFailureReasons.MISSING_INPUT);
             buffer.reserve(requestedAmount, nested);
             nested.commit();
         }

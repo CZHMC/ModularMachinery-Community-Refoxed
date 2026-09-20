@@ -143,7 +143,7 @@ public final class FluxEnergyOutputCapability implements MachineCapability, Scal
 
     @Override
     public List<CapabilityDisplay> displays(CapabilityView ignored) {
-        return List.of(new CapabilityDisplay("energy", Long.toString(pending.amount()), "FE", Optional.empty()));
+        return List.of(new CapabilityDisplay("energy", Long.toString(pending.amount()), "FE/t", Optional.empty()));
     }
 
     @Override

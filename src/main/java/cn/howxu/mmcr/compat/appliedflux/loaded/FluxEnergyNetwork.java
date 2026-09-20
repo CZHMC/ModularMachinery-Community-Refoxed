@@ -93,7 +93,8 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
     }
 
     private CapabilityResult extractExactly(long requestedAmount, TransactionContext transaction) {
-        if (energy.extract(requestedAmount, true) != requestedAmount) return missingInput();
+        long simulated = energy.extract(requestedAmount, true);
+        if (simulated != requestedAmount) return missingInput();
         updateSnapshots(transaction);
         long extracted = energy.extract(requestedAmount, false);
         extractedInTransaction += extracted;

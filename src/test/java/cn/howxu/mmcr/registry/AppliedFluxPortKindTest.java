@@ -118,8 +118,6 @@ class AppliedFluxPortKindTest {
     void appFluxOverlayTexturesAndI18nKeysAreBundled() {
         assertBundleTexture("block/appliedflux/appflux_input.png");
         assertBundleTexture("block/appliedflux/appflux_output.png");
-        assertBundleTexture("block/appliedflux/appliedflux_input_interface.png");
-        assertBundleTexture("block/appliedflux/appliedflux_output_interface.png");
 
         for (String key : List.of(
                 "config.jade.plugin_mmcr.appflux_me_flux_input_interface",

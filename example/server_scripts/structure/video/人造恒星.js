@@ -158,7 +158,11 @@ MMCREvents.server(event => {
         .set('t', api.state('minecraft:iron_bars[east=false,north=true,south=false,waterlogged=false,west=false]'))
         .set('u', api.state('minecraft:iron_bars[east=false,north=true,south=true,waterlogged=false,west=false]'))
         .set('v', api.state('minecraft:iron_trapdoor[facing=north,half=top,open=false,powered=false,waterlogged=false]'))
-        .set('w', api.block('minecraft:red_concrete'))
+        .set('w', api.anyOf(
+            api.block('minecraft:red_concrete'),
+            api.anyOfEnergyOutput(),
+            api.anyOfItemInput()
+        ))
         .set('x', api.block('minecraft:white_stained_glass'))
         .set('y', api.block('minecraft:deepslate'))
         .set('z', api.state('minecraft:iron_bars[east=true,north=false,south=false,waterlogged=false,west=false]'))

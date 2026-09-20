@@ -11,9 +11,9 @@ runs {
         arguments.addAll('--username', "howxu")
         dependencies {
             // spark
-            runtime("curse.maven:spark-361579:8275631")
+            runtime("curse.maven:${spark_id}:${spark_version}")
             // sodium
-            runtime("curse.maven:sodium-394468:8396481")
+            runtime("curse.maven:${sodium_id}:${sodium_version}")
         }
     }
 
