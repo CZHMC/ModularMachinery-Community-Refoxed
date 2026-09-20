@@ -312,9 +312,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (MachineRecipe recipe : recipesForMachine()) {
             if (!patternOutputsMatch(recipe, snapshot, patternOutputs)) continue;
             if (!hasFactoryController()) {
+                long parallelism = Math.min(requestedParallelism, snapshot.maxParallelism());
                 CraftingRuntime crafting = runtime.craftingRuntime();
-                CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, requestedParallelism,
-                        capabilitiesForParallelism.apply(requestedParallelism));
+                CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, parallelism,
+                        capabilitiesForParallelism.apply(parallelism));
                 if (prepared == null || !crafting.reservePatternStart()) {
                     return PatternStartBatchReservation.unavailable();
                 }
