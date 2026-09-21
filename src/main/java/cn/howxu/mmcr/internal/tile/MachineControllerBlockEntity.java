@@ -1458,6 +1458,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         ControllerRuntimeSnapshot tickState = currentRuntimeSnapshot();
+        boolean structureStateChanged = runtime.structureStateChangedSincePublication();
         boolean tickMachine = hasTickBehavior(tickState.structure());
         boolean factoryController = !tickMachine && isFactoryController(tickState);
         int initialFactoryActiveLaneCount = factoryController ? runtime.factoryRuntime().activeLaneCount() : 0;
@@ -1529,7 +1530,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (hadActiveOperation && !hasActiveOperation()) runtime.clearOperationText();
             int finalFactoryActiveLaneCount = factoryTickResult == null
                     ? initialFactoryActiveLaneCount : factoryTickResult.activeLaneCount();
-            boolean publish = hadActiveWork || hasActiveRuntimeWork(factoryTickResult, finalFactoryActiveLaneCount)
+            boolean publish = structureStateChanged
+                    || hadActiveWork || hasActiveRuntimeWork(factoryTickResult, finalFactoryActiveLaneCount)
                     || wasRedstonePaused != redstonePaused
                     || !Objects.equals(previousFailure, lastFailure)
                     || !Objects.equals(previousCraftingFailure, runtime.craftingRuntime().failure())

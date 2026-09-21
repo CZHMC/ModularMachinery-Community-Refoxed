@@ -605,6 +605,27 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void idle_structure_transition_is_published_in_the_same_runtime_batch() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        DynamicMachine machine = new DynamicMachine(MMCR.id("test_cube"), "Idle BER Publish",
+                new BlockArray(Map.of()));
+        RuntimeTestFixtures.formStructure(controller, machine);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.publishStructureState(true, false, machine, 0);
+        runtime.publishSnapshot();
+
+        runtime.beginUpdateBatch();
+        try {
+            runtime.publishStructureState(true, true, machine, 0);
+            controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+            assertThat(runtimeStateBroadcastPending(controller)).isTrue();
+        } finally {
+            runtime.endUpdateBatch();
+        }
+    }
+
+    @Test
     void structure_reconciliation_claims_only_sorted_network_interfaces_within_machine_limit() {
         BlockPos firstPatternPos = new BlockPos(-2, 0, 0);
         BlockPos secondPatternPos = new BlockPos(1, 0, 0);
@@ -1895,6 +1916,12 @@ class MachineControllerBlockEntityTest {
         Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
         field.setAccessible(true);
         return (MachineControllerRuntime) field.get(controller);
+    }
+
+    private static boolean runtimeStateBroadcastPending(MachineControllerBlockEntity controller) throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("runtimeStateBroadcastPending");
+        field.setAccessible(true);
+        return field.getBoolean(controller);
     }
 
     @SuppressWarnings("unchecked")

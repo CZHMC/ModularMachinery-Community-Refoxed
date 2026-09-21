@@ -271,6 +271,10 @@ public final class MachineControllerRuntime {
         return snapshotBuildCountForTesting;
     }
 
+    boolean structureStateChangedSincePublication() {
+        return publishedStructureEpoch != structure.stateEpoch();
+    }
+
     void publishSnapshot() {
         controller.ensureFactoryRuntimeLoaded();
         if (controller.getLevel() == null || !controller.getLevel().isClientSide()) refreshCraftingStateFromRuntime();
