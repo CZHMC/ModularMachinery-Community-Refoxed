@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -455,8 +456,9 @@ public final class FactoryRuntime {
         return failure == BuiltinFailureReasons.STAGE_INSUFFICIENT ? failure : null;
     }
 
-    public void syncCoreLanes(MachineControllerBlockEntity controller, Machine machine,
-                              List<MachineRecipe> candidates) {
+    public boolean syncCoreLanes(MachineControllerBlockEntity controller, Machine machine,
+                                 List<MachineRecipe> candidates) {
+        long initialEpoch = factoryStateEpoch;
         ensureBaseLane(controller);
         long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
         Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
@@ -517,25 +519,28 @@ public final class FactoryRuntime {
         trimLanesToLimit();
         coreCatalogVersion = catalogVersion;
         syncedCoreMachine = machine;
+        return initialEpoch != factoryStateEpoch;
     }
 
-    public void syncCoreLanesIfNeeded(MachineControllerBlockEntity controller, Machine machine,
-                                      List<MachineRecipe> candidates) {
+    public boolean syncCoreLanesIfNeeded(MachineControllerBlockEntity controller, Machine machine,
+                                         List<MachineRecipe> candidates) {
         long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
         if (lanes.isEmpty() || syncedCoreMachine != machine || coreCatalogVersion != catalogVersion) {
-            syncCoreLanes(controller, machine, candidates);
+            return syncCoreLanes(controller, machine, candidates);
         }
+        return false;
     }
 
-    public void ensureBaseLane(MachineControllerBlockEntity controller) {
+    public boolean ensureBaseLane(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
         this.controller = controller;
-        if (!lanes.isEmpty() && lanes.getFirst().isBaseThread()) return;
+        if (!lanes.isEmpty() && lanes.getFirst().isBaseThread()) return false;
         for (FactoryRecipeThread lane : List.copyOf(lanes)) {
             if (lane.isBaseThread()) removeLane(lane);
         }
         lanes.addFirst(FactoryRecipeThread.base(controller));
         markLaneStateChanged();
+        return true;
     }
 
     public List<CraftingRuntime> activeRuntimes() {
@@ -1055,8 +1060,8 @@ public final class FactoryRuntime {
         CraftingRuntime baseRuntime = lanes.isEmpty() ? null : lanes.getFirst().runtime();
         if (baseRuntime == null) return currentTickResult(initialEpoch, false);
         CraftingStateSnapshot before = baseRuntime.snapshot();
-        baseRuntime.tickIdle();
-        boolean changed = !before.equals(baseRuntime.snapshot());
+        CapabilityTickResult result = baseRuntime.tickIdle();
+        boolean changed = result.stateChanged() || !before.equals(baseRuntime.snapshot());
         if (changed) markLaneStateChanged();
         return currentTickResult(initialEpoch, changed);
     }

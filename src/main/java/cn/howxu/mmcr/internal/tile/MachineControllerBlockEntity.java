@@ -1740,13 +1740,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot structure = current.structure();
         long maxParallelism = runtime.maxParallelism(structure.machine());
         List<MachineRecipe> candidates = recipesForMachine();
+        FactoryRuntime factory = runtime.factoryRuntime();
+        boolean baseLaneChanged = factory.ensureBaseLane(this);
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());
-        FactoryRuntime factory = runtime.factoryRuntime();
-        factory.syncCoreLanesIfNeeded(this, structure.machine(), candidates);
+        boolean coreLanesChanged = factory.syncCoreLanesIfNeeded(this, structure.machine(), candidates);
         FactoryTickResult result = factory.tick(current, candidates, maxParallelism, level.getGameTime(),
                 this::playFinishSound);
-        if (result.snapshotChanged() || result.laneStateChanged()) setChanged();
+        if (baseLaneChanged || coreLanesChanged || result.snapshotChanged() || result.laneStateChanged()) setChanged();
         boolean active = result.activeLaneCount() > 0;
         setActiveState(active);
         if (active) {

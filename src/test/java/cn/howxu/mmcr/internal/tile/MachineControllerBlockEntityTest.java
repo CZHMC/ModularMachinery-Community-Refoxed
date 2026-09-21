@@ -397,6 +397,16 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void factory_lane_sync_marks_the_controller_dirty() throws Exception {
+        ChangeCountingController controller = changeCountingFactoryController(MMCR.id("factory_lane_sync_dirty"));
+        controller.changedCalls = 0;
+
+        invokeTickFactoryRecipes(controller);
+
+        assertThat(controller.changedCalls).isPositive();
+    }
+
+    @Test
     void empty_text_snapshot_reaches_matching_menus_after_external_text_is_cleared() throws Exception {
         MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_clear"));
         MachineControllerRuntime runtime = runtimeOf(controller);
