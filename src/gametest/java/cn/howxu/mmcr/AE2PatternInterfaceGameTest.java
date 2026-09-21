@@ -1,5 +1,7 @@
 package cn.howxu.mmcr;
 
+import com.mojang.authlib.GameProfile;
+import io.netty.channel.ChannelFutureListener;
 import appeng.api.config.Actionable;
 import appeng.api.config.LockCraftingMode;
 import appeng.api.config.Settings;
@@ -42,8 +44,17 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -55,14 +66,19 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import org.jspecify.annotations.NonNull;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -342,6 +358,47 @@ public class AE2PatternInterfaceGameTest {
         });
     }
 
+    public void patternInterfaceMemoryCardRoundTrip(GameTestHelper helper) {
+        BlockPos sourcePos = new BlockPos(0, 0, 0);
+        BlockPos targetPos = new BlockPos(2, 0, 0);
+        helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        helper.setBlock(targetPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+
+        helper.runAtTickTime(2, () -> {
+            PatternInterfaceBlockEntity source = helper.getBlockEntity(sourcePos, PatternInterfaceBlockEntity.class);
+            PatternInterfaceBlockEntity target = helper.getBlockEntity(targetPos, PatternInterfaceBlockEntity.class);
+            ServerPlayer player = makePlayerWithConnection(helper);
+            player.getAbilities().instabuild = true;
+            ItemStack card = AEItems.MEMORY_CARD.stack();
+            ItemStack pattern = PatternDetailsHelper.encodeProcessingPattern(
+                    List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
+                    List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)));
+
+            source.getLogic().getPatternInv().setItemDirect(0, pattern);
+            source.getLogic().getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE,
+                    LockCraftingMode.LOCK_UNTIL_RESULT);
+            source.getLogic().setPriority(37);
+
+            player.setShiftKeyDown(true);
+            helper.getLevel().getBlockState(helper.absolutePos(sourcePos)).useItemOn(card, helper.getLevel(), player,
+                    InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(helper.absolutePos(sourcePos)),
+                            Direction.UP, helper.absolutePos(sourcePos), false));
+            player.setShiftKeyDown(false);
+            helper.getLevel().getBlockState(helper.absolutePos(targetPos)).useItemOn(card, helper.getLevel(), player,
+                    InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(helper.absolutePos(targetPos)),
+                            Direction.UP, helper.absolutePos(targetPos), false));
+
+            helper.assertTrue(target.getLogic().getPatternInv().getStackInSlot(0).is(pattern.getItem()),
+                    "Memory-card restore copies the encoded pattern inventory");
+            helper.assertTrue(target.getLogic().getConfigManager().getSetting(Settings.LOCK_CRAFTING_MODE)
+                            == LockCraftingMode.LOCK_UNTIL_RESULT,
+                    "Memory-card restore copies pattern-provider settings");
+            helper.assertTrue(target.getLogic().getPriority() == 37,
+                    "Memory-card restore copies pattern-provider priority");
+            helper.succeed();
+        });
+    }
+
     public void patternInterfaceRestoresPatternsAndWakesNativeWork(GameTestHelper helper) {
         AtomicReference<PatternInterfaceBlockEntity> restoredHost = new AtomicReference<>();
         AtomicLong returnDrainAvailabilityEpoch = new AtomicLong();
@@ -452,6 +509,15 @@ public class AE2PatternInterfaceGameTest {
         return host;
     }
 
+    private static ServerPlayer makePlayerWithConnection(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        ServerPlayer player = new ServerPlayer(server, helper.getLevel(),
+                new GameProfile(UUID.nameUUIDFromBytes("mmcr-pattern-memory-card".getBytes(StandardCharsets.UTF_8)),
+                        "mmcr-pattern-memory-card"), ClientInformation.createDefault());
+        player.connection = new NoOpConnection(server, player);
+        return player;
+    }
+
     private static MachineControllerBlockEntity controller(GameTestHelper helper) {
         MachineControllerBlockEntity controller = helper.getBlockEntity(CONTROLLER_POS, MachineControllerBlockEntity.class);
         if (controller == null) throw new AssertionError("Controller block entity was not created");
@@ -523,6 +589,28 @@ public class AE2PatternInterfaceGameTest {
                     helper.getLevel().registryAccess(), data));
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to reload block entity " + entity, exception);
+        }
+    }
+
+    /**
+     * Minimal connection that permits memory-card feedback in a GameTest player.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class NoOpConnection extends ServerGamePacketListenerImpl {
+        private NoOpConnection(MinecraftServer server, ServerPlayer player) {
+            super(server, new Connection(PacketFlow.CLIENTBOUND), player,
+                    CommonListenerCookie.createInitial(new GameProfile(UUID.nameUUIDFromBytes(
+                            "mmcr-pattern-memory-card-recording".getBytes(StandardCharsets.UTF_8)),
+                            "mmcr-pattern-memory-card-recording"), false));
+        }
+
+        @Override
+        public void send(@NonNull Packet<?> packet) {
+        }
+
+        @Override
+        public void send(Packet<?> packet, ChannelFutureListener listener) {
         }
     }
 }

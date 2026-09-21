@@ -41,6 +41,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -54,6 +55,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -67,7 +69,7 @@ import java.util.function.LongFunction;
  * @author howxu <dev@howxu.cn>
  */
 public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
-        implements PatternProviderLogicHost, IGridConnectedBlockEntity, PatternInterfaceHost {
+        implements MemoryCardHost, PatternProviderLogicHost, IGridConnectedBlockEntity, PatternInterfaceHost {
     private static final IGridNodeListener<PatternInterfaceBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
@@ -117,6 +119,23 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public PatternProviderLogic getLogic() {
         return logic;
+    }
+
+    @Override
+    public Component memoryCardSettingsSource() {
+        return getMainMenuIcon().getItemName();
+    }
+
+    @Override
+    public void exportMemoryCardSettings(DataComponentMap.Builder builder, @Nullable Player player) {
+        MemoryCardHost.super.exportMemoryCardSettings(builder, player);
+        logic.exportSettings(builder);
+    }
+
+    @Override
+    public void importMemoryCardSettings(DataComponentMap input, @Nullable Player player) {
+        MemoryCardHost.super.importMemoryCardSettings(input, player);
+        logic.importSettings(input, player);
     }
 
     public PatternInterfaceCraftingMachine craftingMachine() {

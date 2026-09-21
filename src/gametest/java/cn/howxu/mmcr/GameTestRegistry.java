@@ -225,6 +225,8 @@ public final class GameTestRegistry {
                 helper -> new AE2OutputInterfaceGameTest().extendedOutputMenuAllowsExtractionButBlocksInsertionAndFilters(helper));
         register(event, "ae2_me_async_output_interface", 200,
                 helper -> new AE2AsyncOutputInterfaceGameTest().asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(helper));
+        register(event, "ae2_me_pattern_memory_card", 100,
+                helper -> new AE2PatternInterfaceGameTest().patternInterfaceMemoryCardRoundTrip(helper));
         register(event, "ae2_me_pattern_interface", 160,
                 helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
         register(event, "ae2_me_pattern_interface_request", 100,
