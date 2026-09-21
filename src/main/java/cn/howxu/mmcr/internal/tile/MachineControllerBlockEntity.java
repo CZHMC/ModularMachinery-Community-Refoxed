@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -453,6 +454,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineBehaviorContext behaviorContext(ControllerScreenText screenText) {
         return runtime.behaviorContext(screenText);
+    }
+
+    public MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilities) {
+        return runtime.behaviorContext(capabilities);
+    }
+
+    public MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilities,
+                                                  ControllerScreenText screenText) {
+        return runtime.behaviorContext(capabilities, screenText);
     }
 
     public long countStructureBlocks(Block block) {

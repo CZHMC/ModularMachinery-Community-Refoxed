@@ -406,29 +406,29 @@ public final class CraftingRuntime {
     }
 
     /** Captures the main-thread recipe tick context before any worker-side planning begins. */
-    public boolean prepareAsyncTick() {
+    public boolean prepareAsyncTick(ControllerRuntimeSnapshot runtime) {
         asyncTickPreparation = null;
+        if (runtime == null) throw new IllegalArgumentException("runtime must not be null");
         if (!active()) return false;
         if (!versionsCurrent()) {
             invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
             return false;
         }
         if (activeRecipe.isFinishPending()) return false;
-        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) {
             waiting(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.PER_TICK, Map.of()));
             return false;
         }
-        MachineBehaviorContext machineContext = behaviorContext();
+        CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(components.capabilities());
+        MachineBehaviorContext machineContext = behaviorContext(capabilitySnapshot);
         if (cachedPublicRequirementSource != effectiveRequirements) {
             cachedPublicRequirementSource = effectiveRequirements;
             cachedPublicRequirements = MachineRecipeConverter.toPublicRequirements(effectiveRequirements);
         }
         RecipeTickContext tickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
-                cachedPublicRequirements, effectiveOutputs,
-                new CapabilitySnapshot(components.capabilities()));
+                cachedPublicRequirements, effectiveOutputs, capabilitySnapshot);
         asyncTickPreparation = new AsyncTickPreparation(runtime, machineContext, tickContext);
         return true;
     }
@@ -988,6 +988,12 @@ public final class CraftingRuntime {
         return screenText == null ? controller.behaviorContext() : controller.behaviorContext(screenText);
     }
 
+    private MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilities) {
+        return screenText == null
+                ? controller.behaviorContext(capabilities)
+                : controller.behaviorContext(capabilities, screenText);
+    }
+
     private static void flushScreenTextReplacements(ControllerScreenText screenText) {
         if (screenText instanceof ControllerScreenTextState state) state.flushReplacements();
     }
@@ -1271,6 +1277,20 @@ public final class CraftingRuntime {
                 return true;
             } catch (RuntimeException exception) {
                 logTickFailure("fallback_commit", runtime, activeRecipe.getRecipe(), exception);
+                waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+                return false;
+            }
+        }
+        if (planned.operations().isEmpty()) {
+            try {
+                ExecutionStatus prefetchFailure = consumePrefetchedEnergy();
+                if (prefetchFailure != null) {
+                    waiting(prefetchFailure);
+                    return false;
+                }
+                return true;
+            } catch (RuntimeException exception) {
+                logTickFailure("async_commit", runtime, activeRecipe.getRecipe(), exception);
                 waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
                 return false;
             }

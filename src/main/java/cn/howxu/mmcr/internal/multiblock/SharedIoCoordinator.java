@@ -134,8 +134,7 @@ public final class SharedIoCoordinator {
         List<FinishRequest> currentFinishRequests = new ArrayList<>();
         for (Request request : requests) {
             if (request.domainId() != domain.id()
-                    || request.domainGeneration() != domain.generation()
-                    || !request.isStillValid()) {
+                    || request.domainGeneration() != domain.generation()) {
                 continue;
             }
             current.add(request);

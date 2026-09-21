@@ -184,7 +184,7 @@ public final class FactoryRuntime {
             });
             lane.setSearchGameTime(gameTime);
             lane.setSearchContextKey(searchContextKey(context, lane, recipeLocks.get(lane)));
-            lane.tick();
+            lane.tick(context.snapshot());
         }
 
         Set<FactoryRecipeThread> readyThisTick = Collections.newSetFromMap(new IdentityHashMap<>());

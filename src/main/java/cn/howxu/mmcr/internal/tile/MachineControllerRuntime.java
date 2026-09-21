@@ -161,12 +161,12 @@ public final class MachineControllerRuntime {
                 factoryThreadCount, parallelism);
     }
 
-    private MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot) {
+    MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot) {
         return behaviorContext(capabilitySnapshot, screenText);
     }
 
-    private MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot,
-                                                   ControllerScreenText screenText) {
+    MachineBehaviorContext behaviorContext(CapabilitySnapshot capabilitySnapshot,
+                                           ControllerScreenText screenText) {
         StructureSnapshot snapshot = structure.snapshot();
         Machine machine = snapshot.machine() == null ? snapshot.configuredMachine() : snapshot.machine();
         if (machine == null) throw new IllegalStateException("Machine behavior context requires a configured machine");

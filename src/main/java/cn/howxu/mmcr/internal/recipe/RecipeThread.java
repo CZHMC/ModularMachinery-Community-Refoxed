@@ -448,6 +448,10 @@ public abstract class RecipeThread {
     }
 
     public void tick() {
+        tick(null);
+    }
+
+    public void tick(@Nullable ControllerRuntimeSnapshot tickSnapshot) {
         if (startPending && !isPendingStart(pendingStartToken, pendingStartRecipe)) {
             clearPendingStart(pendingStartToken, pendingStartRecipe);
             controller.clearRecipeScreenText(laneId());
@@ -471,7 +475,7 @@ public abstract class RecipeThread {
                 long token = beginPendingTick(domain);
                 requestFinish(level, domain, token);
             } else {
-                requestTick(level, domain);
+                requestTick(level, domain, tickSnapshot);
             }
             return;
         }
@@ -502,10 +506,13 @@ public abstract class RecipeThread {
         completeIfFinished(wasActive);
     }
 
-    private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
+    private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
+                             @Nullable ControllerRuntimeSnapshot tickSnapshot) {
         long token = beginPendingTick(domain);
-        long structureVersion = controller.currentStructureSnapshot().version();
-        long stateVersion = controller.componentRuntime().stateVersion();
+        ControllerRuntimeSnapshot runtimeSnapshot = tickSnapshot == null
+                ? controller.currentRuntimeSnapshot() : tickSnapshot;
+        long structureVersion = runtimeSnapshot.structure().version();
+        long stateVersion = runtimeSnapshot.stateVersion();
         long catalogVersion = currentCatalogVersion();
         long lifecycleEpoch = controller.lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
@@ -515,7 +522,7 @@ public abstract class RecipeThread {
                 stateVersion,
                 () -> {
                     if (!validateCurrentRuntime(token, domain)) return false;
-                    if (!runtime.prepareAsyncTick()) {
+                    if (!runtime.prepareAsyncTick(runtimeSnapshot)) {
                         finishAsyncTick();
                         return true;
                     }
@@ -662,7 +669,7 @@ public abstract class RecipeThread {
             } else if (lifecycle.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
                 asyncFinishPrepared = runtime.prepareAsyncFinish();
             } else if (lifecycle.kind() == MainThreadStep.Kind.RECIPE_TICK) {
-                if (!runtime.prepareAsyncTick()) {
+                if (!runtime.prepareAsyncTick(controller.currentRuntimeSnapshot())) {
                     finishAsyncTick();
                     return MainThreadStep.Result.value(false);
                 }

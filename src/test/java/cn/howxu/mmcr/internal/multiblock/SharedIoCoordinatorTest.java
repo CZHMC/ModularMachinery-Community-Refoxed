@@ -269,6 +269,23 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void valid_request_is_checked_once_immediately_before_commit() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        AtomicInteger validations = new AtomicInteger();
+
+        coordinator.enqueue(new SharedIoCoordinator.TickRequest(domain, lane(A), 1L, 0L,
+                () -> true, () -> {
+                    validations.incrementAndGet();
+                    return true;
+                }, () -> 1L, () -> 0L));
+
+        coordinator.resolve(domain);
+
+        assertThat(validations).hasValue(1);
+    }
+
+    @Test
     void catalog_change_before_shared_start_commit_never_runs_runtime_or_resource_transaction() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = domain(A);
