@@ -27,7 +27,6 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockE
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.extendedae.loaded.LoadedExtendedAEContributor;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -82,7 +81,7 @@ class AE2InterfaceJadeProviderTest {
         List<Registration> registrations = new ArrayList<>();
         IWailaClientRegistration registration = clientRegistration(registrations);
 
-        new LoadedAE2Bridge().registerJadeClient(registration);
+        AE2JadeRegistration.registerClient(registration);
 
         assertThat(registrations).containsExactly(
                 new Registration(InterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class));
@@ -92,19 +91,10 @@ class AE2InterfaceJadeProviderTest {
     void registersThePatternHostWithTheCommonGridDataProvider() {
         List<Registration> registrations = new ArrayList<>();
 
-        new LoadedAE2Bridge().registerJadeCommon(commonRegistration(registrations));
+        AE2JadeRegistration.registerCommon(commonRegistration(registrations));
 
         assertThat(registrations).contains(new Registration(InterfaceJadeDataProvider.INSTANCE,
                 PatternInterfaceBlockEntity.class));
-    }
-
-    @Test
-    void extendedAeContributorDoesNotReregisterCommonInterfaceHosts() {
-        List<Registration> registrations = new ArrayList<>();
-
-        new LoadedExtendedAEContributor().registerJadeCommon(commonRegistration(registrations));
-
-        assertThat(registrations).isEmpty();
     }
 
     @Test

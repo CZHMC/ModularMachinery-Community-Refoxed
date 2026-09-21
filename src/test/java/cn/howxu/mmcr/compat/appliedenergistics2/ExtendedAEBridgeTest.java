@@ -11,6 +11,7 @@ import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.compat.extendedae.loaded.LoadedExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedInputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.AE2JadeRegistration;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
@@ -121,7 +122,7 @@ class ExtendedAEBridgeTest {
         assertThatCode(() -> bridge.registerCapabilities(capabilityEvent())).doesNotThrowAnyException();
 
         List<Registration> registrations = new ArrayList<>();
-        bridge.registerJadeCommon(commonRegistration(registrations));
+        AE2JadeRegistration.registerCommon(commonRegistration(registrations));
         assertThat(registrations).hasSize(5);
     }
 
@@ -287,11 +288,6 @@ class ExtendedAEBridgeTest {
             throw unexpectedDelegation();
         }
 
-        @Override
-        public void registerJadeCommon(IWailaCommonRegistration registration) {
-            throw unexpectedDelegation();
-        }
-
         private AssertionError unexpectedDelegation() {
             return new AssertionError("Unavailable ExtendedAE contributor must not be delegated to");
         }
@@ -342,10 +338,6 @@ class ExtendedAEBridgeTest {
         public void registerCapabilities(RegisterCapabilitiesEvent event) {
         }
 
-        @Override
-        public void registerJadeCommon(IWailaCommonRegistration registration) {
-        }
-
         private AssertionError unexpectedDelegation() {
             return new AssertionError("Native AE2 paths must not be delegated beyond menu fallback");
         }
@@ -375,6 +367,5 @@ class ExtendedAEBridgeTest {
         @Override public @Nullable ItemStack mainMenuIcon(IOPortKind kind) { return null; }
         @Override public @Nullable Identifier portOverlayTexture(IOPortKind kind) { return null; }
         @Override public void registerCapabilities(RegisterCapabilitiesEvent event) {}
-        @Override public void registerJadeCommon(IWailaCommonRegistration registration) {}
     }
 }
