@@ -1714,13 +1714,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void tickSingleAsyncRecipe() {
         boolean startedThisTick = false;
-        if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending()) {
+        if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending()
+                && !normalRecipeThread.hasPendingAsyncSearch()) {
             ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
             startedThisTick = normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
                     snapshot.structure().version());
             if (!startedThisTick && shouldSearchRecipe()) {
                 recipeSearchAttemptCounter++;
-                startedThisTick = normalRecipeThread.searchAndStartRecipe(recipesForMachine(), getMaxParallelism(),
+                startedThisTick = activeWorkMode() == MachineWorkMode.ASYNC
+                        ? normalRecipeThread.searchAndStartAsyncRecipe(recipesForMachine(), getMaxParallelism(),
+                        snapshot.structure().version(), lockedRecipeId)
+                        : normalRecipeThread.searchAndStartRecipe(recipesForMachine(), getMaxParallelism(),
                         snapshot.structure().version());
             }
         }

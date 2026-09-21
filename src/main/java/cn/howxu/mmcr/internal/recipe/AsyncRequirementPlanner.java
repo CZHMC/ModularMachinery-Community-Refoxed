@@ -5,8 +5,26 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -18,6 +36,42 @@ import java.util.TreeSet;
  * @author howxu <dev@howxu.cn>
  */
 public final class AsyncRequirementPlanner {
+    /** Captures immutable recipe planning inputs on the server thread for a later worker search. */
+    public static RecipeSearchRequest captureRecipeSearch(ControllerRuntimeSnapshot snapshot,
+                                                           List<MachineRecipe> candidates, long maxParallelism,
+                                                           @Nullable Identifier lockedRecipeId,
+                                                           List<MachineCapability> capabilities,
+                                                           List<RecipeModifier> modifiers) {
+        Machine machine = snapshot.structure().machine() == null
+                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        if (machine == null) throw new IllegalStateException("Recipe search has no machine");
+        List<MachineRecipe> orderedCandidates = (candidates == null ? List.<MachineRecipe>of() : candidates).stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingInt(MachineRecipe::priority)
+                        .thenComparing(Comparator.comparingInt(MachineRecipe::inputRequirementCount).reversed())
+                        .thenComparing(MachineRecipe::id))
+                .toList();
+        CraftingContext craftingContext = new CraftingContext(new CapabilitySnapshot(capabilities), modifiers);
+        List<RecipeSearchCandidate> planningCandidates = new ArrayList<>(orderedCandidates.size());
+        for (MachineRecipe candidate : orderedCandidates) {
+            List<MachineRequirement> requirements = candidate.runtimeRequirements(modifiers);
+            FailureReason requirementFailure = capturedRequirementFailure(snapshot, candidate);
+            if (requirementFailure != null) {
+                planningCandidates.add(new RecipeSearchCandidate(candidate, null, requirementFailure,
+                        hasPendingInputWithFeasibleOutputs(craftingContext, candidate, maxParallelism)));
+                continue;
+            }
+            try {
+                planningCandidates.add(new RecipeSearchCandidate(candidate,
+                        craftingContext.planAsync(requirements, maxParallelism), null, false));
+            } catch (RuntimeException ignored) {
+                planningCandidates.add(new RecipeSearchCandidate(candidate, null, null, false));
+            }
+        }
+        return new RecipeSearchRequest(snapshot, machine.registryName(), snapshot.structure().version(), maxParallelism,
+                orderedCandidates, lockedRecipeId, planningCandidates);
+    }
+
     public PlanResult plan(List<Requirement> requirements, List<Capability> capabilities) {
         Objects.requireNonNull(requirements, "requirements");
         Objects.requireNonNull(capabilities, "capabilities");
@@ -173,5 +227,117 @@ public final class AsyncRequirementPlanner {
             fallback.addAll(result.mainThreadRequirements());
             return new PlanResult(result.operations(), List.copyOf(fallback));
         }
+    }
+
+    /** Immutable outcome of a worker-side recipe candidate search. */
+    public record RecipeSearchResult(@Nullable cn.howxu.mmcr.api.recipe.RecipeSearchResult result,
+                                     @Nullable RuntimeException failure, boolean requiresMainThreadReplan) {
+    }
+
+    /** Immutable main-thread capture whose worker method performs only pure planning. */
+    public static final class RecipeSearchRequest {
+        private final ControllerRuntimeSnapshot snapshot;
+        private final Identifier machineId;
+        private final long structureVersion;
+        private final long maxParallelism;
+        private final List<MachineRecipe> candidates;
+        private final @Nullable Identifier lockedRecipeId;
+        private final List<RecipeSearchCandidate> planningCandidates;
+
+        private RecipeSearchRequest(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
+                                    long maxParallelism, List<MachineRecipe> candidates,
+                                    @Nullable Identifier lockedRecipeId,
+                                    List<RecipeSearchCandidate> planningCandidates) {
+            this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
+            this.machineId = Objects.requireNonNull(machineId, "machineId");
+            this.structureVersion = structureVersion;
+            this.maxParallelism = Math.max(1L, maxParallelism);
+            this.candidates = List.copyOf(candidates);
+            this.lockedRecipeId = lockedRecipeId;
+            this.planningCandidates = List.copyOf(planningCandidates);
+        }
+
+        public ControllerRuntimeSnapshot snapshot() { return snapshot; }
+        public long structureVersion() { return structureVersion; }
+        public long maxParallelism() { return maxParallelism; }
+        public List<MachineRecipe> candidates() { return candidates; }
+        public @Nullable Identifier lockedRecipeId() { return lockedRecipeId; }
+
+        /** Runs without live capabilities, block entities, chunks, or recipe callbacks. */
+        public RecipeSearchResult search() {
+            try {
+                List<RecipeSearchTask.PlanningValue> planningValues = new ArrayList<>(planningCandidates.size());
+                for (RecipeSearchCandidate candidate : planningCandidates) {
+                    if (candidate.capturedFailure() != null) {
+                        planningValues.add(RecipeSearchTask.PlanningValue.failure(candidate.recipe().id(),
+                                candidate.capturedFailure(), 0, candidate.inputInsufficientWithFeasibleOutputs()));
+                        continue;
+                    }
+                    if (candidate.plan() == null) {
+                        planningValues.add(RecipeSearchTask.PlanningValue.mainThread(candidate.recipe().id()));
+                        continue;
+                    }
+                    PlanResult plan = candidate.plan().plan();
+                    planningValues.add(plan.mainThreadRequirements().isEmpty()
+                            ? RecipeSearchTask.PlanningValue.success(candidate.recipe().id())
+                            : RecipeSearchTask.PlanningValue.mainThread(candidate.recipe().id()));
+                }
+                cn.howxu.mmcr.api.recipe.RecipeSearchResult result = RecipeSearchTask.forPlanningValues(snapshot, machineId,
+                        structureVersion, maxParallelism, candidates, lockedRecipeId, planningValues).compute();
+                return new RecipeSearchResult(result, null, requiresMainThreadReplan(result, planningValues));
+            } catch (RuntimeException exception) {
+                return new RecipeSearchResult(null, exception, false);
+            }
+        }
+
+        private boolean requiresMainThreadReplan(cn.howxu.mmcr.api.recipe.RecipeSearchResult result,
+                                                 List<RecipeSearchTask.PlanningValue> planningValues) {
+            if (!result.success()) return false;
+            MachineRecipe selected = result.recipe();
+            RecipeSearchTask.PlanningValue selectedValue = planningValues.stream()
+                    .filter(value -> selected.id().equals(value.recipeId())).findFirst().orElse(null);
+            if (selectedValue == null || selectedValue.requiresMainThread()) return true;
+            for (MachineRecipe earlier : candidates) {
+                if (earlier == selected) break;
+                if (earlier.priority() != selected.priority()
+                        || earlier.inputRequirementCount() <= selected.inputRequirementCount()
+                        || !earlier.hasOverlappingInputs(selected)
+                        || !snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
+                if (planningValues.stream().filter(value -> earlier.id().equals(value.recipeId()))
+                        .anyMatch(RecipeSearchTask.PlanningValue::requiresMainThread)) return true;
+            }
+            return false;
+        }
+    }
+
+    private record RecipeSearchCandidate(MachineRecipe recipe, @Nullable PreparedPlan plan,
+                                         @Nullable FailureReason capturedFailure,
+                                         boolean inputInsufficientWithFeasibleOutputs) {
+    }
+
+    private static boolean hasPendingInputWithFeasibleOutputs(CraftingContext context, MachineRecipe candidate,
+                                                               long maxParallelism) {
+        try {
+            return !context.planInputs(candidate, maxParallelism).successful()
+                    && context.planOutputs(candidate, maxParallelism).successful();
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    public static @Nullable FailureReason capturedRequirementFailure(ControllerRuntimeSnapshot snapshot,
+                                                                       MachineRecipe recipe) {
+        for (LevelRequirement requirement : recipe.levelRequirements()) {
+            MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
+            MachineLevel actual = snapshot.foundLevels().get(requirement.typeId());
+            if (required == null || actual == null || actual.priority() < required.priority()) {
+                return BuiltinFailureReasons.LEVEL_INSUFFICIENT;
+            }
+        }
+        int actualStage = Math.max(1, snapshot.structure().matchedStage());
+        for (StageRequirement requirement : recipe.stageRequirements()) {
+            if (actualStage < requirement.minStage()) return BuiltinFailureReasons.STAGE_INSUFFICIENT;
+        }
+        return null;
     }
 }

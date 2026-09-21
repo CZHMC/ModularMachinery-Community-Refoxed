@@ -389,30 +389,8 @@ public final class FactoryRuntime {
     private static WorkerSearchRequest captureWorkerSearch(FactorySearchContext context,
                                                            List<MachineRecipe> candidates,
                                                            @Nullable Identifier lockedRecipeId) {
-        CraftingContext craftingContext = new CraftingContext(new CapabilitySnapshot(context.capabilities()),
-                context.modifiers());
-        List<WorkerCandidate> workerCandidates = new ArrayList<>(candidates.size());
-        for (MachineRecipe candidate : candidates) {
-            List<MachineRequirement> requirements = candidate.runtimeRequirements(context.modifiers());
-            FailureReason requirementFailure = capturedRequirementFailure(context.snapshot(), candidate);
-            if (requirementFailure != null) {
-                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, requirementFailure,
-                        hasPendingInputWithFeasibleOutputs(craftingContext, candidate, context.maxParallelism())));
-                continue;
-            }
-            try {
-                workerCandidates.add(new WorkerCandidate(candidate, requirements,
-                        craftingContext.planAsync(requirements, context.maxParallelism()), null, false));
-            } catch (RuntimeException ignored) {
-                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, null, false));
-            }
-        }
-        Machine machine = context.snapshot().structure().machine() == null
-                ? context.snapshot().structure().configuredMachine() : context.snapshot().structure().machine();
-        if (machine == null) throw new IllegalStateException("Factory search has no machine");
-        return new WorkerSearchRequest(context.snapshot(), machine.registryName(),
-                context.snapshot().structure().version(), context.maxParallelism(), candidates,
-                lockedRecipeId, workerCandidates, null);
+        return new WorkerSearchRequest(AsyncRequirementPlanner.captureRecipeSearch(context.snapshot(), candidates,
+                context.maxParallelism(), lockedRecipeId, context.capabilities(), context.modifiers()));
     }
 
     private record AsyncSearchRequest(FactorySearchContext context, List<MachineRecipe> candidates,
@@ -420,40 +398,13 @@ public final class FactoryRuntime {
                                       WorkerSearchRequest workerRequest) {
     }
 
-    /** Main-thread-captured requirement values and their worker-safe planners. */
-    private record WorkerCandidate(MachineRecipe recipe, List<MachineRequirement> requirements,
-                                   @Nullable AsyncRequirementPlanner.PreparedPlan plan,
-                                   @Nullable FailureReason capturedFailure,
-                                   boolean inputInsufficientWithFeasibleOutputs) {
-        private WorkerCandidate {
-            requirements = List.copyOf(requirements);
-        }
-    }
-
-    /** Worker-owned inputs contain only immutable snapshots and pure planners. */
+    /** Wraps the shared immutable request with its factory-lane result. */
     private static final class WorkerSearchRequest {
-        private final ControllerRuntimeSnapshot snapshot;
-        private final Identifier machineId;
-        private final long structureVersion;
-        private final long maxParallelism;
-        private final List<MachineRecipe> candidates;
-        private final @Nullable Identifier lockedRecipeId;
-        private final List<WorkerCandidate> planningCandidates;
+        private final AsyncRequirementPlanner.RecipeSearchRequest request;
         private volatile @Nullable FactoryRecipeThread.SearchResult result;
 
-        private WorkerSearchRequest(ControllerRuntimeSnapshot snapshot, Identifier machineId, long structureVersion,
-                                    long maxParallelism, List<MachineRecipe> candidates,
-                                    @Nullable Identifier lockedRecipeId,
-                                    List<WorkerCandidate> planningCandidates,
-                                    @Nullable FactoryRecipeThread.SearchResult result) {
-            this.snapshot = snapshot;
-            this.machineId = machineId;
-            this.structureVersion = structureVersion;
-            this.maxParallelism = maxParallelism;
-            this.candidates = List.copyOf(candidates);
-            this.lockedRecipeId = lockedRecipeId;
-            this.planningCandidates = List.copyOf(planningCandidates);
-            this.result = result;
+        private WorkerSearchRequest(AsyncRequirementPlanner.RecipeSearchRequest request) {
+            this.request = request;
         }
 
         private @Nullable FactoryRecipeThread.SearchResult result() {
@@ -479,34 +430,9 @@ public final class FactoryRuntime {
         public Yield advance(AsyncExecutionContext context) {
             if (!planned) {
                 planned = true;
-                try {
-                    List<RecipeSearchTask.PlanningValue> planningValues = new ArrayList<>(request.planningCandidates.size());
-                    for (WorkerCandidate candidate : request.planningCandidates) {
-                        if (candidate.capturedFailure() != null) {
-                            planningValues.add(RecipeSearchTask.PlanningValue.failure(candidate.recipe().id(),
-                                    candidate.capturedFailure(), 0,
-                                    candidate.inputInsufficientWithFeasibleOutputs()));
-                            continue;
-                        }
-                        if (candidate.plan() == null) {
-                            planningValues.add(RecipeSearchTask.PlanningValue.mainThread(candidate.recipe().id()));
-                            continue;
-                        }
-                        AsyncRequirementPlanner.PlanResult plan = candidate.plan().plan();
-                        if (plan.mainThreadRequirements().isEmpty()) {
-                            planningValues.add(RecipeSearchTask.PlanningValue.success(candidate.recipe().id()));
-                            continue;
-                        }
-                        planningValues.add(RecipeSearchTask.PlanningValue.mainThread(candidate.recipe().id()));
-                    }
-                    RecipeSearchResult result = RecipeSearchTask.forPlanningValues(request.snapshot, request.machineId,
-                            request.structureVersion, request.maxParallelism, request.candidates,
-                            request.lockedRecipeId, planningValues).compute();
-                    boolean requiresMainThreadReplan = requiresMainThreadReplan(result, request, planningValues);
-                    request.result = new FactoryRecipeThread.SearchResult(result, null, requiresMainThreadReplan);
-                } catch (RuntimeException exception) {
-                    request.result = new FactoryRecipeThread.SearchResult(null, exception, false);
-                }
+                AsyncRequirementPlanner.RecipeSearchResult result = request.request.search();
+                request.result = new FactoryRecipeThread.SearchResult(result.result(), result.failure(),
+                        result.requiresMainThreadReplan());
             }
             return Yield.mainThread(new MainThreadStep.FactorySearch(laneId, catalogVersion, searchId),
                     ignored -> ignoredContext -> Yield.complete());
@@ -514,56 +440,10 @@ public final class FactoryRuntime {
 
     }
 
-    private static boolean requiresMainThreadReplan(RecipeSearchResult result, WorkerSearchRequest request,
-                                                    List<RecipeSearchTask.PlanningValue> planningValues) {
-        if (!result.success()) return false;
-        MachineRecipe selected = result.recipe();
-        RecipeSearchTask.PlanningValue selectedValue = planningValues.stream()
-                .filter(value -> selected.id().equals(value.recipeId())).findFirst().orElse(null);
-        if (selectedValue == null || selectedValue.requiresMainThread()) return true;
-        for (MachineRecipe earlier : request.candidates) {
-            if (earlier == selected) break;
-            if (earlier.priority() != selected.priority()
-                    || earlier.inputRequirementCount() <= selected.inputRequirementCount()
-                    || !earlier.hasOverlappingInputs(selected)
-                    || !request.snapshot.moduleConnectionStatus().canRunRecipe(earlier.requiredHostIds())) continue;
-            if (planningValues.stream().filter(value -> earlier.id().equals(value.recipeId()))
-                    .anyMatch(RecipeSearchTask.PlanningValue::requiresMainThread)) return true;
-        }
-        return false;
-    }
-
-    private static boolean hasPendingInputWithFeasibleOutputs(CraftingContext context, MachineRecipe candidate,
-                                                              long maxParallelism) {
-        try {
-            return !context.planInputs(candidate, maxParallelism).successful()
-                    && context.planOutputs(candidate, maxParallelism).successful();
-        } catch (RuntimeException ignored) {
-            return false;
-        }
-    }
-
-    private static @Nullable FailureReason capturedRequirementFailure(ControllerRuntimeSnapshot snapshot,
-                                                                       MachineRecipe recipe) {
-        for (LevelRequirement requirement : recipe.levelRequirements()) {
-            MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
-            MachineLevel actual = snapshot.foundLevels().get(requirement.typeId());
-            if (required == null || actual == null || actual.priority() < required.priority()) {
-                return BuiltinFailureReasons.LEVEL_INSUFFICIENT;
-            }
-        }
-        int actualStage = Math.max(1, snapshot.structure().matchedStage());
-        for (StageRequirement requirement : recipe.stageRequirements()) {
-            if (actualStage < requirement.minStage()) {
-                return BuiltinFailureReasons.STAGE_INSUFFICIENT;
-            }
-        }
-        return null;
-    }
 
     private static @Nullable FailureReason capturedStageFailure(ControllerRuntimeSnapshot snapshot,
                                                                  MachineRecipe recipe) {
-        FailureReason failure = capturedRequirementFailure(snapshot, recipe);
+        FailureReason failure = AsyncRequirementPlanner.capturedRequirementFailure(snapshot, recipe);
         return failure == BuiltinFailureReasons.STAGE_INSUFFICIENT ? failure : null;
     }
 

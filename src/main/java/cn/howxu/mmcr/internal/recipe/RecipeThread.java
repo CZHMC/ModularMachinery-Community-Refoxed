@@ -137,6 +137,101 @@ public abstract class RecipeThread {
         return startRecipe(result.recipe(), context.maxParallelism(), structureVersion, context);
     }
 
+    /** Submits a pure, immutable candidate search and applies it only after server-thread validation. */
+    protected boolean submitAsyncRecipeSearch(MachineAsyncCoordinator.TaskKey taskKey,
+                                              AsyncRequirementPlanner.RecipeSearchRequest request,
+                                              long catalogVersion, long searchId, String searchLaneId,
+                                              Runnable clearPendingSearch) {
+        if (!(controller.getLevel() instanceof ServerLevel level)) return false;
+        AsyncRecipeSearch search = new AsyncRecipeSearch(request);
+        return MachineAsyncCoordinator.get(level).submit(taskKey,
+                new AsyncRecipeSearchContinuation(search, catalogVersion, searchId, searchLaneId),
+                (key, step) -> applyAsyncRecipeSearch(key, step, search, catalogVersion, searchId,
+                        searchLaneId, clearPendingSearch));
+    }
+
+    private MainThreadStep.Result applyAsyncRecipeSearch(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep step,
+                                                          AsyncRecipeSearch search, long catalogVersion, long searchId,
+                                                          String searchLaneId, Runnable clearPendingSearch) {
+        if (!(step instanceof MainThreadStep.FactorySearch completed)
+                || completed.searchId() != searchId || !searchLaneId.equals(completed.laneId())
+                || !isAsyncRecipeSearchCurrent(taskKey, search.request(), catalogVersion, searchLaneId)) {
+            clearPendingSearch.run();
+            return MainThreadStep.Result.success();
+        }
+        clearPendingSearch.run();
+        AsyncRequirementPlanner.RecipeSearchResult result = search.result();
+        if (result == null || result.failure() != null || result.result() == null || !result.result().success()) {
+            controller.clearPendingConflictStart();
+            onStartSearchFailed(result == null || result.result() == null ? null : result.result().failure());
+            return MainThreadStep.Result.success();
+        }
+        if (result.requiresMainThreadReplan()) {
+            searchAndStartRecipe(search.request().candidates(), search.request().maxParallelism(),
+                    search.request().structureVersion(), search.request().lockedRecipeId());
+            return MainThreadStep.Result.success();
+        }
+        if (controller.shouldDelayConflictProneStart(result.result())) return MainThreadStep.Result.success();
+        startRecipe(result.result().recipe(), search.request().maxParallelism(), search.request().structureVersion());
+        return MainThreadStep.Result.success();
+    }
+
+    private boolean isAsyncRecipeSearchCurrent(MachineAsyncCoordinator.TaskKey taskKey,
+                                               AsyncRequirementPlanner.RecipeSearchRequest request,
+                                               long catalogVersion, String searchLaneId) {
+        if (!controller.getBlockPos().equals(taskKey.controllerPos()) || taskKey.lifecycleEpoch() != controller.lifecycleEpoch()
+                || taskKey.workMode() != MachineWorkMode.ASYNC || !searchLaneId.equals(taskKey.laneId())
+                || runtime.active() || isStartPending()) return false;
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        ControllerRuntimeSnapshot captured = request.snapshot();
+        Machine currentMachine = current.structure().machine() == null
+                ? current.structure().configuredMachine() : current.structure().machine();
+        Machine capturedMachine = captured.structure().machine() == null
+                ? captured.structure().configuredMachine() : captured.structure().machine();
+        return current.structure().formed() && current.structure().structureAreaLoaded()
+                && current.structure().version() == captured.structure().version()
+                && current.capabilityVersion() == captured.capabilityVersion()
+                && current.modifierVersion() == captured.modifierVersion()
+                && current.stateVersion() == captured.stateVersion()
+                && currentMachine != null && capturedMachine != null
+                && currentMachine.registryName().equals(capturedMachine.registryName())
+                && currentCatalogVersion() == catalogVersion;
+    }
+
+    private static final class AsyncRecipeSearch {
+        private final AsyncRequirementPlanner.RecipeSearchRequest request;
+        private volatile @Nullable AsyncRequirementPlanner.RecipeSearchResult result;
+
+        private AsyncRecipeSearch(AsyncRequirementPlanner.RecipeSearchRequest request) {
+            this.request = request;
+        }
+
+        private AsyncRequirementPlanner.RecipeSearchRequest request() { return request; }
+        private @Nullable AsyncRequirementPlanner.RecipeSearchResult result() { return result; }
+    }
+
+    private static final class AsyncRecipeSearchContinuation implements AsyncContinuation {
+        private final AsyncRecipeSearch search;
+        private final long catalogVersion;
+        private final long searchId;
+        private final String searchLaneId;
+
+        private AsyncRecipeSearchContinuation(AsyncRecipeSearch search, long catalogVersion, long searchId,
+                                              String searchLaneId) {
+            this.search = search;
+            this.catalogVersion = catalogVersion;
+            this.searchId = searchId;
+            this.searchLaneId = searchLaneId;
+        }
+
+        @Override
+        public Yield advance(cn.howxu.mmcr.internal.async.AsyncExecutionContext context) {
+            search.result = search.request().search();
+            return Yield.mainThread(new MainThreadStep.FactorySearch(searchLaneId, catalogVersion, searchId),
+                    ignored -> ignoredContext -> Yield.complete());
+        }
+    }
+
     private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates, Identifier machineId) {
         if (candidates == null || candidates.isEmpty()) return List.of();
         Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machineId);
