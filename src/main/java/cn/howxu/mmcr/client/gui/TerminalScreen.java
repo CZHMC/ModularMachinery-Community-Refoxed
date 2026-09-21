@@ -244,8 +244,8 @@ public final class TerminalScreen extends Screen {
     }
 
     private TerminalInventoryMode nextInventoryMode() {
-        return data.inventoryMode() == TerminalInventoryMode.INVENTORY
-                ? TerminalInventoryMode.CONTAINER : TerminalInventoryMode.INVENTORY;
+        TerminalInventoryMode[] modes = TerminalInventoryMode.values();
+        return modes[(data.inventoryMode().ordinal() + 1) % modes.length];
     }
 
     private List<LevelType> levelTypes() {
@@ -314,8 +314,7 @@ public final class TerminalScreen extends Screen {
     }
 
     private Component inventoryModeLabel() {
-        return Component.translatable(data.inventoryMode() == TerminalInventoryMode.INVENTORY
-                ? "gui.mmcr.terminal.inventory_mode.inventory" : "gui.mmcr.terminal.inventory_mode.container");
+        return Component.translatable("gui.mmcr.terminal.inventory_mode." + data.inventoryMode().serializedName());
     }
 
     private Component levelLabel(LevelView view) {

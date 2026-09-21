@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
 import appeng.api.AECapabilities;
+import appeng.api.networking.IGrid;
+import appeng.api.networking.security.IActionSource;
+import appeng.blockentity.networking.WirelessAccessPointBlockEntity;
 import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.implementations.PatternProviderMenu;
@@ -22,11 +25,14 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlock
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -35,6 +41,7 @@ import snownee.jade.api.IWailaClientRegistration;
 import snownee.jade.api.IWailaCommonRegistration;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -113,6 +120,25 @@ public final class LoadedAE2Bridge implements AE2Bridge {
             return MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
         return false;
+    }
+
+    @Override
+    public boolean isWirelessAccessPoint(ServerPlayer player, GlobalPos accessPoint) {
+        ServerLevel level = player.level().getServer().getLevel(accessPoint.dimension());
+        return level != null && level.hasChunkAt(accessPoint.pos())
+                && level.getBlockEntity(accessPoint.pos()) instanceof WirelessAccessPointBlockEntity;
+    }
+
+    @Override
+    public Optional<StructureItemStorage> resolveTerminalNetworkStorage(ServerPlayer player, GlobalPos accessPoint) {
+        ServerLevel level = player.level().getServer().getLevel(accessPoint.dimension());
+        if (level == null || !level.hasChunkAt(accessPoint.pos())) return Optional.empty();
+        if (!(level.getBlockEntity(accessPoint.pos()) instanceof WirelessAccessPointBlockEntity wirelessAccessPoint)
+                || !wirelessAccessPoint.isActive()) return Optional.empty();
+        IGrid grid = wirelessAccessPoint.getGrid();
+        if (grid == null) return Optional.empty();
+        return Optional.of(new AE2NetworkStructureItemStorage(grid.getStorageService().getInventory(),
+                IActionSource.ofPlayer(player)));
     }
 
     @Override

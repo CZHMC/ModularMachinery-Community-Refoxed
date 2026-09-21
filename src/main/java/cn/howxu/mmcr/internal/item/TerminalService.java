@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.StructureItemSink;
@@ -53,7 +54,8 @@ public final class TerminalService {
     public static Result bindContainer(ServerPlayer player, ItemStack stack, GlobalPos target) {
         if (!isHeldTerminal(player, stack)) return rejected(player, stack, "message.mmcr.terminal.not_held");
         TerminalData data = TerminalData.from(stack);
-        if (data.inventoryMode() != TerminalInventoryMode.CONTAINER || !canAccess(player, target)) {
+        if (data.inventoryMode() != TerminalInventoryMode.CONTAINER || !canAccess(player, target)
+                || AE2Bridge.get().isWirelessAccessPoint(player, target)) {
             return rejected(player, stack, "message.mmcr.terminal.invalid_container");
         }
         TerminalData candidate = data.withContainer(target);
@@ -62,6 +64,17 @@ public final class TerminalService {
         }
         setData(stack, candidate);
         return accepted(player, stack, "message.mmcr.terminal.container_bound");
+    }
+
+    public static Result bindAe2AccessPoint(ServerPlayer player, ItemStack stack, GlobalPos target) {
+        if (!isHeldTerminal(player, stack)) return rejected(player, stack, "message.mmcr.terminal.not_held");
+        TerminalData data = TerminalData.from(stack);
+        if (data.inventoryMode() != TerminalInventoryMode.AE2
+                || AE2Bridge.get().resolveTerminalNetworkStorage(player, target).isEmpty()) {
+            return rejected(player, stack, "message.mmcr.terminal.invalid_ae2_access_point");
+        }
+        setData(stack, data.withAe2AccessPoint(target));
+        return accepted(player, stack, "message.mmcr.terminal.ae2_access_point_bound");
     }
 
     public static void clear(ItemStack stack) {
@@ -203,8 +216,8 @@ public final class TerminalService {
         }
         Identifier selectedType = data.selectedLevelType();
         if (selectedType == null || !levels.containsKey(selectedType)) selectedType = levels.isEmpty() ? null : levels.keySet().iterator().next();
-        return new TerminalData(data.controller(), data.container(), data.inventoryMode(), selectedType, levels, stage,
-                data.previewEnabled(), data.previewLayer());
+        return new TerminalData(data.controller(), data.container(), data.ae2AccessPoint(), data.inventoryMode(), selectedType,
+                levels, stage, data.previewEnabled(), data.previewLayer());
     }
 
     private static Optional<MachineControllerBlockEntity> controllerAt(ServerPlayer player, GlobalPos target) {

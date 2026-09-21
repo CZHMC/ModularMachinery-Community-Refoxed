@@ -69,7 +69,12 @@ public class TerminalItem extends Item {
             return result.accepted()
                     ? InteractionResult.SUCCESS : InteractionResult.FAIL;
         }
-        if (TerminalData.from(context.getItemInHand()).inventoryMode() == TerminalInventoryMode.CONTAINER) {
+        TerminalData data = TerminalData.from(context.getItemInHand());
+        if (data.inventoryMode() == TerminalInventoryMode.AE2) {
+            return TerminalService.bindAe2AccessPoint(serverPlayer, context.getItemInHand(), target).accepted()
+                    ? InteractionResult.SUCCESS : InteractionResult.PASS;
+        }
+        if (data.inventoryMode() == TerminalInventoryMode.CONTAINER) {
             return TerminalService.bindContainer(serverPlayer, context.getItemInHand(), target).accepted()
                     ? InteractionResult.SUCCESS : InteractionResult.PASS;
         }
@@ -81,11 +86,7 @@ public class TerminalItem extends Item {
                                 Consumer<Component> tooltip, TooltipFlag flag) {
         TerminalData data = TerminalData.from(stack);
 
-        Component modeLabel = Component.translatable(
-                        data.inventoryMode() == TerminalInventoryMode.INVENTORY
-                                ? "tooltip.mmcr.terminal.inventory_mode.inventory"
-                                : "tooltip.mmcr.terminal.inventory_mode.container")
-                .withStyle(ChatFormatting.GRAY);
+        Component modeLabel = data.inventoryMode().component().copy().withStyle(ChatFormatting.GRAY);
         tooltip.accept(
                 Component.empty()
                         .append(Component.translatable("tooltip.mmcr.terminal.mode").withStyle(ChatFormatting.GREEN))
@@ -95,6 +96,7 @@ public class TerminalItem extends Item {
 
         appendController(data.controller(), context.level(), tooltip);
         appendContainer(data, context.level(), tooltip);
+        appendAe2AccessPoint(data, context.level(), tooltip);
         appendLevels(data.selectedLevels(), tooltip);
 
         tooltip.accept(
@@ -167,6 +169,19 @@ public class TerminalItem extends Item {
                         .append(value)
                         .append(" @ ")
                         .append(Component.literal(container.dimension().identifier().toString()))
+        );
+    }
+
+    private static void appendAe2AccessPoint(TerminalData data, Level level, Consumer<Component> tooltip) {
+        if (data.inventoryMode() != TerminalInventoryMode.AE2 || data.ae2AccessPoint() == null) return;
+        GlobalPos accessPoint = data.ae2AccessPoint();
+        tooltip.accept(
+                Component.empty()
+                        .append(Component.translatable("tooltip.mmcr.terminal.ae2_access_point").withStyle(ChatFormatting.GREEN))
+                        .append(Component.literal(": "))
+                        .append(resolveContainerValue(accessPoint, level))
+                        .append(" @ ")
+                        .append(Component.literal(accessPoint.dimension().identifier().toString()))
         );
     }
 

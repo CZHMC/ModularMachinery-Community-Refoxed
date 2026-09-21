@@ -13,7 +13,8 @@ import net.minecraft.network.codec.StreamCodec;
  */
 public enum TerminalInventoryMode {
     INVENTORY("inventory"),
-    CONTAINER("container");
+    CONTAINER("container"),
+    AE2("ae2");
 
     public static final Codec<TerminalInventoryMode> CODEC = Codec.STRING.xmap(
             TerminalInventoryMode::bySerializedName, TerminalInventoryMode::serializedName);

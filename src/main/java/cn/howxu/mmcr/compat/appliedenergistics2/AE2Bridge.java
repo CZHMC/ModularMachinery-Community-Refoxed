@@ -1,9 +1,12 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
+import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -29,6 +32,14 @@ public interface AE2Bridge {
     boolean isPort(String id);
 
     boolean openMenu(ServerPlayer player, Level level, BlockPos pos);
+
+    default boolean isWirelessAccessPoint(ServerPlayer player, GlobalPos accessPoint) {
+        return false;
+    }
+
+    default Optional<StructureItemStorage> resolveTerminalNetworkStorage(ServerPlayer player, GlobalPos accessPoint) {
+        return Optional.empty();
+    }
 
     default void onPortNeighborChanged(IOPortBlockEntity port) {
     }

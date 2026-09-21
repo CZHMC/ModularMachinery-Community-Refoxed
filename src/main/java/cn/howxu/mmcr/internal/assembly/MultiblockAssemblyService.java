@@ -235,7 +235,9 @@ public final class MultiblockAssemblyService {
             if (placements.isEmpty()) {
                 return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
             }
-            source.extractAll(aggregateRequirements(placements));
+            if (!source.extractAll(aggregateRequirements(placements))) {
+                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
+            }
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), stage, placements,
                 controller.buildBlocksPerTick(), !freeBuild);

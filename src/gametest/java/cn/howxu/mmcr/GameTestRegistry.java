@@ -134,6 +134,8 @@ public final class GameTestRegistry {
                 helper -> new TerminalAssemblyGameTest().storageResolverRejectsUnavailableContainerTargets(helper));
         register(event, "terminal_block_storage", 100,
                 helper -> new TerminalAssemblyGameTest().blockStorageAcceptsCompleteStacksAndRollsBackPartialInsertions(helper));
+        register(event, "ae2_terminal_access_point", 100,
+                helper -> new AE2TerminalGameTest().boundAccessPointTransfersBuildAndDemolishMaterials(helper));
         register(event, "terminal_expandable_demolish_stage_two", 100, helper -> new TerminalAssemblyGameTest().demolishExpandableFormedStageTwoRemovesCompleteSnapshot(helper));
         register(event, "terminal_expandable_missing_materials_stage_one", 100, helper -> new TerminalAssemblyGameTest().defaultBuildMissingMaterialsExcludeStageTwo(helper));
         register(event, "terminal_build_missing_stage_one_partial", 100, helper -> new TerminalAssemblyGameTest().survivalBuildRejectsWhenStageOneMaterialsAreMissing(helper));
