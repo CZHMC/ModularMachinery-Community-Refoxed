@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
+import cn.howxu.mmcr.api.machine.StructureMatcher;
 
 /**
  * A state mutation that must execute on the server thread.
@@ -25,7 +26,8 @@ public interface MainThreadStep {
         UNSUPPORTED_REQUIREMENT,
         INTENT_COMMIT,
         SCREEN_TEXT_FLUSH,
-        FACTORY_SEARCH
+        FACTORY_SEARCH,
+        STRUCTURE_SCAN
     }
 
     sealed interface Result permits Result.Success, Result.Failure, Result.Pending, Result.Value {
@@ -149,6 +151,20 @@ public interface MainThreadStep {
         @Override
         public Kind kind() {
             return Kind.FACTORY_SEARCH;
+        }
+
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
+    /** Pure structure-match result whose controller validates and applies it on the server thread. */
+    record StructureScan(StructureMatcher.ScanIdentity identity, Object candidateIdentity,
+                         StructureMatcher.ScanResult result) implements MainThreadStep {
+        @Override
+        public Kind kind() {
+            return Kind.STRUCTURE_SCAN;
         }
 
         @Override

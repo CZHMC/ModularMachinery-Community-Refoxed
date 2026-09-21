@@ -1,9 +1,11 @@
 package cn.howxu.mmcr.internal.async;
 
+import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -189,6 +191,35 @@ class MachineAsyncCoordinatorTest {
         coordinator.completeTick();
 
         assertThat(committedLanes).containsExactly("factory-0");
+    }
+
+    @Test
+    void structure_scan_result_is_delivered_to_its_main_thread_owner() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L, MachineWorkMode.ASYNC, "structure-scan");
+        Object pattern = new Object();
+        Object candidate = new Object();
+        var identity = new StructureMatcher.ScanIdentity(4L, Direction.SOUTH, Direction.NORTH, 2,
+                pattern, 9L, 3);
+        var result = new StructureMatcher.ScanResult(StructureMatcher.ScanStatus.IN_PROGRESS, 2, null, null);
+        AtomicBoolean delivered = new AtomicBoolean();
+
+        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThread(
+                new MainThreadStep.StructureScan(identity, candidate, result), resume -> context ->
+                        AsyncContinuation.Yield.complete()), (taskKey, step) -> {
+            assertThat(taskKey).isEqualTo(key);
+            assertThat(step).isInstanceOf(MainThreadStep.StructureScan.class);
+            MainThreadStep.StructureScan scan = (MainThreadStep.StructureScan) step;
+            assertThat(scan.identity()).isSameAs(identity);
+            assertThat(scan.candidateIdentity()).isSameAs(candidate);
+            assertThat(scan.result()).isSameAs(result);
+            delivered.set(true);
+            return MainThreadStep.Result.success();
+        });
+
+        coordinator.completeTick();
+
+        assertThat(delivered).isTrue();
     }
 
     @Test

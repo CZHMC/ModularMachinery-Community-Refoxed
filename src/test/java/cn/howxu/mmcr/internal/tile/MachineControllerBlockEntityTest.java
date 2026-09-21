@@ -43,6 +43,7 @@ import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayModelLoader;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
@@ -115,6 +116,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -934,30 +936,104 @@ class MachineControllerBlockEntityTest {
     @Test
     void formed_structure_safety_check_continues_with_a_full_batched_scan() {
         TestBootstrap.registerRuntimeBuiltins();
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 100; index++) {
+            entries.put(new BlockPos(index + 1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE));
+        }
+        DynamicMachine machine = new DynamicMachine(MMCR.id("async_safety_scan"), "Async Safety Scan",
+                new BlockArray(entries), MachineControllerSpec.defaultsFor(MMCR.id("async_safety_scan")));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
-        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
+        RuntimeTestFixtures.formStructure(controller, machine);
         ServerLevel level = (ServerLevel) controller.getLevel();
-        controller.setStructureScanBatchesForTesting(5);
+        controller.setStructureScanBatchesForTesting(6);
         var published = controller.runtimeSnapshot();
 
         for (int tick = 0; tick < 120; tick++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.tickStructure(level, controller.getBlockPos());
-        }
-        for (int tick = 0; tick < 4; tick++) {
-            RuntimeTestFixtures.advanceGameTime(level);
-            controller.tickStructure(level, controller.getBlockPos());
+            SharedIoEvents.completeLevelTick(level);
         }
         assertThat(controller.structureWorkSnapshotForTesting().scan()).isNotNull();
         for (int tick = 0; tick < 40 && controller.structureWorkSnapshotForTesting().scan() != null; tick++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.tickStructure(level, controller.getBlockPos());
+            SharedIoEvents.completeLevelTick(level);
         }
 
         assertThat(controller.scanBatchCountForTesting()).isGreaterThan(5);
         assertThat(controller.structureWorkSnapshotForTesting().scan()).isNull();
         assertThat(controller.structureSnapshot().formed()).isTrue();
         assertThat(controller.runtimeSnapshot()).isSameAs(published);
+    }
+
+    @Test
+    void stale_structure_batch_is_discarded_before_its_cursor_or_result_is_applied() throws InterruptedException {
+        TestBootstrap.registerRuntimeBuiltins();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+
+        for (int tick = 0; tick < 120; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.tickStructure(level, controller.getBlockPos());
+        }
+
+        StructureRuntime.StructureWorkSnapshot.ScanView scan = controller.structureWorkSnapshotForTesting().scan();
+        assertThat(scan).isNotNull();
+        assertThat(scan.cursor()).isZero();
+        assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
+
+        BlockPos changedPos = controller.getBlockPos().offset(
+                controller.structureSnapshot().pattern().pattern().keySet().iterator().next());
+        level.setBlock(changedPos, Blocks.DIRT.defaultBlockState(), 3);
+        controller.handleStructureBlockChanged(changedPos);
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(controller.structureSnapshot().formed()).isTrue();
+        for (int tick = 0; tick < 64 && controller.structureSnapshot().formed(); tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.tickStructure(level, controller.getBlockPos());
+            SharedIoEvents.completeLevelTick(level);
+        }
+
+        assertThat(controller.structureSnapshot().formed()).isFalse();
+    }
+
+    @Test
+    void redstone_pause_keeps_an_inflight_structure_scan_deliverable() throws InterruptedException {
+        TestBootstrap.registerRuntimeBuiltins();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+
+        startPendingStructureScan(controller, level);
+        RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 15);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+
+        assertThat(controller.isRedstonePaused()).isTrue();
+        assertThat(MachineAsyncCoordinator.get(level).hasPendingMainStepForTesting()).isTrue();
+        SharedIoEvents.completeLevelTick(level);
+        assertThat(controller.structureScanCursorForTesting()).isPositive();
+    }
+
+    @Test
+    void unloading_the_controller_chunk_cancels_a_scan_outside_its_pattern_bounds() throws InterruptedException {
+        TestBootstrap.registerRuntimeBuiltins();
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 9; index++) {
+            entries.put(new BlockPos(17 + index, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE));
+        }
+        DynamicMachine machine = new DynamicMachine(MMCR.id("scan_in_other_chunk"), "Scan In Other Chunk",
+                new BlockArray(entries), MachineControllerSpec.defaultsFor(MMCR.id("scan_in_other_chunk")));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, machine);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+
+        startPendingStructureScan(controller, level);
+        controller.onChunkUnloaded();
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(controller.structureScanCursorForTesting()).isEqualTo(-1);
     }
 
     @Test
@@ -1662,6 +1738,20 @@ class MachineControllerBlockEntityTest {
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
         SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+    }
+
+    private static void startPendingStructureScan(MachineControllerBlockEntity controller, ServerLevel level)
+            throws InterruptedException {
+        for (int tick = 0; tick < 120; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.tickStructure(level, controller.getBlockPos());
+        }
+        assertThat(controller.structureWorkSnapshotForTesting().scan()).isNotNull();
+        assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
+    }
+
+    private static boolean waitForPendingMainStep(MachineAsyncCoordinator coordinator) throws InterruptedException {
+        return coordinator.awaitPendingMainStepForTesting(1L, TimeUnit.SECONDS);
     }
 
     private static NetworkInterfaceBlockEntity networkInterface(BlockPos pos) {

@@ -470,6 +470,14 @@ public final class MachineControllerRuntime {
         return structure.stepScan(level, controllerPos);
     }
 
+    StructureMatcher.ScanBatch captureStructureScan(ServerLevel level, BlockPos controllerPos) {
+        return structure.captureScan(level, controllerPos);
+    }
+
+    void applyStructureScanResult(StructureMatcher.ScanIdentity identity, StructureMatcher.ScanResult result) {
+        structure.applyScanResult(identity, result);
+    }
+
     void clearStructureScan() {
         structure.clearScan();
     }

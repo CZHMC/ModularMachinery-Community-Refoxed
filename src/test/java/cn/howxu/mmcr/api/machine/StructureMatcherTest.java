@@ -399,6 +399,21 @@ class StructureMatcherTest {
     }
 
     @Test
+    void bounded_scan_does_not_advance_past_an_unmatched_entry() {
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int index = 0; index < 6; index++) {
+            entries.put(new BlockPos(index, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE));
+        }
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(entries), Map.of(), true,
+                StructureMatcher.ScanOptions.of(2, false, 0));
+
+        StructureMatcher.ScanResult result = scan.step(LevelStub.create(Map.of(BlockPos.ZERO, Blocks.DIRT)), BlockPos.ZERO);
+
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
+        assertThat(scan.cursor()).isZero();
+    }
+
+    @Test
     void sentinel_reads_share_the_batch_budget_while_scan_progresses() {
         Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         for (int index = 0; index < 20; index++) {

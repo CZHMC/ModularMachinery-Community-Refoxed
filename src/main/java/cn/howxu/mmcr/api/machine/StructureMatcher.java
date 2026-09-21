@@ -100,6 +100,50 @@ public final class StructureMatcher {
         public Optional<Mismatch> mismatch() { return Optional.ofNullable(mismatchValue); }
     }
 
+    /** Immutable identity captured with one server-thread structure batch. */
+    public record ScanIdentity(long structureVersion, Direction frontFacing, Direction rollFacing, int stageNumber,
+                               Object patternIdentity, long chunkStateEpoch, int cursor) {
+    }
+
+    /** One immutable block-state observation that can be matched without a level. */
+    public record ScanEntry(Mismatch mismatch, BlockPredicate matchingExpected,
+                            List<BlockPredicate> replacementPredicates) {
+        public ScanEntry {
+            replacementPredicates = List.copyOf(replacementPredicates);
+        }
+
+        private boolean matches(boolean stateSensitive) {
+            if (matchingExpected.matches(mismatch.actualState(), stateSensitive)) return true;
+            for (BlockPredicate replacement : replacementPredicates) {
+                if (replacement.matches(mismatch.actualState(), stateSensitive)) return true;
+            }
+            return mismatch.expected() instanceof BlockPredicate.Air && mismatch.actualState().isAir();
+        }
+    }
+
+    /** Immutable server-thread capture of one bounded scan batch. */
+    public record ScanBatch(ScanIdentity identity, List<ScanEntry> entries, int nextSentinelCursor,
+                            boolean sentinelsChecked, int nextCursor, ScanStatus completionStatus,
+                            @Nullable InvalidationReason invalidation, boolean stateSensitive) {
+        public ScanBatch {
+            entries = List.copyOf(entries);
+        }
+
+        public ScanResult match() {
+            if (invalidation != null) {
+                return new ScanResult(ScanStatus.INVALIDATED, 0, null, invalidation);
+            }
+            int checked = 0;
+            for (ScanEntry entry : entries) {
+                checked++;
+                if (!entry.matches(stateSensitive)) {
+                    return new ScanResult(ScanStatus.MISMATCH, checked, entry.mismatch(), null);
+                }
+            }
+            return new ScanResult(completionStatus, checked, null, null);
+        }
+    }
+
     public static final class ScanState {
         private final long structureVersion;
         private final Direction frontFacing;
@@ -117,6 +161,7 @@ public final class StructureMatcher {
         private @Nullable ScanResult result;
         private @Nullable Mismatch previousMismatch;
         private @Nullable InvalidationReason invalidated;
+        private @Nullable ScanBatch pendingBatch;
 
         private ScanState(long structureVersion, Direction frontFacing, Direction rollFacing, int stageNumber,
                           Object patternIdentity, CompiledMachinePattern.ScanPlan scanPlan,
@@ -159,64 +204,99 @@ public final class StructureMatcher {
 
         public void invalidate(InvalidationReason reason) {
             if (invalidated == null) invalidated = reason;
+            pendingBatch = null;
         }
 
         public ScanResult step(Level level, BlockPos ctrlPos) {
-            if (invalidated != null) return result = new ScanResult(ScanStatus.INVALIDATED, 0, null, invalidated);
-            int checked = 0;
-            int budget = batchSize();
-            if (previousMismatch != null) {
-                Mismatch refreshed = mismatchAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos,
-                        structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
-                checked++;
-                if (!matchesEntry(refreshed.expected(), refreshed.actualState(),
-                        replacements.getOrDefault(refreshed.relativePos(), List.of()), stateSensitive)) {
-                    previousMismatch = refreshed;
-                    return result = new ScanResult(ScanStatus.MISMATCH, checked, refreshed, null);
-                }
-                previousMismatch = null;
-            }
-            if (options.sentinelEnabled() && !sentinelsChecked) {
-                while (sentinelCursor < activeSentinelCount && checked < budget) {
-                    int index = scanPlan.sentinelAt(sentinelCursor++);
-                    BlockPos relativePos = scanPlan.entryPositions().get(index);
-                    BlockPredicate expected = scanPlan.entryPredicates().get(index);
-                    Mismatch mismatch = mismatchAt(relativePos, expected, level, ctrlPos,
-                            structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
-                    checked++;
-                    if (!matchesEntry(expected, mismatch.actualState(),
-                            replacements.getOrDefault(relativePos, List.of()), stateSensitive)) {
-                        previousMismatch = mismatch;
-                        return result = new ScanResult(ScanStatus.MISMATCH, checked, mismatch, null);
-                    }
-                }
-                sentinelsChecked = sentinelCursor == activeSentinelCount;
-            }
-            while (scanIndex < scanPlan.entryCount() && checked < budget) {
-                if (sentinelWasChecked(scanIndex)) {
-                    scanIndex++;
-                    continue;
-                }
-                int index = scanIndex++;
-                BlockPos relativePos = scanPlan.entryPositions().get(index);
-                BlockPredicate expected = scanPlan.entryPredicates().get(index);
-                Mismatch mismatch = mismatchAt(relativePos, expected, level, ctrlPos,
-                        structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
-                checked++;
-                if (!matchesEntry(expected, mismatch.actualState(),
-                        replacements.getOrDefault(relativePos, List.of()), stateSensitive)) {
-                    previousMismatch = mismatch;
-                    return result = new ScanResult(ScanStatus.MISMATCH, checked, mismatch, null);
-                }
-            }
-            ScanStatus status = scanIndex == scanPlan.entryCount() ? ScanStatus.VALID : ScanStatus.IN_PROGRESS;
-            return result = new ScanResult(status, checked, null, null);
+            ScanBatch batch = capture(level, ctrlPos);
+            ScanResult scanResult = batch.match();
+            apply(batch.identity(), scanResult);
+            return scanResult;
         }
 
-        private boolean sentinelWasChecked(int index) {
-            if (!options.sentinelEnabled() || sentinelCursor == 0 || !scanPlan.isSentinel(index)) return false;
-            return sentinelsChecked || sentinelCursor == activeSentinelCount
-                    || index < scanPlan.sentinelAt(sentinelCursor);
+        /** Captures the next bounded batch on the server thread without evaluating predicates. */
+        public ScanBatch capture(Level level, BlockPos ctrlPos) {
+            if (pendingBatch != null) throw new IllegalStateException("Structure scan batch is already pending");
+            ScanIdentity identity = new ScanIdentity(structureVersion, frontFacing, rollFacing, stageNumber,
+                    patternIdentity, chunkStateEpoch, scanIndex);
+            if (invalidated != null) {
+                return pendingBatch = new ScanBatch(identity, List.of(), sentinelCursor, sentinelsChecked, scanIndex,
+                        ScanStatus.INVALIDATED, invalidated, stateSensitive);
+            }
+            List<ScanEntry> entries = new java.util.ArrayList<>();
+            int budget = batchSize();
+            int nextSentinelCursor = sentinelCursor;
+            boolean nextSentinelsChecked = sentinelsChecked;
+            int nextScanIndex = scanIndex;
+            if (previousMismatch != null) {
+                entries.add(entryAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos));
+            }
+            if (options.sentinelEnabled() && !nextSentinelsChecked) {
+                while (nextSentinelCursor < activeSentinelCount && entries.size() < budget) {
+                    int index = scanPlan.sentinelAt(nextSentinelCursor++);
+                    BlockPos relativePos = scanPlan.entryPositions().get(index);
+                    BlockPredicate expected = scanPlan.entryPredicates().get(index);
+                    entries.add(entryAt(relativePos, expected, level, ctrlPos));
+                }
+                nextSentinelsChecked = nextSentinelCursor == activeSentinelCount;
+            }
+            while (nextScanIndex < scanPlan.entryCount() && entries.size() < budget) {
+                if (sentinelWasChecked(nextScanIndex, nextSentinelCursor, nextSentinelsChecked)) {
+                    nextScanIndex++;
+                    continue;
+                }
+                int index = nextScanIndex++;
+                BlockPos relativePos = scanPlan.entryPositions().get(index);
+                BlockPredicate expected = scanPlan.entryPredicates().get(index);
+                entries.add(entryAt(relativePos, expected, level, ctrlPos));
+            }
+            ScanStatus status = nextScanIndex == scanPlan.entryCount() ? ScanStatus.VALID : ScanStatus.IN_PROGRESS;
+            return pendingBatch = new ScanBatch(identity, entries, nextSentinelCursor, nextSentinelsChecked,
+                    nextScanIndex, status, null, stateSensitive);
+        }
+
+        /** Publishes a completed batch after its result has been accepted on the server thread. */
+        public void apply(ScanIdentity identity, ScanResult scanResult) {
+            if (pendingBatch == null || pendingBatch.identity() != identity) {
+                throw new IllegalStateException("Structure scan result does not match the pending batch");
+            }
+            ScanBatch batch = pendingBatch;
+            pendingBatch = null;
+            result = scanResult;
+            if (scanResult.status() == ScanStatus.INVALIDATED) return;
+            if (scanResult.status() == ScanStatus.MISMATCH) {
+                previousMismatch = scanResult.mismatchValue();
+                return;
+            }
+            sentinelCursor = batch.nextSentinelCursor();
+            sentinelsChecked = batch.sentinelsChecked();
+            scanIndex = batch.nextCursor();
+            previousMismatch = null;
+        }
+
+        private ScanEntry entryAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos) {
+            Mismatch mismatch = mismatchAt(relativePos, expected, level, ctrlPos,
+                    structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
+            List<BlockPredicate> replacementPredicates = replacements.getOrDefault(relativePos, List.of()).stream()
+                .map(SingleBlockModifierReplacement::getReplacement)
+                    .map(ScanState::snapshotPredicate)
+                    .toList();
+            return new ScanEntry(mismatch, snapshotPredicate(expected), replacementPredicates);
+        }
+
+        private static BlockPredicate snapshotPredicate(BlockPredicate predicate) {
+            return switch (predicate) {
+                case BlockPredicate.DeferredBlock deferred when !deferred.networkInterface() ->
+                        new BlockPredicate.OfBlock(deferred.supplier().get());
+                case BlockPredicate.AnyOf anyOf -> new BlockPredicate.AnyOf(anyOf.children().stream()
+                        .map(ScanState::snapshotPredicate).toList());
+                default -> predicate;
+            };
+        }
+
+        private boolean sentinelWasChecked(int index, int cursor, boolean checked) {
+            if (!options.sentinelEnabled() || cursor == 0 || !scanPlan.isSentinel(index)) return false;
+            return checked || cursor == activeSentinelCount || index < scanPlan.sentinelAt(cursor);
         }
 
         private static Mismatch mismatchAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,

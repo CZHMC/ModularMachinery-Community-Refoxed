@@ -595,6 +595,16 @@ public final class StructureRuntime {
         return scan.step(level, controllerPos);
     }
 
+    StructureMatcher.ScanBatch captureScan(ServerLevel level, BlockPos controllerPos) {
+        if (scan == null) throw new IllegalStateException("Structure scan is not active");
+        return scan.capture(level, controllerPos);
+    }
+
+    void applyScanResult(StructureMatcher.ScanIdentity identity, StructureMatcher.ScanResult result) {
+        if (scan == null) throw new IllegalStateException("Structure scan is not active");
+        scan.apply(identity, result);
+    }
+
     void clearScan() {
         scan = null;
         scanMachine = null;

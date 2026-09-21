@@ -43,7 +43,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSink;
@@ -163,6 +165,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger();
     private static final Map<ServerLevel, Map<ChunkPos, Set<MachineControllerBlockEntity>>> FORMED_CONTROLLER_INDEX = new ConcurrentHashMap<>();
     private static final Set<MachineControllerBlockEntity> ACTIVE_STRUCTURE_SCANS = ConcurrentHashMap.newKeySet();
+    private static final String STRUCTURE_SCAN_LANE = "structure-scan";
     private static final String SHARED_COMPONENT_CONFLICT = "shared_component_conflict";
     private static final int PREVIEW_RECEIVER_WINDOW_TICKS = 8 * 20;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
@@ -185,6 +188,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Identifier pendingControllerLockId;
     private boolean redstonePaused;
     private @Nullable MachineWorkMode activeWorkMode;
+    private @Nullable MachineAsyncCoordinator.TaskKey pendingStructureScanTask;
     private long lifecycleEpoch;
     private @Nullable FactoryRecipeScheduler factoryScheduler;
     private int recipeSearchRetryCounter;
@@ -889,7 +893,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void handleStructureBlockChanges(Set<BlockPos> changedPositions) {
         if (changedPositions.isEmpty()) return;
         if (changedPositions.stream().allMatch(getBlockPos()::equals)) return;
-        if (structureWorkSnapshot().scan() != null) publishStructureWork(state -> state.withPendingInvalidation(true));
+        if (structureWorkSnapshot().scan() != null) {
+            cancelPendingStructureScan();
+            runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.VERSION);
+            publishStructureWork(state -> state.withPendingInvalidation(true));
+        }
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         if (!structure.formed()) {
             if (structure.configuredMachine() != null) requestImmediateStructureCheck();
@@ -1564,7 +1572,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void invalidateAsyncLifecycle(ServerLevel serverLevel) {
         lifecycleEpoch++;
-        MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos());
+        MachineAsyncCoordinator.get(serverLevel).cancel(getBlockPos(), pendingStructureScanTask);
         SharedIoCoordinator.get(serverLevel).cancel(getBlockPos());
         normalRecipeThread.cancelAsyncState();
         runtime.factoryRuntime().cancelAsyncState();
@@ -1762,8 +1770,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         if (structureCheckCallbackForTesting != null) structureCheckCallbackForTesting.run();
         StructureWorkSnapshot work = structureWorkSnapshot();
-        if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK && structure.formed()
-                && work.scan() == null) {
+        if (work.scan() != null) {
+            advanceStructureScan();
+            return;
+        }
+        if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK && structure.formed()) {
             publishStructureWork(state -> state.withDirty(false).withCheckCounter(0)
                     .withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks()));
             runStructureSafetyCheck(structure);
@@ -1772,10 +1783,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
         publishStructureWork(state -> state.withDirty(false).withCheckCounter(0)
                 .withNextCheckTick(level.getGameTime() + (structure.formed()
                         ? ServerConfig.structureSafetyCheckIntervalTicks() : structureCheckIntervalTicks())));
-        if (structureWorkSnapshot().scan() != null) {
-            advanceStructureScan();
-            return;
-        }
         publishStructureWork(state -> state.withFormationFailure(null));
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         Machine configuredMachine = structure.configuredMachine();
@@ -1859,7 +1866,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (!isPatternAreaLoaded(structure.pattern())) return;
         CandidatePattern candidatePattern = new CandidatePattern(compiled, structure.pattern(), structure.rollFacing());
-        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(ServerConfig.structureSafetyScanBatches(), false, 0);
+        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(structureSafetyScanBatches(), false, 0);
         CompiledMachinePattern.ScanPlan scanPlan = hasCompiledFacing(compiled, structure.facing())
                 ? compiled.scanPlan(structure.facing(), 0) : null;
         StructureMatcher.ScanState scan = StructureMatcher.beginScan(structure.version(), structure.facing(), structure.rollFacing(),
@@ -2280,15 +2287,106 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void advanceStructureScan() {
-        publishStructureWork(state -> state.withScanSteppedTick(level.getGameTime()));
         StructureWorkSnapshot work = structureWorkSnapshot();
+        if (pendingStructureScanTask != null) {
+            if (level.getGameTime() - work.scanStartedTick() > structureScanTimeoutTicks()) {
+                invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);
+            }
+            return;
+        }
         boolean identityChanged = invalidateActiveStructureScanIfIdentityChanged();
         if (!identityChanged && level.getGameTime() - work.scanStartedTick() > structureScanTimeoutTicks()) {
-            runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);
+            invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);
         }
+        work = structureWorkSnapshot();
+        if (work.scan() == null) return;
+        StructureMatcher.ScanBatch batch = runtime.captureStructureScan(serverLevel(), getBlockPos());
+        if (batch.invalidation() != null) {
+            StructureMatcher.ScanResult scanResult = batch.match();
+            runtime.applyStructureScanResult(batch.identity(), scanResult);
+            applyStructureScanResult(scanResult, work);
+            return;
+        }
+        publishStructureWork(state -> state.withScanSteppedTick(level.getGameTime()));
         scanBatchCountForTesting++;
         scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
-        StructureMatcher.ScanResult scanResult = runtime.stepStructureScan(serverLevel(), getBlockPos());
+        MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(getBlockPos(), level.getGameTime(),
+                MachineWorkMode.ASYNC, STRUCTURE_SCAN_LANE, lifecycleEpoch);
+        Object candidateIdentity = work.scanCandidate();
+        StructureRuntime.CheckReason checkReason = work.checkReason();
+        pendingStructureScanTask = taskKey;
+        MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(serverLevel()).submitDetailed(taskKey,
+                ignored -> AsyncContinuation.Yield.mainThread(new MainThreadStep.StructureScan(
+                        batch.identity(), candidateIdentity, batch.match()), result -> context -> AsyncContinuation.Yield.complete()),
+                this::executeStructureScanStep);
+        if (submission != MachineAsyncCoordinator.SubmissionResult.ACCEPTED) {
+            pendingStructureScanTask = null;
+            runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);
+            clearStructureScan();
+            publishStructureWork(state -> state.withPendingInvalidation(false));
+            runtime.requestStructureCheck();
+            return;
+        }
+        publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L)
+                .withCheckReason(checkReason == StructureRuntime.CheckReason.SAFETY_CHECK
+                        ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION));
+    }
+
+    private MainThreadStep.Result executeStructureScanStep(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep step) {
+        if (!(step instanceof MainThreadStep.StructureScan scan)) {
+            return MainThreadStep.Result.failure(new IllegalArgumentException("Unexpected structure scan step"));
+        }
+        StructureWorkSnapshot work = structureWorkSnapshot();
+        if (!isCurrentStructureScan(taskKey, scan, work)) {
+            if (Objects.equals(pendingStructureScanTask, taskKey)) pendingStructureScanTask = null;
+            if (matchesStructureScanIdentity(work.scan(), scan.identity())) {
+                clearStructureScan();
+                publishStructureWork(state -> state.withPendingInvalidation(false));
+            }
+            runtime.requestStructureCheck();
+            return MainThreadStep.Result.success();
+        }
+        pendingStructureScanTask = null;
+        runtime.applyStructureScanResult(scan.identity(), scan.result());
+        applyStructureScanResult(scan.result(), work);
+        return MainThreadStep.Result.success();
+    }
+
+    private boolean isCurrentStructureScan(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep.StructureScan scan,
+                                           StructureWorkSnapshot work) {
+        boolean initialMatch = Objects.equals(pendingStructureScanTask, taskKey)
+                && getBlockPos().equals(taskKey.controllerPos())
+                && !work.pendingInvalidation()
+                && matchesStructureScanIdentity(work.scan(), scan.identity());
+        if (!initialMatch) return false;
+        CandidatePattern candidate = work.scanCandidate() instanceof CandidatePattern value ? value : null;
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        Direction rollFacing = BlockRotator.normalizedRoll(facing,
+                getBlockState().getValue(MachineControllerBlock.ROLL_FACING));
+        boolean current = candidate != null
+                && candidate == scan.candidateIdentity()
+                && candidate.pattern() == scan.identity().patternIdentity()
+                && candidate.stageNumber() == scan.identity().stageNumber()
+                && currentRuntimeSnapshot().structure().version() == scan.identity().structureVersion()
+                && runtime.structureChunkStateEpoch() == scan.identity().chunkStateEpoch()
+                && facing == scan.identity().frontFacing()
+                && rollFacing == scan.identity().rollFacing();
+        return current;
+    }
+
+    private static boolean matchesStructureScanIdentity(@Nullable StructureWorkSnapshot.ScanView scan,
+                                                        StructureMatcher.ScanIdentity identity) {
+        return scan != null
+                && scan.version() == identity.structureVersion()
+                && scan.chunkStateEpoch() == identity.chunkStateEpoch()
+                && scan.facing() == identity.frontFacing()
+                && scan.rollFacing() == identity.rollFacing()
+                && scan.stage() == identity.stageNumber()
+                && scan.pattern() == identity.patternIdentity()
+                && scan.cursor() == identity.cursor();
+    }
+
+    private void applyStructureScanResult(StructureMatcher.ScanResult scanResult, StructureWorkSnapshot work) {
         if (scanResult.inProgress()) {
             publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L)
                     .withCheckReason(work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK
@@ -2415,6 +2513,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void clearStructureScan() {
+        cancelPendingStructureScan();
         ACTIVE_STRUCTURE_SCANS.remove(this);
         runtime.clearStructureScan();
     }
@@ -2453,7 +2552,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void invalidateStructureScan(StructureMatcher.InvalidationReason reason) {
         clearStructureDiagnosticRequest();
+        cancelPendingStructureScan();
         runtime.invalidateStructureScan(reason);
+    }
+
+    private void cancelPendingStructureScan() {
+        MachineAsyncCoordinator.TaskKey taskKey = pendingStructureScanTask;
+        pendingStructureScanTask = null;
+        if (taskKey != null && level instanceof ServerLevel serverLevel) {
+            MachineAsyncCoordinator.get(serverLevel).cancel(taskKey);
+        }
     }
 
     private boolean invalidateActiveStructureScanIfIdentityChanged() {
@@ -2485,7 +2593,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 : work.scan().stage() != candidatePattern.stageNumber()
                 ? StructureMatcher.InvalidationReason.STAGE
                 : StructureMatcher.InvalidationReason.PATTERN;
-        runtime.invalidateStructureScan(reason);
+        invalidateStructureScan(reason);
         return true;
     }
 
@@ -2493,6 +2601,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (structureScanBatchesOverrideForTesting != null) return structureScanBatchesOverrideForTesting;
         try { return ServerConfig.STRUCTURE_SCAN_BATCHES.get(); }
         catch (IllegalStateException ignored) { return ServerConfig.DEFAULT_STRUCTURE_SCAN_BATCHES; }
+    }
+
+    private int structureSafetyScanBatches() {
+        if (structureScanBatchesOverrideForTesting != null) return structureScanBatchesOverrideForTesting;
+        return ServerConfig.structureSafetyScanBatches();
     }
 
     private long structureScanTimeoutTicks() {
@@ -3979,6 +4092,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     @Override
     public void onChunkUnloaded() {
         chunkUnloaded = true;
+        if (structureWorkSnapshot().scan() != null) {
+            invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
+            clearStructureScan();
+        }
     }
 
     void bindDefaultMachine() {

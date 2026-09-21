@@ -137,8 +137,13 @@ public final class MachineAsyncCoordinator {
     }
 
     public void cancel(BlockPos controllerPos) {
+        cancel(controllerPos, null);
+    }
+
+    public void cancel(BlockPos controllerPos, @Nullable TaskKey retainedTaskKey) {
         for (Task task : tasks.values()) {
             if (!task.key.controllerPos().equals(controllerPos)) continue;
+            if (task.key.equals(retainedTaskKey)) continue;
             TickBatch batch = batches.get(task.key.gameTime());
             if (batch == null) continue;
             synchronized (task) {
@@ -181,8 +186,20 @@ public final class MachineAsyncCoordinator {
         return failures.get(key);
     }
 
-    boolean hasPendingMainStepForTesting() {
+    public boolean hasPendingMainStepForTesting() {
         return batches.values().stream().anyMatch(batch -> !batch.pendingMainSteps.isEmpty());
+    }
+
+    public boolean awaitPendingMainStepForTesting(long timeout, TimeUnit unit) throws InterruptedException {
+        long deadline = System.nanoTime() + unit.toNanos(timeout);
+        synchronized (progressMonitor) {
+            while (!hasPendingMainStepForTesting()) {
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0L) return false;
+                TimeUnit.NANOSECONDS.timedWait(progressMonitor, remaining);
+            }
+        }
+        return true;
     }
 
     private boolean schedule(TickBatch batch, Task task, AsyncContinuation continuation) {
