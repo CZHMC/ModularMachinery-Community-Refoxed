@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -68,6 +69,8 @@ public class WrenchDismantleGameTest {
 
         helper.assertTrue(event.isCanceled(), "Crouch-right-clicking an MMCR block with a wrench is intercepted");
         helper.assertTrue(helper.getLevel().getBlockState(worldPos).isAir(), "The wrench dismantles the MMCR block");
+        helper.assertTrue(player.getInventory().contains(new ItemStack(ModBlocks.BLOCKS.get("item_input_bus").get())),
+                "Wrench dismantling returns the block itself to the player's inventory");
         helper.runAfterDelay(1, () -> {
             long dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class, new AABB(worldPos).inflate(1))
                     .stream().filter(entity -> entity.getItem().is(Items.IRON_INGOT))

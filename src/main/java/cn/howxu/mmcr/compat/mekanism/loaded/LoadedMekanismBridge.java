@@ -66,6 +66,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.network.IContainerFactory;
@@ -133,6 +134,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     @Override
     public boolean available() {
         return true;
+    }
+
+    @Override
+    public boolean isNonEmptyRadioactiveChemicalPort(BlockEntity blockEntity) {
+        return blockEntity instanceof ChemicalPortBlockEntity port
+                && port.isRadioactive() && !port.chemicalTank().isEmpty();
     }
 
     @Override

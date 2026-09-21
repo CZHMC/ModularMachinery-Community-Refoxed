@@ -12,6 +12,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
@@ -40,6 +41,10 @@ public interface MekanismBridge {
 
     default HeatDisplayData heatDisplayData(double kelvin) {
         return new HeatDisplayData(kelvin, "K");
+    }
+
+    default boolean isNonEmptyRadioactiveChemicalPort(BlockEntity blockEntity) {
+        return false;
     }
 
     void registerRecipeTypes(Identifier chemical, Identifier heatTemperature, Identifier heat);
