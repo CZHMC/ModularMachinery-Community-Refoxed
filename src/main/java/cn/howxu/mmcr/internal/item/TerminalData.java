@@ -127,7 +127,8 @@ public record TerminalData(
     }
 
     public TerminalData clear() {
-        return DEFAULT;
+        return new TerminalData(null, container, ae2AccessPoint, inventoryMode, null, Map.of(), DEFAULT.stage(),
+                DEFAULT.previewEnabled(), DEFAULT.previewLayer());
     }
 
     private static Map<Identifier, Identifier> immutableSelectedLevels(Map<Identifier, Identifier> selectedLevels) {

@@ -42,6 +42,10 @@ ServerEvents.recipes( event => {
                 type: 'neoforge:energy',
                 io: 'input',
                 fe_per_tick: 20
+            },
+            {
+                type: 'mmcr:stage',
+                min_stage: 2
             }
         ]
     })

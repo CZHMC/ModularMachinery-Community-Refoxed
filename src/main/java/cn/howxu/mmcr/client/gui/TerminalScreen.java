@@ -114,8 +114,8 @@ public final class TerminalScreen extends Screen {
         graphics.fill(left(), top() + PANEL_HEIGHT - 1, left() + PANEL_WIDTH, top() + PANEL_HEIGHT, 0xFF40798B);
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
         text(graphics, machineLabel(), 8, 8);
-        Component containerLabel = containerLabel();
-        if (containerLabel != null) text(graphics, containerLabel, 8, 22);
+        Component storageLabel = storageLabel();
+        if (storageLabel != null) text(graphics, storageLabel, 8, 22);
         text(graphics, Component.translatable("gui.mmcr.terminal.inventory"), 8, 38);
         text(graphics, Component.translatable("gui.mmcr.terminal.level_blocks"), 8, 58);
         text(graphics, Component.translatable("gui.mmcr.terminal.machine_stage"), 8, 78);
@@ -296,16 +296,24 @@ public final class TerminalScreen extends Screen {
     }
 
     @Nullable
-    private Component containerLabel() {
-        if (data.inventoryMode() != TerminalInventoryMode.CONTAINER || data.container() == null) return null;
-        GlobalPos container = data.container();
-        Component detail = Component.literal(container.pos().toShortString());
-        Level level = Minecraft.getInstance().level;
-        if (level != null && level.dimension().equals(container.dimension()) && level.hasChunkAt(container.pos())) {
-            Component blockName = level.getBlockState(container.pos()).getBlock().getName();
-            detail = Component.literal(blockName.getString() + " @ " + container.pos().toShortString());
+    private Component storageLabel() {
+        GlobalPos storage = switch (data.inventoryMode()) {
+            case INVENTORY -> null;
+            case CONTAINER -> data.container();
+            case AE2 -> data.ae2AccessPoint();
+        };
+        if (data.inventoryMode() == TerminalInventoryMode.INVENTORY) return null;
+        if (storage == null) {
+            return Component.translatable(data.inventoryMode() == TerminalInventoryMode.CONTAINER
+                    ? "gui.mmcr.terminal.no_container" : "gui.mmcr.terminal.no_ae2_access_point");
         }
-        return Component.translatable("gui.mmcr.terminal.container", detail);
+        Component detail = Component.literal(storage.pos().toShortString());
+        Level level = Minecraft.getInstance().level;
+        if (level != null && level.dimension().equals(storage.dimension()) && level.hasChunkAt(storage.pos())) {
+            Component blockName = level.getBlockState(storage.pos()).getBlock().getName();
+            detail = Component.literal(blockName.getString() + " @ " + storage.pos().toShortString());
+        }
+        return Component.translatable("gui.mmcr.terminal.inventory_source", detail);
     }
 
     private Component layerLabel() {

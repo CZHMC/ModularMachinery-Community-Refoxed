@@ -43,11 +43,20 @@ class TerminalDataTest {
     }
 
     @Test
-    void clear_returns_the_exact_default_snapshot() {
-        TerminalData data = TerminalData.DEFAULT.withStage(4).withPreview(true, 12)
-                .withInventoryMode(TerminalInventoryMode.CONTAINER);
+    void clear_preserves_the_active_inventory_source() {
+        GlobalPos accessPoint = GlobalPos.of(Level.OVERWORLD, new BlockPos(3, 64, 5));
+        TerminalData data = TerminalData.DEFAULT.withController(GlobalPos.of(Level.OVERWORLD, BlockPos.ZERO))
+                .withStage(4).withPreview(true, 12)
+                .withAe2AccessPoint(accessPoint).withInventoryMode(TerminalInventoryMode.AE2);
 
-        assertThat(data.clear()).isEqualTo(TerminalData.DEFAULT);
+        TerminalData cleared = data.clear();
+
+        assertThat(cleared.controller()).isNull();
+        assertThat(cleared.inventoryMode()).isEqualTo(TerminalInventoryMode.AE2);
+        assertThat(cleared.ae2AccessPoint()).isEqualTo(accessPoint);
+        assertThat(cleared.container()).isNull();
+        assertThat(cleared.stage()).isEqualTo(TerminalData.DEFAULT.stage());
+        assertThat(cleared.previewEnabled()).isFalse();
     }
 
     @Test
