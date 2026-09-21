@@ -9,7 +9,8 @@ import net.minecraft.resources.Identifier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Resource, AsyncCapabilityRequest.Scalar {
+public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Resource, AsyncCapabilityRequest.Scalar,
+        AsyncCapabilityRequest.Heat {
     Identifier capabilityId();
 
     long parallelism();
@@ -44,6 +45,17 @@ public sealed interface AsyncCapabilityRequest permits AsyncCapabilityRequest.Re
             Objects.requireNonNull(capabilityId, "capabilityId");
             if (parallelism <= 0L || amount <= 0L) {
                 throw new IllegalArgumentException("parallelism and amount must be positive");
+            }
+        }
+    }
+
+    /** A minimum-temperature check or output-heat request. */
+    record Heat(Identifier capabilityId, long parallelism, double value, boolean minimumTemperature,
+                long accountingAmount) implements AsyncCapabilityRequest {
+        public Heat {
+            Objects.requireNonNull(capabilityId, "capabilityId");
+            if (parallelism <= 0L || !Double.isFinite(value) || value < 0D || accountingAmount <= 0L) {
+                throw new IllegalArgumentException("heat request values must be finite and positive");
             }
         }
     }

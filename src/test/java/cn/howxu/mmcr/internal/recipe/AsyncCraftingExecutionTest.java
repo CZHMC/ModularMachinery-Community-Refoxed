@@ -140,6 +140,31 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
+    void empty_per_tick_workset_completes_in_the_first_shared_io_resolution() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller,
+                new DynamicMachine(machineId, "empty tick workset", new BlockArray(Map.of())));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("empty_tick_workset"), machineId, 20,
+                List.of(), List.of());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        completeTick(controller);
+
+        thread.tick();
+        assertThat(SharedIoCoordinator.get(level).resolve(level)).isEqualTo(1);
+
+        assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(1);
+        assertThat(MachineAsyncCoordinator.get(level).hasPendingMainStepForTesting()).isFalse();
+    }
+
+    @Test
     void async_start_prefetches_only_during_the_main_thread_shared_io_commit() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier machineId = MMCR.id("test_cube");

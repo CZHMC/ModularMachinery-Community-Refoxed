@@ -73,6 +73,11 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
         this.storage = storage;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override
+            public Object planningIdentity() {
+                return storage.reservationIdentity();
+            }
+
+            @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
                 return new AsyncCapabilitySnapshot.Resource(type().id(), IntStream.range(0, storage.size())
                         .mapToObj(slot -> {

@@ -4,6 +4,8 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Objects;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -15,6 +17,13 @@ import net.neoforged.neoforge.server.ServerLifecycleHooks;
  * @author howxu <dev@howxu.cn>
  */
 public abstract class AsyncPlanningFacet implements CapabilityFacet {
+    private static final ThreadLocal<Map<Object, AsyncCapabilitySnapshot>> CAPTURE_SCOPE = new ThreadLocal<>();
+
+    /** Identity used to deduplicate snapshots that represent the same physical storage. */
+    public Object planningIdentity() {
+        return this;
+    }
+
     /**
      * Captures an immutable snapshot. This method and all capability storage access are main-thread-only.
      *
@@ -22,7 +31,18 @@ public abstract class AsyncPlanningFacet implements CapabilityFacet {
      */
     public final AsyncCapabilitySnapshot captureSnapshot() {
         requireServerThread("captureSnapshot");
-        return captureSnapshotOnServerThread();
+        Map<Object, AsyncCapabilitySnapshot> scope = CAPTURE_SCOPE.get();
+        if (scope == null) return captureSnapshotOnServerThread();
+        return scope.computeIfAbsent(planningIdentity(), ignored -> captureSnapshotOnServerThread());
+    }
+
+    public static CaptureScope beginCaptureScope() {
+        Map<Object, AsyncCapabilitySnapshot> previous = CAPTURE_SCOPE.get();
+        CAPTURE_SCOPE.set(new IdentityHashMap<>());
+        return () -> {
+            if (previous == null) CAPTURE_SCOPE.remove();
+            else CAPTURE_SCOPE.set(previous);
+        };
     }
 
     /**
@@ -77,5 +97,11 @@ public abstract class AsyncPlanningFacet implements CapabilityFacet {
         if (server == null || !server.isSameThread()) {
             throw new IllegalStateException(operation + " requires the server thread");
         }
+    }
+
+    @FunctionalInterface
+    public interface CaptureScope extends AutoCloseable {
+        @Override
+        void close();
     }
 }

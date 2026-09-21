@@ -61,6 +61,11 @@ public final class FluxEnergyOutputCapability implements MachineCapability, Scal
         this.pending = pending;
         asyncPlanning = new AsyncPlanningFacet() {
             @Override
+            public Object planningIdentity() {
+                return pending;
+            }
+
+            @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
                 long available = admissionAvailable();
                 return new AsyncCapabilitySnapshot.Scalar(type().id(), 0L, available, available);

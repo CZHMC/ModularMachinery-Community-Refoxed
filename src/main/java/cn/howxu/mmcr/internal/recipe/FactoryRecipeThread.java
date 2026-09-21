@@ -49,6 +49,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private final String laneId;
     private final Set<MachineRecipe> recipeSet = new LinkedHashSet<>();
     private int idleTicks;
+    private long lastIdleGameTime = Long.MIN_VALUE;
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeStructureVersion = Long.MIN_VALUE;
     private long lastRecipeCapabilityVersion = Long.MIN_VALUE;
@@ -234,10 +235,35 @@ public final class FactoryRecipeThread extends RecipeThread {
         return !baseThread && !coreThread && !recipeLockUsed && isIdle()
                 && idleTicks >= ServerConfig.factoryIdleTimeoutTicks();
     }
-    public void tickIdle() { idleTicks = isIdle() ? idleTicks + 1 : 0; }
+
+    public boolean idleTimeoutDue(long gameTime, boolean recipeLockUsed) {
+        if (baseThread || coreThread || recipeLockUsed || !isIdle()) return false;
+        if (lastIdleGameTime == Long.MIN_VALUE) lastIdleGameTime = gameTime;
+        return effectiveIdleTicks(gameTime) >= ServerConfig.factoryIdleTimeoutTicks();
+    }
+
+    public void tickIdle(long gameTime) {
+        if (!isIdle()) {
+            idleTicks = 0;
+            lastIdleGameTime = Long.MIN_VALUE;
+            return;
+        }
+        if (lastIdleGameTime == Long.MIN_VALUE) {
+            idleTicks = Math.min(Integer.MAX_VALUE, idleTicks + 1);
+        } else if (gameTime > lastIdleGameTime) {
+            idleTicks = (int) Math.min(Integer.MAX_VALUE, idleTicks + gameTime - lastIdleGameTime);
+        }
+        lastIdleGameTime = gameTime;
+    }
+
+    private int effectiveIdleTicks(long gameTime) {
+        if (lastIdleGameTime == Long.MIN_VALUE || gameTime <= lastIdleGameTime) return idleTicks;
+        return (int) Math.min(Integer.MAX_VALUE, idleTicks + gameTime - lastIdleGameTime);
+    }
 
     @Override protected void onStarted() {
         idleTicks = 0;
+        lastIdleGameTime = Long.MIN_VALUE;
         clearSearchFailure();
         currentSearchContextKey = null;
         searchGameTimeSet = false;
@@ -259,6 +285,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     @Override
     protected void onFinished() {
         idleTicks = 0;
+        lastIdleGameTime = Long.MIN_VALUE;
         if (lastRecipe != null && !recipeBelongsToCurrentMachine(lastRecipe)) {
             clearLastRecipe();
             return;
@@ -613,7 +640,8 @@ public final class FactoryRecipeThread extends RecipeThread {
         output.putBoolean("base", baseThread);
         output.putString("name", threadName);
         output.putString("lane_id", laneId);
-        output.putInt("idle_ticks", idleTicks);
+        long gameTime = controller.getLevel() == null ? 0L : controller.getLevel().getGameTime();
+        output.putInt("idle_ticks", effectiveIdleTicks(gameTime));
         output.putBoolean("has_last", lastRecipe != null);
         if (lastRecipe != null) {
             output.putString("last_recipe", lastRecipe.id().toString());
@@ -624,7 +652,6 @@ public final class FactoryRecipeThread extends RecipeThread {
             output.putLong("last_catalog_version", lastRecipeCatalogVersion);
         }
         output.putInt("search_failure_streak", failureStreak);
-        long gameTime = controller.getLevel() == null ? 0L : controller.getLevel().getGameTime();
         long remaining = lastSearchFailureKey == null || nextSearchTick == Long.MIN_VALUE
                 ? 0L : Math.max(0L, nextSearchTick - gameTime);
         output.putInt("search_retry_remaining", (int) Math.min(100L, remaining));

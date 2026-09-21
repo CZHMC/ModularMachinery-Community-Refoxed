@@ -1,10 +1,21 @@
 package cn.howxu.mmcr.internal.multiblock;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
+import java.lang.reflect.Field;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -20,6 +31,50 @@ class SharedIoCoordinatorTest {
     private static final BlockPos A = new BlockPos(0, 64, 0);
     private static final BlockPos B = new BlockPos(4, 64, 0);
     private static final BlockPos C = new BlockPos(8, 64, 0);
+
+    @BeforeAll
+    static void bootstrapMinecraft() throws Exception {
+        TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void domain_tick_workset_reserves_a_shared_snapshot_in_lane_order() {
+        var capabilityId = MMCR.id("energy");
+        AsyncCapabilitySnapshot snapshot = new AsyncCapabilitySnapshot.Scalar(capabilityId, 10L, 10L, 10L);
+        AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
+                new AsyncCapabilityPlanner.Scalar(capabilityId), snapshot, Set.of(IOType.INPUT));
+        AsyncRequirementPlanner.Requirement requirement = new AsyncRequirementPlanner.Requirement(0, 6L,
+                IOType.INPUT, List.of(new AsyncCapabilityRequest.Scalar(capabilityId, 1L, 6L, false)));
+        AsyncRequirementPlanner.PreparedPlan plan = new AsyncRequirementPlanner.PreparedPlan(
+                List.of(requirement), List.of(capability), List.of());
+
+        List<AsyncRequirementPlanner.PlanResult> results = SharedIoCoordinator.planTickWorksetForTesting(
+                List.of(plan, plan));
+
+        assertThat(results.get(0).operations()).hasSize(1);
+        assertThat(results.get(0).mainThreadRequirements()).isEmpty();
+        assertThat(results.get(1).operations()).isEmpty();
+        assertThat(results.get(1).mainThreadRequirements()).containsExactly(0);
+    }
+
+    @Test
+    void cancelling_a_controller_discards_its_pending_domain_tick_work() throws Exception {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A, B);
+        ServerLevel level = allocate(ServerLevel.class);
+        AtomicInteger discarded = new AtomicInteger();
+        AsyncRequirementPlanner.PreparedPlan plan = new AsyncRequirementPlanner.PreparedPlan(
+                List.of(), List.of(), List.of());
+
+        coordinator.enqueueTickWork(level, domain,
+                new MachineAsyncCoordinator.TaskKey(A, 1L), plan, ignored -> { }, discarded::incrementAndGet);
+        coordinator.enqueueTickWork(level, domain,
+                new MachineAsyncCoordinator.TaskKey(B, 1L), plan, ignored -> { }, () -> { });
+
+        coordinator.cancel(A);
+
+        assertThat(discarded).hasValue(1);
+    }
 
     @Test
     void startRequestsUseRotatingOrderAndMayReceivePartialParallelism() {
@@ -446,5 +501,12 @@ class SharedIoCoordinatorTest {
                                                              LongSupplier structureVersionSupplier) {
         return new SharedIoCoordinator.FinishRequest(domain, lane(position), structureVersion, 0L,
                 transaction, validator, structureVersionSupplier, () -> 0L);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T allocate(Class<T> type) throws Exception {
+        Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (T) ((sun.misc.Unsafe) field.get(null)).allocateInstance(type);
     }
 }

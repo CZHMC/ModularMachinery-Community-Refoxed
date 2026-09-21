@@ -300,7 +300,8 @@ class MachineWorkModeIntegrationTest {
             assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
         } else {
             SharedIoCoordinator.get(level).resolve(level);
-            assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
+            assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
+            assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isFalse();
         }
         completeAsyncLevelTick(level);
 

@@ -325,7 +325,7 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
-    void factory_starts_all_allowed_threads_on_the_first_tick() {
+    void factory_publishes_the_first_started_thread_on_the_first_tick() {
         Identifier machineId = MMCR.id("sync_factory_initial_threads");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
@@ -364,7 +364,7 @@ class ControllerSyncRuntimeTest {
         controller.serverTick();
         resolveSharedRequests(controller);
 
-        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(4);
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
     }
 
     @Test

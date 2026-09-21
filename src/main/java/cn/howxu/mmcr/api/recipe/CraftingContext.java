@@ -14,21 +14,26 @@ import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -65,8 +70,15 @@ public final class CraftingContext {
         if (requirements == null || parallelism <= 0L) {
             throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
         }
+        Set<Identifier> capabilityIds = new LinkedHashSet<>();
+        for (MachineRequirement requirement : requirements) {
+            if (requirement == null) continue;
+            capabilityIds.add(requirement instanceof LoadedHeatRequirement
+                    ? MekanismRecipeTypes.HEAT : requirement.type().id());
+        }
         List<AsyncRequirementPlanner.Capability> asyncCapabilities = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
+            if (!capabilityIds.contains(capability.type().id())) continue;
             AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElse(null);
             if (facet == null) continue;
             AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();
@@ -280,6 +292,16 @@ public final class CraftingContext {
             return new AsyncRequirementPlanner.Requirement(index, scaled(energy.fePerTick(), parallelism),
                     IOType.valueOf(energy.io().name()), List.of(new AsyncCapabilityRequest.Scalar(energy.type().id(),
                     parallelism, scaled(energy.fePerTick(), parallelism), energy.io() == RecipeModifier.IOType.OUTPUT)));
+        }
+        if (requirement instanceof LoadedHeatRequirement heat) {
+            boolean minimumTemperature = heat.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
+            double value = minimumTemperature ? heat.heat().value() : heat.heat().value() * parallelism;
+            if (!Double.isFinite(value) || value < 0D) return null;
+            long accountingAmount = Math.max(1L, value >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) Math.ceil(value));
+            return new AsyncRequirementPlanner.Requirement(index, accountingAmount,
+                    minimumTemperature ? IOType.INPUT : IOType.OUTPUT,
+                    List.of(new AsyncCapabilityRequest.Heat(MekanismRecipeTypes.HEAT, parallelism, value,
+                            minimumTemperature, accountingAmount)));
         }
         return null;
     }

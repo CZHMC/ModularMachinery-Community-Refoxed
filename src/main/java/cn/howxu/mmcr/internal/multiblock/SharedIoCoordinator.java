@@ -1,5 +1,12 @@
 package cn.howxu.mmcr.internal.multiblock;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.internal.async.AsyncContinuation;
+import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.async.MainThreadStep;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -13,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 import java.util.function.LongUnaryOperator;
 import java.util.function.LongSupplier;
@@ -29,6 +37,9 @@ public final class SharedIoCoordinator {
     private final Map<Long, LaneKey> startCursors = new HashMap<>();
     private final Map<Long, LaneKey> tickCursors = new HashMap<>();
     private final Map<Long, LaneKey> finishCursors = new HashMap<>();
+    private final Map<Long, List<TickWorkEntry>> pendingTickWork = new HashMap<>();
+    private final Map<Long, TickWorkset> submittedTickWork = new HashMap<>();
+    private long nextTickWorksetId;
 
     private record DomainResolution(List<Request> unresolved, int progress) {
     }
@@ -45,11 +56,36 @@ public final class SharedIoCoordinator {
         pending.add(request);
     }
 
+    public boolean enqueueTickWork(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
+                                   MachineAsyncCoordinator.TaskKey laneTaskKey,
+                                   AsyncRequirementPlanner.PreparedPlan preparedPlan,
+                                   Consumer<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
+        if (level == null || domain == null || laneTaskKey == null || preparedPlan == null
+                || committer == null || discard == null) return false;
+        pendingTickWork.computeIfAbsent(domain.id(), ignored -> new ArrayList<>())
+                .add(new TickWorkEntry(level, laneTaskKey, preparedPlan, committer, discard));
+        return true;
+    }
+
     /** Discards every queued request owned by one controller. */
     public void cancel(BlockPos controllerPos) {
         pending.removeIf(request -> {
             if (!request.laneKey().controllerPos().equals(controllerPos)) return false;
             request.discard();
+            return true;
+        });
+        pendingTickWork.values().forEach(entries -> entries.removeIf(entry -> {
+            if (!entry.laneTaskKey().controllerPos().equals(controllerPos)) return false;
+            entry.discardWork();
+            return true;
+        }));
+        pendingTickWork.values().removeIf(List::isEmpty);
+        submittedTickWork.values().removeIf(workset -> {
+            if (workset.entries().stream().noneMatch(entry ->
+                    entry.laneTaskKey().controllerPos().equals(controllerPos))) return false;
+            TickWorkEntry first = workset.entries().getFirst();
+            MachineAsyncCoordinator.get(first.level()).cancel(workset.taskKey());
+            workset.entries().forEach(TickWorkEntry::discardWork);
             return true;
         });
     }
@@ -117,7 +153,10 @@ public final class SharedIoCoordinator {
         currentFinishRequests.sort(REQUEST_ORDER);
         Set<Request> successful = Collections.newSetFromMap(new IdentityHashMap<>());
         resolveRoundRobin(startRequests, startCursors, domain.id(), successful);
-        resolveRoundRobin(tickRequests, tickCursors, domain.id(), successful);
+        try (AsyncPlanningFacet.CaptureScope ignored = AsyncPlanningFacet.beginCaptureScope()) {
+            resolveRoundRobin(tickRequests, tickCursors, domain.id(), successful);
+        }
+        submitTickWorkset(domain);
         Set<StartRequest> pendingStartsBeforeFinish = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Request request : pending) {
             if (request instanceof StartRequest startRequest
@@ -142,6 +181,85 @@ public final class SharedIoCoordinator {
             if (!successful.contains(request)) unresolved.add(request);
         }
         return new DomainResolution(unresolved, successful.size() + requests.size() - current.size());
+    }
+
+    private void submitTickWorkset(StructureClaimRegistry.ResourceDomain domain) {
+        List<TickWorkEntry> entries = pendingTickWork.remove(domain.id());
+        if (entries == null || entries.isEmpty()) return;
+        long worksetId = ++nextTickWorksetId;
+        TickWorkEntry first = entries.getFirst();
+        MachineAsyncCoordinator.TaskKey laneKey = first.laneTaskKey();
+        MachineAsyncCoordinator.TaskKey worksetKey = new MachineAsyncCoordinator.TaskKey(
+                laneKey.controllerPos(), laneKey.gameTime(), laneKey.workMode(),
+                "domain-tick/" + domain.id() + "/" + worksetId, laneKey.lifecycleEpoch());
+        TickWorkset workset = new TickWorkset(worksetId, worksetKey, List.copyOf(entries));
+        submittedTickWork.put(worksetId, workset);
+        MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(first.level()).submitDetailed(
+                worksetKey, new TickWorksetContinuation(workset), this::executeTickWorksetStep);
+        if (submission == MachineAsyncCoordinator.SubmissionResult.ACCEPTED) return;
+        submittedTickWork.remove(worksetId);
+        entries.forEach(TickWorkEntry::discardWork);
+    }
+
+    private MainThreadStep.Result executeTickWorksetStep(MachineAsyncCoordinator.TaskKey ignored,
+                                                          MainThreadStep step) {
+        if (!(step instanceof MainThreadStep.TickWorkset result)) {
+            return MainThreadStep.Result.failure(new IllegalArgumentException("Unexpected domain tick workset step"));
+        }
+        TickWorkset workset = submittedTickWork.remove(result.worksetId());
+        if (workset == null || workset.entries().size() != result.intents().size()) {
+            return MainThreadStep.Result.failure(new IllegalStateException("Domain tick workset became stale"));
+        }
+        for (int index = 0; index < workset.entries().size(); index++) {
+            workset.entries().get(index).committer().accept(result.intents().get(index));
+        }
+        return MainThreadStep.Result.success();
+    }
+
+    private static List<AsyncRequirementPlanner.PlanResult> planTickWorkset(TickWorkset workset) {
+        return planTickWorksetForTesting(workset.entries().stream().map(TickWorkEntry::preparedPlan).toList());
+    }
+
+    static List<AsyncRequirementPlanner.PlanResult> planTickWorksetForTesting(
+            List<AsyncRequirementPlanner.PreparedPlan> preparedPlans) {
+        IdentityHashMap<AsyncCapabilitySnapshot, AsyncCapabilitySnapshot> virtualSnapshots = new IdentityHashMap<>();
+        List<AsyncRequirementPlanner.PlanResult> results = new ArrayList<>(preparedPlans.size());
+        for (AsyncRequirementPlanner.PreparedPlan prepared : preparedPlans) {
+            List<AsyncRequirementPlanner.Capability> capabilities = prepared.capabilities().stream()
+                    .map(capability -> new AsyncRequirementPlanner.Capability(capability.planner(),
+                            virtualSnapshots.getOrDefault(capability.snapshot(), capability.snapshot()),
+                            capability.directions()))
+                    .toList();
+            AsyncRequirementPlanner.PlanResult result = new AsyncRequirementPlanner.PreparedPlan(
+                    prepared.requirements(), capabilities, prepared.initialMainThreadRequirements()).plan();
+            results.add(result);
+            if (!result.mainThreadRequirements().isEmpty()) continue;
+            for (AsyncRequirementPlanner.PlannedOperation operation : result.operations()) {
+                AsyncCapabilitySnapshot identity = prepared.capabilities().get(operation.capabilityIndex()).snapshot();
+                AsyncCapabilitySnapshot current = virtualSnapshots.getOrDefault(identity, identity);
+                virtualSnapshots.put(identity, AsyncRequirementPlanner.apply(current, operation.operation()));
+            }
+        }
+        return List.copyOf(results);
+    }
+
+    private record TickWorkEntry(ServerLevel level, MachineAsyncCoordinator.TaskKey laneTaskKey,
+                                 AsyncRequirementPlanner.PreparedPlan preparedPlan,
+                                 Consumer<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
+        private void discardWork() {
+            discard.run();
+        }
+    }
+
+    private record TickWorkset(long id, MachineAsyncCoordinator.TaskKey taskKey, List<TickWorkEntry> entries) { }
+
+    private record TickWorksetContinuation(TickWorkset workset) implements AsyncContinuation {
+        @Override
+        public Yield advance(AsyncExecutionContext context) {
+            List<AsyncRequirementPlanner.PlanResult> intents = planTickWorkset(workset);
+            return Yield.mainThread(new MainThreadStep.TickWorkset(workset.id(), intents),
+                    ignored -> ignoredContext -> Yield.complete());
+        }
     }
 
     private List<FinishRequest> takePendingFinishRequests(StructureClaimRegistry.ResourceDomain domain) {

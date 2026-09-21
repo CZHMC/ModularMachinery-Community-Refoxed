@@ -94,7 +94,11 @@ public final class AsyncRequirementPlanner {
                     if (operation.isEmpty()) continue;
                     long plannedAmount = amount(operation.get());
                     if (plannedAmount <= 0L) continue;
-                    plannedSnapshots.set(capabilityIndex, apply(plannedSnapshots.get(capabilityIndex), operation.get()));
+                    AsyncCapabilitySnapshot previous = plannedSnapshots.get(capabilityIndex);
+                    AsyncCapabilitySnapshot updated = apply(previous, operation.get());
+                    for (int snapshotIndex = 0; snapshotIndex < plannedSnapshots.size(); snapshotIndex++) {
+                        if (plannedSnapshots.get(snapshotIndex) == previous) plannedSnapshots.set(snapshotIndex, updated);
+                    }
                     plannedOperations.add(new PlannedOperation(requirement.index(), capabilityIndex, operation.get()));
                     remaining -= plannedAmount;
                 }
@@ -125,11 +129,12 @@ public final class AsyncRequirementPlanner {
     private static long amount(AsyncCapabilityOperation operation) {
         if (operation instanceof AsyncCapabilityOperation.Resource resource) return resource.amount();
         if (operation instanceof AsyncCapabilityOperation.Scalar scalar) return scalar.amount();
+        if (operation instanceof AsyncCapabilityOperation.Heat heat) return heat.accountingAmount();
         return ((AsyncCapabilityOperation.Group) operation).operations().stream()
                 .mapToLong(AsyncRequirementPlanner::amount).sum();
     }
 
-    private static AsyncCapabilitySnapshot apply(AsyncCapabilitySnapshot snapshot, AsyncCapabilityOperation operation) {
+    public static AsyncCapabilitySnapshot apply(AsyncCapabilitySnapshot snapshot, AsyncCapabilityOperation operation) {
         if (snapshot instanceof AsyncCapabilitySnapshot.Resource resource) {
             List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(resource.slots());
             applyResource(slots, operation);
@@ -147,6 +152,14 @@ public final class AsyncRequirementPlanner {
                 planned = apply(planned, child);
             }
             return planned;
+        }
+        if (snapshot instanceof AsyncCapabilitySnapshot.Heat heatSnapshot
+                && operation instanceof AsyncCapabilityOperation.Heat heatOperation) {
+            if (heatOperation.minimumTemperature()) return heatSnapshot;
+            double heat = heatSnapshot.heat() + heatOperation.value();
+            double temperature = heatSnapshot.temperature() + heatOperation.value() / heatSnapshot.capacity();
+            return new AsyncCapabilitySnapshot.Heat(heatSnapshot.capabilityId(), heat, temperature,
+                    heatSnapshot.capacity());
         }
         throw new IllegalArgumentException("operation does not match capability snapshot");
     }

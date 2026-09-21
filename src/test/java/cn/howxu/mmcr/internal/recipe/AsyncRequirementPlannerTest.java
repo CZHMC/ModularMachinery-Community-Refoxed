@@ -106,6 +106,48 @@ class AsyncRequirementPlannerTest {
     }
 
     @Test
+    void capture_scope_reuses_one_snapshot_for_the_same_physical_storage() throws Exception {
+        BulkItemStorage storage = new BulkItemStorage(64L, null);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        try (Transaction transaction = Transaction.openRoot()) {
+            storage.insert(0, iron, 4L, transaction);
+            transaction.commit();
+        }
+        ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                ItemStack.EMPTY);
+        CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(
+                new ItemBusCapability(storage, IOType.INPUT), new ItemBusCapability(storage, IOType.INPUT))));
+
+        installCurrentServerForTesting();
+        AsyncRequirementPlanner.PreparedPlan prepared;
+        try (AsyncPlanningFacet.CaptureScope ignored = AsyncPlanningFacet.beginCaptureScope()) {
+            prepared = context.planAsync(List.of(input), 1L);
+        } finally {
+            clearCurrentServerForTesting();
+        }
+
+        assertThat(prepared.capabilities()).hasSize(2);
+        assertThat(prepared.capabilities().get(0).snapshot())
+                .isSameAs(prepared.capabilities().get(1).snapshot());
+    }
+
+    @Test
+    void shared_snapshot_cannot_be_reserved_twice_through_capability_aliases() {
+        var capabilityId = MMCR.id("energy");
+        AsyncCapabilitySnapshot snapshot = new AsyncCapabilitySnapshot.Scalar(capabilityId, 6L, 6L, 6L);
+        AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
+                new AsyncCapabilityPlanner.Scalar(capabilityId), snapshot, Set.of(IOType.INPUT));
+        AsyncRequirementPlanner.Requirement requirement = new AsyncRequirementPlanner.Requirement(0, 10L,
+                IOType.INPUT, List.of(new AsyncCapabilityRequest.Scalar(capabilityId, 1L, 10L, false)));
+
+        AsyncRequirementPlanner.PlanResult result = new AsyncRequirementPlanner().plan(
+                List.of(requirement), List.of(capability, capability));
+
+        assertThat(result.operations()).isEmpty();
+        assertThat(result.mainThreadRequirements()).containsExactly(0);
+    }
+
+    @Test
     void crafting_context_returns_a_worker_safe_descriptor_with_ordered_fallback_indexes() {
         AsyncRequirementPlanner.PreparedPlan prepared = new CraftingContext(new CapabilitySnapshot(List.of()))
                 .planAsync(List.of(new EnergyRequirement(4L)), 1L);

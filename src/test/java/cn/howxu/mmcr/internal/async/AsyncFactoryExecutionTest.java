@@ -97,7 +97,7 @@ class AsyncFactoryExecutionTest {
 
         completeAsyncLevelTick(level);
 
-        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(2);
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
 
         RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
@@ -110,7 +110,7 @@ class AsyncFactoryExecutionTest {
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
                 .extracting(lane -> lane.tick())
-                .containsOnly(1);
+                .containsExactly(1, 0);
     }
 
     @Test
@@ -121,6 +121,15 @@ class AsyncFactoryExecutionTest {
         RecipeRegistry.registerStatic(recipe);
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
+        controller.serverTick();
+        completeAsyncLevelTick(level);
+
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes())
+                .filteredOn(lane -> lane.active())
+                .extracting(lane -> lane.laneId())
+                .containsExactly("base");
+
+        RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
         completeAsyncLevelTick(level);
 
@@ -140,7 +149,7 @@ class AsyncFactoryExecutionTest {
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
                 .extracting(lane -> lane.tick())
-                .containsExactly(1, 1, 1);
+                .containsExactly(2, 1, 1);
     }
 
     @Test
@@ -170,7 +179,28 @@ class AsyncFactoryExecutionTest {
         controller.serverTick();
         completeAsyncLevelTick(level);
 
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.serverTick();
+        completeAsyncLevelTick(level);
+
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(2);
+    }
+
+    @Test
+    void async_factory_does_not_create_speculative_lanes_when_no_recipe_can_start() {
+        MachineControllerBlockEntity controller = factoryController(8);
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(MMCR.id("idle_factory_missing_input"),
+                MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                                ItemStack.EMPTY))));
+
+        controller.serverTick();
+        completeAsyncLevelTick(level);
+
+        assertThat(factoryRuntime(controller).laneCount()).isEqualTo(1);
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
     }
 
     @Test

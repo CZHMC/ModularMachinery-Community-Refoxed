@@ -10,7 +10,7 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperation.Resource, AsyncCapabilityOperation.Scalar,
-        AsyncCapabilityOperation.Group {
+        AsyncCapabilityOperation.Heat, AsyncCapabilityOperation.Group {
     Identifier capabilityId();
 
     /**
@@ -69,6 +69,17 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
         public Scalar {
             Objects.requireNonNull(capabilityId, "capabilityId");
             if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
+        }
+    }
+
+    /** A validated minimum-temperature check or output-heat mutation. */
+    record Heat(Identifier capabilityId, double value, boolean minimumTemperature, long accountingAmount)
+            implements AsyncCapabilityOperation {
+        public Heat {
+            Objects.requireNonNull(capabilityId, "capabilityId");
+            if (!Double.isFinite(value) || value < 0D || accountingAmount <= 0L) {
+                throw new IllegalArgumentException("heat operation values must be finite and positive");
+            }
         }
     }
 }

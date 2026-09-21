@@ -98,11 +98,15 @@ class AsyncPlanningFacetTest {
     void worker_planner_is_a_sealed_value_descriptor() {
         assertThat(AsyncCapabilityPlanner.class.isSealed()).isTrue();
         assertThat(Arrays.stream(AsyncCapabilityPlanner.class.getPermittedSubclasses()))
-                .containsExactlyInAnyOrder(AsyncCapabilityPlanner.Resource.class, AsyncCapabilityPlanner.Scalar.class);
+                .containsExactlyInAnyOrder(AsyncCapabilityPlanner.Resource.class, AsyncCapabilityPlanner.Scalar.class,
+                        AsyncCapabilityPlanner.Heat.class);
         assertThat(AsyncCapabilityPlanner.Resource.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
                 .containsExactly(Identifier.class);
         assertThat(AsyncCapabilityPlanner.Scalar.class.getRecordComponents())
+                .extracting(RecordComponent::getType)
+                .containsExactly(Identifier.class);
+        assertThat(AsyncCapabilityPlanner.Heat.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
                 .containsExactly(Identifier.class);
     }

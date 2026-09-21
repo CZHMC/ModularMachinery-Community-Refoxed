@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.async;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
+import java.util.List;
 
 /**
  * A state mutation that must execute on the server thread.
@@ -27,6 +28,7 @@ public interface MainThreadStep {
         INTENT_COMMIT,
         SCREEN_TEXT_FLUSH,
         FACTORY_SEARCH,
+        TICK_WORKSET,
         STRUCTURE_SCAN
     }
 
@@ -152,6 +154,23 @@ public interface MainThreadStep {
         @Override
         public Kind kind() {
             return Kind.INTENT_COMMIT;
+        }
+
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
+    /** Pure ordered results produced for one SharedIO resource-domain workset. */
+    record TickWorkset(long worksetId, List<AsyncRequirementPlanner.PlanResult> intents) implements MainThreadStep {
+        public TickWorkset {
+            intents = List.copyOf(intents);
+        }
+
+        @Override
+        public Kind kind() {
+            return Kind.TICK_WORKSET;
         }
 
         @Override

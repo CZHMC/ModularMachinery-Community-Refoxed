@@ -5,6 +5,10 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
 import cn.howxu.mmcr.api.capability.facet.SyncFacet;
@@ -24,6 +28,7 @@ import cn.howxu.mmcr.util.IOType;
 import mekanism.api.heat.IHeatCapacitor;
 import mekanism.api.heat.IHeatHandler;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.List;
 import java.util.Map;
@@ -41,14 +46,51 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     private final IHeatCapacitor heatCapacitor;
     private final IOType ioType;
     private final CapabilityView view;
+    private final AsyncPlanningFacet asyncPlanning;
 
     public HeatPortCapability(IHeatCapacitor heatCapacitor, IOType ioType) {
         if (heatCapacitor == null) throw new IllegalArgumentException("heatCapacitor must not be null");
         if (ioType == null) throw new IllegalArgumentException("ioType must not be null");
         this.heatCapacitor = heatCapacitor;
         this.ioType = ioType;
+        this.asyncPlanning = new AsyncPlanningFacet() {
+            @Override
+            public Object planningIdentity() {
+                return heatCapacitor;
+            }
+
+            @Override
+            protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
+                return new AsyncCapabilitySnapshot.Heat(type().id(), heatCapacitor.getHeat(),
+                        heatCapacitor.getTemperature(), heatCapacitor.getHeatCapacity());
+            }
+
+            @Override
+            protected AsyncCapabilityPlanner workerPlannerOnServerThread() {
+                return new AsyncCapabilityPlanner.Heat(type().id());
+            }
+
+            @Override
+            protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation operation,
+                                                              TransactionContext transaction) {
+                if (!(operation instanceof AsyncCapabilityOperation.Heat heat)) {
+                    return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
+                }
+                if (heat.minimumTemperature()) {
+                    return heatCapacitor.getTemperature() >= heat.value()
+                            ? CapabilityResult.successful()
+                            : failure(MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT);
+                }
+                try {
+                    heatCapacitor.handleHeat(heat.value(), transaction);
+                    return CapabilityResult.successful();
+                } catch (RuntimeException exception) {
+                    return failure(MekanismFailureReasons.HEAT_OUTPUT_BLOCKED);
+                }
+            }
+        };
         this.view = CapabilityFactories.view(TYPE, directions(),
-                Set.of(OperationFacet.class, PresentationFacet.class, SyncFacet.class));
+                Set.of(OperationFacet.class, PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
     }
 
     public HeatPortCapability(HeatPortBlockEntity port) {
@@ -73,6 +115,12 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
     @Override
     public CapabilityView view() {
         return view;
+    }
+
+    @Override
+    public <F extends cn.howxu.mmcr.api.capability.facet.CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+        if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        return LoadedMekanismBridge.HeatPort.super.facet(facetType);
     }
 
     @Override

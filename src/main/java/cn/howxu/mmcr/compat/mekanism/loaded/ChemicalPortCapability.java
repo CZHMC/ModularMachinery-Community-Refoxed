@@ -79,6 +79,11 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         this.ioType = ioType;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override
+            public Object planningIdentity() {
+                return chemicalTank;
+            }
+
+            @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
                 ChemicalResource resource = chemicalTank.resource();
                 boolean empty = resource.isEmpty();

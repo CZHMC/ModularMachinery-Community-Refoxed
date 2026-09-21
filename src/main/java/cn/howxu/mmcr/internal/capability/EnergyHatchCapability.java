@@ -64,6 +64,11 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         this.storage = storage;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override
+            public Object planningIdentity() {
+                return storage;
+            }
+
+            @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
                 return new AsyncCapabilitySnapshot.Scalar(type().id(), storage.amount(), storage.capacity(),
                         storage.transferLimit());

@@ -10,7 +10,8 @@ import net.minecraft.resources.Identifier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.Resource, AsyncCapabilitySnapshot.Scalar {
+public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.Resource, AsyncCapabilitySnapshot.Scalar,
+        AsyncCapabilitySnapshot.Heat {
     /**
      * A resource capability snapshot.
      *
@@ -38,6 +39,18 @@ public sealed interface AsyncCapabilitySnapshot permits AsyncCapabilitySnapshot.
             Objects.requireNonNull(capabilityId, "capabilityId");
             if (amount < 0L || capacity < 0L || amount > capacity || transferLimit < 0L) {
                 throw new IllegalArgumentException("scalar amount must be within capacity and transfer limit non-negative");
+            }
+        }
+    }
+
+    /** Immutable Mekanism heat values used for temperature checks and heat output planning. */
+    record Heat(Identifier capabilityId, double heat, double temperature, double capacity)
+            implements AsyncCapabilitySnapshot {
+        public Heat {
+            Objects.requireNonNull(capabilityId, "capabilityId");
+            if (!Double.isFinite(heat) || !Double.isFinite(temperature) || !Double.isFinite(capacity)
+                    || heat < 0D || capacity <= 0D) {
+                throw new IllegalArgumentException("heat snapshot values must be finite and non-negative");
             }
         }
     }

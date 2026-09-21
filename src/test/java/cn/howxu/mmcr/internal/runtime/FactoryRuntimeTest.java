@@ -385,7 +385,7 @@ class FactoryRuntimeTest {
 
         runtime.tick(List.of(recipe("factory_idle_cleanup", 1)), 1);
         assertThat(runtime.laneCount()).isEqualTo(2);
-        for (int tick = 0; tick <= 200; tick++) runtime.tick(List.of(), 1);
+        for (int tick = 1; tick <= 201; tick++) runtime.tick(List.of(), 1, tick);
 
         assertThat(runtime.laneCount()).isEqualTo(1);
         assertThat(runtime.activeLaneCount()).isZero();
@@ -672,6 +672,31 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void sleeping_dynamic_lane_does_not_force_candidate_context_rebuild() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+        runtime.tick(List.of(recipe("factory_dynamic_sleep", 1)), 1L, 0L);
+        runtime.tick(List.of(inputRecipe("factory_dynamic_sleep_blocked")), 1L, 1L);
+        List<MachineRecipe> unreadableCandidates = new AbstractList<>() {
+            @Override
+            public MachineRecipe get(int index) {
+                throw new AssertionError("candidate list was read");
+            }
+
+            @Override
+            public int size() {
+                throw new AssertionError("candidate list was read");
+            }
+        };
+
+        runtime.tick(unreadableCandidates, 1L, 2L);
+
+        assertThat(runtime.laneCount()).isEqualTo(2);
+    }
+
+    @Test
     void failed_lane_retries_a_same_id_recipe_from_the_new_catalog_on_the_next_tick() {
         Identifier recipeId = MMCR.id("factory_reload_failed_lane");
         MachineRecipe oldRecipe = itemInputRecipe(recipeId.getPath(), Items.IRON_INGOT);
@@ -747,8 +772,12 @@ class FactoryRuntimeTest {
     @Test
     void catalog_change_after_shared_tick_commit_invalidates_before_async_continuation() {
         Identifier recipeId = MMCR.id("factory_reload_async_tick_recipe");
-        MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
-        MachineRecipe replacement = recipe(recipeId.getPath(), 40);
+        MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
+        MachineRecipe replacement = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
 
         MachineControllerBlockEntity controller = factoryController("test_cube");

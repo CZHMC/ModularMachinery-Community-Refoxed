@@ -42,6 +42,7 @@ import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayModelLoader;
 import cn.howxu.mmcr.client.model.RuntimeMachineModelRegistry;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -966,7 +967,12 @@ class MachineControllerBlockEntityTest {
         ServerLevel level = (ServerLevel) controller.getLevel();
         int safetyChecks = controller.structureSafetyCheckCountForTesting();
 
-        for (int tick = 0; tick < 119; tick++) {
+        long nextCheckTick = controller.structureWorkSnapshotForTesting().nextCheckTick();
+        assertThat(nextCheckTick).isGreaterThan(level.getGameTime());
+        assertThat(nextCheckTick - level.getGameTime())
+                .isLessThanOrEqualTo(ServerConfig.structureSafetyCheckIntervalTicks());
+
+        while (level.getGameTime() + 1 < nextCheckTick) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.tickStructure(level, controller.getBlockPos());
         }
@@ -977,6 +983,19 @@ class MachineControllerBlockEntityTest {
         controller.tickStructure(level, controller.getBlockPos());
 
         assertThat(controller.structureSafetyCheckCountForTesting()).isEqualTo(safetyChecks + 1);
+    }
+
+    @Test
+    void formed_structure_safety_checks_are_phased_by_controller_position() {
+        TestBootstrap.registerRuntimeBuiltins();
+        MachineControllerBlockEntity first = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        MachineControllerBlockEntity second = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"),
+                new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructure(first, MachineRegistry.getMachine(MMCR.id("test_cube")));
+        RuntimeTestFixtures.formStructure(second, MachineRegistry.getMachine(MMCR.id("test_cube")));
+
+        assertThat(first.structureWorkSnapshotForTesting().nextCheckTick())
+                .isNotEqualTo(second.structureWorkSnapshotForTesting().nextCheckTick());
     }
 
     @Test
@@ -994,7 +1013,8 @@ class MachineControllerBlockEntityTest {
         controller.setStructureScanBatchesForTesting(6);
         var published = controller.runtimeSnapshot();
 
-        for (int tick = 0; tick < 120; tick++) {
+        long nextCheckTick = controller.structureWorkSnapshotForTesting().nextCheckTick();
+        while (level.getGameTime() < nextCheckTick) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.tickStructure(level, controller.getBlockPos());
             SharedIoEvents.completeLevelTick(level);

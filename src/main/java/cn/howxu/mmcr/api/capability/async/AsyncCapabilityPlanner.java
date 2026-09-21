@@ -11,7 +11,8 @@ import net.minecraft.resources.Identifier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Resource, AsyncCapabilityPlanner.Scalar {
+public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Resource, AsyncCapabilityPlanner.Scalar,
+        AsyncCapabilityPlanner.Heat {
     /**
      * Produces an operation supported by the captured snapshot and request.
      *
@@ -122,6 +123,27 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
 
         private static long scaled(long amount, long multiplier) {
             return amount > Long.MAX_VALUE / multiplier ? Long.MAX_VALUE : amount * multiplier;
+        }
+    }
+
+    /** Pure planner for Mekanism heat checks and output mutations. */
+    record Heat(Identifier capabilityId) implements AsyncCapabilityPlanner {
+        public Heat {
+            Objects.requireNonNull(capabilityId, "capabilityId");
+        }
+
+        @Override
+        public Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot,
+                                                        AsyncCapabilityRequest request) {
+            if (!(snapshot instanceof AsyncCapabilitySnapshot.Heat heatSnapshot)
+                    || !(request instanceof AsyncCapabilityRequest.Heat heatRequest)
+                    || !capabilityId.equals(heatSnapshot.capabilityId())
+                    || !capabilityId.equals(heatRequest.capabilityId())) return Optional.empty();
+            if (heatRequest.minimumTemperature() && heatSnapshot.temperature() < heatRequest.value()) {
+                return Optional.empty();
+            }
+            return Optional.of(new AsyncCapabilityOperation.Heat(capabilityId, heatRequest.value(),
+                    heatRequest.minimumTemperature(), heatRequest.accountingAmount()));
         }
     }
 }

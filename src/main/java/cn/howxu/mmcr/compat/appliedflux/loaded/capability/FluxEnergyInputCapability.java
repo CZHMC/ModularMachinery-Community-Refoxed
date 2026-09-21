@@ -67,6 +67,11 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
         this.prefetchBridge = prefetchBridge;
         asyncPlanning = new AsyncPlanningFacet() {
             @Override
+            public Object planningIdentity() {
+                return buffer;
+            }
+
+            @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
                 return new AsyncCapabilitySnapshot.Scalar(type().id(), buffer.amount(), Long.MAX_VALUE, Long.MAX_VALUE);
             }

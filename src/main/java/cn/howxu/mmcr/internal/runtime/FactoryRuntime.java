@@ -138,7 +138,7 @@ public final class FactoryRuntime {
                                   long maxParallelism, long gameTime, Runnable onFinished) {
         long initialEpoch = factoryStateEpoch;
         if (paused || controller == null) return currentTickResult(initialEpoch, false);
-        if (!requiresFullTick(snapshot, maxParallelism, gameTime)) return tickIdleBaseRuntime(initialEpoch);
+        if (!requiresFullTick(snapshot, candidates, maxParallelism, gameTime)) return tickIdleBaseRuntime(initialEpoch);
         return tick(createSearchContext(snapshot, candidates, maxParallelism, gameTime), onFinished);
     }
 
@@ -236,7 +236,7 @@ public final class FactoryRuntime {
         }
 
         for (FactoryRecipeThread lane : laneSnapshot) {
-            lane.tickIdle();
+            lane.tickIdle(gameTime);
             if (lane.isTimedOut(recipeLockUsed.contains(lane))) removeLane(lane);
         }
         if (activeLaneCount() == 0) {
@@ -283,6 +283,7 @@ public final class FactoryRuntime {
         for (FactoryRecipeThread lane : laneSnapshot) {
             scheduleAsyncSearch(context, lane, activeCounts, level);
         }
+        if (activeCounts.isEmpty() && startReservations.isEmpty() && patternStartReservations.isEmpty()) return;
         while (lanes.size() < laneLimit) {
             FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
             addLane(lane);
@@ -1050,15 +1051,17 @@ public final class FactoryRuntime {
                 lane.coreRecipeSetVersion());
     }
 
-    private boolean requiresFullTick(ControllerRuntimeSnapshot snapshot, long maxParallelism, long gameTime) {
-        if (perThreadParallelLimit != maxParallelism || lanes.size() < laneLimit || !startReservations.isEmpty()
+    private boolean requiresFullTick(ControllerRuntimeSnapshot snapshot, List<MachineRecipe> candidates,
+                                     long maxParallelism, long gameTime) {
+        if (perThreadParallelLimit != maxParallelism || !startReservations.isEmpty()
                 || !patternStartReservations.isEmpty() || !readyLanes.isEmpty() || !pendingAsyncSearches.isEmpty()) {
             return true;
         }
         for (FactoryRecipeThread lane : lanes) {
-            if (!lane.isBaseThread() && !lane.isCoreThread()) return true;
             if (lane.isStartPending() || lane.runtime().active()) return true;
-            if (lane.needsSearch(currentSearchContextKey(snapshot, lane, recipeLocks.get(lane)), gameTime)) return true;
+            if (lane.needsSearch(currentSearchContextKey(snapshot, lane, recipeLocks.get(lane)), gameTime)
+                    && candidates != null && !candidates.isEmpty()) return true;
+            if (lane.idleTimeoutDue(gameTime, recipeLockUsed.contains(lane))) return true;
         }
         return false;
     }

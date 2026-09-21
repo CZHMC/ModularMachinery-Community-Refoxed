@@ -531,13 +531,26 @@ public abstract class RecipeThread {
                         finishAsyncTick();
                         return true;
                     }
-                    MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(level).submitDetailed(
-                            new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), level.getGameTime(),
-                                    controller.activeWorkMode(), asyncLaneId(), lifecycleEpoch),
-                            AsyncCraftingExecution.plan(preparedPlan, asyncLaneId(), catalogVersion),
-                            this::executeAsyncMainStep);
-                    if (submission == MachineAsyncCoordinator.SubmissionResult.REJECTED) clearPendingTick();
-                    return submission != MachineAsyncCoordinator.SubmissionResult.REJECTED;
+                    if (preparedPlan.requirements().isEmpty()
+                            && preparedPlan.initialMainThreadRequirements().isEmpty()) {
+                        AsyncRequirementPlanner.PlanResult empty = new AsyncRequirementPlanner.PlanResult(List.of(), List.of());
+                        boolean committed = runtime.commitAsyncTick(empty);
+                        if (committed && runtime.completeAsyncTickAfterInputs()) {
+                            runtime.completeAsyncTickAfterRecipe();
+                        } else if (!committed) {
+                            runtime.discardAsyncTickPreparation();
+                        }
+                        finishAsyncTick();
+                        return true;
+                    }
+                    MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(
+                            controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(),
+                            asyncLaneId(), lifecycleEpoch);
+                    boolean enqueued = SharedIoCoordinator.get(level).enqueueTickWork(level, domain, taskKey,
+                            preparedPlan, intent -> commitTickWorksetIntent(token, domain, lifecycleEpoch,
+                                    catalogVersion, intent), this::clearPendingTick);
+                    if (!enqueued) clearPendingTick();
+                    return enqueued;
                 },
                 () -> {
                     boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
@@ -552,6 +565,23 @@ public abstract class RecipeThread {
                   this::currentCatalogVersion,
                   () -> { }
           ));
+    }
+
+    private void commitTickWorksetIntent(long token, StructureClaimRegistry.ResourceDomain domain,
+                                         long lifecycleEpoch, long catalogVersion,
+                                         AsyncRequirementPlanner.PlanResult intent) {
+        if (lifecycleEpoch != controller.lifecycleEpoch() || !validateCurrentRuntime(token, domain)
+                || catalogVersion != currentCatalogVersion()) {
+            clearPendingTick();
+            return;
+        }
+        boolean committed = runtime.commitAsyncTick(intent);
+        if (committed && runtime.completeAsyncTickAfterInputs()) {
+            runtime.completeAsyncTickAfterRecipe();
+        } else if (!committed) {
+            runtime.discardAsyncTickPreparation();
+        }
+        finishAsyncTick();
     }
 
     private void requestFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token) {

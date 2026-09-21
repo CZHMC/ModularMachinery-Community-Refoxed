@@ -1797,7 +1797,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK && structure.formed()) {
             publishStructureWork(state -> state.withDirty(false).withCheckCounter(0)
-                    .withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks()));
+                    .withNextCheckTick(nextStructureSafetyCheckTick(level.getGameTime())));
             runStructureSafetyCheck(structure);
             return;
         }
@@ -1860,6 +1860,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return true;
         }
         return level.getGameTime() >= work.nextCheckTick();
+    }
+
+    private long nextStructureSafetyCheckTick(long gameTime) {
+        int interval = ServerConfig.structureSafetyCheckIntervalTicks();
+        long dimensionHash = level == null || level.dimension() == null
+                ? 0L : level.dimension().identifier().hashCode();
+        long phase = Math.floorMod(getBlockPos().asLong() ^ dimensionHash, interval);
+        long delay = Math.floorMod(phase - Math.floorMod(gameTime, interval), interval);
+        return gameTime + (delay == 0L ? interval : delay);
     }
 
     private void runStructureSafetyCheck(StructureSnapshot structure) {
@@ -2458,7 +2467,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         publishStructureWork(state -> state.withPreviousMismatch(null, null).withPendingInvalidation(false));
         clearStructureScan();
         if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK) {
-            publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks()));
+            publishStructureWork(state -> state.withNextCheckTick(nextStructureSafetyCheckTick(level.getGameTime())));
             return;
         }
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
@@ -2818,7 +2827,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!refreshComponents) {
                 publishStructureWork(state -> state.withDirty(false).withComponentRefreshRequired(false)
                         .withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK)
-                        .withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks())
+                        .withNextCheckTick(nextStructureSafetyCheckTick(level.getGameTime()))
                         .withFormationFailure(null).withLastStructureError(null));
                 registerFormedController();
                 restoringFactoryRuntime = false;
@@ -2845,7 +2854,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
             publishStructureWork(state -> state.withDirty(false).withComponentRefreshRequired(false)
                     .withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK)
-                    .withNextCheckTick(level.getGameTime() + ServerConfig.structureSafetyCheckIntervalTicks()));
+                    .withNextCheckTick(nextStructureSafetyCheckTick(level.getGameTime())));
             if (!physicalFormed()) {
                 updatePhysicalFormedState(true);
                 notifyPreviewReceiversStructureFormed();

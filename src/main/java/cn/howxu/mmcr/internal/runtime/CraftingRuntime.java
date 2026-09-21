@@ -35,6 +35,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeFinishContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeTickContext;
+import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
@@ -81,6 +82,13 @@ public final class CraftingRuntime {
     private @Nullable CraftingPlan finishPlan;
     private List<MachineRequirement> effectiveRequirements = List.of();
     private List<MachineOutput> effectiveOutputs = List.of();
+    private @Nullable List<MachineRequirement> cachedPerTickSource;
+    private @Nullable Set<Integer> cachedPerTickConsumed;
+    private @Nullable Set<Integer> cachedPerTickRetained;
+    private @Nullable List<ActivePrefetch> cachedPerTickPrefetches;
+    private List<MachineRequirement> cachedPerTickRequirements = List.of();
+    private @Nullable List<MachineRequirement> cachedPublicRequirementSource;
+    private List<RecipeRequirement> cachedPublicRequirements = List.of();
     private Set<Integer> consumedAtStart = Set.of();
     private Set<Integer> retainedInputs = Set.of();
     private @Nullable ExecutionStatus failure;
@@ -413,9 +421,13 @@ public final class CraftingRuntime {
             return false;
         }
         MachineBehaviorContext machineContext = behaviorContext();
+        if (cachedPublicRequirementSource != effectiveRequirements) {
+            cachedPublicRequirementSource = effectiveRequirements;
+            cachedPublicRequirements = MachineRecipeConverter.toPublicRequirements(effectiveRequirements);
+        }
         RecipeTickContext tickContext = new RecipeTickContext(machineContext, activeRecipe.getRecipe(),
                 activeRecipe.getTick(), activeRecipe.getTotalTick(), activeRecipe.getParallelism(),
-                MachineRecipeConverter.toPublicRequirements(effectiveRequirements()), activeOutputs(),
+                cachedPublicRequirements, effectiveOutputs,
                 new CapabilitySnapshot(components.capabilities()));
         asyncTickPreparation = new AsyncTickPreparation(runtime, machineContext, tickContext);
         return true;
@@ -442,7 +454,9 @@ public final class CraftingRuntime {
         } catch (RuntimeException exception) {
             logCallbackFailure("recipeTick", preparation.runtime(), activeRecipe.getRecipe(), exception);
         }
-        return context(preparation.runtime()).planAsync(perTickRequirements(), activeRecipe.getParallelism());
+        List<MachineRequirement> requirements = perTickRequirements();
+        if (requirements.isEmpty()) return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
+        return context(preparation.runtime()).planAsync(requirements, activeRecipe.getParallelism());
     }
 
     /** Flushes recipe behavior screen text after its callback has run on the server thread. */
@@ -1292,8 +1306,12 @@ public final class CraftingRuntime {
     }
 
     private List<MachineRequirement> perTickRequirements() {
+        if (cachedPerTickSource == effectiveRequirements && cachedPerTickConsumed == consumedAtStart
+                && cachedPerTickRetained == retainedInputs && cachedPerTickPrefetches == activePrefetches) {
+            return cachedPerTickRequirements;
+        }
         List<MachineRequirement> requirements = new ArrayList<>();
-        List<MachineRequirement> source = effectiveRequirements();
+        List<MachineRequirement> source = effectiveRequirements;
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
@@ -1309,7 +1327,12 @@ public final class CraftingRuntime {
                 requirements.add(requirement);
             }
         }
-        return requirements;
+        cachedPerTickSource = effectiveRequirements;
+        cachedPerTickConsumed = consumedAtStart;
+        cachedPerTickRetained = retainedInputs;
+        cachedPerTickPrefetches = activePrefetches;
+        cachedPerTickRequirements = List.copyOf(requirements);
+        return cachedPerTickRequirements;
     }
 
     private List<MachineRequirement> finishRequirements() {
