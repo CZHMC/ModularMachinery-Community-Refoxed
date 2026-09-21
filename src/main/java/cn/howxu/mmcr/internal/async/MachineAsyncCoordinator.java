@@ -148,6 +148,16 @@ public final class MachineAsyncCoordinator {
         }
     }
 
+    public void cancel(TaskKey key) {
+        Task task = tasks.get(key);
+        TickBatch batch = task == null ? null : batches.get(key.gameTime());
+        if (task == null || batch == null) return;
+        synchronized (task) {
+            task.cancelled = true;
+        }
+        removeTask(batch, task);
+    }
+
     public void resume(TaskKey key) {
         resume(key, MainThreadStep.Result.success());
     }

@@ -173,6 +173,25 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void cancelling_one_lane_keeps_other_lanes_of_the_same_controller_running() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var cancelledKey = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L, MachineWorkMode.ASYNC, "base");
+        var activeKey = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L, MachineWorkMode.ASYNC, "factory-0");
+        List<String> committedLanes = new CopyOnWriteArrayList<>();
+        coordinator.submit(cancelledKey, ignored -> AsyncContinuation.Yield.mainThread(
+                new MainThreadStep.TestStep(() -> committedLanes.add("base")),
+                result -> context -> AsyncContinuation.Yield.complete()));
+        coordinator.submit(activeKey, ignored -> AsyncContinuation.Yield.mainThread(
+                new MainThreadStep.TestStep(() -> committedLanes.add("factory-0")),
+                result -> context -> AsyncContinuation.Yield.complete()));
+
+        coordinator.cancel(cancelledKey);
+        coordinator.completeTick();
+
+        assertThat(committedLanes).containsExactly("factory-0");
+    }
+
+    @Test
     void cancellation_wins_when_it_interleaves_after_a_main_step_is_dequeued() throws InterruptedException {
         CountDownLatch dequeued = new CountDownLatch(1);
         CountDownLatch allowPump = new CountDownLatch(1);
