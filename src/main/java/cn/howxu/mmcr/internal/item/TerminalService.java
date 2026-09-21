@@ -78,7 +78,7 @@ public final class TerminalService {
     }
 
     public static void clear(ItemStack stack) {
-        stack.set(ModDataComponents.TERMINAL_DATA.get(), TerminalData.DEFAULT);
+        stack.set(ModDataComponents.TERMINAL_DATA.get(), TerminalData.from(stack).clear());
     }
 
     public static Result clear(ServerPlayer player, ItemStack stack) {
