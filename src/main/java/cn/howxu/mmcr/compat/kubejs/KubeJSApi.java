@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.StageRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
@@ -301,6 +302,10 @@ public final class KubeJSApi {
             throw new IllegalArgumentException("Unknown or mismatched machine level: " + typeId + "/" + levelId);
         }
         return new LevelRequirement(type, level);
+    }
+
+    public StageRequirement stageRequirement(int minStage) {
+        return new StageRequirement(minStage);
     }
 
     public LevelSlot levelSlot(String typeId) {

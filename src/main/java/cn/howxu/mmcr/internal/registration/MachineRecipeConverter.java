@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import com.google.gson.JsonElement;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -113,6 +114,9 @@ public final class MachineRecipeConverter {
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement level) {
             return new LevelRequirement(toInternalIo(level.io()), level.typeId(), level.levelId());
         }
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.StageRequirement stage) {
+            return StageRequirement.input(stage.minStage());
+        }
         throw new IllegalArgumentException("Unsupported public recipe requirement: " + value);
     }
 
@@ -137,6 +141,9 @@ public final class MachineRecipeConverter {
         }
         if (value instanceof LevelRequirement level) {
             return new cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement(io, level.typeId(), level.levelId());
+        }
+        if (value instanceof StageRequirement stage) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.StageRequirement(stage.minStage());
         }
         return codecBackedRequirement(value, io);
     }

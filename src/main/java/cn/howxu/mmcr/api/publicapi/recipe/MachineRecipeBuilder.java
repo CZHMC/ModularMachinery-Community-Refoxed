@@ -130,6 +130,7 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder outputChance(ItemStack stack, float chance) { return requirement(ItemRequirement.output(new ItemOutput(stack, chance))); }
     public MachineRecipeBuilder outputChance(ItemStack stack, float chance, DataComponentPredicateSet components) { return requirement(ItemRequirement.output(new ItemOutput(stack, chance, components))); }
     public MachineRecipeBuilder levelRequirement(Identifier typeId, Identifier levelId) { return requirement(new LevelRequirement(typeId, levelId)); }
+    public MachineRecipeBuilder stageRequirement(int minStage) { return requirement(new StageRequirement(minStage)); }
     public MachineRecipeBuilder requiredHost(Identifier hostId) { requiredHosts.add(new RequiredHost(hostId)); return this; }
     public MachineRecipeBuilder requirement(RecipeRequirement requirement) { if (requirement == null) throw new IllegalArgumentException("requirement null"); requirements.add(requirement); return this; }
     public MachineRecipeBuilder custom(CustomRecipeIo io) {

@@ -191,6 +191,54 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void stage_one_controller_rejects_a_stage_two_recipe_before_starting() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = stagedController(1);
+        FactoryRuntime runtime = new FactoryRuntime();
+        MachineRecipe recipe = stageRecipe("factory_stage_one_rejected", machineId);
+        runtime.ensureBaseLane(controller);
+
+        assertThat(controller.runtimeSnapshot().structure().matchedStage()).isEqualTo(1);
+        runtime.tick(List.of(recipe), 1, 0L);
+
+        assertThat(runtime.activeRuntimes()).isEmpty();
+        assertThat(runtime.threadSnapshots().getFirst().failure().reason().id())
+                .isEqualTo(BuiltinFailureReasons.STAGE_INSUFFICIENT.id());
+    }
+
+    @Test
+    void stage_two_controller_starts_a_stage_two_recipe() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = stagedController(2);
+        FactoryRuntime runtime = new FactoryRuntime();
+        MachineRecipe recipe = stageRecipe("factory_stage_two_started", machineId);
+        runtime.ensureBaseLane(controller);
+
+        assertThat(controller.runtimeSnapshot().structure().matchedStage()).isEqualTo(2);
+        runtime.tick(List.of(recipe), 1, 0L);
+
+        assertThat(runtime.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
+    }
+
+    @Test
+    void unstaged_controller_treats_stage_zero_as_stage_one() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        MachineRecipe recipe = stageRecipe("factory_stage_zero_rejected", MMCR.id("test_cube"));
+        runtime.ensureBaseLane(controller);
+
+        assertThat(controller.runtimeSnapshot().structure().matchedStage()).isZero();
+        runtime.tick(List.of(recipe), 1, 0L);
+
+        assertThat(runtime.activeRuntimes()).isEmpty();
+        assertThat(runtime.threadSnapshots().getFirst().failure().reason().id())
+                .isEqualTo(BuiltinFailureReasons.STAGE_INSUFFICIENT.id());
+    }
+
+    @Test
     void ticking_gives_each_active_lane_independent_parallelism() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
@@ -1590,6 +1638,21 @@ class FactoryRuntimeTest {
         return controller;
     }
 
+    private static MachineControllerBlockEntity stagedController(int stage) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        ControllerRuntimeSnapshot snapshot = controller.runtimeSnapshot();
+        try {
+            var method = MachineControllerRuntime.class.getDeclaredMethod("publishStructureState",
+                    boolean.class, boolean.class, Machine.class, int.class);
+            method.setAccessible(true);
+            method.invoke(controllerRuntime(controller), true, true,
+                    snapshot.structure().configuredMachine(), stage);
+            return controller;
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to publish staged controller snapshot", exception);
+        }
+    }
+
     private static MachineControllerBlockEntity asyncFactoryController(ItemInputBusBlockEntity input) {
         Identifier machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
@@ -1645,12 +1708,16 @@ class FactoryRuntimeTest {
     }
 
     private static FactoryRuntime controllerFactoryRuntime(MachineControllerBlockEntity controller) {
+        return controllerRuntime(controller).factoryRuntime();
+    }
+
+    private static MachineControllerRuntime controllerRuntime(MachineControllerBlockEntity controller) {
         try {
             var field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
             field.setAccessible(true);
-            return ((MachineControllerRuntime) field.get(controller)).factoryRuntime();
+            return (MachineControllerRuntime) field.get(controller);
         } catch (ReflectiveOperationException exception) {
-            throw new AssertionError("Unable to access controller factory runtime", exception);
+            throw new AssertionError("Unable to access controller runtime", exception);
         }
     }
 
@@ -1721,6 +1788,12 @@ class FactoryRuntimeTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
                  ItemStack.EMPTY)));
+    }
+
+    private static MachineRecipe stageRecipe(String path, Identifier machineId) {
+        return RecipeTestSupport.create(MMCR.id(path), machineId, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(2)));
     }
 
     private static MachineRecipe itemInputRecipe(String path, Item item) {

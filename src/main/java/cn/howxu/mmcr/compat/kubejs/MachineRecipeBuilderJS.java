@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.publicapi.RecipeApi;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
@@ -452,6 +453,11 @@ public class MachineRecipeBuilderJS {
             throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
         }
         requirements.add(LevelRequirement.input(type, level.id()));
+        return this;
+    }
+
+    public MachineRecipeBuilderJS requiresStage(int minStage) {
+        requirements.add(StageRequirement.input(minStage));
         return this;
     }
 

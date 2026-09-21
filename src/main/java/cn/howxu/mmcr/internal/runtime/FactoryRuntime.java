@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
@@ -202,7 +203,7 @@ public final class FactoryRuntime {
                     continue;
                 }
                 searchAttemptsForTesting++;
-                reserveStart(lane, lane.searchAndStartRecipe(context, available, structureVersion, lock), activeCounts);
+                reserveStart(lane, searchAndStartRecipe(lane, context, available, structureVersion, lock), activeCounts);
                 readyThisTick.remove(lane);
             }
             while (lanes.size() < laneLimit && perThreadParallelLimit > 0) {
@@ -216,7 +217,7 @@ public final class FactoryRuntime {
                 lane.setSearchGameTime(gameTime);
                 lane.setSearchContextKey(key);
                 searchAttemptsForTesting++;
-                boolean started = lane.searchAndStartRecipe(context, available, structureVersion, lock);
+                boolean started = searchAndStartRecipe(lane, context, available, structureVersion, lock);
                 reserveStart(lane, started, activeCounts);
                 if (!started) break;
             }
@@ -240,6 +241,28 @@ public final class FactoryRuntime {
         int activeLaneCount = activeLaneCount();
         return new FactoryTickResult(activeLaneCount, failure,
                 initialEpoch != factoryStateEpoch, initialEpoch != factoryStateEpoch);
+    }
+
+    private static boolean searchAndStartRecipe(FactoryRecipeThread lane, FactorySearchContext context,
+                                                List<MachineRecipe> candidates, long structureVersion,
+                                                @Nullable Identifier lockedRecipeId) {
+        List<MachineRecipe> eligible = candidates.stream()
+                .filter(candidate -> capturedStageFailure(context.snapshot(), candidate) == null)
+                .toList();
+        if (!eligible.isEmpty()) {
+            return lane.searchAndStartRecipe(context, eligible, structureVersion, lockedRecipeId);
+        }
+        Machine machine = context.snapshot().structure().machine() == null
+                ? context.snapshot().structure().configuredMachine() : context.snapshot().structure().machine();
+        if (machine == null) return false;
+        List<RecipeSearchTask.PlanningValue> failures = candidates.stream()
+                .map(candidate -> RecipeSearchTask.PlanningValue.failure(candidate.id(),
+                        capturedStageFailure(context.snapshot(), candidate), 0, false))
+                .toList();
+        RecipeSearchResult result = RecipeSearchTask.forPlanningValues(context.snapshot(), machine.registryName(),
+                structureVersion, context.maxParallelism(), candidates, lockedRecipeId, failures).compute();
+        return lane.startSearchResult(context, candidates, structureVersion, lockedRecipeId,
+                new FactoryRecipeThread.SearchResult(result, null, false));
     }
 
     private void scheduleAsyncSearches(FactorySearchContext context, List<FactoryRecipeThread> laneSnapshot,
@@ -371,9 +394,9 @@ public final class FactoryRuntime {
         List<WorkerCandidate> workerCandidates = new ArrayList<>(candidates.size());
         for (MachineRecipe candidate : candidates) {
             List<MachineRequirement> requirements = candidate.runtimeRequirements(context.modifiers());
-            FailureReason levelFailure = capturedLevelFailure(context.snapshot(), candidate);
-            if (levelFailure != null) {
-                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, levelFailure,
+            FailureReason requirementFailure = capturedRequirementFailure(context.snapshot(), candidate);
+            if (requirementFailure != null) {
+                workerCandidates.add(new WorkerCandidate(candidate, requirements, null, requirementFailure,
                         hasPendingInputWithFeasibleOutputs(craftingContext, candidate, context.maxParallelism())));
                 continue;
             }
@@ -520,8 +543,8 @@ public final class FactoryRuntime {
         }
     }
 
-    private static @Nullable FailureReason capturedLevelFailure(ControllerRuntimeSnapshot snapshot,
-                                                                 MachineRecipe recipe) {
+    private static @Nullable FailureReason capturedRequirementFailure(ControllerRuntimeSnapshot snapshot,
+                                                                       MachineRecipe recipe) {
         for (LevelRequirement requirement : recipe.levelRequirements()) {
             MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
             MachineLevel actual = snapshot.foundLevels().get(requirement.typeId());
@@ -529,7 +552,19 @@ public final class FactoryRuntime {
                 return BuiltinFailureReasons.LEVEL_INSUFFICIENT;
             }
         }
+        int actualStage = Math.max(1, snapshot.structure().matchedStage());
+        for (StageRequirement requirement : recipe.stageRequirements()) {
+            if (actualStage < requirement.minStage()) {
+                return BuiltinFailureReasons.STAGE_INSUFFICIENT;
+            }
+        }
         return null;
+    }
+
+    private static @Nullable FailureReason capturedStageFailure(ControllerRuntimeSnapshot snapshot,
+                                                                 MachineRecipe recipe) {
+        FailureReason failure = capturedRequirementFailure(snapshot, recipe);
+        return failure == BuiltinFailureReasons.STAGE_INSUFFICIENT ? failure : null;
     }
 
     public void syncCoreLanes(MachineControllerBlockEntity controller, Machine machine,

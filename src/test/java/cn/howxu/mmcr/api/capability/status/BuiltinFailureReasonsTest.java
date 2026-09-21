@@ -35,11 +35,14 @@ class BuiltinFailureReasonsTest {
                 .isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
         assertThat(FailureReasonRegistry.find(MMCR.id("level_insufficient")))
                 .isEqualTo(BuiltinFailureReasons.LEVEL_INSUFFICIENT);
+        assertThat(FailureReasonRegistry.find(MMCR.id("stage_insufficient")))
+                .isEqualTo(BuiltinFailureReasons.STAGE_INSUFFICIENT);
         assertThat(FailureReasonRegistry.find(MMCR.id("module_connection")))
                 .isEqualTo(BuiltinFailureReasons.MODULE_CONNECTION);
         assertThat(BuiltinFailureReasons.MISSING_INPUT.priority()).isEqualTo(400);
         assertThat(BuiltinFailureReasons.MISSING_ENERGY.priority()).isEqualTo(300);
         assertThat(BuiltinFailureReasons.LEVEL_INSUFFICIENT.priority()).isEqualTo(200);
+        assertThat(BuiltinFailureReasons.STAGE_INSUFFICIENT.priority()).isEqualTo(200);
         assertThat(BuiltinFailureReasons.MISSING_OUTPUT.priority()).isEqualTo(100);
         assertThat(BuiltinFailureReasons.MODULE_CONNECTION.translationKey())
                 .isEqualTo("gui.mmcr.controller.failure.module_connection");
