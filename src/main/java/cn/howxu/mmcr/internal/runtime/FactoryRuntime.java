@@ -75,6 +75,7 @@ public final class FactoryRuntime {
     private boolean paused;
     private long nextFactoryLaneId;
     private long coreCatalogVersion = Long.MIN_VALUE;
+    private @Nullable Machine syncedCoreMachine;
     private @Nullable MachineControllerBlockEntity controller;
     private @Nullable ExecutionStatus failure;
     private long searchAttemptsForTesting;
@@ -126,7 +127,14 @@ public final class FactoryRuntime {
 
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, Runnable onFinished, long gameTime) {
         if (controller == null) return currentTickResult(factoryStateEpoch, false);
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        return tick(controller.currentRuntimeSnapshot(), candidates, maxParallelism, gameTime, onFinished);
+    }
+
+    public FactoryTickResult tick(ControllerRuntimeSnapshot snapshot, List<MachineRecipe> candidates,
+                                  long maxParallelism, long gameTime, Runnable onFinished) {
+        long initialEpoch = factoryStateEpoch;
+        if (paused || controller == null) return currentTickResult(initialEpoch, false);
+        if (!requiresFullTick(snapshot, maxParallelism, gameTime)) return tickIdleBaseRuntime(initialEpoch);
         return tick(createSearchContext(snapshot, candidates, maxParallelism, gameTime), onFinished);
     }
 
@@ -508,6 +516,15 @@ public final class FactoryRuntime {
         setLaneLimit(laneLimit);
         trimLanesToLimit();
         coreCatalogVersion = catalogVersion;
+        syncedCoreMachine = machine;
+    }
+
+    public void syncCoreLanesIfNeeded(MachineControllerBlockEntity controller, Machine machine,
+                                      List<MachineRecipe> candidates) {
+        long catalogVersion = RecipeRegistry.catalogForMachine(machine).version();
+        if (lanes.isEmpty() || syncedCoreMachine != machine || coreCatalogVersion != catalogVersion) {
+            syncCoreLanes(controller, machine, candidates);
+        }
     }
 
     public void ensureBaseLane(MachineControllerBlockEntity controller) {
@@ -767,6 +784,7 @@ public final class FactoryRuntime {
         readyLanes.clear();
         pendingAsyncSearches.clear();
         coreCatalogVersion = Long.MIN_VALUE;
+        syncedCoreMachine = null;
         clearCandidateCaches();
         if (changed && lanes.isEmpty()) markLaneStateChanged();
     }
@@ -1006,13 +1024,41 @@ public final class FactoryRuntime {
 
     private RecipeSearchContextKey currentSearchContextKey(FactoryRecipeThread lane,
                                                             @Nullable Identifier lockedRecipeId) {
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        return currentSearchContextKey(controller.currentRuntimeSnapshot(), lane, lockedRecipeId);
+    }
+
+    private RecipeSearchContextKey currentSearchContextKey(ControllerRuntimeSnapshot snapshot,
+                                                            FactoryRecipeThread lane,
+                                                            @Nullable Identifier lockedRecipeId) {
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
                 snapshot.modifierVersion(), snapshot.stateVersion(), RecipeRegistry.catalogForMachine(machine).version(),
                 lane.searchResourceEpoch(controller.resourceAvailabilityEpoch()), lockedRecipeId,
                 lane.coreRecipeSetVersion());
+    }
+
+    private boolean requiresFullTick(ControllerRuntimeSnapshot snapshot, long maxParallelism, long gameTime) {
+        if (perThreadParallelLimit != maxParallelism || lanes.size() < laneLimit || !startReservations.isEmpty()
+                || !patternStartReservations.isEmpty() || !readyLanes.isEmpty() || !pendingAsyncSearches.isEmpty()) {
+            return true;
+        }
+        for (FactoryRecipeThread lane : lanes) {
+            if (!lane.isBaseThread() && !lane.isCoreThread()) return true;
+            if (lane.isStartPending() || lane.runtime().active()) return true;
+            if (lane.needsSearch(currentSearchContextKey(snapshot, lane, recipeLocks.get(lane)), gameTime)) return true;
+        }
+        return false;
+    }
+
+    private FactoryTickResult tickIdleBaseRuntime(long initialEpoch) {
+        CraftingRuntime baseRuntime = lanes.isEmpty() ? null : lanes.getFirst().runtime();
+        if (baseRuntime == null) return currentTickResult(initialEpoch, false);
+        CraftingStateSnapshot before = baseRuntime.snapshot();
+        baseRuntime.tickIdle();
+        boolean changed = !before.equals(baseRuntime.snapshot());
+        if (changed) markLaneStateChanged();
+        return currentTickResult(initialEpoch, changed);
     }
 
     private static RecipeSearchContextKey searchContextKey(FactorySearchContext context,

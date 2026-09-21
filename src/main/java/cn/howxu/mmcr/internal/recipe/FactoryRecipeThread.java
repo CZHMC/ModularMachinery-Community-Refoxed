@@ -161,6 +161,10 @@ public final class FactoryRecipeThread extends RecipeThread {
                 || gameTime >= nextSearchTick;
     }
 
+    public boolean needsSearch(RecipeSearchContextKey currentKey, long gameTime) {
+        return isIdle() && canSearch(gameTime, currentKey);
+    }
+
     public void recordSearchFailure(RecipeSearchContextKey key, long gameTime) {
         if (key == null) throw new IllegalArgumentException("key must not be null");
         failureStreak = Math.min(Integer.MAX_VALUE, failureStreak + 1);

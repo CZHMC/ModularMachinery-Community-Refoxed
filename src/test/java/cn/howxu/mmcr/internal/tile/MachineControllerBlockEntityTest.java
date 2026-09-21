@@ -362,6 +362,41 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void unopened_controller_menus_do_not_materialize_factory_lane_text() throws Exception {
+        MachineControllerBlockEntity controller = factoryTextController(MMCR.id("controller_text_no_viewer"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.factoryRuntime().ensureBaseLane(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("no_viewer_line"), Component.literal("visible"));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        lastSentRecipeScreenTextRevisions(controller).put("removed", 1L);
+        setPlayers(level, List.of());
+
+        invokeSyncOpenText(controller);
+
+        assertThat(lastSentRecipeScreenTextRevisions(controller)).containsEntry("removed", 1L);
+
+        ServerPlayer factory = player(level, controller.getBlockPos());
+        factory.containerMenu = new FactoryControllerMenu(2, new Inventory(null, null), controller);
+        setPlayers(level, List.of(factory));
+        invokeSyncOpenText(controller);
+
+        assertThat(textPackets(factory)).anySatisfy(packet -> assertThat(packet.laneId()).isEmpty());
+        assertThat(textPackets(factory)).anySatisfy(packet -> assertThat(packet.laneId()).isEqualTo("base"));
+    }
+
+    @Test
+    void unchanged_factory_tick_does_not_mark_the_controller_dirty() throws Exception {
+        ChangeCountingController controller = changeCountingFactoryController(MMCR.id("factory_unchanged_dirty"));
+
+        invokeTickFactoryRecipes(controller);
+        controller.changedCalls = 0;
+        invokeTickFactoryRecipes(controller);
+
+        assertThat(controller.changedCalls).isZero();
+    }
+
+    @Test
     void empty_text_snapshot_reaches_matching_menus_after_external_text_is_cleared() throws Exception {
         MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_clear"));
         MachineControllerRuntime runtime = runtimeOf(controller);
@@ -1803,14 +1838,46 @@ class MachineControllerBlockEntityTest {
         return controller;
     }
 
+    private static ChangeCountingController changeCountingFactoryController(Identifier machineId) {
+        ChangeCountingController controller = new ChangeCountingController(BlockPos.ZERO,
+                ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        BlockPos schedulerPos = controller.getBlockPos().offset(1, 0, 0);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(schedulerPos,
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        DynamicMachine machine = new DynamicMachine(machineId, "factory dirty test",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()))),
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler);
+        controller.componentRuntime().replaceComponents(List.of(
+                new ProcessingComponent(null, scheduler, schedulerPos, BlockPos.ZERO, (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        return controller;
+    }
+
     private static MachineControllerRuntime runtimeOf(MachineControllerBlockEntity controller) throws Exception {
         Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
         field.setAccessible(true);
         return (MachineControllerRuntime) field.get(controller);
     }
 
+    @SuppressWarnings("unchecked")
+    private static Map<String, Long> lastSentRecipeScreenTextRevisions(MachineControllerBlockEntity controller)
+            throws Exception {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("lastSentRecipeScreenTextRevisions");
+        field.setAccessible(true);
+        return (Map<String, Long>) field.get(controller);
+    }
+
     private static void invokeSyncOpenText(MachineControllerBlockEntity controller) throws Exception {
         Method method = MachineControllerBlockEntity.class.getDeclaredMethod("syncOpenControllerScreenText");
+        method.setAccessible(true);
+        method.invoke(controller);
+    }
+
+    private static void invokeTickFactoryRecipes(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("tickFactoryRecipes");
         method.setAccessible(true);
         method.invoke(controller);
     }
@@ -1845,6 +1912,20 @@ class MachineControllerBlockEntityTest {
                 return true;
             }
         };
+    }
+
+    private static final class ChangeCountingController extends MachineControllerBlockEntity {
+        private int changedCalls;
+
+        private ChangeCountingController(BlockPos pos, BlockState state) {
+            super(pos, state);
+        }
+
+        @Override
+        public void setChanged() {
+            changedCalls++;
+            super.setChanged();
+        }
     }
 
     private static ServerPlayer player(ServerLevel level, BlockPos pos) throws Exception {

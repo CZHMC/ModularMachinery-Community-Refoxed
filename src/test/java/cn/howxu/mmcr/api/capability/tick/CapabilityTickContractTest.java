@@ -132,6 +132,20 @@ class CapabilityTickContractTest {
     }
 
     @Test
+    void empty_tick_operations_preserve_a_reported_state_change() {
+        TickCapability capability = new TickCapability(context -> new CapabilityTickResult(List.of(), null, true));
+        var controller = RuntimeTestFixtures.controller(Identifier.fromNamespaceAndPath("mmcr", "test_cube"));
+
+        CapabilityTickResult result = new ComponentRuntime().executeTickPhase(new CapabilityTickContext(0L,
+                CapabilityTickPhase.IDLE, null, 1L, new CapabilitySnapshot(List.of(capability)),
+                controller.behaviorContext()));
+
+        assertThat(result.operations()).isEmpty();
+        assertThat(result.failure()).isNull();
+        assertThat(result.stateChanged()).isTrue();
+    }
+
+    @Test
     void recipe_search_does_not_invoke_tick_facets() {
         AtomicInteger calls = new AtomicInteger();
         TickCapability capability = new TickCapability(context -> {

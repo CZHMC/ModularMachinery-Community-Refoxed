@@ -1743,11 +1743,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         FactoryRecipeScheduler scheduler = factoryScheduler();
         scheduler.setThreadLimit(effectiveFactoryThreadLimit());
         FactoryRuntime factory = runtime.factoryRuntime();
-        factory.syncCoreLanes(this, structure.machine(), candidates);
-        FactorySearchContext context = factory.createSearchContext(current, candidates, maxParallelism,
-                level.getGameTime());
-        FactoryTickResult result = factory.tick(context, this::playFinishSound);
-        setChanged();
+        factory.syncCoreLanesIfNeeded(this, structure.machine(), candidates);
+        FactoryTickResult result = factory.tick(current, candidates, maxParallelism, level.getGameTime(),
+                this::playFinishSound);
+        if (result.snapshotChanged() || result.laneStateChanged()) setChanged();
         boolean active = result.activeLaneCount() > 0;
         setActiveState(active);
         if (active) {
@@ -3575,6 +3574,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void syncOpenControllerScreenText() {
         if (!(level instanceof ServerLevel serverLevel)) return;
+        List<ServerPlayer> viewers = new ArrayList<>();
+        for (ServerPlayer player : serverLevel.players()) {
+            boolean ordinaryMenu = player.containerMenu instanceof MachineControllerMenu menu
+                    && menu.controllerPos().equals(getBlockPos());
+            boolean factoryMenu = player.containerMenu instanceof FactoryControllerMenu factory
+                    && factory.controllerPos().equals(getBlockPos());
+            if (ordinaryMenu || factoryMenu) viewers.add(player);
+        }
+        if (viewers.isEmpty()) return;
         ControllerScreenTextSnapshot snapshot = runtime.screenText().snapshot();
         Map<String, ControllerScreenTextSnapshot> laneSnapshots = runtime.factoryRuntime().screenTextSnapshots();
         lastSentRecipeScreenTextRevisions.keySet().retainAll(laneSnapshots.keySet());
@@ -3597,12 +3605,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         boolean globalSent = false;
         Set<String> sentLanes = new HashSet<>();
-        for (ServerPlayer player : serverLevel.players()) {
-            boolean ordinaryMenu = player.containerMenu instanceof MachineControllerMenu menu
-                    && menu.controllerPos().equals(getBlockPos());
+        for (ServerPlayer player : viewers) {
             boolean factoryMenu = player.containerMenu instanceof FactoryControllerMenu factory
                     && factory.controllerPos().equals(getBlockPos());
-            if (!ordinaryMenu && !factoryMenu) continue;
             if (globalChanged) {
                 player.connection.send(new ClientboundCustomPayloadPacket(globalPacket));
                 globalSent = true;

@@ -129,6 +129,10 @@ public final class ComponentRuntime {
                 return new CapabilityTickResult(operations, result.failure(), stateChanged);
             }
         }
+        if (operations.isEmpty()) {
+            if (stateChanged) markCapabilityPresentationChanged();
+            return new CapabilityTickResult(operations, null, stateChanged);
+        }
         try (Transaction transaction = Transaction.openRoot()) {
             for (CapabilityOperation operation : operations) {
                 CapabilityResult result = operation.commit(transaction);

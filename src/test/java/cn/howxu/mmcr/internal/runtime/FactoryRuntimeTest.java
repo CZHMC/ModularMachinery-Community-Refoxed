@@ -77,6 +77,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.AbstractList;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -626,6 +627,31 @@ class FactoryRuntimeTest {
         }
 
         assertThat(runtime.searchAttemptsForTesting()).isEqualTo(2);
+    }
+
+    @Test
+    void unchanged_failed_lane_does_not_read_candidates_before_its_retry_tick() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe candidate = inputRecipe("factory_idle_fast_path");
+
+        runtime.tick(List.of(candidate), 1L, 0L);
+        List<MachineRecipe> unreadableCandidates = new AbstractList<>() {
+            @Override
+            public MachineRecipe get(int index) {
+                throw new AssertionError("candidate list was read");
+            }
+
+            @Override
+            public int size() {
+                throw new AssertionError("candidate list was read");
+            }
+        };
+
+        runtime.tick(unreadableCandidates, 1L, 1L);
+
+        assertThat(runtime.searchAttemptsForTesting()).isEqualTo(1L);
     }
 
     @Test
