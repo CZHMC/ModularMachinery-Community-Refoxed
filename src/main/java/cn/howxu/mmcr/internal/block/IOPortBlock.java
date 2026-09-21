@@ -1,5 +1,11 @@
 package cn.howxu.mmcr.internal.block;
 
+import appeng.api.ids.AEComponents;
+import appeng.api.implementations.items.IMemoryCard;
+import appeng.api.implementations.items.MemoryCardMessages;
+import appeng.items.tools.MemoryCardItem;
+import appeng.util.InteractionUtil;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.MemoryCardHost;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
@@ -21,6 +27,7 @@ import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
@@ -87,6 +94,29 @@ public class IOPortBlock extends Block implements EntityBlock {
     @Override
     protected @NonNull InteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
                                                    BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        if (stack.getItem() instanceof IMemoryCard memoryCard
+                && level.getBlockEntity(pos) instanceof MemoryCardHost memoryCardHost) {
+            if (InteractionUtil.isInAlternateUseMode(player)) {
+                DataComponentMap.Builder builder = DataComponentMap.builder();
+                memoryCardHost.exportMemoryCardSettings(builder, player);
+                builder.set(AEComponents.EXPORTED_SETTINGS_SOURCE, memoryCardHost.memoryCardSettingsSource());
+                DataComponentMap settings = builder.build();
+                if (!settings.isEmpty()) {
+                    MemoryCardItem.clearCard(stack);
+                    stack.applyComponents(settings);
+                    memoryCard.notifyUser(player, MemoryCardMessages.SETTINGS_SAVED);
+                }
+            } else {
+                Component savedSource = stack.get(AEComponents.EXPORTED_SETTINGS_SOURCE);
+                if (memoryCardHost.memoryCardSettingsSource().equals(savedSource)) {
+                    memoryCardHost.importMemoryCardSettings(stack.getComponents(), player);
+                    memoryCard.notifyUser(player, MemoryCardMessages.SETTINGS_LOADED);
+                } else {
+                    MemoryCardItem.importGenericSettingsAndNotify(memoryCardHost, stack.getComponents(), player);
+                }
+            }
+            return InteractionResult.SUCCESS;
+        }
         if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
             if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection(), null)) {

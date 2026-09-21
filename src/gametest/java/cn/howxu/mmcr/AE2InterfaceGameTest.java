@@ -3,6 +3,7 @@ package cn.howxu.mmcr;
 import appeng.api.AECapabilities;
 import appeng.api.behaviors.GenericInternalInventory;
 import appeng.api.config.Actionable;
+import appeng.api.ids.AEComponents;
 import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.security.IActionSource;
@@ -37,6 +38,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
+import io.netty.channel.ChannelFutureListener;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -52,6 +54,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -64,6 +68,8 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -455,6 +461,62 @@ public class AE2InterfaceGameTest {
         });
     }
 
+    public void inputInterfaceMemoryCardRoundTrip(GameTestHelper helper) {
+        BlockPos sourcePos = new BlockPos(0, 0, 0);
+        BlockPos targetPos = new BlockPos(2, 0, 0);
+        BlockPos outputPos = new BlockPos(4, 0, 0);
+        helper.setBlock(sourcePos, ModBlocks.BLOCKS.get("ae2_me_input_interface").get().defaultBlockState());
+        helper.setBlock(targetPos, ModBlocks.BLOCKS.get("ae2_me_input_interface").get().defaultBlockState());
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("ae2_me_output_interface").get().defaultBlockState());
+
+        helper.runAtTickTime(2, () -> {
+            InputInterfaceBlockEntity source = helper.getBlockEntity(sourcePos, InputInterfaceBlockEntity.class);
+            InputInterfaceBlockEntity target = helper.getBlockEntity(targetPos, InputInterfaceBlockEntity.class);
+            ServerPlayer player = makePlayerWithConnection(helper);
+            player.getAbilities().instabuild = true;
+            ItemStack card = AEItems.MEMORY_CARD.stack();
+
+            helper.assertTrue(source.getInterfaceLogic().getUpgrades().addItems(AEItems.FUZZY_CARD.stack()).isEmpty(),
+                    "Input interface accepts AE2 fuzzy cards");
+            source.getInterfaceLogic().getUpgrades().setItemDirect(0, ItemStack.EMPTY);
+            helper.assertTrue(source.getInterfaceLogic().getUpgrades().addItems(AEItems.CRAFTING_CARD.stack()).isEmpty(),
+                    "Input interface accepts AE2 crafting cards");
+            source.getInterfaceLogic().getConfig().setStack(0,
+                    new GenericStack(AEItemKey.of(Items.IRON_INGOT), CONFIGURED_ITEM_AMOUNT));
+            source.getInterfaceLogic().setPriority(42);
+
+            player.setShiftKeyDown(true);
+            helper.assertTrue(useMemoryCard(helper, sourcePos, player, card).consumesAction(),
+                    "Sneak-use saves the input interface to the memory card");
+            player.setShiftKeyDown(false);
+            helper.assertTrue(useMemoryCard(helper, targetPos, player, card).consumesAction(),
+                    "Normal use restores the input interface from the memory card");
+            helper.assertTrue(target.getInterfaceLogic().getConfig().getStack(0).what()
+                            .equals(AEItemKey.of(Items.IRON_INGOT)),
+                    "Memory-card restore copies the input config inventory");
+            helper.assertTrue(target.getInterfaceLogic().getPriority() == 42,
+                    "Memory-card restore copies interface priority");
+            helper.assertTrue(target.getInterfaceLogic().getUpgrades().isInstalled(AEItems.CRAFTING_CARD),
+                    "Memory-card restore copies installed input upgrades");
+
+            ItemStack outputCard = AEItems.MEMORY_CARD.stack();
+            helper.assertTrue(useMemoryCard(helper, outputPos, player, outputCard) == InteractionResult.TRY_WITH_EMPTY_HAND,
+                    "Output interfaces do not claim memory-card interactions");
+            helper.assertTrue(outputCard.get(AEComponents.EXPORTED_SETTINGS_SOURCE) == null,
+                    "Output interfaces do not write memory-card data");
+            helper.succeed();
+        });
+    }
+
+    private static InteractionResult useMemoryCard(GameTestHelper helper, BlockPos pos,
+                                                   ServerPlayer player, ItemStack card) {
+        BlockPos worldPos = helper.absolutePos(pos);
+        player.setItemInHand(InteractionHand.MAIN_HAND, card);
+        return helper.getLevel().getBlockState(worldPos).useItemOn(card, helper.getLevel(), player,
+                InteractionHand.MAIN_HAND,
+                new BlockHitResult(Vec3.atCenterOf(worldPos), Direction.UP, worldPos, false));
+    }
+
     private static ServerPlayer makePlayer(GameTestHelper helper) {
         return new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
                 new GameProfile(UUID.nameUUIDFromBytes(
@@ -509,6 +571,11 @@ public class AE2InterfaceGameTest {
 
         @Override
         public void send(@NonNull Packet<?> packet) {
+            packets.add(packet);
+        }
+
+        @Override
+        public void send(Packet<?> packet, ChannelFutureListener listener) {
             packets.add(packet);
         }
     }

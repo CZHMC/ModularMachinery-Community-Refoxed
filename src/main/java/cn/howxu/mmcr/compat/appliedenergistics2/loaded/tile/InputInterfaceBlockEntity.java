@@ -48,7 +48,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class InputInterfaceBlockEntity extends IOPortBlockEntity
-        implements InterfaceLogicHost, IGridConnectedBlockEntity, NetworkOwnedInputHost {
+        implements InterfaceLogicHost, IGridConnectedBlockEntity, MemoryCardHost, NetworkOwnedInputHost {
     private static final String NETWORK_OWNED_KEY = "network_owned";
     private static final String NETWORK_OWNED_SLOT_KEY = "slot";
     private static final IGridNodeListener<InputInterfaceBlockEntity> NODE_LISTENER =
@@ -107,6 +107,11 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         ItemStack fallback = AEBlocks.INTERFACE.stack();
         fallback.set(DataComponents.CUSTOM_NAME, Component.translatable("container.mmcr." + kind.id()));
         return fallback;
+    }
+
+    @Override
+    public Component memoryCardSettingsSource() {
+        return getMainMenuIcon().getItemName();
     }
 
     @Override

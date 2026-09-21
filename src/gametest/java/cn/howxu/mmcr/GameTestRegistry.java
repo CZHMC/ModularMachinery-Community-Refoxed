@@ -211,6 +211,8 @@ public final class GameTestRegistry {
                 helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
         register(event, "eae_me_extended_input_provenance", 100,
                 helper -> new AE2InterfaceGameTest().extendedInputReturnsOnlyAeOwnedResourcesAfterCommittedExtraction(helper));
+        register(event, "ae2_me_input_memory_card", 100,
+                helper -> new AE2InterfaceGameTest().inputInterfaceMemoryCardRoundTrip(helper));
         register(event, "ae2_me_stocking_input_interface", 100,
                 helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
         // register(event, "eae_me_oversize_stocking_watcher", 100,
