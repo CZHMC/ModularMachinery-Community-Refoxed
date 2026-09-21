@@ -142,12 +142,12 @@ public final class NetworkInterfaceGameTests {
             assertFormed(helper, target);
             TestPlayer player = new TestPlayer(helper.getLevel());
             ItemStack card = new ItemStack(ModItems.KEY_CARD.get());
-            player.setShiftKeyDown(true);
+            player.setPose(net.minecraft.world.entity.Pose.CROUCHING);
             useOn(helper.getLevel(), player, card, source.interfaces().getFirst().getBlockPos());
             helper.assertTrue(card.get(ModDataComponents.KEY_CARD_BINDING.get())
                             .equals(new KeyCardBinding(global(source.interfaces().getFirst().getBlockPos()), source.controller().machineReference())),
                     "Key card selects a formed source interface and its machine reference");
-            player.setShiftKeyDown(false);
+            player.setPose(net.minecraft.world.entity.Pose.STANDING);
             useOn(helper.getLevel(), player, card, target.interfaces().getFirst().getBlockPos());
             useOn(helper.getLevel(), player, card, target.interfaces().getFirst().getBlockPos());
             helper.assertTrue(source.interfaces().getFirst().connections().size() == 1
@@ -471,15 +471,11 @@ public final class NetworkInterfaceGameTests {
 
     private static final class TestPlayer extends ServerPlayer {
         private final List<Component> messages = new ArrayList<>();
-        private boolean shift;
-
         private TestPlayer(ServerLevel level) {
             super(level.getServer(), level, new GameProfile(UUID.randomUUID(), "mmcr-network-test"),
                     ClientInformation.createDefault());
         }
 
-        @Override public void setShiftKeyDown(boolean shiftKeyDown) { shift = shiftKeyDown; }
-        @Override public boolean isShiftKeyDown() { return shift; }
         @Override public void sendSystemMessage(Component message) { messages.add(message); }
         private List<Component> messages() { return messages; }
     }

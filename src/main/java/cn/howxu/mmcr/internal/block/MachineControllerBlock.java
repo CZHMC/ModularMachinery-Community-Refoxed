@@ -186,7 +186,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                 Player player, BlockHitResult hit) {
         if (!level.isClientSide()
-                && player.isShiftKeyDown()
+                && player.isCrouching()
                 && player.getMainHandItem().isEmpty()
                 && player.getOffhandItem().isEmpty()
                 && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller

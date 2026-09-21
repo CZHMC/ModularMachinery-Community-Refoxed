@@ -4,7 +4,6 @@ import appeng.api.ids.AEComponents;
 import appeng.api.implementations.items.IMemoryCard;
 import appeng.api.implementations.items.MemoryCardMessages;
 import appeng.items.tools.MemoryCardItem;
-import appeng.util.InteractionUtil;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.MemoryCardHost;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
@@ -96,7 +95,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                                                    BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (stack.getItem() instanceof IMemoryCard memoryCard
                 && level.getBlockEntity(pos) instanceof MemoryCardHost memoryCardHost) {
-            if (InteractionUtil.isInAlternateUseMode(player)) {
+            if (player.isCrouching()) {
                 DataComponentMap.Builder builder = DataComponentMap.builder();
                 memoryCardHost.exportMemoryCardSettings(builder, player);
                 builder.set(AEComponents.EXPORTED_SETTINGS_SOURCE, memoryCardHost.memoryCardSettingsSource());
@@ -117,7 +116,7 @@ public class IOPortBlock extends Block implements EntityBlock {
             }
             return InteractionResult.SUCCESS;
         }
-        if (!player.isShiftKeyDown() && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
+        if (!player.isCrouching() && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
             if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection(), null)) {
                 return InteractionResult.SUCCESS;

@@ -31,7 +31,7 @@ public final class MultiblockDetectorClientHandler {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
 
-        if (shouldOpenScreen(event.isUseItem(), event.getHand(), minecraft.hasShiftDown(), minecraft.screen != null,
+        if (shouldOpenScreen(event.isUseItem(), event.getHand(), minecraft.player.isCrouching(), minecraft.screen != null,
                 minecraft.hitResult != null && minecraft.hitResult.getType() == HitResult.Type.MISS,
                 minecraft.player.getMainHandItem().is(ModItems.MULTIBLOCK_DETECTOR.get()))) {
             minecraft.setScreen(new MultiblockDetectorScreen(
@@ -58,8 +58,8 @@ public final class MultiblockDetectorClientHandler {
         event.setCanceled(true);
     }
 
-    static boolean shouldOpenScreen(boolean useItem, InteractionHand hand, boolean shiftDown,
+    static boolean shouldOpenScreen(boolean useItem, InteractionHand hand, boolean crouching,
             boolean hasScreen, boolean miss, boolean mainHandDetector) {
-        return useItem && hand == InteractionHand.MAIN_HAND && !shiftDown && !hasScreen && miss && mainHandDetector;
+        return useItem && hand == InteractionHand.MAIN_HAND && !crouching && !hasScreen && miss && mainHandDetector;
     }
 }

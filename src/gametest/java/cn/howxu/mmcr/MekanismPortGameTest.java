@@ -1,5 +1,7 @@
 package cn.howxu.mmcr;
 
+import appeng.core.definitions.AEItems;
+import com.mojang.authlib.GameProfile;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
@@ -36,18 +38,28 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
+import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * End-to-end GameTest coverage for the loaded Mekanism port integration.
@@ -97,6 +109,33 @@ public class MekanismPortGameTest {
                     "Radioactive chemical port accepts radioactive chemicals");
             tx.commit();
         }
+        helper.succeed();
+    }
+
+    public void wrenchPreservesNonEmptyRadioactiveChemicalPort(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
+        ChemicalPortBlockEntity port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
+        try (Transaction transaction = Transaction.openRoot()) {
+            port.chemicalTank().insert(registerRadioactiveChemical("wrench_protection"), 1_000,
+                    transaction, AutomationType.EXTERNAL);
+            transaction.commit();
+        }
+
+        ServerPlayer player = wrenchPlayer(helper);
+        player.setPose(Pose.CROUCHING);
+        player.setItemInHand(InteractionHand.MAIN_HAND, AEItems.CERTUS_QUARTZ_WRENCH.stack());
+        BlockPos worldPos = helper.absolutePos(pos);
+        PlayerInteractEvent.RightClickBlock event = new PlayerInteractEvent.RightClickBlock(player,
+                InteractionHand.MAIN_HAND, worldPos, new BlockHitResult(Vec3.atCenterOf(worldPos), Direction.UP, worldPos, false));
+
+        NeoForge.EVENT_BUS.post(event);
+
+        helper.assertTrue(event.isCanceled() && event.getCancellationResult().equals(net.minecraft.world.InteractionResult.FAIL),
+                "A non-empty radioactive chemical port rejects wrench dismantling");
+        helper.assertTrue(helper.getLevel().getBlockState(worldPos).is(ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get()),
+                "Rejected wrench dismantling preserves the radioactive chemical port");
+        helper.assertTrue(!port.chemicalTank().isEmpty(), "Rejected wrench dismantling preserves the radioactive chemical");
         helper.succeed();
     }
 
@@ -674,6 +713,12 @@ public class MekanismPortGameTest {
 
     private static long capacityForResource(ChemicalPortBlockEntity port, ChemicalResource resource) {
         return port.chemicalTank().capacityAsLong(resource);
+    }
+
+    private static ServerPlayer wrenchPlayer(GameTestHelper helper) {
+        return new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                new GameProfile(UUID.nameUUIDFromBytes("mmcr-radioactive-wrench".getBytes(StandardCharsets.UTF_8)),
+                        "mmcr-wrench"), ClientInformation.createDefault());
     }
 
     private static void setHeat(HeatPortBlockEntity port, double target) {

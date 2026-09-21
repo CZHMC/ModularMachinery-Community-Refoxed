@@ -49,7 +49,7 @@ public class BlueprintItem extends Item {
     public InteractionResult useOn(UseOnContext context) {
         Level level = context.getLevel();
         Player player = context.getPlayer();
-        if (player == null || !player.isShiftKeyDown()
+        if (player == null || !player.isCrouching()
                 || !(level.getBlockEntity(context.getClickedPos()) instanceof MachineControllerBlockEntity controller)) {
             return InteractionResult.PASS;
         }

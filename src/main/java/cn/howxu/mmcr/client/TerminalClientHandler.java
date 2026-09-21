@@ -31,7 +31,7 @@ public final class TerminalClientHandler {
     public static void onInteractionKey(InputEvent.InteractionKeyMappingTriggered event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
-        if (!shouldOpenScreen(event.isUseItem(), event.getHand(), minecraft.hasShiftDown(), minecraft.screen != null,
+        if (!shouldOpenScreen(event.isUseItem(), event.getHand(), minecraft.player.isCrouching(), minecraft.screen != null,
                 isTerminalScreenTarget(minecraft),
                 minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get()))) return;
         TerminalData data = TerminalData.from(minecraft.player.getMainHandItem());
@@ -65,8 +65,8 @@ public final class TerminalClientHandler {
                 && !(minecraft.level.getBlockEntity(blockHit.getBlockPos()) instanceof MachineControllerBlockEntity);
     }
 
-    static boolean shouldOpenScreen(boolean useItem, InteractionHand hand, boolean shiftDown,
+    static boolean shouldOpenScreen(boolean useItem, InteractionHand hand, boolean crouching,
             boolean hasScreen, boolean targetAllowed, boolean terminalHeld) {
-        return useItem && hand == InteractionHand.MAIN_HAND && !shiftDown && !hasScreen && targetAllowed && terminalHeld;
+        return useItem && hand == InteractionHand.MAIN_HAND && !crouching && !hasScreen && targetAllowed && terminalHeld;
     }
 }

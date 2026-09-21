@@ -46,7 +46,7 @@ public class TerminalItem extends Item {
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (!player.isShiftKeyDown()) return InteractionResult.PASS;
+        if (!player.isCrouching()) return InteractionResult.PASS;
         if (level.isClientSide()) return InteractionResult.SUCCESS;
         if (player instanceof ServerPlayer serverPlayer) {
             TerminalService.Result result = TerminalService.clear(serverPlayer, stack);
@@ -58,7 +58,7 @@ public class TerminalItem extends Item {
     @Override
     public InteractionResult useOn(UseOnContext context) {
         Player player = context.getPlayer();
-        if (player == null || !player.isShiftKeyDown()) return InteractionResult.PASS;
+        if (player == null || !player.isCrouching()) return InteractionResult.PASS;
         if (context.getLevel().isClientSide()) return InteractionResult.SUCCESS;
         if (!(player instanceof ServerPlayer serverPlayer)) return InteractionResult.SUCCESS;
         BlockEntity blockEntity = context.getLevel().getBlockEntity(context.getClickedPos());

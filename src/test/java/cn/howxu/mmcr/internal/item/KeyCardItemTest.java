@@ -82,11 +82,11 @@ class KeyCardItemTest {
     }
 
     @Test
-    void shift_right_click_stores_and_replaces_the_interface_and_machine_reference() throws Exception {
+    void crouch_right_click_stores_and_replaces_the_interface_and_machine_reference() throws Exception {
         Fixture fixture = fixture(true, true);
         ItemStack stack = stack();
         TestPlayer player = player();
-        player.setShiftKeyDown(true);
+        player.setCrouching(true);
 
         assertThat(useOn(fixture, player, stack, fixture.sourceEndpoint)).isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get()))
@@ -100,7 +100,7 @@ class KeyCardItemTest {
     }
 
     @Test
-    void only_shift_right_click_air_clears_the_binding() throws Exception {
+    void only_crouch_right_click_air_clears_the_binding() throws Exception {
         Fixture fixture = fixture(true, true);
         ItemStack stack = stack(new KeyCardBinding(fixture.sourceEndpoint, fixture.sourceMachine));
         TestPlayer player = player();
@@ -109,7 +109,7 @@ class KeyCardItemTest {
         assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND)).isEqualTo(InteractionResult.PASS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get())).isNotNull();
 
-        player.setShiftKeyDown(true);
+        player.setCrouching(true);
         assertThat(keyCard.use(fixture.level, player, InteractionHand.MAIN_HAND)).isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get())).isNull();
         assertThat(player.messages).contains(Component.translatable("message.mmcr.key_card.cleared"));
@@ -200,7 +200,7 @@ class KeyCardItemTest {
         ItemStack stack = stack();
         TestPlayer player = player();
         player.hold(stack);
-        player.setShiftKeyDown(true);
+        player.setCrouching(true);
 
         assertThat(useOn(fixture, player, stack, fixture.sourceEndpoint)).isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get())).isNull();
@@ -397,7 +397,7 @@ class KeyCardItemTest {
     private static final class TestPlayer extends Player {
         private ItemStack held;
         private ArrayList<Component> messages;
-        private boolean shift;
+        private boolean crouching;
 
         private TestPlayer(Level level) {
             super(level, new GameProfile(UUID.randomUUID(), "key-card-test"));
@@ -407,8 +407,8 @@ class KeyCardItemTest {
             held = stack;
             if (messages == null) messages = new ArrayList<>();
         }
-        @Override public void setShiftKeyDown(boolean shiftKeyDown) { shift = shiftKeyDown; }
-        @Override public boolean isShiftKeyDown() { return shift; }
+        private void setCrouching(boolean crouching) { this.crouching = crouching; }
+        @Override public boolean isCrouching() { return crouching; }
         @Override public ItemStack getItemInHand(InteractionHand hand) { return held; }
         @Override public void sendSystemMessage(Component message) {
             if (messages == null) messages = new ArrayList<>();

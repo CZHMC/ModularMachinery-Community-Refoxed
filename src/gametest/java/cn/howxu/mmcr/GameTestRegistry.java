@@ -75,6 +75,10 @@ public final class GameTestRegistry {
                 ItemBusCapabilityGameTest::itemBusDoesNotStackNonStackableItems);
         register(event, "item_bus_capability_cache_auto_io_side", 100, ItemBusCapabilityGameTest::itemBusCapabilityCacheFollowsAutoIOSideConfig);
         register(event, "item_bus_drops_contents", 100, ItemBusCapabilityGameTest::itemBusDropsStoredItemsWhenRemoved);
+        register(event, "wrench_standing_preserves_block", 100,
+                helper -> new WrenchDismantleGameTest().wrenchWhileStandingDoesNotDismantle(helper));
+        register(event, "wrench_dismantles_item_bus", 100,
+                helper -> new WrenchDismantleGameTest().wrenchDismantlesItemBusAndDropsItsContents(helper));
         register(event, "dynamic_controller_drops_self", 100, ItemBusCapabilityGameTest::dynamicControllerDropsItself);
         // Disabled: CPU scheduling delays can cause this otherwise-correct test to fail intermittently.
         register(event, "auto_io_fluid_output", 120, helper -> new AutoIOGameTest().fluidOutputAutoExports(helper));
@@ -163,6 +167,8 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(helper));
         register(event, "mekanism_radioactive_chemical_only_accepts_radioactive", 100,
                 helper -> new MekanismPortGameTest().radioactiveChemicalPortRejectsNonRadioactiveAndAcceptsRadioactive(helper));
+        register(event, "mekanism_radioactive_chemical_wrench_protection", 100,
+                helper -> new MekanismPortGameTest().wrenchPreservesNonEmptyRadioactiveChemicalPort(helper));
         register(event, "mekanism_normal_chemical_capacities_match_tiers", 100,
                 helper -> new MekanismPortGameTest().normalChemicalCapacitiesMatchDeclaredTiers(helper));
         register(event, "mekanism_radioactive_chemical_capacity_512k", 100,

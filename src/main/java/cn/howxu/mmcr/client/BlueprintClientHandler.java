@@ -32,7 +32,7 @@ public final class BlueprintClientHandler {
 
         boolean miss = minecraft.hitResult != null
                 && minecraft.hitResult.getType() == HitResult.Type.MISS;
-        if (!shouldHandle(event.isUseItem(), event.getHand(), minecraft.hasShiftDown(), minecraft.screen != null,
+        if (!shouldHandle(event.isUseItem(), event.getHand(), minecraft.player.isCrouching(), minecraft.screen != null,
                 miss, minecraft.player.getMainHandItem().is(ModItems.BLUEPRINT.get()))) return;
 
         ItemStack stack = minecraft.player.getMainHandItem();
@@ -48,8 +48,8 @@ public final class BlueprintClientHandler {
         event.setCanceled(true);
     }
 
-    static boolean shouldHandle(boolean useItem, InteractionHand hand, boolean shiftDown,
+    static boolean shouldHandle(boolean useItem, InteractionHand hand, boolean crouching,
             boolean hasScreen, boolean miss, boolean mainHandBlueprint) {
-        return useItem && hand == InteractionHand.MAIN_HAND && !shiftDown && !hasScreen && miss && mainHandBlueprint;
+        return useItem && hand == InteractionHand.MAIN_HAND && !crouching && !hasScreen && miss && mainHandBlueprint;
     }
 }

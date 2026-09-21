@@ -55,6 +55,7 @@ import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -485,10 +486,10 @@ public class AE2InterfaceGameTest {
                     new GenericStack(AEItemKey.of(Items.IRON_INGOT), CONFIGURED_ITEM_AMOUNT));
             source.getInterfaceLogic().setPriority(42);
 
-            player.setShiftKeyDown(true);
+            player.setPose(Pose.CROUCHING);
             helper.assertTrue(useMemoryCard(helper, sourcePos, player, card).consumesAction(),
                     "Sneak-use saves the input interface to the memory card");
-            player.setShiftKeyDown(false);
+            player.setPose(Pose.STANDING);
             helper.assertTrue(useMemoryCard(helper, targetPos, player, card).consumesAction(),
                     "Normal use restores the input interface from the memory card");
             helper.assertTrue(target.getInterfaceLogic().getConfig().getStack(0).what()

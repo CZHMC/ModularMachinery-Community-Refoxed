@@ -43,7 +43,7 @@ public class MultiblockDetectorItem extends Item {
             ItemStack stack = context.getItemInHand();
             BlockPos pos = context.getClickedPos();
             MultiblockDetectorSelection selection = selection(stack);
-            if (player.isShiftKeyDown()) {
+            if (player.isCrouching()) {
                 stack.set(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get(), selection.withSecond(pos));
                 player.sendSystemMessage(Component.translatable("message.mmcr.multiblock_detector.second_set", pos.toShortString()));
             } else {
@@ -56,7 +56,7 @@ public class MultiblockDetectorItem extends Item {
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
-        if (!player.isShiftKeyDown()) return InteractionResult.PASS;
+        if (!player.isCrouching()) return InteractionResult.PASS;
 
         if (!level.isClientSide()) {
             ItemStack stack = player.getItemInHand(hand);

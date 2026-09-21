@@ -52,7 +52,7 @@ public class KeyCardItem extends Item {
         if (level.isClientSide()) return InteractionResult.SUCCESS;
 
         ItemStack stack = context.getItemInHand();
-        if (player.isShiftKeyDown()) {
+        if (player.isCrouching()) {
             select(level, player, stack, target, context.getClickedPos());
             return InteractionResult.SUCCESS;
         }
@@ -63,7 +63,7 @@ public class KeyCardItem extends Item {
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
-        if (!player.isShiftKeyDown()) return InteractionResult.PASS;
+        if (!player.isCrouching()) return InteractionResult.PASS;
         if (!level.isClientSide()) {
             player.getItemInHand(hand).remove(ModDataComponents.KEY_CARD_BINDING.get());
             player.sendSystemMessage(Component.translatable("message.mmcr.key_card.cleared"));

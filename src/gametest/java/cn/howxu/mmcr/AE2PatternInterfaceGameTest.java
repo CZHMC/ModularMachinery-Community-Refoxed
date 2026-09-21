@@ -55,6 +55,7 @@ import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -379,11 +380,11 @@ public class AE2PatternInterfaceGameTest {
                     LockCraftingMode.LOCK_UNTIL_RESULT);
             source.getLogic().setPriority(37);
 
-            player.setShiftKeyDown(true);
+            player.setPose(Pose.CROUCHING);
             helper.getLevel().getBlockState(helper.absolutePos(sourcePos)).useItemOn(card, helper.getLevel(), player,
                     InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(helper.absolutePos(sourcePos)),
                             Direction.UP, helper.absolutePos(sourcePos), false));
-            player.setShiftKeyDown(false);
+            player.setPose(Pose.STANDING);
             helper.getLevel().getBlockState(helper.absolutePos(targetPos)).useItemOn(card, helper.getLevel(), player,
                     InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(helper.absolutePos(targetPos)),
                             Direction.UP, helper.absolutePos(targetPos), false));
