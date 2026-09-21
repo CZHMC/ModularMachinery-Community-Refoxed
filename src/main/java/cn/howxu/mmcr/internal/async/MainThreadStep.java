@@ -146,6 +146,20 @@ public interface MainThreadStep {
         }
     }
 
+    /** Commits a worker-planned recipe tick and all post-input phases in one server-thread grant. */
+    record TickTransitionCommit(String laneId, long catalogVersion,
+                                AsyncRequirementPlanner.PlanResult intent) implements MainThreadStep {
+        @Override
+        public Kind kind() {
+            return Kind.INTENT_COMMIT;
+        }
+
+        @Override
+        public Result execute() {
+            return Result.success();
+        }
+    }
+
     /** Marks that a worker finished pure factory planning for one lane. */
     record FactorySearch(String laneId, long catalogVersion, long searchId) implements MainThreadStep {
         @Override

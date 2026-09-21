@@ -36,8 +36,6 @@ public final class MachineAsyncCoordinator {
             new Thread(runnable, "MMCR-AsyncWorker-" + WORKER_THREAD_ID.getAndIncrement());
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
             0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), WORKER_THREAD_FACTORY);
-    private static final int MAX_STALLED_FENCE_PASSES = 5;
-
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
     private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
@@ -46,6 +44,7 @@ public final class MachineAsyncCoordinator {
     private final Map<TaskKey, MainThreadStep.Result.Failure> failures = new ConcurrentHashMap<>();
     private final Object progressMonitor = new Object();
     private final AtomicInteger progress = new AtomicInteger();
+    private boolean completingFence;
 
     private MachineAsyncCoordinator(Executor executor) {
         this(executor, null);
@@ -106,34 +105,23 @@ public final class MachineAsyncCoordinator {
         Map.Entry<Long, TickBatch> entry = batches.firstEntry();
         if (entry == null) return;
         TickBatch batch = entry.getValue();
-        int stalledPasses = 0;
-        while (batch.hasLiveTask()) {
-            int progressBefore = progress.get();
+        completingFence = true;
+        try {
             admitWaitingWorkers(batch);
-            pumpMainThreadSteps(batch);
+            int completedSteps = pumpReadyMainThreadSteps(batch);
             if (resolveSharedIo.getAsInt() > 0) signalProgress();
-            if (!batch.hasLiveTask()) break;
-            if (progress.get() != progressBefore) {
-                stalledPasses = 0;
-                continue;
+            if (completedSteps == 0 || !batch.deferredMainSteps.isEmpty()) pumpNewerMainThreadSteps(batch.gameTime);
+            for (Task task : batch.tasks.values()) {
+                if (task.finished || task.cancelled) removeTask(batch, task);
             }
-            if (!batch.deferredMainSteps.isEmpty()) {
-                pumpNewerMainThreadSteps(batch.gameTime);
-                return;
-            }
-            if (batch.runningWorkers.get() > 0) {
-                awaitWorkerProgress(progressBefore);
-                if (progress.get() != progressBefore) {
-                    stalledPasses = 0;
-                    continue;
-                }
-            }
-            if (++stalledPasses >= MAX_STALLED_FENCE_PASSES) failStalledTasks(batch);
+            if (!batch.hasLiveTask()) batches.remove(batch.gameTime, batch);
+        } finally {
+            completingFence = false;
         }
-        for (Task task : batch.tasks.values()) {
-            if (task.finished || task.cancelled) removeTask(batch, task);
-        }
-        batches.remove(batch.gameTime, batch);
+    }
+
+    public boolean isCompletingFence() {
+        return completingFence;
     }
 
     public void cancel(BlockPos controllerPos) {
@@ -174,7 +162,19 @@ public final class MachineAsyncCoordinator {
         PendingMainStep pending = batch.deferredMainSteps.remove(key);
         if (pending == null) return;
         pending.results.add(result);
-        executePendingMainStep(batch, pending);
+        batch.pendingMainSteps.add(pending);
+        signalProgress();
+    }
+
+    public void complete(TaskKey key) {
+        Task task = tasks.get(key);
+        TickBatch batch = task == null ? null : batches.get(key.gameTime());
+        if (task == null || batch == null) return;
+        synchronized (task) {
+            task.finished = true;
+        }
+        removeTask(batch, task);
+        signalProgress();
     }
 
     public static synchronized void discard(ServerLevel level) {
@@ -188,6 +188,20 @@ public final class MachineAsyncCoordinator {
 
     public boolean hasPendingMainStepForTesting() {
         return batches.values().stream().anyMatch(batch -> !batch.pendingMainSteps.isEmpty());
+    }
+
+    public void completeUntilIdleForTesting(IntSupplier resolveSharedIo) {
+        for (int pass = 0; pass < 64; pass++) {
+            completeTick(resolveSharedIo);
+            if (tasks.isEmpty()) return;
+            try {
+                awaitPendingMainStepForTesting(1, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while waiting for async test work", exception);
+            }
+        }
+        throw new AssertionError("Async test work did not become idle");
     }
 
     public boolean awaitPendingMainStepForTesting(long timeout, TimeUnit unit) throws InterruptedException {
@@ -248,8 +262,21 @@ public final class MachineAsyncCoordinator {
         while ((pending = batch.pendingMainSteps.poll()) != null) executePendingMainStep(batch, pending);
     }
 
+    /** Processes only work ready when this level-end fence began. */
+    private int pumpReadyMainThreadSteps(TickBatch batch) {
+        int readySteps = batch.pendingMainSteps.size();
+        int completedSteps = 0;
+        for (int index = 0; index < readySteps; index++) {
+            PendingMainStep pending = batch.pendingMainSteps.poll();
+            if (pending == null) break;
+            executePendingMainStep(batch, pending);
+            completedSteps++;
+        }
+        return completedSteps;
+    }
+
     private void pumpNewerMainThreadSteps(long gameTime) {
-        for (TickBatch batch : batches.tailMap(gameTime, false).values()) pumpMainThreadSteps(batch);
+        for (TickBatch batch : batches.tailMap(gameTime, false).values()) pumpReadyMainThreadSteps(batch);
     }
 
     private void executePendingMainStep(TickBatch batch, PendingMainStep pending) {
@@ -295,15 +322,6 @@ public final class MachineAsyncCoordinator {
         removeTask(batch, task);
     }
 
-    private void failStalledTasks(TickBatch batch) {
-        for (Task task : batch.tasks.values()) {
-            synchronized (task) {
-                task.cancelled = true;
-            }
-            fail(batch, task, new IllegalStateException("Async continuation made no tick-fence progress"));
-        }
-    }
-
     private void removeTask(TickBatch batch, Task task) {
         tasks.remove(task.key, task);
         batch.tasks.remove(task.key, task);
@@ -329,17 +347,6 @@ public final class MachineAsyncCoordinator {
         progress.incrementAndGet();
         synchronized (progressMonitor) {
             progressMonitor.notifyAll();
-        }
-    }
-
-    private void awaitWorkerProgress(int progressBefore) {
-        synchronized (progressMonitor) {
-            if (progress.get() != progressBefore) return;
-            try {
-                progressMonitor.wait(ServerConfig.asyncWorkerProgressWaitMillis());
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-            }
         }
     }
 

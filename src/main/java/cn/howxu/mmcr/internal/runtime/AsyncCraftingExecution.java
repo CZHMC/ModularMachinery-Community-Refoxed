@@ -25,10 +25,7 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
     private boolean lifecycleYielded;
     private boolean capabilityTickYielded;
     private boolean screenFlushYielded;
-    private boolean unsupportedFallbackYielded;
     private boolean intentCommitYielded;
-    private boolean afterInputsYielded;
-    private boolean afterRecipeYielded;
 
     private AsyncCraftingExecution(AsyncRequirementPlanner.PreparedPlan preparedPlan, String laneId, long catalogVersion) {
         this.preparedPlan = Objects.requireNonNull(preparedPlan, "preparedPlan");
@@ -117,32 +114,11 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
             planResult = preparedPlan.plan();
             planned = true;
         }
-        if (!planResult.mainThreadRequirements().isEmpty() && !unsupportedFallbackYielded) {
-            unsupportedFallbackYielded = true;
-            int requirementIndex = planResult.mainThreadRequirements().getFirst();
-            return AsyncContinuation.Yield.mainThread(
-                    new MainThreadStep.UnsupportedRequirement(requirementIndex, catalogVersion, planResult),
-                    ignored -> this);
-        }
         if (!intentCommitYielded) {
             intentCommitYielded = true;
-            return AsyncContinuation.Yield.mainThread(new MainThreadStep.IntentCommit(laneId, catalogVersion, planResult),
-                    ignored -> this);
-        }
-        if (!afterInputsYielded) {
-            afterInputsYielded = true;
-            return AsyncContinuation.Yield.mainThread(new MainThreadStep.CapabilityTick(CapabilityTickPhase.AFTER_INPUTS,
-                    laneId, catalogVersion), result -> {
-                if (result instanceof MainThreadStep.Result.Value value && Boolean.FALSE.equals(value.value())) {
-                    return ignored -> AsyncContinuation.Yield.complete();
-                }
-                return this;
-            });
-        }
-        if (!afterRecipeYielded) {
-            afterRecipeYielded = true;
-            return AsyncContinuation.Yield.mainThread(new MainThreadStep.CapabilityTick(CapabilityTickPhase.AFTER_RECIPE,
-                    laneId, catalogVersion), ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
+            return AsyncContinuation.Yield.mainThread(
+                    new MainThreadStep.TickTransitionCommit(laneId, catalogVersion, planResult),
+                    ignored -> ignoredContext -> AsyncContinuation.Yield.complete());
         }
         return AsyncContinuation.Yield.complete();
     }

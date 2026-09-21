@@ -7,7 +7,8 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.config.ServerConfig;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -76,7 +77,7 @@ class RecipeThreadTest {
         assertThat(thread.searchAndStartAsyncRecipe(List.of(foreign, valid), 1,
                 controller.runtimeSnapshot().structure().version(), null)).isTrue();
 
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        completeAsyncLevelTick((ServerLevel) controller.getLevel());
 
         assertThat(thread.runtime().active()).isTrue();
         assertThat(thread.runtime().recipe()).isEqualTo(valid);
@@ -94,7 +95,7 @@ class RecipeThreadTest {
 
         assertThat(controller.isRuntimeActive()).isFalse();
 
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        completeAsyncLevelTick((ServerLevel) controller.getLevel());
 
         assertThat(controller.isRuntimeActive()).isTrue();
     }
@@ -110,7 +111,7 @@ class RecipeThreadTest {
 
         controller.serverTick();
         controller.setFormed(false);
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.isRuntimeActive()).isFalse();
 
@@ -118,7 +119,7 @@ class RecipeThreadTest {
         RuntimeTestFixtures.republish(controller);
         RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.isRuntimeActive()).isTrue();
     }
@@ -150,5 +151,12 @@ class RecipeThreadTest {
         RuntimeTestFixtures.republish(controller);
         StructureClaimRegistry.get((ServerLevel) controller.getLevel()).release(controller.getBlockPos());
         return controller;
+    }
+
+    private static void completeAsyncLevelTick(ServerLevel level) {
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 }

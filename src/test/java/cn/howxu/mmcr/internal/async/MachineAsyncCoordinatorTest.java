@@ -126,7 +126,7 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
-    void complete_tick_drains_all_main_steps_yielded_by_its_tick() {
+    void complete_tick_defers_a_worker_continuation_yielded_by_its_main_step_to_the_next_fence() {
         List<String> phases = new CopyOnWriteArrayList<>();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
 
@@ -137,6 +137,9 @@ class MachineAsyncCoordinatorTest {
                                     phases.add("complete");
                                     return AsyncContinuation.Yield.complete();
                                 })));
+
+        coordinator.completeTick();
+        assertThat(phases).containsExactly("first-main");
 
         coordinator.completeTick();
 
@@ -248,7 +251,7 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
-    void complete_tick_waits_for_a_worker_resumed_after_a_main_step() throws InterruptedException {
+    void complete_tick_does_not_wait_for_a_worker_resumed_after_a_main_step() throws InterruptedException {
         ManualExecutor executor = new ManualExecutor();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor);
         AtomicBoolean resumed = new AtomicBoolean();
@@ -259,29 +262,27 @@ class MachineAsyncCoordinatorTest {
                 }));
         executor.runNext();
 
-        Thread completeTick = new Thread(coordinator::completeTick);
-        completeTick.start();
+        coordinator.completeTick();
+
         assertThat(executor.awaitTask()).isTrue();
-        assertThat(completeTick.isAlive()).isTrue();
-
+        assertThat(resumed).isFalse();
         executor.runNext();
-        completeTick.join(1_000L);
-
-        assertThat(completeTick.isAlive()).isFalse();
+        coordinator.completeTick();
         assertThat(resumed).isTrue();
     }
 
     @Test
-    void tick_fence_cancels_a_worker_that_makes_no_observable_progress() {
+    void tick_fence_keeps_an_unfinished_worker_for_a_later_fence() {
         ManualExecutor executor = new ManualExecutor();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
         coordinator.submit(key, ignored -> AsyncContinuation.Yield.complete());
 
         assertThatCode(coordinator::completeTick).doesNotThrowAnyException();
-        assertThat(coordinator.failureFor(key)).isInstanceOf(MainThreadStep.Result.Failure.class);
-        MainThreadStep.Result.Failure failure = (MainThreadStep.Result.Failure) coordinator.failureFor(key);
-        assertThat(failure.cause()).hasMessage("Async continuation made no tick-fence progress");
+        assertThat(coordinator.failureFor(key)).isNull();
+        executor.runNext();
+        coordinator.completeTick();
+        assertThat(coordinator.failureFor(key)).isNull();
     }
 
     @Test
@@ -315,6 +316,24 @@ class MachineAsyncCoordinatorTest {
                         result -> context -> AsyncContinuation.Yield.complete()));
 
         coordinator.completeTick(() -> 0);
+
+        assertThat(newerStepRan).isTrue();
+    }
+
+    @Test
+    void an_unready_worker_from_an_older_tick_does_not_block_a_newer_ready_main_step() {
+        AtomicInteger submissions = new AtomicInteger();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(command -> {
+            if (submissions.getAndIncrement() > 0) command.run();
+        });
+        AtomicBoolean newerStepRan = new AtomicBoolean();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.complete());
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 8L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> newerStepRan.set(true)),
+                        result -> context -> AsyncContinuation.Yield.complete()));
+
+        coordinator.completeTick();
 
         assertThat(newerStepRan).isTrue();
     }
@@ -376,6 +395,8 @@ class MachineAsyncCoordinatorTest {
             return step.execute();
         });
 
+        coordinator.completeTick(() -> sharedIo.resolve(domain));
+        coordinator.completeTick(() -> sharedIo.resolve(domain));
         coordinator.completeTick(() -> sharedIo.resolve(domain));
 
         assertThat(committed).hasValue(1);

@@ -48,6 +48,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
@@ -440,9 +441,9 @@ class MachineControllerBlockEntityTest {
                 MMCR.id("operation_line"), Component.literal("operation"));
 
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        resolveSharedRequests(controller);
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        resolveSharedRequests(controller);
 
         assertThat(runtime.screenText().snapshot().lines())
                 .extracting(ControllerScreenTextSnapshot.Line::scope)
@@ -1782,7 +1783,11 @@ class MachineControllerBlockEntityTest {
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
     private static void startPendingStructureScan(MachineControllerBlockEntity controller, ServerLevel level)

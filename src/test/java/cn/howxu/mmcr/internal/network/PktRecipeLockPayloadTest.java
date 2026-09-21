@@ -8,7 +8,8 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
@@ -60,6 +61,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class PktRecipeLockPayloadTest {
+    private ServerLevel asyncLevel;
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
@@ -74,6 +77,9 @@ class PktRecipeLockPayloadTest {
     @AfterEach
     void clearRecipes() {
         RecipeRegistry.clearForTesting();
+        if (asyncLevel == null) return;
+        MachineAsyncCoordinator.discard(asyncLevel);
+        SharedIoCoordinator.discard(asyncLevel);
     }
 
     @Test
@@ -166,7 +172,11 @@ class PktRecipeLockPayloadTest {
                 List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
         controller.tickRuntimeWork(level, controllerPos);
-        SharedIoEvents.completeLevelTick(level);
+        asyncLevel = level;
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
 
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
 

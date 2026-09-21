@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
@@ -86,6 +87,8 @@ public final class FactoryRuntime {
     private int cachedActiveLaneCount;
     private long cachedSnapshotEpoch = Long.MIN_VALUE;
     private @Nullable FactorySnapshot cachedSnapshot;
+    private final Map<FactoryRecipeThread, LanePresentationCache> lanePresentationCaches = new IdentityHashMap<>();
+    private int presentationBuildCountForTesting;
     private final Set<FactoryRecipeThread> readyLanes = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, AsyncSearchRequest> pendingAsyncSearches = new IdentityHashMap<>();
     private long nextAsyncSearchId;
@@ -623,7 +626,7 @@ public final class FactoryRuntime {
                     lane.runtime().totalTick(), lane.runtime().active() ? lane.runtime().parallelism() : 1,
                     state.failure(), lockedRecipe != null,
                     lockedRecipe == null ? "" : lockedRecipe.toString(),
-                    ControllerRecipePresentation.from(lane.runtime())));
+                    presentationFor(lane)));
         }
         while (snapshots.size() < laneLimit) {
             int index = snapshots.size();
@@ -632,6 +635,10 @@ public final class FactoryRuntime {
                     ControllerRecipePresentation.empty()));
         }
         return List.copyOf(snapshots);
+    }
+
+    int presentationBuildCountForTesting() {
+        return presentationBuildCountForTesting;
     }
 
     public Map<String, ControllerScreenTextSnapshot> screenTextSnapshots() {
@@ -1169,6 +1176,7 @@ public final class FactoryRuntime {
         recipeLocks.remove(lane);
         recipeLockUsed.remove(lane);
         startReservations.remove(lane);
+        lanePresentationCaches.remove(lane);
     }
 
     public void markLaneRuntimeChanged(CraftingRuntime runtime) {
@@ -1212,6 +1220,23 @@ public final class FactoryRuntime {
         activeCountDirty = true;
         failureDirty = true;
         factoryStateEpoch++;
+    }
+
+    private ControllerRecipePresentation presentationFor(FactoryRecipeThread lane) {
+        CraftingRuntime runtime = lane.runtime();
+        ActiveMachineRecipe recipe = runtime.activeRecipe();
+        long parallelism = runtime.active() ? runtime.parallelism() : 0L;
+        LanePresentationCache cached = lanePresentationCaches.get(lane);
+        if (cached != null && cached.recipe == recipe && cached.parallelism == parallelism) return cached.presentation;
+
+        ControllerRecipePresentation presentation = ControllerRecipePresentation.from(runtime);
+        lanePresentationCaches.put(lane, new LanePresentationCache(recipe, parallelism, presentation));
+        presentationBuildCountForTesting++;
+        return presentation;
+    }
+
+    private record LanePresentationCache(@Nullable ActiveMachineRecipe recipe, long parallelism,
+                                         ControllerRecipePresentation presentation) {
     }
 
     private @Nullable PatternLane reservePatternStart(FactoryRecipeThread lane, MachineRecipe recipe,

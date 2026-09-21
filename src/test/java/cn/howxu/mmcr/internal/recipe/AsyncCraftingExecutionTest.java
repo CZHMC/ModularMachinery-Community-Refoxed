@@ -201,7 +201,8 @@ class AsyncCraftingExecutionTest {
         ServerLevel level = (ServerLevel) controller.getLevel();
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
         sharedIo.resolve(level);
-        MachineAsyncCoordinator.get(level).completeTick(() -> sharedIo.resolve(level));
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
     private static final class AsyncPrefetchNetworkCapability extends BlockEntity

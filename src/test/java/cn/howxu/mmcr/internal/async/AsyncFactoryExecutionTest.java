@@ -95,13 +95,13 @@ class AsyncFactoryExecutionTest {
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
 
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(2);
 
         RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
@@ -122,7 +122,7 @@ class AsyncFactoryExecutionTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
@@ -135,7 +135,7 @@ class AsyncFactoryExecutionTest {
 
         RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(lane -> lane.active())
@@ -154,7 +154,7 @@ class AsyncFactoryExecutionTest {
         controller.serverTick();
         RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 15);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
@@ -168,7 +168,7 @@ class AsyncFactoryExecutionTest {
         RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 0);
         RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(2);
     }
@@ -182,13 +182,13 @@ class AsyncFactoryExecutionTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
         long beforeFinishEpoch = controller.resourceAvailabilityEpoch();
 
         for (int pass = 0; pass < 3 && controller.resourceAvailabilityEpoch() == beforeFinishEpoch; pass++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(level);
+            completeAsyncLevelTick(level);
         }
 
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeFinishEpoch + 1L);
@@ -196,7 +196,7 @@ class AsyncFactoryExecutionTest {
                 && !controller.runtimeSnapshot().factory().presentationLanes().getFirst().active(); pass++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(level);
+            completeAsyncLevelTick(level);
         }
         assertThat(controller.runtimeSnapshot().factory().presentationLanes()).singleElement().satisfies(lane -> {
             assertThat(lane.active()).isTrue();
@@ -215,7 +215,7 @@ class AsyncFactoryExecutionTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
         FactoryRuntime runtime = factoryRuntime(controller);
         assertThat(runtime.toggleRecipeLock(0)).isTrue();
         MachineRecipe lockedFailure = RecipeTestSupport.create(locked.id(), MMCR.id("test_cube"), 20,
@@ -227,7 +227,7 @@ class AsyncFactoryExecutionTest {
         for (int pass = 0; pass < 8 && runtime.searchAttemptsForTesting() == initialAttempts; pass++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(level);
+            completeAsyncLevelTick(level);
         }
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount())
@@ -237,7 +237,7 @@ class AsyncFactoryExecutionTest {
 
         RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(runtime.searchAttemptsForTesting()).isEqualTo(attemptsAfterFailure);
         assertThat(runtime.toggleRecipeLock(0)).isTrue();
@@ -245,7 +245,7 @@ class AsyncFactoryExecutionTest {
         for (int pass = 0; pass < 8 && controller.runtimeSnapshot().factory().activeLaneCount() == 0; pass++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(level);
+            completeAsyncLevelTick(level);
         }
 
         assertThat(controller.runtimeSnapshot().factory().presentationLanes()).singleElement().satisfies(lane -> {
@@ -272,7 +272,7 @@ class AsyncFactoryExecutionTest {
 
         for (int pass = 0; pass < 8 && controller.runtimeSnapshot().factory().activeLaneCount() == 0; pass++) {
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(level);
+            completeAsyncLevelTick(level);
             RuntimeTestFixtures.advanceGameTime(level);
         }
 
@@ -298,7 +298,7 @@ class AsyncFactoryExecutionTest {
 
         controller.serverTick();
         factoryRuntime(controller).setLaneLimit(1);
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().presentationLanes()).hasSize(1);
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
@@ -378,7 +378,7 @@ class AsyncFactoryExecutionTest {
 
         for (int pass = 0; pass < 8; pass++) {
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(level);
+            completeAsyncLevelTick(level);
             RuntimeTestFixtures.advanceGameTime(level);
         }
 
@@ -419,6 +419,13 @@ class AsyncFactoryExecutionTest {
             if (!stack.isEmpty()) storage.insert(0, ItemResource.of(stack), stack.getCount(), transaction);
             transaction.commit();
         }
+    }
+
+    private static void completeAsyncLevelTick(ServerLevel level) {
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
 

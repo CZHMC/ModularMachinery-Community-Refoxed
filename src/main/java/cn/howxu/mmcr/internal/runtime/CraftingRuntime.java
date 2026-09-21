@@ -735,13 +735,15 @@ public final class CraftingRuntime {
 
     public boolean versionsCurrent() {
         if (!active()) return true;
-        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        return structureVersion == runtime.structure().version()
-                && capabilityVersion == runtime.capabilityVersion()
-                && modifierVersion == runtime.modifierVersion()
-                && componentStateVersion == runtime.stateVersion()
-                && upgradeContentRevision == runtime.upgradeContentRevision()
-                && recipeBelongsToMachine(activeRecipe.getRecipe(), runtime);
+        StructureSnapshot structure = controller.currentStructureSnapshot();
+        ComponentRuntime components = controller.componentRuntime();
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        return structureVersion == structure.version()
+                && capabilityVersion == components.capabilityVersion()
+                && modifierVersion == components.modifierVersion()
+                && componentStateVersion == components.stateVersion()
+                && upgradeContentRevision == components.upgradeContentRevision()
+                && recipeBelongsToMachine(activeRecipe.getRecipe(), machine);
     }
 
     public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
@@ -1341,6 +1343,11 @@ public final class CraftingRuntime {
 
     private static boolean recipeBelongsToMachine(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
         Identifier recipePoolId = recipePoolId(runtime);
+        return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
+    }
+
+    private static boolean recipeBelongsToMachine(MachineRecipe recipe, @Nullable Machine machine) {
+        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 

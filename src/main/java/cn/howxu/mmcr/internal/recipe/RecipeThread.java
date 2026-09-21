@@ -412,9 +412,8 @@ public abstract class RecipeThread {
     }
 
     private long currentCatalogVersion() {
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+        var structure = controller.currentStructureSnapshot();
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         return RecipeRegistry.catalogForMachine(machine).version();
     }
 
@@ -505,21 +504,38 @@ public abstract class RecipeThread {
 
     private void requestTick(ServerLevel level, StructureClaimRegistry.ResourceDomain domain) {
         long token = beginPendingTick(domain);
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        long structureVersion = snapshot.structure().version();
+        long structureVersion = controller.currentStructureSnapshot().version();
+        long stateVersion = controller.componentRuntime().stateVersion();
         long catalogVersion = currentCatalogVersion();
         long lifecycleEpoch = controller.lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
-                snapshot.stateVersion(),
+                stateVersion,
                 () -> {
                     if (!validateCurrentRuntime(token, domain)) return false;
+                    if (!runtime.prepareAsyncTick()) {
+                        finishAsyncTick();
+                        return true;
+                    }
+                    if (!runtime.executeAsyncCapabilityTick(CapabilityTickPhase.BEFORE_RECIPE)) {
+                        runtime.discardAsyncTickPreparation();
+                        runtime.flushAsyncScreenText();
+                        finishAsyncTick();
+                        return true;
+                    }
+                    AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan();
+                    runtime.flushAsyncScreenText();
+                    if (preparedPlan == null) {
+                        finishAsyncTick();
+                        return true;
+                    }
                     MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(level).submitDetailed(
                             new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), level.getGameTime(),
                                     controller.activeWorkMode(), asyncLaneId(), lifecycleEpoch),
-                            AsyncCraftingExecution.tick(asyncLaneId(), catalogVersion), this::executeAsyncMainStep);
+                            AsyncCraftingExecution.plan(preparedPlan, asyncLaneId(), catalogVersion),
+                            this::executeAsyncMainStep);
                     if (submission == MachineAsyncCoordinator.SubmissionResult.REJECTED) clearPendingTick();
                     return submission != MachineAsyncCoordinator.SubmissionResult.REJECTED;
                 },
@@ -530,8 +546,8 @@ public abstract class RecipeThread {
                       if (!valid) clearPendingTick();
                       return valid;
                 },
-                  () -> controller.currentRuntimeSnapshot().structure().version(),
-                  () -> controller.currentRuntimeSnapshot().stateVersion(),
+                  () -> controller.currentStructureSnapshot().version(),
+                  () -> controller.componentRuntime().stateVersion(),
                    catalogVersion,
                   this::currentCatalogVersion,
                   () -> { }
@@ -683,6 +699,14 @@ public abstract class RecipeThread {
                 return MainThreadStep.Result.failure(new IllegalStateException("Missing async finish continuation"));
             }
         }
+        if (step instanceof MainThreadStep.TickTransitionCommit transition) {
+            if (controller.getLevel() instanceof ServerLevel level && pendingTickDomain != null) {
+                enqueueAsyncTickTransition(level, pendingTickDomain, pendingTickToken, key,
+                        transition.catalogVersion(), transition.intent());
+                return MainThreadStep.Result.pending();
+            }
+            return MainThreadStep.Result.failure(new IllegalStateException("Missing async tick transition context"));
+        }
         if (step instanceof MainThreadStep.UnsupportedRequirement unsupported) {
             if (controller.getLevel() instanceof ServerLevel level && pendingTickDomain != null) {
                 enqueueAsyncTickIntent(level, pendingTickDomain, pendingTickToken, key,
@@ -755,7 +779,8 @@ public abstract class RecipeThread {
                     && snapshot.recipePoolId().equals(recipePoolForMachine(current))
                     && snapshot.recipePoolId().equals(pending.recipe().recipePoolId());
         }
-        long catalogVersion = step instanceof MainThreadStep.IntentCommit intent ? intent.catalogVersion()
+        long catalogVersion = step instanceof MainThreadStep.TickTransitionCommit transition ? transition.catalogVersion()
+                : step instanceof MainThreadStep.IntentCommit intent ? intent.catalogVersion()
                 : step instanceof MainThreadStep.UnsupportedRequirement unsupported ? unsupported.catalogVersion()
                 : step instanceof MainThreadStep.SharedIoRequest request ? request.catalogVersion()
                 : step instanceof MainThreadStep.Lifecycle lifecycle ? lifecycle.catalogVersion()
@@ -789,7 +814,40 @@ public abstract class RecipeThread {
                     return valid;
                 }, () -> controller.currentRuntimeSnapshot().structure().version(),
                 () -> controller.currentRuntimeSnapshot().stateVersion(), catalogVersion, this::currentCatalogVersion,
-                () -> MachineAsyncCoordinator.get(level).resume(key)));
+                 () -> MachineAsyncCoordinator.get(level).resume(key)));
+    }
+
+    private void enqueueAsyncTickTransition(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token,
+                                            MachineAsyncCoordinator.TaskKey key, long catalogVersion,
+                                            AsyncRequirementPlanner.PlanResult intent) {
+        long structureVersion = controller.currentStructureSnapshot().version();
+        long stateVersion = controller.componentRuntime().stateVersion();
+        long lifecycleEpoch = controller.lifecycleEpoch();
+        SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
+                new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()), structureVersion,
+                stateVersion, () -> {
+                    if (!validateCurrentRuntime(token, domain)) return false;
+                    boolean committed = runtime.commitAsyncTick(intent);
+                    if (committed && runtime.completeAsyncTickAfterInputs()) {
+                        runtime.completeAsyncTickAfterRecipe();
+                    } else if (!committed) {
+                        runtime.discardAsyncTickPreparation();
+                    }
+                    finishAsyncTick();
+                    MachineAsyncCoordinator.get(level).complete(key);
+                    return true;
+                }, () -> {
+                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
+                            && validateCurrentRuntime(token, domain);
+                    boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
+                    if (!valid) {
+                        clearPendingTick();
+                        MachineAsyncCoordinator.get(level).complete(key);
+                    }
+                    return valid;
+                }, () -> controller.currentStructureSnapshot().version(),
+                () -> controller.componentRuntime().stateVersion(), catalogVersion, this::currentCatalogVersion,
+                () -> MachineAsyncCoordinator.get(level).complete(key)));
     }
 
     private boolean validateCurrentRuntime(long token, @Nullable StructureClaimRegistry.ResourceDomain domain) {

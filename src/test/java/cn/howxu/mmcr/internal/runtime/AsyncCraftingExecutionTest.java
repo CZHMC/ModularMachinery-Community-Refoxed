@@ -42,7 +42,7 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
-    void unsupported_requirements_are_yielded_before_the_intent_commit() {
+    void unsupported_requirements_are_carried_by_the_single_tick_transition() {
         AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(),
                 List.of(3));
         AsyncCraftingExecution execution = AsyncCraftingExecution.plan(prepared, "base");
@@ -50,11 +50,10 @@ class AsyncCraftingExecutionTest {
         AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
         assertThat(((AsyncContinuation.Yield.MainThread) first).step())
-                .isInstanceOf(MainThreadStep.UnsupportedRequirement.class);
-        MainThreadStep.UnsupportedRequirement unsupported =
-                (MainThreadStep.UnsupportedRequirement) ((AsyncContinuation.Yield.MainThread) first).step();
-        assertThat(unsupported.requirementIndex()).isEqualTo(3);
-        assertThat(unsupported.intent()).isNotNull();
+                .isInstanceOf(MainThreadStep.TickTransitionCommit.class);
+        MainThreadStep.TickTransitionCommit transition =
+                (MainThreadStep.TickTransitionCommit) ((AsyncContinuation.Yield.MainThread) first).step();
+        assertThat(transition.intent().mainThreadRequirements()).containsExactly(3);
     }
 
     @Test
@@ -118,27 +117,22 @@ class AsyncCraftingExecutionTest {
                         new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
 
         assertThat(((AsyncContinuation.Yield.MainThread) next).step())
-                .isInstanceOf(MainThreadStep.IntentCommit.class);
+                .isInstanceOf(MainThreadStep.TickTransitionCommit.class);
     }
 
     @Test
-    void tick_batches_preparation_and_keeps_commit_phases_ordered() {
+    void tick_yields_one_transition_for_all_post_plan_commit_phases() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
         AsyncExecutionContext context = new AsyncExecutionContext(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L));
         AsyncContinuation.Yield.MainThreadBatch preparation = (AsyncContinuation.Yield.MainThreadBatch) execution.advance(context);
         AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
-        AsyncContinuation.Yield.MainThread intent = (AsyncContinuation.Yield.MainThread) preparation.resume()
+        AsyncContinuation.Yield.MainThread transition = (AsyncContinuation.Yield.MainThread) preparation.resume()
                 .apply(List.of(MainThreadStep.Result.success(), MainThreadStep.Result.success(),
                         MainThreadStep.Result.value(prepared))).advance(context);
-        AsyncContinuation.Yield.MainThread afterInputs = (AsyncContinuation.Yield.MainThread) intent.resume()
-                .apply(MainThreadStep.Result.success()).advance(context);
-        AsyncContinuation.Yield.MainThread afterRecipe = (AsyncContinuation.Yield.MainThread) afterInputs.resume()
-                .apply(MainThreadStep.Result.value(true)).advance(context);
 
-        assertThat(afterInputs.step()).isEqualTo(new MainThreadStep.CapabilityTick(
-                cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.AFTER_INPUTS, "base", 1L));
-        assertThat(afterRecipe.step()).isEqualTo(new MainThreadStep.CapabilityTick(
-                cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.AFTER_RECIPE, "base", 1L));
+        assertThat(transition.step()).isInstanceOf(MainThreadStep.TickTransitionCommit.class);
+        assertThat(transition.resume().apply(MainThreadStep.Result.success()).advance(context))
+                .isInstanceOf(AsyncContinuation.Yield.Complete.class);
     }
 
     @Test
@@ -164,8 +158,8 @@ class AsyncCraftingExecutionTest {
                 new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L, MachineWorkMode.ASYNC, "factory-0")));
 
         AsyncContinuation.Yield.MainThread mainThread = (AsyncContinuation.Yield.MainThread) yield;
-        assertThat(mainThread.step()).isInstanceOf(MainThreadStep.IntentCommit.class);
-        assertThat(((MainThreadStep.IntentCommit) mainThread.step()).laneId()).isEqualTo("factory-0");
-        assertThat(((MainThreadStep.IntentCommit) mainThread.step()).catalogVersion()).isEqualTo(7L);
+        assertThat(mainThread.step()).isInstanceOf(MainThreadStep.TickTransitionCommit.class);
+        assertThat(((MainThreadStep.TickTransitionCommit) mainThread.step()).laneId()).isEqualTo("factory-0");
+        assertThat(((MainThreadStep.TickTransitionCommit) mainThread.step()).catalogVersion()).isEqualTo(7L);
     }
 }

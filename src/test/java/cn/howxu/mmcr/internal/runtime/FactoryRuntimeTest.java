@@ -129,6 +129,23 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void advancing_an_active_lane_reuses_its_recipe_presentation() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe recipe = recipe("factory_presentation_cache", 20);
+
+        runtime.tick(List.of(recipe), 1);
+        runtime.snapshot();
+        int presentationBuilds = runtime.presentationBuildCountForTesting();
+
+        runtime.tick(List.of(recipe), 1);
+        runtime.snapshot();
+
+        assertThat(runtime.presentationBuildCountForTesting()).isEqualTo(presentationBuilds);
+    }
+
+    @Test
     void searchContextUsesTheConfiguredMachineRecipePoolCatalog() {
         Identifier machineId = MMCR.id("factory_shared_pool_machine");
         Identifier recipePoolId = MMCR.id("factory_shared_pool");
@@ -746,7 +763,7 @@ class FactoryRuntimeTest {
         thread.tick();
         SharedIoCoordinator.get(level).resolve(controller.resourceDomain());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, replacement));
-        MachineAsyncCoordinator.get(level).completeTick(() -> SharedIoCoordinator.get(level).resolve(level));
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> SharedIoCoordinator.get(level).resolve(level));
 
         assertThat(thread.runtime().active()).isFalse();
         assertThat(thread.runtime().tickCount()).isZero();
@@ -1752,7 +1769,8 @@ class FactoryRuntimeTest {
             ServerLevel level = (ServerLevel) controller.getLevel();
             SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
             sharedIo.resolve(controller.resourceDomain());
-            MachineAsyncCoordinator.get(level).completeTick(() -> sharedIo.resolve(level));
+            MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+            MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
         }
     }
 

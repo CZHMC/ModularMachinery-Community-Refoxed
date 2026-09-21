@@ -291,7 +291,7 @@ class MachineWorkModeIntegrationTest {
         } else {
             assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
         }
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
 
         RuntimeTestFixtures.advanceGameTime(level);
@@ -302,12 +302,12 @@ class MachineWorkModeIntegrationTest {
             SharedIoCoordinator.get(level).resolve(level);
             assertThat(hasPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
         }
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
 
         for (int tick = 0; tick < 5 && !phases.contains("finish"); tick++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(level);
+            completeAsyncLevelTick(level);
         }
 
         assertThat(phases).containsSubsequence("start", "tick", "finish");
@@ -323,8 +323,15 @@ class MachineWorkModeIntegrationTest {
     private static void tickAndComplete(MachineControllerBlockEntity controller) {
         ServerLevel level = (ServerLevel) controller.getLevel();
         controller.tickRuntimeWork(level, controller.getBlockPos());
-        SharedIoEvents.completeLevelTick(level);
+        completeAsyncLevelTick(level);
         RuntimeTestFixtures.advanceGameTime(level);
+    }
+
+    private static void completeAsyncLevelTick(ServerLevel level) {
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
     private void assertLifecycleInterruptCancelsRecipeThreadSharedIo(

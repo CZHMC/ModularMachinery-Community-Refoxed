@@ -36,6 +36,7 @@ public final class SharedIoEvents {
         async.completeTick(() -> sharedIo.resolve(level));
         sharedIo.resolve(level);
         async.completeTick(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
         if (level.getServer() != null) NetworkInterfaceBindingCoordinator.heartbeat(level);
     }
 

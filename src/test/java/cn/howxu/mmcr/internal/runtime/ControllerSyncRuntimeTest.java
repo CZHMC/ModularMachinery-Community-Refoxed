@@ -26,6 +26,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -69,6 +71,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * @author howxu <dev@howxu.cn>
  */
 class ControllerSyncRuntimeTest {
+    private ServerLevel level;
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
@@ -77,6 +81,9 @@ class ControllerSyncRuntimeTest {
     @AfterEach
     void clearRecipes() {
         RecipeRegistry.clearForTesting();
+        if (level == null) return;
+        MachineAsyncCoordinator.discard(level);
+        SharedIoCoordinator.discard(level);
     }
 
     @Test
@@ -416,7 +423,7 @@ class ControllerSyncRuntimeTest {
         RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        resolveSharedRequests(controller);
         MachineStateSnapshot state = new ControllerSyncRuntime().machineState(controller.runtimeSnapshot());
 
         assertThat(state.active()).isFalse();
@@ -500,8 +507,12 @@ class ControllerSyncRuntimeTest {
                 true, true, 1, 2, 8, Map.of());
     }
 
-    private static void resolveSharedRequests(MachineControllerBlockEntity controller) {
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+    private void resolveSharedRequests(MachineControllerBlockEntity controller) {
+        level = (ServerLevel) controller.getLevel();
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
 }
