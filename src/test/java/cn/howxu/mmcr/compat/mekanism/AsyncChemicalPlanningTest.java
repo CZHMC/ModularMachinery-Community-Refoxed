@@ -12,8 +12,15 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
@@ -36,6 +43,8 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,6 +77,47 @@ class AsyncChemicalPlanningTest {
         assertThat(((AsyncCapabilityOperation.Group) operation).operations())
                 .containsExactly(new AsyncCapabilityOperation.Resource(capability.type().id(), 0,
                         snapshot.slots().getFirst().resource().orElseThrow(), 100L, false));
+    }
+
+    @Test
+    void crafting_context_prepares_full_chance_chemical_input_for_async_extraction() throws Exception {
+        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_async_oxygen"));
+
+        Object prepared = prepareChemicalInput(oxygen, 1F, 3L);
+
+        assertThat(prepared).isInstanceOf(AsyncRequirementPlanner.Requirement.class);
+        AsyncRequirementPlanner.Requirement requirement = (AsyncRequirementPlanner.Requirement) prepared;
+        assertThat(requirement.amount()).isEqualTo(300L);
+        assertThat(requirement.direction()).isEqualTo(IOType.INPUT);
+        assertThat(requirement.requests()).singleElement().isInstanceOf(AsyncCapabilityRequest.Resource.class);
+        AsyncCapabilityRequest.Resource request = (AsyncCapabilityRequest.Resource) requirement.requests().getFirst();
+        assertThat(request.capabilityId()).isEqualTo(MekanismRecipeTypes.CHEMICAL);
+        assertThat(request.parallelism()).isEqualTo(3L);
+        assertThat(request.actions()).containsExactly(new AsyncResourceAction(NativeAsyncResourceValues.chemical(oxygen),
+                300L, false));
+    }
+
+    @Test
+    void crafting_context_keeps_zero_chance_chemical_input_on_the_main_thread() throws Exception {
+        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_zero_oxygen"));
+
+        assertThat(prepareChemicalInput(oxygen, 0F)).isNull();
+    }
+
+    @Test
+    void crafting_context_keeps_partial_chance_chemical_input_on_the_main_thread() throws Exception {
+        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_partial_oxygen"));
+
+        assertThat(prepareChemicalInput(oxygen, 0.5F)).isNull();
+    }
+
+    @Test
+    void crafting_context_keeps_tag_chemical_input_on_the_main_thread() throws Exception {
+        ChemicalResource oxygen = ChemicalResource.of(registerChemical("crafting_context_tag_oxygen"));
+        LoadedChemicalRequirement input = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.tag(Identifier.parse("mmcr_test:crafting_context_tag"), 100L), 1F, List.of(), 1F);
+
+        assertThat(prepareChemicalInput(input, oxygen, 1L)).isNull();
     }
 
     @Test
@@ -143,9 +193,34 @@ class AsyncChemicalPlanningTest {
     }
 
     private static CapabilityResult commit(AsyncPlanningFacet facet, AsyncCapabilityOperation operation,
-                                           TransactionContext transaction) throws Exception {
+                                            TransactionContext transaction) throws Exception {
         return (CapabilityResult) invoke(facet, "commitOnServerThread", AsyncCapabilityOperation.class,
                 TransactionContext.class, operation, transaction);
+    }
+
+    private static Object prepareChemicalInput(ChemicalResource chemical, float consumeChance) throws Exception {
+        return prepareChemicalInput(chemical, consumeChance, 1L);
+    }
+
+    private static Object prepareChemicalInput(ChemicalResource chemical, float consumeChance, long parallelism)
+            throws Exception {
+        LoadedChemicalRequirement input = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(Identifier.parse(chemical.typeHolder().getRegisteredName()), 100L), 1F,
+                List.of(), consumeChance);
+        return prepareChemicalInput(input, chemical, parallelism);
+    }
+
+    private static Object prepareChemicalInput(LoadedChemicalRequirement input, ChemicalResource chemical,
+                                               long parallelism) throws Exception {
+        AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
+                new AsyncCapabilityPlanner.Resource(input.type().id()),
+                new AsyncCapabilitySnapshot.Resource(input.type().id(), List.of(
+                        new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(NativeAsyncResourceValues.chemical(chemical)),
+                                1_000L, 1_000L))), Set.of(IOType.INPUT));
+        Method method = CraftingContext.class.getDeclaredMethod("prepareAsyncRequirement", int.class,
+                MachineRequirement.class, long.class, List.class);
+        method.setAccessible(true);
+        return method.invoke(null, 0, input, parallelism, List.of(capability));
     }
 
     private static Object invoke(AsyncPlanningFacet facet, String name, Class<?>... parameterTypes) throws Exception {

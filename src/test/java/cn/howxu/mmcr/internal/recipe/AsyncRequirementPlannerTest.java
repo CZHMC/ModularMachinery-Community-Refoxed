@@ -12,7 +12,12 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -21,13 +26,29 @@ import cn.howxu.mmcr.internal.storage.BulkItemStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.SystemReport;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.server.players.NameAndId;
+import net.minecraft.util.debugchart.SampleLogger;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+import java.io.IOException;
+import java.net.Proxy;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -94,6 +115,60 @@ class AsyncRequirementPlannerTest {
     }
 
     @Test
+    void zero_consume_chance_item_input_does_not_create_an_async_extraction_request() throws Exception {
+        BulkItemStorage storage = new BulkItemStorage(64L, null);
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        try (Transaction transaction = Transaction.openRoot()) {
+            storage.insert(0, iron, 2L, transaction);
+            transaction.commit();
+        }
+        ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
+                ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F);
+        CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(
+                new ItemBusCapability(storage, IOType.INPUT))));
+
+        installCurrentServerForTesting();
+        AsyncRequirementPlanner.PreparedPlan prepared;
+        try {
+            prepared = context.planAsync(List.of(input), 1L);
+        } finally {
+            clearCurrentServerForTesting();
+        }
+        assertThat(prepared.initialMainThreadRequirements()).containsExactly(0);
+        var fallback = context.planInputRequirements(List.of(input), 1L, Set.of(), Set.of());
+        assertThat(fallback.successful()).isTrue();
+        assertThat(fallback.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(2L);
+    }
+
+    @Test
+    void partial_consume_chance_item_input_does_not_create_an_async_extraction_request() throws Exception {
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2,
+                ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0.5F);
+
+        assertThat(prepareAsyncInput(input, NativeAsyncResourceValues.item(iron), 2L)).isNull();
+    }
+
+    @Test
+    void zero_consume_chance_fluid_input_does_not_create_an_async_extraction_request() throws Exception {
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        FluidRequirement input = new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 100,
+                FluidStack.EMPTY, 1F, List.of(), 0F);
+
+        assertThat(prepareAsyncInput(input, NativeAsyncResourceValues.fluid(water), 100L)).isNull();
+    }
+
+    @Test
+    void partial_consume_chance_fluid_input_does_not_create_an_async_extraction_request() throws Exception {
+        FluidResource water = FluidResource.of(Fluids.WATER);
+        FluidRequirement input = new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 100,
+                FluidStack.EMPTY, 1F, List.of(), 0.5F);
+
+        assertThat(prepareAsyncInput(input, NativeAsyncResourceValues.fluid(water), 100L)).isNull();
+    }
+
+    @Test
     void resource_group_commit_rolls_back_its_prefix_when_a_later_operation_is_rejected() throws Exception {
         BulkItemStorage storage = new BulkItemStorage(64L, null);
         ItemResource iron = ItemResource.of(Items.IRON_INGOT);
@@ -150,6 +225,127 @@ class AsyncRequirementPlannerTest {
         return new AsyncRequirementPlanner.Capability(new AsyncCapabilityPlanner.Resource(capabilityId),
                 new AsyncCapabilitySnapshot.Resource(capabilityId, List.of(
                         new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(resource), amount, capacity))));
+    }
+
+    private static Object prepareAsyncInput(MachineRequirement input, AsyncResourceValue resource, long amount)
+            throws Exception {
+        AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
+                new AsyncCapabilityPlanner.Resource(input.type().id()),
+                new AsyncCapabilitySnapshot.Resource(input.type().id(), List.of(
+                        new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(resource), amount, amount))), Set.of(IOType.INPUT));
+        Method method = CraftingContext.class.getDeclaredMethod("prepareAsyncRequirement", int.class,
+                MachineRequirement.class, long.class, List.class);
+        method.setAccessible(true);
+        return method.invoke(null, 0, input, 1L, List.of(capability));
+    }
+
+    private static void installCurrentServerForTesting() throws Exception {
+        TestServer server = allocate(TestServer.class);
+        server.serverThread = Thread.currentThread();
+        Field currentServer = ServerLifecycleHooks.class.getDeclaredField("currentServer");
+        currentServer.setAccessible(true);
+        currentServer.set(null, server);
+    }
+
+    private static void clearCurrentServerForTesting() throws Exception {
+        Field currentServer = ServerLifecycleHooks.class.getDeclaredField("currentServer");
+        currentServer.setAccessible(true);
+        currentServer.set(null, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T allocate(Class<T> type) throws Exception {
+        Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+        field.setAccessible(true);
+        return (T) ((sun.misc.Unsafe) field.get(null)).allocateInstance(type);
+    }
+
+    /**
+     * Minimal server identity used to exercise AsyncPlanningFacet's main-thread guard.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class TestServer extends MinecraftServer {
+        private Thread serverThread;
+
+        private TestServer() {
+            super(null, null, null, null, Optional.empty(), Proxy.NO_PROXY, null, null, null, false);
+        }
+
+        @Override
+        public Thread getRunningThread() {
+            return serverThread;
+        }
+
+        @Override
+        protected boolean initServer() throws IOException {
+            return false;
+        }
+
+        @Override
+        public LevelBasedPermissionSet operatorUserPermissions() {
+            return LevelBasedPermissionSet.ALL;
+        }
+
+        @Override
+        public LevelBasedPermissionSet getFunctionCompilationPermissions() {
+            return LevelBasedPermissionSet.OWNER;
+        }
+
+        @Override
+        public boolean shouldRconBroadcast() {
+            return false;
+        }
+
+        @Override
+        public boolean isDedicatedServer() {
+            return false;
+        }
+
+        @Override
+        public int getRateLimitPacketsPerSecond() {
+            return 0;
+        }
+
+        @Override
+        public boolean useNativeTransport() {
+            return false;
+        }
+
+        @Override
+        public boolean isPublished() {
+            return false;
+        }
+
+        @Override
+        public boolean shouldInformAdmins() {
+            return false;
+        }
+
+        @Override
+        public boolean isSingleplayerOwner(NameAndId nameAndId) {
+            return false;
+        }
+
+        @Override
+        protected SampleLogger getTickTimeLogger() {
+            return null;
+        }
+
+        @Override
+        public boolean isTickTimeLoggingEnabled() {
+            return false;
+        }
+
+        @Override
+        public int getMaxPlayers() {
+            return 1;
+        }
+
+        @Override
+        public SystemReport fillServerSystemReport(SystemReport report) {
+            return report;
+        }
     }
 
     private static CapabilityResult commit(ItemBusCapability capability, AsyncCapabilityOperation operation,

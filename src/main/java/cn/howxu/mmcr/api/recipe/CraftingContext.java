@@ -13,11 +13,13 @@ import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
@@ -213,7 +215,8 @@ public final class CraftingContext {
         if (requirement instanceof ItemRequirement item) {
             long amount = item.io() == RecipeModifier.IOType.INPUT
                     ? scaled(item.count(), parallelism) : scaled(item.stack(null).getCount(), parallelism);
-            if (amount <= 0L || (item.io() == RecipeModifier.IOType.INPUT && item.item() == null)) return null;
+            if (amount <= 0L || (item.io() == RecipeModifier.IOType.INPUT
+                    && (item.item() == null || item.consumeChance() < 1F))) return null;
             List<AsyncCapabilityRequest> requests = new ArrayList<>();
             if (item.io() == RecipeModifier.IOType.INPUT) {
                 for (AsyncResourceValue value : resources(capabilities, item.type().id(), IOType.INPUT)) {
@@ -237,7 +240,8 @@ public final class CraftingContext {
         if (requirement instanceof FluidRequirement fluid) {
             long amount = fluid.io() == RecipeModifier.IOType.INPUT
                     ? scaled(fluid.amount(), parallelism) : scaled(fluid.stack().getAmount(), parallelism);
-            if (amount <= 0L || (fluid.io() == RecipeModifier.IOType.INPUT && fluid.fluid() == null)) return null;
+            if (amount <= 0L || (fluid.io() == RecipeModifier.IOType.INPUT
+                    && (fluid.fluid() == null || fluid.consumeChance() < 1F))) return null;
             List<AsyncCapabilityRequest> requests = new ArrayList<>();
             if (fluid.io() == RecipeModifier.IOType.INPUT) {
                 for (AsyncResourceValue value : resources(capabilities, fluid.type().id(), IOType.INPUT)) {
@@ -257,6 +261,20 @@ public final class CraftingContext {
             }
             return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
                     IOType.valueOf(fluid.io().name()), requests);
+        }
+        if (requirement instanceof LoadedChemicalRequirement chemical) {
+            if (chemical.io() != RecipeModifier.IOType.INPUT || chemical.consumeChance() < 1F
+                    || chemical.ingredient().kind() != ChemicalIngredient.Kind.CHEMICAL) return null;
+            long amount = scaled(chemical.ingredient().amount(), parallelism);
+            if (amount <= 0L) return null;
+            List<AsyncCapabilityRequest> requests = new ArrayList<>();
+            for (AsyncResourceValue value : resources(capabilities, chemical.type().id(), IOType.INPUT)) {
+                if (chemical.ingredient().id().equals(value.resourceId())) {
+                    requests.add(resourceRequest(chemical.type().id(), parallelism, value, amount, false));
+                }
+            }
+            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount, IOType.INPUT,
+                    requests);
         }
         if (requirement instanceof EnergyRequirement energy && energy.fePerTick() > 0L) {
             return new AsyncRequirementPlanner.Requirement(index, scaled(energy.fePerTick(), parallelism),
