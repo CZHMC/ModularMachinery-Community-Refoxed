@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.LevelType;
@@ -152,6 +153,7 @@ class MachineRecipeJsonTest {
         energyRequirement.addProperty("fe_per_tick", 80);
         var requirements = new JsonArray();
         requirements.add(levelRequirement());
+        requirements.add(stageRequirement());
         requirements.add(explicit);
         requirements.add(energyRequirement);
         var fluidRequirement = new JsonObject();
@@ -166,7 +168,7 @@ class MachineRecipeJsonTest {
         var recipe = MachineRecipeJson.parse(id("complex"), json, registries);
 
         assertThat(recipe.requirements()).filteredOn(requirement -> requirement.io() == RecipeModifier.IOType.INPUT)
-                .hasSize(3);
+                .hasSize(4);
         assertThat(recipe.requirements()).filteredOn(EnergyRequirement.class::isInstance).singleElement()
                 .isInstanceOfSatisfying(EnergyRequirement.class, energy -> assertThat(energy.fePerTick()).isEqualTo(80));
         assertThat(recipe.machineOutputs()).filteredOn(MachineOutput.ItemOutput.class::isInstance).singleElement()
@@ -194,6 +196,7 @@ class MachineRecipeJsonTest {
             assertThat(level.levelId()).isEqualTo(Identifier.parse("mmcr:test_level"));
         });
         assertThat(recipe.requirements()).anyMatch(LevelRequirement.class::isInstance);
+        assertThat(recipe.stageRequirements()).containsExactly(StageRequirement.input(2));
         assertThat(recipe.requirements()).anyMatch(ItemRequirement.class::isInstance);
         assertThat(recipe.requirements().stream().filter(ItemRequirement.class::isInstance).findFirst().orElseThrow())
                 .isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
@@ -202,9 +205,15 @@ class MachineRecipeJsonTest {
         });
         assertThat(recipe.requirements().stream().filter(ItemRequirement.class::isInstance).findFirst().orElseThrow())
                 .isInstanceOfSatisfying(ItemRequirement.class, requirement -> {
-            assertThat(requirement.components().isEmpty()).isFalse();
-            assertThat(requirement.consumeChance()).isEqualTo(0.5F);
-        });
+                    assertThat(requirement.components().isEmpty()).isFalse();
+                    assertThat(requirement.consumeChance()).isEqualTo(0.5F);
+                });
+
+        var ops = RegistryOps.create(JsonOps.INSTANCE,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        var encoded = MachineRecipe.CODEC.codec().encodeStart(ops, recipe).getOrThrow();
+        var decoded = MachineRecipe.CODEC.codec().parse(ops, encoded).getOrThrow();
+        assertThat(decoded.stageRequirements()).containsExactly(StageRequirement.input(2));
     }
 
     @Test
@@ -450,6 +459,13 @@ class MachineRecipeJsonTest {
         level.addProperty("level_type", "mmcr:test_level_type");
         level.addProperty("level", "mmcr:test_level");
         return level;
+    }
+
+    private static JsonObject stageRequirement() {
+        var stage = new JsonObject();
+        stage.addProperty("type", "mmcr:stage");
+        stage.addProperty("min_stage", 2);
+        return stage;
     }
 
     private static JsonObject itemOutput(String item, int count) {

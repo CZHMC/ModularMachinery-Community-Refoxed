@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.recipe.RecipeIngredientRole;
@@ -264,6 +266,30 @@ class MachineRecipeLayoutTest {
         assertThat(layout.levelRequirementSlotY(display, 1)).isEqualTo(layout.levelRequirementSlotY(display, 0) + 18);
         assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.levelRequirementSlotY(display, 1) + 18 + 10);
         assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.levelRequirementSlotY(display, 1));
+    }
+
+    @Test
+    void stageRequirementTextFollowsLevelSlotAndPrecedesSmartInterfaceText() {
+        TestBootstrap.beginRegistration();
+        Identifier levelType = MMCR.id("stage_layout_level_type");
+        Identifier levelId = MMCR.id("stage_layout_level");
+        TestBootstrap.registerType(new LevelType(levelType, Component.literal("Coils")));
+        TestBootstrap.registerLevel(new MachineLevel(levelId, levelType, 0,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+        MachineRecipe recipe = RecipeTestSupport.create(
+                MMCR.id("jei_stage_layout"), MMCR.id("stage_layout_machine"), 100,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(LevelRequirement.input(levelType, levelId), StageRequirement.input(2),
+                        SmartInterfaceRequirement.input("mode", 1F)),
+                false, List.of(), false, Set.of());
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
+
+        assertThat(layout.stageRequirementTextY(display))
+                .isEqualTo(layout.levelRequirementSlotY(display, 0) + 18 + 10);
+        assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.stageRequirementTextY(display) + 10);
+        assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.smartInterfaceTextY(display));
     }
 
     @Test

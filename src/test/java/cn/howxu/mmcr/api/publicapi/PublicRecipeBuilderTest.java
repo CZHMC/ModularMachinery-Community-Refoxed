@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.StageRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -215,6 +216,20 @@ class PublicRecipeBuilderTest {
             assertThat(level.typeId()).isEqualTo(TEST_LEVEL_TYPE);
             assertThat(level.levelId()).isEqualTo(TEST_LEVEL);
         });
+    }
+
+    @Test
+    void stage_requirement_is_preserved_by_the_public_builder_and_converters() {
+        MachineRecipeDefinition definition = MachineRecipeBuilder.recipe(id("stage_requirement"))
+                .recipePool(id("machine"))
+                .stageRequirement(2)
+                .build();
+        StageRequirement publicRequirement = new StageRequirement(2);
+        var internalRequirement = cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(2);
+
+        assertThat(definition.requirements()).containsExactly(publicRequirement);
+        assertThat(MachineRecipeConverter.toRequirement(publicRequirement)).isEqualTo(internalRequirement);
+        assertThat(MachineRecipeConverter.toPublicRequirement(internalRequirement)).isEqualTo(publicRequirement);
     }
 
     @Test

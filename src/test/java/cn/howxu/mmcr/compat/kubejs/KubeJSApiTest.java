@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import com.mojang.serialization.JsonOps;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -242,6 +243,20 @@ class KubeJSApiTest {
 
         assertThat(requirement).isEqualTo(
                 cn.howxu.mmcr.api.recipe.requirement.LevelRequirement.input(TEST_LEVEL_TYPE, TEST_LEVEL));
+    }
+
+    @Test
+    void rhino_adds_stage_requirement_without_internal_imports() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var builder = new MachineRecipeBuilderJS("mmcr:stage_requirement_test");
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, "builder.addRequirement(api.stageRequirement(2))",
+                "stage-requirement-test", 1, null);
+
+        assertThat(builder.requirements.getFirst()).isEqualTo(StageRequirement.input(2));
     }
 
     @Test

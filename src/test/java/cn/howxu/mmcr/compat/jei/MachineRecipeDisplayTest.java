@@ -29,6 +29,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -724,6 +725,18 @@ class MachineRecipeDisplayTest {
 
         assertThat(display.entries()).noneMatch(entry -> entry.typeId().equals(LevelRequirement.TYPE.id()));
         assertThat(display.recipe().levelRequirements()).hasSize(1);
+    }
+
+    @Test
+    void stageRequirementsUseDedicatedJeiRenderingWithoutGenericEntries() {
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("display_stage_recipe"),
+                MMCR.id("blast_furnace"), 20, List.of(StageRequirement.input(2)), List.of(), List.of(),
+                0, 1, false, false, false, Set.of());
+
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+
+        assertThat(display.entries()).noneMatch(entry -> entry.typeId().equals(StageRequirement.TYPE.id()));
+        assertThat(display.recipe().stageRequirements()).containsExactly(StageRequirement.input(2));
     }
 
     @Test

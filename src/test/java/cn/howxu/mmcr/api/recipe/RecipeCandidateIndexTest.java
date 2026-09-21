@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
@@ -210,6 +211,21 @@ class RecipeCandidateIndexTest {
 
         assertThat(itemAndLevel.inputRequirementCount()).isEqualTo(1);
         assertThat(index.candidates(List.of(Items.IRON_INGOT))).containsExactly(itemAndLevel);
+        assertThat(index.candidates(List.of(Items.DIAMOND))).isEmpty();
+    }
+
+    @Test
+    void stage_requirements_do_not_count_or_demote_exact_item_candidates() {
+        MachineRecipe itemAndStage = RecipeTestSupport.create(id("exact_item_and_stage"), MACHINE, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY),
+                StageRequirement.input(2)), false, List.of(), false, Set.of());
+
+        RecipeCandidateIndex index = RecipeCandidateIndex.build(MACHINE, List.of(itemAndStage));
+
+        assertThat(itemAndStage.inputRequirementCount()).isEqualTo(1);
+        assertThat(index.candidates(List.of(Items.IRON_INGOT))).containsExactly(itemAndStage);
         assertThat(index.candidates(List.of(Items.DIAMOND))).isEmpty();
     }
 

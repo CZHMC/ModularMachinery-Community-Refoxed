@@ -19,6 +19,8 @@ public final class BuiltinFailureReasons {
             "missing_energy", "gui.mmcr.controller.failure.missing_energy", 300);
     public static final FailureReason LEVEL_INSUFFICIENT = reason(
             "level_insufficient", "gui.mmcr.controller.failure.level_insufficient", 200);
+    public static final FailureReason STAGE_INSUFFICIENT = reason(
+            "stage_insufficient", "gui.mmcr.controller.failure.stage_insufficient", 200);
     public static final FailureReason MODULE_CONNECTION = reason(
             "module_connection", "gui.mmcr.controller.failure.module_connection", 0);
 
@@ -56,6 +58,7 @@ public final class BuiltinFailureReasons {
             MISSING_OUTPUT,
             MISSING_ENERGY,
             LEVEL_INSUFFICIENT,
+            STAGE_INSUFFICIENT,
             MODULE_CONNECTION,
             VERSION_INVALIDATED,
             SMART_INTERFACE_CHANGED,

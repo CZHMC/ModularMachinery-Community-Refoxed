@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -212,7 +213,8 @@ public record MachineRecipeDisplay(
                 .filter(requirement -> !(requirement instanceof EnergyRequirement)
                         && !(requirement instanceof LoadedHeatRequirement)
                         && !(requirement instanceof SmartInterfaceRequirement)
-                        && !(requirement instanceof LevelRequirement))
+                        && !(requirement instanceof LevelRequirement)
+                        && !(requirement instanceof StageRequirement))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,
