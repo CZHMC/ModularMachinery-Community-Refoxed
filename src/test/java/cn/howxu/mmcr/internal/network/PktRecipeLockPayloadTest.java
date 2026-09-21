@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
@@ -165,6 +166,7 @@ class PktRecipeLockPayloadTest {
                 List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
         controller.tickRuntimeWork(level, controllerPos);
+        SharedIoEvents.completeLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
 

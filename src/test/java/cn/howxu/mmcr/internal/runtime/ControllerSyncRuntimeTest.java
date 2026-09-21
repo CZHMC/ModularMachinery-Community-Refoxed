@@ -416,6 +416,7 @@ class ControllerSyncRuntimeTest {
         RecipeRegistry.registerStatic(recipe);
 
         controller.serverTick();
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
         MachineStateSnapshot state = new ControllerSyncRuntime().machineState(controller.runtimeSnapshot());
 
         assertThat(state.active()).isFalse();

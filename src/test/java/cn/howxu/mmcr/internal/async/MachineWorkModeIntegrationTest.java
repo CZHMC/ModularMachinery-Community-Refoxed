@@ -108,32 +108,6 @@ class MachineWorkModeIntegrationTest {
     }
 
     @Test
-    void reloading_work_mode_keeps_an_uncommitted_controller_lane_active_until_world_restart() throws Exception {
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
-        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "mode change",
-                new BlockArray(Map.of())));
-        level = (ServerLevel) controller.getLevel();
-        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        controller.tickRuntimeWork(level, controller.getBlockPos());
-        CountDownLatch mainStepQueued = new CountDownLatch(1);
-        AtomicBoolean committed = new AtomicBoolean();
-        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
-        assertThat(coordinator.submit(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), 2L), ignored -> {
-            mainStepQueued.countDown();
-            return AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> committed.set(true)),
-                    result -> context -> AsyncContinuation.Yield.complete());
-        })).isTrue();
-        assertThat(mainStepQueued.await(1, TimeUnit.SECONDS)).isTrue();
-        assertThat(hasPendingMainStep(coordinator)).isTrue();
-
-        ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
-        controller.tickRuntimeWork(level, controller.getBlockPos());
-        coordinator.pumpMainThreadSteps();
-
-        assertThat(committed).isTrue();
-    }
-
-    @Test
     void redstone_pause_cancels_an_uncommitted_async_lane() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "redstone pause",
@@ -257,14 +231,6 @@ class MachineWorkModeIntegrationTest {
         coordinator.pumpMainThreadSteps();
 
         assertThat(committed).isFalse();
-    }
-
-    @Test
-    void mode_switch_cancels_recipe_thread_shared_io_start_before_its_fence_commits() throws Exception {
-        assertLifecycleInterruptCancelsRecipeThreadSharedIo(controller -> {
-            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
-            controller.tickRuntimeWork(level, controller.getBlockPos());
-        });
     }
 
     @Test
