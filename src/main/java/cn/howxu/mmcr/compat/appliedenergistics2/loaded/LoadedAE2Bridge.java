@@ -12,8 +12,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeComponentProvider;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeDataProvider;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
@@ -24,7 +22,6 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockE
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -37,8 +34,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import snownee.jade.api.IWailaClientRegistration;
-import snownee.jade.api.IWailaCommonRegistration;
 
 import java.util.List;
 import java.util.Optional;
@@ -184,23 +179,4 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (contributor.available()) contributor.registerCapabilities(event);
     }
 
-    @Override
-    public void registerJadeCommon(IWailaCommonRegistration registration) {
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
-                InputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
-                StockingInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
-                OutputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
-                AsyncOutputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
-                PatternInterfaceBlockEntity.class);
-        if (contributor.available()) contributor.registerJadeCommon(registration);
-    }
-
-    @Override
-    public void registerJadeClient(IWailaClientRegistration registration) {
-        registration.registerBlockComponent(InterfaceJadeComponentProvider.INSTANCE, IOPortBlock.class);
-    }
 }

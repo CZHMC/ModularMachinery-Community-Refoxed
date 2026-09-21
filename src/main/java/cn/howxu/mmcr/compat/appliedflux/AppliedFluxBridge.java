@@ -5,8 +5,6 @@ import java.util.List;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.jetbrains.annotations.Nullable;
-import snownee.jade.api.IWailaClientRegistration;
-import snownee.jade.api.IWailaCommonRegistration;
 
 /**
  * Isolates optional AppFlux integration from the common runtime.
@@ -25,12 +23,6 @@ public interface AppliedFluxBridge {
     boolean isPort(String id);
 
     default void registerCapabilities(RegisterCapabilitiesEvent event) {
-    }
-
-    default void registerJadeCommon(IWailaCommonRegistration registration) {
-    }
-
-    default void registerJadeClient(IWailaClientRegistration registration) {
     }
 
     @Nullable

@@ -10,7 +10,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.jetbrains.annotations.Nullable;
-import snownee.jade.api.IWailaCommonRegistration;
 
 /**
  * Inert contributor used when ExtendedAE is unavailable.
@@ -62,7 +61,4 @@ final class UnavailableExtendedAEContributor implements ExtendedAEContributor {
     public void registerCapabilities(RegisterCapabilitiesEvent event) {
     }
 
-    @Override
-    public void registerJadeCommon(IWailaCommonRegistration registration) {
-    }
 }

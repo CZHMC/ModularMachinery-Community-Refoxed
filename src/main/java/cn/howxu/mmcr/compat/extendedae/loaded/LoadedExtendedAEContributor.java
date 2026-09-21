@@ -33,7 +33,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.jetbrains.annotations.Nullable;
-import snownee.jade.api.IWailaCommonRegistration;
 
 /** Provides ExtendedAE-specific AE2 port kinds after both optional mods are loaded.
  *
@@ -117,11 +116,6 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
                 (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
                 (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
-    }
-
-    @Override
-    public void registerJadeCommon(IWailaCommonRegistration registration) {
-        // LoadedAE2Bridge owns registration for the shared interface host classes.
     }
 
     private static boolean isOversize(IOPortKind kind) {

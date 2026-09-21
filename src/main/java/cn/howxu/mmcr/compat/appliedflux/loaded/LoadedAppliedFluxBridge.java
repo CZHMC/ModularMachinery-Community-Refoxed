@@ -7,13 +7,11 @@ import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyInputKind;
 import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyOutputKind;
 import cn.howxu.mmcr.compat.appliedflux.loaded.tile.FluxEnergyInputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedflux.loaded.tile.FluxEnergyOutputInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.InterfaceJadeDataProvider;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import snownee.jade.api.IWailaCommonRegistration;
 
 import java.util.List;
 
@@ -62,11 +60,4 @@ public final class LoadedAppliedFluxBridge implements AppliedFluxBridge {
                 (be, ignored) -> be instanceof FluxEnergyOutputInterfaceBlockEntity host ? host : null);
     }
 
-    @Override
-    public void registerJadeCommon(IWailaCommonRegistration registration) {
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
-                FluxEnergyInputInterfaceBlockEntity.class);
-        registration.registerBlockDataProvider(InterfaceJadeDataProvider.INSTANCE,
-                FluxEnergyOutputInterfaceBlockEntity.class);
-    }
 }

@@ -16,14 +16,20 @@ import snownee.jade.api.WailaPlugin;
  */
 @WailaPlugin
 public final class JadePlugin implements IWailaPlugin {
+    private static final String AE2_REGISTRATION =
+            "cn.howxu.mmcr.compat.appliedenergistics2.loaded.jade.AE2JadeRegistration";
+    private static final String APPLIED_FLUX_REGISTRATION =
+            "cn.howxu.mmcr.compat.appliedflux.loaded.jade.AppliedFluxJadeRegistration";
 
     @Override
     public void register(IWailaCommonRegistration registration) {
         JadeTextSupport.enable();
         registration.registerBlockDataProvider(MachineControllerDataProvider.INSTANCE, MachineControllerBlockEntity.class);
         registration.registerBlockDataProvider(RecipeOutputDataProvider.INSTANCE, MachineControllerBlockEntity.class);
-        AE2Bridge.get().registerJadeCommon(registration);
-        AppliedFluxBridge.get().registerJadeCommon(registration);
+        if (AE2Bridge.get().available()) register(AE2_REGISTRATION, "registerCommon",
+                IWailaCommonRegistration.class, registration);
+        if (AppliedFluxBridge.get().available()) register(APPLIED_FLUX_REGISTRATION, "registerCommon",
+                IWailaCommonRegistration.class, registration);
     }
 
     @Override
@@ -34,7 +40,16 @@ public final class JadePlugin implements IWailaPlugin {
         registration.registerBlockComponent(RecipeOutputComponentProvider.INSTANCE, MachineControllerBlock.class);
         registration.addConfig(ParallelControllerComponentProvider.UID, true);
         registration.registerBlockComponent(ParallelControllerComponentProvider.INSTANCE, ParallelControllerBlock.class);
-        AE2Bridge.get().registerJadeClient(registration);
-        AppliedFluxBridge.get().registerJadeClient(registration);
+        if (AE2Bridge.get().available()) register(AE2_REGISTRATION, "registerClient",
+                IWailaClientRegistration.class, registration);
+    }
+
+    private static <T> void register(String className, String methodName, Class<T> registrationType,
+                                     T registration) {
+        try {
+            Class.forName(className).getMethod(methodName, registrationType).invoke(null, registration);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Unable to register optional Jade integration: " + className, exception);
+        }
     }
 }

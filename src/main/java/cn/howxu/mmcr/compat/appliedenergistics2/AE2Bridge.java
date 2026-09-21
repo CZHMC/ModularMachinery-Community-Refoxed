@@ -11,8 +11,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import snownee.jade.api.IWailaClientRegistration;
-import snownee.jade.api.IWailaCommonRegistration;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -50,11 +48,5 @@ public interface AE2Bridge {
     }
 
     default void registerCapabilities(RegisterCapabilitiesEvent event) {
-    }
-
-    default void registerJadeCommon(IWailaCommonRegistration registration) {
-    }
-
-    default void registerJadeClient(IWailaClientRegistration registration) {
     }
 }

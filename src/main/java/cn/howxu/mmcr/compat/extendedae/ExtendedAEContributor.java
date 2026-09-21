@@ -10,7 +10,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.jetbrains.annotations.Nullable;
-import snownee.jade.api.IWailaCommonRegistration;
 
 /**
  * Isolates optional ExtendedAE integration from the AE2 bridge.
@@ -44,6 +43,4 @@ public interface ExtendedAEContributor {
     Identifier portOverlayTexture(IOPortKind kind);
 
     void registerCapabilities(RegisterCapabilitiesEvent event);
-
-    void registerJadeCommon(IWailaCommonRegistration registration);
 }
