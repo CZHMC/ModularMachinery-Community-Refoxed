@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
@@ -193,6 +194,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += TEXT_LINE_SPACING;
         }
         drawLevelRequirementLabels(recipe, layout, guiGraphics, textX);
+        drawStageRequirementLabels(recipe, layout, guiGraphics, textX);
         y = layout.smartInterfaceTextY(recipe);
         guiGraphics.pose().popMatrix();
         guiGraphics.pose().pushMatrix();
@@ -373,6 +375,20 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             guiGraphics.text(Minecraft.getInstance().font, levelLabel(requirement), textX,
                     (int) (labelY / TEXT_SCALE), 0xFF404040, false);
         }
+    }
+
+    private static void drawStageRequirementLabels(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+            GuiGraphicsExtractor guiGraphics, int textX) {
+        int y = layout.stageRequirementTextY(recipe);
+        for (StageRequirement requirement : recipe.recipe().stageRequirements()) {
+            guiGraphics.text(Minecraft.getInstance().font, stageRequirementLabel(requirement), textX,
+                    (int) (y / TEXT_SCALE), 0xFF404040, false);
+            y += TEXT_LINE_SPACING;
+        }
+    }
+
+    static Component stageRequirementLabel(StageRequirement requirement) {
+        return Component.translatable("jei.mmcr.machine_recipe.minimum_stage", requirement.minStage());
     }
 
     static Component hostRequirementComponent(MachineRecipeDisplay recipe, long gameTime) {
