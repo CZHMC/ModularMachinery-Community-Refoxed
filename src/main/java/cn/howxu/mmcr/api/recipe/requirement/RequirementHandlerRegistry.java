@@ -22,7 +22,8 @@ public final class RequirementHandlerRegistry {
             Identifier.fromNamespaceAndPath("minecraft", "fluid"),
             Identifier.fromNamespaceAndPath("neoforge", "energy"),
             Identifier.fromNamespaceAndPath("mmcr", "smart_interface"),
-            Identifier.fromNamespaceAndPath("mmcr", "level"));
+            Identifier.fromNamespaceAndPath("mmcr", "level"),
+            Identifier.fromNamespaceAndPath("mmcr", "stage"));
 
     private RequirementHandlerRegistry() {
     }
@@ -99,6 +100,7 @@ public final class RequirementHandlerRegistry {
         registerBuiltIn(EnergyRequirement.TYPE);
         registerBuiltIn(SmartInterfaceRequirement.TYPE);
         registerBuiltIn(LevelRequirement.TYPE);
+        registerBuiltIn(StageRequirement.TYPE);
     }
 
     /**

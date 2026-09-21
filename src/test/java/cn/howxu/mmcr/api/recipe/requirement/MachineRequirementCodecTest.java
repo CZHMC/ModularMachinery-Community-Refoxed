@@ -45,7 +45,8 @@ class MachineRequirementCodecTest {
                 new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 250, FluidStack.EMPTY),
                 new EnergyRequirement(RecipeModifier.IOType.INPUT, 40),
                 SmartInterfaceRequirement.input("mode", 1F, 2F),
-                LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal")));
+                LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal")),
+                StageRequirement.input(2));
         DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE,
                 RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
@@ -60,6 +61,14 @@ class MachineRequirementCodecTest {
         assertThat(encoded.getAsJsonObject().get("type").getAsString()).isEqualTo("mmcr:level");
         assertThat(encoded.getAsJsonObject().get("level_type").getAsString()).isEqualTo("test:coil");
         assertThat(encoded.getAsJsonObject().get("level").getAsString()).isEqualTo("test:kanthal");
+
+        StageRequirement stage = StageRequirement.input(2);
+        encoded = MachineRequirement.CODEC.encodeStart(ops, stage).getOrThrow();
+        JsonObject expected = new JsonObject();
+        expected.addProperty("type", "mmcr:stage");
+        expected.addProperty("io", "input");
+        expected.addProperty("min_stage", 2);
+        assertThat(encoded).isEqualTo(expected);
     }
 
     @Test
@@ -97,9 +106,39 @@ class MachineRequirementCodecTest {
     }
 
     @Test
+    void stage_requirement_rejects_non_positive_minimum_stage() {
+        assertThatThrownBy(() -> StageRequirement.input(0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stage minimum must be at least 1");
+    }
+
+    @Test
+    void codec_rejects_an_output_stage_requirement() {
+        JsonObject encoded = new JsonObject();
+        encoded.addProperty("type", "mmcr:stage");
+        encoded.addProperty("io", "output");
+        encoded.addProperty("min_stage", 2);
+
+        assertThatThrownBy(() -> MachineRequirement.CODEC.parse(JsonOps.INSTANCE, encoded))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stage requirements must use input direction");
+    }
+
+    @Test
     void level_handler_ignores_capabilities_and_preserves_requested_parallelism() {
         var plan = new LevelRequirementHandler().plan(
                 LevelRequirement.input(Identifier.parse("test:coil"), Identifier.parse("test:kanthal")),
+                Collections.singletonList(null), new PlanningContext(4, 2));
+
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.requirementIndex()).isEqualTo(2);
+        assertThat(plan.maxParallelism()).isEqualTo(4);
+        assertThat(plan.operations()).isEmpty();
+    }
+
+    @Test
+    void stage_handler_ignores_capabilities_and_preserves_requested_parallelism() {
+        var plan = new StageRequirementHandler().plan(StageRequirement.input(2),
                 Collections.singletonList(null), new PlanningContext(4, 2));
 
         assertThat(plan.successful()).isTrue();

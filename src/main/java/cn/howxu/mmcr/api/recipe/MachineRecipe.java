@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
@@ -400,6 +401,13 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                 .toList();
     }
 
+    public List<StageRequirement> stageRequirements() {
+        return requirements.stream()
+                .filter(StageRequirement.class::isInstance)
+                .map(StageRequirement.class::cast)
+                .toList();
+    }
+
     public Set<Identifier> requiredHostIds() {
         return requiredHostIds;
     }
@@ -411,7 +419,9 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     public int inputRequirementCount() {
         int count = 0;
         for (MachineRequirement requirement : requirements) {
-            if (requirement.io() == RecipeModifier.IOType.INPUT && !(requirement instanceof LevelRequirement)) {
+            if (requirement.io() == RecipeModifier.IOType.INPUT
+                    && !(requirement instanceof LevelRequirement)
+                    && !(requirement instanceof StageRequirement)) {
                 count++;
             }
         }
