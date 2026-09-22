@@ -1,10 +1,11 @@
 package cn.howxu.mmcr.internal.storage;
 
-import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Long-backed fluid storage that can expose one or more fixed tanks.
@@ -80,7 +81,7 @@ public final class LongFluidStorage extends LongResourceStorage<FluidResource>
     }
 
     @Override
-    public FluidResource getResource(int slot) {
+    public @Nullable FluidResource getResource(int slot) {
         return resource(slot);
     }
 
@@ -90,17 +91,17 @@ public final class LongFluidStorage extends LongResourceStorage<FluidResource>
     }
 
     @Override
-    public long getCapacityAsLong(int slot, FluidResource resource) {
+    public long getCapacityAsLong(int slot, @NonNull FluidResource resource) {
         return capacity(slot, resource);
     }
 
     @Override
-    public int insert(int slot, FluidResource resource, int amount, TransactionContext transaction) {
+    public int insert(int slot, @NonNull FluidResource resource, int amount, @NonNull TransactionContext transaction) {
         return (int) super.insert(slot, resource, amount, transaction);
     }
 
     @Override
-    public int extract(int slot, FluidResource resource, int amount, TransactionContext transaction) {
+    public int extract(int slot, @NonNull FluidResource resource, int amount, @NonNull TransactionContext transaction) {
         return (int) super.extract(slot, resource, amount, transaction);
     }
 }

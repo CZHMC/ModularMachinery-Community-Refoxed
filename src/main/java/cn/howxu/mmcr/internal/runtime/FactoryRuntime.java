@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
@@ -13,19 +12,12 @@ import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
-import cn.howxu.mmcr.api.machine.level.MachineLevel;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.recipe.CraftingContext;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;

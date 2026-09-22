@@ -3,7 +3,6 @@ package org.nibelungorum.builtin;
 import cn.howxu.mmcr.api.publicapi.data.DataStorage;
 import cn.howxu.mmcr.api.publicapi.data.DataValue;
 import cn.howxu.mmcr.api.publicapi.network.NetworkApi;
-import cn.howxu.mmcr.api.publicapi.network.RequestProcess;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -20,7 +19,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
@@ -66,7 +64,7 @@ public class NETWORK_CENTER_MACHINE {
                         int liveCount = 0;
                         Set<String> connectedHashes = new HashSet<>();
                         var interfaces = NetworkApi.interfaces(context);
-                        var iface = interfaces != null && !interfaces.isEmpty() ? interfaces.get(0) : null;
+                        var iface = !interfaces.isEmpty() ? interfaces.getFirst() : null;
                         if (iface != null) {
                             for (var target : iface.connections()) {
                                 liveCount = liveCount + 1;

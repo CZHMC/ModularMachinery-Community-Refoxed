@@ -2,7 +2,6 @@ package cn.howxu.mmcr.api.recipe.requirement;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
-import cn.howxu.mmcr.api.recipe.MachineOutput;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
