@@ -83,17 +83,15 @@ public final class DynamicOverlayTextures {
         return MMCR.id("block/" + (ioType == IOType.INPUT ? input : output) + "_" + tier);
     }
 
-    private static final String[] CHEMICAL_TIER_IDS = {"basic", "advanced", "elite", "ultimate"};
-
     // cause we have overlay now, so the overlay is from this DynamicOverlayTextures declare
     // For AE2 we directly use AE2 resource, so it's better create a bridge
     private static Identifier chemicalOverlay(PortKinds.ChemicalKind kind) {
         if (kind.radioactive()) {
             return MMCR.id("block/mekanism/overlay_radioactive_chemical_" + (kind.ioType() == IOType.INPUT ? "input" : "output"));
         }
-        int tier = Math.min(Math.max(kind.tier(), 0), CHEMICAL_TIER_IDS.length - 1);
+        String tier = kind.id().substring(kind.id().lastIndexOf('_') + 1);
         String direction = kind.ioType() == IOType.INPUT ? "chemicalinputhatch" : "chemicaloutputhatch";
-        return MMCR.id("block/mekanism/overlay_" + direction + "_" + CHEMICAL_TIER_IDS[tier]);
+        return MMCR.id("block/mekanism/overlay_" + direction + "_" + tier);
     }
 
     private static Identifier heatOverlay(IOType ioType) {
