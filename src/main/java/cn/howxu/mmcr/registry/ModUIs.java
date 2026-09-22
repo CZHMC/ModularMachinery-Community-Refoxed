@@ -86,7 +86,7 @@ public final class ModUIs {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static DeferredHolder<MenuType<?>, ?> registerOptional(
             String id, Supplier<? extends MenuType<?>> supplier) {
-        return (DeferredHolder) REGISTER.register(id, supplier);
+        return REGISTER.register(id, supplier);
     }
 
     private ModUIs() {}

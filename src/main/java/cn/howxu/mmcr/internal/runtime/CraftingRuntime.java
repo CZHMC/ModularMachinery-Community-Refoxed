@@ -669,8 +669,7 @@ public final class CraftingRuntime {
                     failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false));
             return false;
         }
-        if (result.failure() == null) return true;
-        return false;
+        return result.failure() == null;
     }
 
     private boolean executeAsyncTickPhase(CapabilityTickPhase phase, MachineBehaviorContext machineContext,
@@ -1337,10 +1336,14 @@ public final class CraftingRuntime {
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
                 if (!activePrefetches.isEmpty() && requirement instanceof EnergyRequirement) continue;
                 if (consumedAtStart.contains(index)) continue;
-                if (retainedInputs.contains(index) && requirement instanceof ItemRequirement item
-                        && item.consumeChance() > 0F) {
-                    requirement = new ItemRequirement(item.io(), item.item(), item.count(), item.stack(null),
-                            item.chance(), item.tags(), item.components(), 0F);
+                if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
+                        RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
+                        net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
+                        cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components1, float consumeChance
+                )
+                        && consumeChance > 0F) {
+                    requirement = new ItemRequirement(io, item1, count, stack,
+                            chance, tags, components1, 0F);
                 }
                 requirements.add(requirement);
             } else if (isPerTickOutput(requirement)) {

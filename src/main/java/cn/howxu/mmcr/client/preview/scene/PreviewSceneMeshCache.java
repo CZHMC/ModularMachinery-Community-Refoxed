@@ -207,33 +207,28 @@ public final class PreviewSceneMeshCache implements AutoCloseable {
         }
     }
 
-    static final class TranslucentOrder implements TranslucentCache {
-        private final List<ByteBufferBuilder.Result> indexBuffers;
-        private final List<VertexFormat.IndexType> indexTypes;
-
-        TranslucentOrder(List<ByteBufferBuilder.Result> indexBuffers,
-                         List<VertexFormat.IndexType> indexTypes) {
-            if (indexBuffers.size() != indexTypes.size()) {
-                throw new IllegalArgumentException("translucent index metadata size mismatch");
-            }
-            this.indexBuffers = List.copyOf(indexBuffers);
-            this.indexTypes = List.copyOf(indexTypes);
-        }
-
-        List<ByteBufferBuilder.Result> indexBuffers() { return indexBuffers; }
-        List<VertexFormat.IndexType> indexTypes() { return indexTypes; }
-
-        @Override
-        public void close() {
-            RuntimeException failure = null;
-            for (ByteBufferBuilder.Result indexBuffer : indexBuffers) {
-                try {
-                    indexBuffer.close();
-                } catch (RuntimeException exception) {
-                    failure = MeshPart.appendFailure(failure, exception);
+    record TranslucentOrder(List<ByteBufferBuilder.Result> indexBuffers,
+                            List<VertexFormat.IndexType> indexTypes) implements TranslucentCache {
+            TranslucentOrder(List<ByteBufferBuilder.Result> indexBuffers,
+                             List<VertexFormat.IndexType> indexTypes) {
+                if (indexBuffers.size() != indexTypes.size()) {
+                    throw new IllegalArgumentException("translucent index metadata size mismatch");
                 }
+                this.indexBuffers = List.copyOf(indexBuffers);
+                this.indexTypes = List.copyOf(indexTypes);
             }
-            if (failure != null) throw failure;
+
+            @Override
+            public void close() {
+                RuntimeException failure = null;
+                for (ByteBufferBuilder.Result indexBuffer : indexBuffers) {
+                    try {
+                        indexBuffer.close();
+                    } catch (RuntimeException exception) {
+                        failure = MeshPart.appendFailure(failure, exception);
+                    }
+                }
+                if (failure != null) throw failure;
+            }
         }
-    }
 }

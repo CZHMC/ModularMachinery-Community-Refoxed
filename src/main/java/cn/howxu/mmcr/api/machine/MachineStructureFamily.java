@@ -95,14 +95,14 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
     }
 
     private static boolean isController(BlockPredicate predicate) {
-        if (predicate instanceof BlockPredicate.OfBlock ofBlock) {
-            return ofBlock.block() instanceof MachineControllerBlock;
+        if (predicate instanceof BlockPredicate.OfBlock(net.minecraft.world.level.block.Block block)) {
+            return block instanceof MachineControllerBlock;
         }
-        if (predicate instanceof BlockPredicate.OfBlockState ofBlockState) {
-            return ofBlockState.state().getBlock() instanceof MachineControllerBlock;
+        if (predicate instanceof BlockPredicate.OfBlockState(net.minecraft.world.level.block.state.BlockState state)) {
+            return state.getBlock() instanceof MachineControllerBlock;
         }
-        if (predicate instanceof BlockPredicate.AnyOf anyOf) {
-            return anyOf.children().stream().anyMatch(MachineStructureFamily::isController);
+        if (predicate instanceof BlockPredicate.AnyOf(List<BlockPredicate> children)) {
+            return children.stream().anyMatch(MachineStructureFamily::isController);
         }
         return false;
     }

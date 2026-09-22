@@ -83,7 +83,7 @@ public final class MultiblockPreviewClientHandler {
     }
 
     public static void clearPreview(ResourceKey<Level> previewDimension, BlockPos previewControllerPos) {
-        if (controllerPos != null && previewDimension.equals(dimension) && previewControllerPos.equals(controllerPos)) clear();
+        if (previewDimension.equals(dimension) && previewControllerPos.equals(controllerPos)) clear();
     }
 
     public static void setSelectedLayer(int newLayer) {

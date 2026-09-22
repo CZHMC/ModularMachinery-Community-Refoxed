@@ -25,8 +25,8 @@ public final class MultiblockPreviewPredicates {
     private MultiblockPreviewPredicates() {}
 
     public static Optional<BlockPredicate> representative(BlockPredicate predicate) {
-        if (predicate instanceof BlockPredicate.AnyOf anyOf) {
-            return anyOf.children().stream()
+        if (predicate instanceof BlockPredicate.AnyOf(java.util.List<BlockPredicate> children)) {
+            return children.stream()
                     .flatMap(child -> representative(child).stream())
                     .min(Comparator.comparingInt(MultiblockPreviewPredicates::exactStatePriority).reversed()
                             .thenComparingInt(MultiblockPreviewPredicates::priority));

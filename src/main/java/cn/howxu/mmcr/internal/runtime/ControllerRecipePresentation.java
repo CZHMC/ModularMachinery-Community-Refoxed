@@ -49,8 +49,8 @@ public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
         for (MachineOutput output : runtime.activeOutputs()) {
             if (output == null) continue;
             if (MekanismRecipeTypes.HEAT.equals(output.outputType().id())) {
-                if (output instanceof LoadedHeatOutput loadedHeat) {
-                    heat = saturatingAdd(heat, saturatingMultiply(loadedHeat.heat(), parallelism));
+                if (output instanceof LoadedHeatOutput(double heat1)) {
+                    heat = saturatingAdd(heat, saturatingMultiply(heat1, parallelism));
                     foundHeatOutput = true;
                 }
                 continue;

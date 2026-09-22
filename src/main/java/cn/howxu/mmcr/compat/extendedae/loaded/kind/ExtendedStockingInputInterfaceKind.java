@@ -18,8 +18,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 public final class ExtendedStockingInputInterfaceKind implements InterfaceLogicKind {
     public static final ExtendedStockingInputInterfaceKind INSTANCE = new ExtendedStockingInputInterfaceKind();
     private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(
-            AE2ResourceFamilies.ITEM.inputBinding(host -> ((StockingInterfaceBlockEntity) host).itemStorage(), false),
-            AE2ResourceFamilies.FLUID.inputBinding(host -> ((StockingInterfaceBlockEntity) host).fluidStorage(), false)));
+            AE2ResourceFamilies.ITEM.inputBinding(host -> host.itemStorage(), false),
+            AE2ResourceFamilies.FLUID.inputBinding(host -> host.fluidStorage(), false)));
     private ExtendedStockingInputInterfaceKind() {}
     @Override public String id() { return "eae_me_extended_stocking_input_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }

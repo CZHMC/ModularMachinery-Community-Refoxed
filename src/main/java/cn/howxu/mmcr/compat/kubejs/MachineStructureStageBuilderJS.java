@@ -69,8 +69,8 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
         }
         MachineStructureBuilderJS.PatternEntry entry = toPatternEntry(value);
         sliceBuilder.set(symbol.charAt(0), entry.base());
-        if (value instanceof LevelSlot levelSlot) {
-            stageRequirements.levelSlot(symbol.charAt(0), levelSlot.typeId());
+        if (value instanceof LevelSlot(Identifier typeId)) {
+            stageRequirements.levelSlot(symbol.charAt(0), typeId);
         }
         return this;
     }

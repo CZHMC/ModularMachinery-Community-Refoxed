@@ -22,8 +22,8 @@ public final class StockingInterfaceKind implements InterfaceLogicKind {
     public static final StockingInterfaceKind INSTANCE = new StockingInterfaceKind();
 
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
-            AE2ResourceFamilies.ITEM.inputBinding(host -> ((StockingInterfaceBlockEntity) host).itemStorage(), false),
-            AE2ResourceFamilies.FLUID.inputBinding(host -> ((StockingInterfaceBlockEntity) host).fluidStorage(), false)));
+            AE2ResourceFamilies.ITEM.inputBinding(host -> host.itemStorage(), false),
+            AE2ResourceFamilies.FLUID.inputBinding(host -> host.fluidStorage(), false)));
 
     private StockingInterfaceKind() {}
 

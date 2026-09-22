@@ -99,7 +99,7 @@ public class MachineSoundManager {
         return ChunkPos.rangeClosed(center, viewDistance)
                 .map(chunkPos -> level.getChunkSource().getChunkNow(chunkPos.x(), chunkPos.z()))
                 .filter(chunk -> chunk instanceof LevelChunk)
-                .map(LevelChunk.class::cast)
+                .map(levelChunk -> levelChunk)
                 .flatMap(chunk -> chunk.getBlockEntities().values().stream())
                 .toList();
     }

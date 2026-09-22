@@ -292,9 +292,9 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
     }
 
     private CapabilityResult commitAsync(AsyncCapabilityOperation operation, TransactionContext transaction) {
-        if (operation instanceof AsyncCapabilityOperation.Group group) {
+        if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
             try (Transaction nested = Transaction.open(transaction)) {
-                for (AsyncCapabilityOperation child : group.operations()) {
+                for (AsyncCapabilityOperation child : operations) {
                     CapabilityResult result = commitAsync(child, nested);
                     if (!result.success()) return result;
                 }
@@ -330,75 +330,70 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         if (slot != 0) throw new IndexOutOfBoundsException("chemical port slot must be zero");
     }
 
-    private static final class ChemicalStorage implements ResourceStorage<ChemicalResource> {
-        private final IChemicalTank tank;
-
-        private ChemicalStorage(IChemicalTank tank) {
-            this.tank = tank;
-        }
+    private record ChemicalStorage(IChemicalTank tank) implements ResourceStorage<ChemicalResource> {
 
         @Override
-        public Class<ChemicalResource> resourceType() {
-            return ChemicalResource.class;
-        }
-
-        @Override
-        public int size() {
-            return 1;
-        }
-
-        @Override
-        public ChemicalResource resource(int slot) {
-            checkSlot(slot);
-            return tank.resource();
-        }
-
-        @Override
-        public long amount(int slot) {
-            checkSlot(slot);
-            return tank.amountAsLong();
-        }
-
-        @Override
-        public long capacity(int slot, @Nullable ChemicalResource resource) {
-            checkSlot(slot);
-            return tank.capacityAsLong(resource == null ? tank.resource() : resource);
-        }
-
-        @Override
-        public boolean isValid(int slot, ChemicalResource resource) {
-            checkSlot(slot);
-            return !resource.isEmpty() && tank.isValid(resource);
-        }
-
-        @Override
-        public long insert(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
-            checkSlot(slot);
-            if (amount <= 0L || !isValid(slot, resource)) return 0L;
-            return transfer(tank, resource, amount, transaction, true);
-        }
-
-        @Override
-        public long extract(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
-            checkSlot(slot);
-            if (amount <= 0L || resource.isEmpty()) return 0L;
-            return transfer(tank, resource, amount, transaction, false);
-        }
-
-        private static long transfer(IChemicalTank tank, ChemicalResource resource, long amount,
-                                     TransactionContext transaction, boolean insert) {
-            long remaining = amount;
-            long movedTotal = 0L;
-            while (remaining > 0L) {
-                int request = (int) Math.min(remaining, Integer.MAX_VALUE);
-                int moved = insert
-                        ? tank.insert(resource, request, transaction, AutomationType.INTERNAL)
-                        : tank.extract(resource, request, transaction, AutomationType.INTERNAL);
-                if (moved <= 0) break;
-                movedTotal += moved;
-                remaining -= moved;
+            public Class<ChemicalResource> resourceType() {
+                return ChemicalResource.class;
             }
-            return movedTotal;
+
+            @Override
+            public int size() {
+                return 1;
+            }
+
+            @Override
+            public ChemicalResource resource(int slot) {
+                checkSlot(slot);
+                return tank.resource();
+            }
+
+            @Override
+            public long amount(int slot) {
+                checkSlot(slot);
+                return tank.amountAsLong();
+            }
+
+            @Override
+            public long capacity(int slot, @Nullable ChemicalResource resource) {
+                checkSlot(slot);
+                return tank.capacityAsLong(resource == null ? tank.resource() : resource);
+            }
+
+            @Override
+            public boolean isValid(int slot, ChemicalResource resource) {
+                checkSlot(slot);
+                return !resource.isEmpty() && tank.isValid(resource);
+            }
+
+            @Override
+            public long insert(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
+                checkSlot(slot);
+                if (amount <= 0L || !isValid(slot, resource)) return 0L;
+                return transfer(tank, resource, amount, transaction, true);
+            }
+
+            @Override
+            public long extract(int slot, ChemicalResource resource, long amount, TransactionContext transaction) {
+                checkSlot(slot);
+                if (amount <= 0L || resource.isEmpty()) return 0L;
+                return transfer(tank, resource, amount, transaction, false);
+            }
+
+            private static long transfer(IChemicalTank tank, ChemicalResource resource, long amount,
+                                         TransactionContext transaction, boolean insert) {
+                long remaining = amount;
+                long movedTotal = 0L;
+                while (remaining > 0L) {
+                    int request = (int) Math.min(remaining, Integer.MAX_VALUE);
+                    int moved = insert
+                            ? tank.insert(resource, request, transaction, AutomationType.INTERNAL)
+                            : tank.extract(resource, request, transaction, AutomationType.INTERNAL);
+                    if (moved <= 0) break;
+                    movedTotal += moved;
+                    remaining -= moved;
+                }
+                return movedTotal;
+            }
         }
-    }
 }

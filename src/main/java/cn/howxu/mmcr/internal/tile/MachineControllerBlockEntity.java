@@ -757,7 +757,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         var replacements = replacementsFor(machine, stageCompiled, facing, pattern, rollFacing);
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
         matcherInvocationCountForTesting++;
-        boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
+        boolean matches = hasCompiledFacing(stageCompiled, facing)
                 ? StructureMatcher.matchesCompiled(stageCompiled, facing, rollFacing, level,
                 getBlockPos(), replacements, stateSensitive)
                 : StructureMatcher.matchesRotated(pattern, level, getBlockPos(), replacements, stateSensitive);
@@ -1309,7 +1309,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
                 .sum();
         long extraThreads = Math.max(0L, (long) aggregatedThreads - 1L);
-        long effective = Math.max(1L, (long) machine.factoryThreadLimit()) + extraThreads + levelBonus;
+        long effective = Math.max(1L, machine.factoryThreadLimit()) + extraThreads + levelBonus;
         return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, effective));
     }
 
@@ -2309,7 +2309,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
         matcherInvocationCountForTesting++;
-        boolean matches = stageCompiled != null && hasCompiledFacing(stageCompiled, facing)
+        boolean matches = hasCompiledFacing(stageCompiled, facing)
                 ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
                 getBlockPos(), replacements, stateSensitive)
                 : StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements, stateSensitive);
@@ -2566,7 +2566,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (mismatch != null) {
             if (structureDiagnosticCallbackForTesting != null) {
                 structureDiagnosticCallbackForTesting.run();
-            } else if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
+            } else if (playerId != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
                 if (player != null && player.level().dimension().equals(dimension)) {
@@ -2574,7 +2574,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 }
             }
         } else if (formationFailure != null) {
-            if (playerId != null && dimension != null && level instanceof ServerLevel serverLevel
+            if (playerId != null && level instanceof ServerLevel serverLevel
                     && serverLevel.dimension().equals(dimension)) {
                 ServerPlayer player = serverLevel.getServer().getPlayerList().getPlayer(playerId);
                 if (player != null && player.level().dimension().equals(dimension)) {
@@ -3331,8 +3331,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (scanActive) invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
         boolean wasLoaded = structure.structureAreaLoaded();
         ChunkPos controllerChunk = new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4);
-        boolean loaded = structure.formed() && unloadedChunk != null && !controllerChunk.equals(unloadedChunk)
-                ? false : isStructureAreaLoaded(structure);
+        boolean loaded = (!structure.formed() || unloadedChunk == null || controllerChunk.equals(unloadedChunk)) && isStructureAreaLoaded(structure);
         if (!structure.formed() || structure.pattern() == null || structure.facing() == null) {
             runtime.publishStructureState(loaded, structure.formed(), structure.configuredMachine(), structure.matchedStage());
             publishRuntimeState();
@@ -3678,7 +3677,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (var player : sl.getPlayers(p -> p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64
                 || (p.containerMenu instanceof MachineControllerMenu menu
                 && menu.controllerPos().equals(getBlockPos())))) {
-            ((ServerPlayer) player).connection.send(new ClientboundCustomPayloadPacket(packet));
+            player.connection.send(new ClientboundCustomPayloadPacket(packet));
         }
     }
 

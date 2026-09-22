@@ -291,7 +291,7 @@ public class TerminalAssemblyGameTest {
 
         helper.assertTrue(result.interactionResult() == InteractionResult.SUCCESS, "One stage-1 casing is enough for default build");
         helper.assertTrue(result.changedBlocks() == 1, "Survival build places only the required stage-1 block");
-        helper.assertTrue(new PlayerInventoryStructureItemSource(player).extractAll(List.of(new ItemStack(ModBlocks.CASING.get()))) == false,
+        helper.assertTrue(!new PlayerInventoryStructureItemSource(player).extractAll(List.of(new ItemStack(ModBlocks.CASING.get()))),
                 "No stage-2-only casing was consumed");
         helper.assertTrue(helper.getLevel().getBlockState(stage2OnlyPos).isAir(), "Stage 2-only block is not built");
         helper.succeed();

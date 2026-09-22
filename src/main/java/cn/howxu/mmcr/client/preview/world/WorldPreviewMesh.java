@@ -29,7 +29,7 @@ public final class WorldPreviewMesh implements AutoCloseable {
 
     WorldPreviewMesh(SectionBufferBuilderPack builders, Map<ChunkSectionLayer, MeshData> meshes,
             MeshData.SortState translucentSortState, Set<BlockPos> blockEntityPositions) {
-        this((AutoCloseable) builders, builders, meshes, translucentSortState, blockEntityPositions);
+        this(builders, builders, meshes, translucentSortState, blockEntityPositions);
     }
 
     WorldPreviewMesh(AutoCloseable builders, Map<ChunkSectionLayer, MeshData> meshes,

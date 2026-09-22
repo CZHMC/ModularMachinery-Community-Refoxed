@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
+import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
@@ -210,27 +211,16 @@ public abstract class RecipeThread {
         private @Nullable AsyncRequirementPlanner.RecipeSearchResult result() { return result; }
     }
 
-    private static final class AsyncRecipeSearchContinuation implements AsyncContinuation {
-        private final AsyncRecipeSearch search;
-        private final long catalogVersion;
-        private final long searchId;
-        private final String searchLaneId;
-
-        private AsyncRecipeSearchContinuation(AsyncRecipeSearch search, long catalogVersion, long searchId,
-                                              String searchLaneId) {
-            this.search = search;
-            this.catalogVersion = catalogVersion;
-            this.searchId = searchId;
-            this.searchLaneId = searchLaneId;
-        }
+    private record AsyncRecipeSearchContinuation(AsyncRecipeSearch search, long catalogVersion, long searchId,
+                                                 String searchLaneId) implements AsyncContinuation {
 
         @Override
-        public Yield advance(cn.howxu.mmcr.internal.async.AsyncExecutionContext context) {
-            search.result = search.request().search();
-            return Yield.mainThread(new MainThreadStep.FactorySearch(searchLaneId, catalogVersion, searchId),
-                    ignored -> ignoredContext -> Yield.complete());
+            public Yield advance(AsyncExecutionContext context) {
+                search.result = search.request().search();
+                return Yield.mainThread(new MainThreadStep.FactorySearch(searchLaneId, catalogVersion, searchId),
+                        ignored -> ignoredContext -> Yield.complete());
+            }
         }
-    }
 
     private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates, Identifier machineId) {
         if (candidates == null || candidates.isEmpty()) return List.of();

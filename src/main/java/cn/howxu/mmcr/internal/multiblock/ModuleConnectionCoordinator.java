@@ -197,8 +197,7 @@ public final class ModuleConnectionCoordinator {
         Machine moduleMachine = module.currentStructureSnapshot().machine();
         if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) return false;
         if (!host.couplerWorldPositions().contains(couplerPos) || !module.couplerWorldPositions().contains(couplerPos)) return false;
-        if (!structureMatches(level, host) || !structureMatches(level, module)) return false;
-        return true;
+        return structureMatches(level, host) && structureMatches(level, module);
     }
 
     private static List<MachineControllerBlockEntity> controllersFor(ServerLevel level, BlockPos couplerPos, boolean host) {

@@ -215,9 +215,9 @@ public final class FluxEnergyOutputCapability implements MachineCapability, Scal
     }
 
     private CapabilityResult commitAsync(AsyncCapabilityOperation operation, TransactionContext transaction) {
-        if (operation instanceof AsyncCapabilityOperation.Group group) {
+        if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
             try (Transaction nested = Transaction.open(transaction)) {
-                for (AsyncCapabilityOperation child : group.operations()) {
+                for (AsyncCapabilityOperation child : operations) {
                     CapabilityResult result = commitAsync(child, nested);
                     if (!result.success()) return result;
                 }
@@ -225,11 +225,13 @@ public final class FluxEnergyOutputCapability implements MachineCapability, Scal
             }
             return CapabilityResult.successful();
         }
-        if (!(operation instanceof AsyncCapabilityOperation.Scalar scalar)
-                || !type().id().equals(scalar.capabilityId()) || !scalar.insert()) {
+        if (!(operation instanceof AsyncCapabilityOperation.Scalar(
+                net.minecraft.resources.Identifier capabilityId, long amount, boolean insert
+        ))
+                || !type().id().equals(capabilityId) || !insert) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return commitAdmission(scalar.amount(), transaction);
+        return commitAdmission(amount, transaction);
     }
 
     private CapabilityResult failure(FailureReason reason) {

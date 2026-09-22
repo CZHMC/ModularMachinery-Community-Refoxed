@@ -115,6 +115,7 @@ public class PURE_TICK_MACHINE {
                         for (var output : simulation.outputs()) {
                             if (output.accepted() < output.requested()) {
                                 outputAvailable = false;
+                                break;
                             }
                         }
 

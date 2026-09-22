@@ -77,7 +77,9 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
             if (!lifecycleYielded) {
                 lifecycleYielded = true;
                 return AsyncContinuation.Yield.mainThread(new MainThreadStep.Lifecycle(sharedIoRequest, laneId, catalogVersion),
-                        result -> result instanceof MainThreadStep.Result.Value value && Boolean.FALSE.equals(value.value())
+                        result -> result instanceof MainThreadStep.Result.Value(
+                                Object value1
+                        ) && Boolean.FALSE.equals(value1)
                                 ? ignored -> AsyncContinuation.Yield.complete() : this);
             }
             if (!screenFlushYielded) {
@@ -86,8 +88,8 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
                         ignored -> this);
             }
             return AsyncContinuation.Yield.mainThread(new MainThreadStep.SharedIoRequest(sharedIoRequest, laneId, catalogVersion),
-                    result -> result instanceof MainThreadStep.Result.Value value
-                    && value.value() instanceof AsyncContinuation continuation
+                    result -> result instanceof MainThreadStep.Result.Value(Object value1)
+                    && value1 instanceof AsyncContinuation continuation
                     ? continuation : ignoredContext -> AsyncContinuation.Yield.complete());
         }
         if (preparedPlan == null) {
@@ -99,11 +101,11 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
                         new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, laneId, catalogVersion),
                         new MainThreadStep.CapabilityTick(CapabilityTickPhase.BEFORE_RECIPE, laneId, catalogVersion),
                         new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK, laneId, catalogVersion)), results -> ignored -> {
-                if (results.get(1) instanceof MainThreadStep.Result.Value value && Boolean.FALSE.equals(value.value())) {
+                if (results.get(1) instanceof MainThreadStep.Result.Value(Object value2) && Boolean.FALSE.equals(value2)) {
                     return AsyncContinuation.Yield.complete();
                 }
-                if (results.get(2) instanceof MainThreadStep.Result.Value value
-                        && value.value() instanceof AsyncRequirementPlanner.PreparedPlan prepared) {
+                if (results.get(2) instanceof MainThreadStep.Result.Value(Object value1)
+                        && value1 instanceof AsyncRequirementPlanner.PreparedPlan prepared) {
                     return AsyncCraftingExecution.plan(prepared, laneId, catalogVersion).advance(ignored);
                 }
                 return AsyncContinuation.Yield.complete();

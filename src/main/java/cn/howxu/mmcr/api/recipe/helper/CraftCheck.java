@@ -27,7 +27,7 @@ public final class CraftCheck {
     private final ResultType type;
     private final @Nullable FailureOccurrence failure;
 
-    protected CraftCheck(ResultType type, @Nullable FailureOccurrence failure) {
+    private CraftCheck(ResultType type, @Nullable FailureOccurrence failure) {
         this.type = Objects.requireNonNull(type, "type");
         this.failure = failure;
     }

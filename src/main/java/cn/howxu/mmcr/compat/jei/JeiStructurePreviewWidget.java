@@ -215,7 +215,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private static int maxVisibleCandidates() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 12;
             case 2 -> 10;
             case 3 -> 8;
@@ -256,7 +256,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             tooltip.add(stack.getHoverName());
             if (candidate.modifier()) tooltip.add(Component.translatable("jei.mmcr.structure_preview.modifier"));
             tooltip.setIngredient(new ItemStackIngredient(stack));
-            return;
         }
     }
 

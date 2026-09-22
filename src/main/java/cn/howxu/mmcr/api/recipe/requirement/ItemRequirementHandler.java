@@ -289,7 +289,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
     }
 
     private static boolean matchesItem(ItemRequirement requirement, ItemResource resource) {
-        ItemStack stack = resource.toStack((int) Math.min(resource.getMaxStackSize(), Integer.MAX_VALUE));
+        ItemStack stack = resource.toStack(Math.min(resource.getMaxStackSize(), Integer.MAX_VALUE));
         return requirement.item().test(stack) && requirement.components().matches(stack);
     }
 

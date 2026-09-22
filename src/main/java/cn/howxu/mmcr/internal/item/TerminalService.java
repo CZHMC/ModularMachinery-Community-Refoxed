@@ -120,7 +120,7 @@ public final class TerminalService {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
                 MachineLevel level = secondId == null ? null : MachineLevelRegistry.getLevel(secondId);
                 TerminalData normalized = normalize(controller, data);
-                if (firstId == null || level == null || !level.typeId().equals(firstId)
+                if (level == null || !level.typeId().equals(firstId)
                         || !normalized.selectedLevels().containsKey(firstId)) {
                     return rejected(player, stack, "message.mmcr.terminal.invalid_level");
                 }

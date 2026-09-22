@@ -100,7 +100,7 @@ public final class MachineLevelRegistry {
         if (levels.containsKey(level.id())) {
             throw new IllegalStateException("Machine level already registered: " + level.id());
         }
-        if (!(level.statePredicate() instanceof BlockPredicate.OfBlockState statePredicate)) {
+        if (!(level.statePredicate() instanceof BlockPredicate.OfBlockState(BlockState state))) {
             throw new IllegalArgumentException("Machine levels require an exact block state predicate");
         }
 
@@ -112,7 +112,7 @@ public final class MachineLevelRegistry {
         }
         for (MachineLevel registered : levelsForType) {
             BlockPredicate.OfBlockState registeredPredicate = (BlockPredicate.OfBlockState) registered.statePredicate();
-            if (registeredPredicate.matches(statePredicate.state())) {
+            if (registeredPredicate.matches(state)) {
                 throw new IllegalStateException("Machine level state already registered: " + level.id());
             }
         }

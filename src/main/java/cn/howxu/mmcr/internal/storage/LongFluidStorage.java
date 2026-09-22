@@ -96,11 +96,11 @@ public final class LongFluidStorage extends LongResourceStorage<FluidResource>
 
     @Override
     public int insert(int slot, FluidResource resource, int amount, TransactionContext transaction) {
-        return (int) super.insert(slot, resource, (long) amount, transaction);
+        return (int) super.insert(slot, resource, amount, transaction);
     }
 
     @Override
     public int extract(int slot, FluidResource resource, int amount, TransactionContext transaction) {
-        return (int) super.extract(slot, resource, (long) amount, transaction);
+        return (int) super.extract(slot, resource, amount, transaction);
     }
 }

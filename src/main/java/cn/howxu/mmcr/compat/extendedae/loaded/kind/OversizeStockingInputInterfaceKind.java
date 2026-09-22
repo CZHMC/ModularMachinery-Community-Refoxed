@@ -18,7 +18,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 /** @author howxu <dev@howxu.cn> */
 public final class OversizeStockingInputInterfaceKind implements InterfaceLogicKind {
     public static final OversizeStockingInputInterfaceKind INSTANCE = new OversizeStockingInputInterfaceKind();
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(AE2ResourceFamilies.ITEM.inputBinding(host -> ((StockingInterfaceBlockEntity) host).itemStorage(), false), AE2ResourceFamilies.FLUID.inputBinding(host -> ((StockingInterfaceBlockEntity) host).fluidStorage(), false)));
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(AE2ResourceFamilies.ITEM.inputBinding(host -> host.itemStorage(), false), AE2ResourceFamilies.FLUID.inputBinding(host -> host.fluidStorage(), false)));
     private OversizeStockingInputInterfaceKind() {}
     @Override public String id() { return "eae_me_oversize_stocking_input_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }

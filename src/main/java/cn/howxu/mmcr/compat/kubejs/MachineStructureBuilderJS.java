@@ -99,8 +99,8 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
         }
         PatternEntry entry = toPatternEntry(value);
         sliceBuilder.set(key, entry.base());
-        if (value instanceof LevelSlot levelSlot) {
-            sliceRequirements.levelSlot(key, validateLevelType(levelSlot.typeId()));
+        if (value instanceof LevelSlot(Identifier typeId)) {
+            sliceRequirements.levelSlot(key, validateLevelType(typeId));
         }
         return this;
     }

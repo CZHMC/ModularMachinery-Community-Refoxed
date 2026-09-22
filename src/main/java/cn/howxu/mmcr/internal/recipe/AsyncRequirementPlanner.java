@@ -114,14 +114,18 @@ public final class AsyncRequirementPlanner {
     }
 
     private static AsyncCapabilityRequest forAmount(AsyncCapabilityRequest request, long amount) {
-        if (request instanceof AsyncCapabilityRequest.Resource resource && resource.actions().size() == 1) {
-            AsyncResourceAction action = resource.actions().getFirst();
-            return new AsyncCapabilityRequest.Resource(resource.capabilityId(), resource.parallelism(), List.of(
+        if (request instanceof AsyncCapabilityRequest.Resource(
+                Identifier id, long parallelism1, List<AsyncResourceAction> actions
+        ) && actions.size() == 1) {
+            AsyncResourceAction action = actions.getFirst();
+            return new AsyncCapabilityRequest.Resource(id, parallelism1, List.of(
                     new AsyncResourceAction(action.resource(), Math.min(action.amount(), amount), action.insert())));
         }
-        if (request instanceof AsyncCapabilityRequest.Scalar scalar) {
-            return new AsyncCapabilityRequest.Scalar(scalar.capabilityId(), scalar.parallelism(),
-                    Math.min(scalar.amount(), amount), scalar.insert());
+        if (request instanceof AsyncCapabilityRequest.Scalar(
+                Identifier capabilityId, long parallelism, long amount1, boolean insert
+        )) {
+            return new AsyncCapabilityRequest.Scalar(capabilityId, parallelism,
+                    Math.min(amount1, amount), insert);
         }
         return request;
     }
@@ -135,20 +139,26 @@ public final class AsyncRequirementPlanner {
     }
 
     public static AsyncCapabilitySnapshot apply(AsyncCapabilitySnapshot snapshot, AsyncCapabilityOperation operation) {
-        if (snapshot instanceof AsyncCapabilitySnapshot.Resource resource) {
-            List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(resource.slots());
+        if (snapshot instanceof AsyncCapabilitySnapshot.Resource(
+                Identifier id, List<AsyncCapabilitySnapshot.ResourceSlot> slots1
+        )) {
+            List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(slots1);
             applyResource(slots, operation);
-            return new AsyncCapabilitySnapshot.Resource(resource.capabilityId(), slots);
+            return new AsyncCapabilitySnapshot.Resource(id, slots);
         }
-        if (snapshot instanceof AsyncCapabilitySnapshot.Scalar scalar
+        if (snapshot instanceof AsyncCapabilitySnapshot.Scalar(
+                Identifier capabilityId, long amount1, long capacity, long transferLimit
+        )
                 && operation instanceof AsyncCapabilityOperation.Scalar value) {
-            long amount = value.insert() ? scalar.amount() + value.amount() : scalar.amount() - value.amount();
-            return new AsyncCapabilitySnapshot.Scalar(scalar.capabilityId(), amount, scalar.capacity(),
-                    scalar.transferLimit());
+            long amount = value.insert() ? amount1 + value.amount() : amount1 - value.amount();
+            return new AsyncCapabilitySnapshot.Scalar(capabilityId, amount, capacity,
+                    transferLimit);
         }
-        if (snapshot instanceof AsyncCapabilitySnapshot.Scalar && operation instanceof AsyncCapabilityOperation.Group group) {
+        if (snapshot instanceof AsyncCapabilitySnapshot.Scalar && operation instanceof AsyncCapabilityOperation.Group(
+                List<AsyncCapabilityOperation> operations
+        )) {
             AsyncCapabilitySnapshot planned = snapshot;
-            for (AsyncCapabilityOperation child : group.operations()) {
+            for (AsyncCapabilityOperation child : operations) {
                 planned = apply(planned, child);
             }
             return planned;
@@ -166,8 +176,8 @@ public final class AsyncRequirementPlanner {
 
     private static void applyResource(List<AsyncCapabilitySnapshot.ResourceSlot> slots,
                                       AsyncCapabilityOperation operation) {
-        if (operation instanceof AsyncCapabilityOperation.Group group) {
-            group.operations().forEach(child -> applyResource(slots, child));
+        if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
+            operations.forEach(child -> applyResource(slots, child));
             return;
         }
         if (!(operation instanceof AsyncCapabilityOperation.Resource resource)) {

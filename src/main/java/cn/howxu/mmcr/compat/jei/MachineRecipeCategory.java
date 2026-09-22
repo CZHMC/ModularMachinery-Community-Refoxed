@@ -111,7 +111,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public int getWidth() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 168;
             case 2 -> 168;
             case 3 -> 168;
@@ -121,7 +121,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public int getHeight() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 300;
             case 2 -> 280;
             case 3 -> 220;

@@ -173,7 +173,7 @@ public interface MachineOutput {
         return chance;
     }
 
-    public record AggregationKey(@org.jetbrains.annotations.Nullable OutputType<?> type,
+    record AggregationKey(@org.jetbrains.annotations.Nullable OutputType<?> type,
                                 @org.jetbrains.annotations.Nullable ItemStack itemKey,
                                 @org.jetbrains.annotations.Nullable FluidStack fluidKey) {
 
@@ -188,19 +188,16 @@ public interface MachineOutput {
         @Override
         public boolean equals(Object other) {
             if (this == other) return true;
-            if (!(other instanceof AggregationKey that)) return false;
-            if (type != that.type) return false;
-            if (!Objects.equals(itemKey, that.itemKey) || !Objects.equals(fluidKey, that.fluidKey)) {
-                if (itemKey != null && that.itemKey != null
-                        && ItemStack.isSameItemSameComponents(itemKey, that.itemKey)) {
-                    return fluidKey == null && that.fluidKey == null;
+            if (!(other instanceof AggregationKey(OutputType<?> type1, ItemStack key, FluidStack fluidKey1))) return false;
+            if (type != type1) return false;
+            if (!Objects.equals(itemKey, key) || !Objects.equals(fluidKey, fluidKey1)) {
+                if (itemKey != null && key != null
+                        && ItemStack.isSameItemSameComponents(itemKey, key)) {
+                    return fluidKey == null && fluidKey1 == null;
                 }
-                if (fluidKey != null && that.fluidKey != null
-                        && fluidKey.getFluid() == that.fluidKey.getFluid()
-                        && Objects.equals(fluidKey.getComponents(), that.fluidKey.getComponents())) {
-                    return true;
-                }
-                return false;
+                return fluidKey != null && fluidKey1 != null
+                        && fluidKey.getFluid() == fluidKey1.getFluid()
+                        && Objects.equals(fluidKey.getComponents(), fluidKey1.getComponents());
             }
             return true;
         }
@@ -219,7 +216,7 @@ public interface MachineOutput {
         }
     }
 
-    public static AggregationKey aggregationKey(MachineOutput output) {
+    static AggregationKey aggregationKey(MachineOutput output) {
         if (output instanceof ItemOutput item) {
             ItemStack stripped = item.stack().copy();
             stripped.setCount(1);
@@ -233,13 +230,13 @@ public interface MachineOutput {
         return AggregationKey.EMPTY;
     }
 
-    public static long scaledAmount(MachineOutput output) {
+    static long scaledAmount(MachineOutput output) {
          if (output instanceof ItemOutput item) return item.stack().getCount();
          if (output instanceof FluidOutput fluid) return fluid.stack().getAmount();
          return output.amount();
     }
 
-    public static MachineOutput withScaledAmount(MachineOutput template, long amount, float chance) {
+    static MachineOutput withScaledAmount(MachineOutput template, long amount, float chance) {
          if (template instanceof ItemOutput item) {
              ItemStack stack = item.stack().copy();
              stack.setCount((int) Math.min(amount, Integer.MAX_VALUE));

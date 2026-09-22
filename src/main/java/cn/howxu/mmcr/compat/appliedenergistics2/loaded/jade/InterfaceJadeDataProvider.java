@@ -70,7 +70,7 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
         return capability.facet(PresentationFacet.class).stream().flatMap(facet -> {
             List<CapabilityDisplay> displays = facet.displays(capability.view());
             return capability.facet(ResourceFacet.class)
-                    .<Stream<CapabilityDisplay>>map(resources -> IntStream.range(0,
+                    .map(resources -> IntStream.range(0,
                                     Math.min(displays.size(), resources.storage().size()))
                             .filter(slot -> belongsToOutputFamily(displays.get(slot), resources.storage().resource(slot)))
                             .mapToObj(displays::get))

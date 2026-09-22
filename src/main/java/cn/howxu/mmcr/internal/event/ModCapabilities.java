@@ -232,60 +232,52 @@ public final class ModCapabilities {
         return new ResourceStorageHandler<>(storage, canInsert, canExtract);
     }
 
-    private static final class DirectionalEnergyHandler implements LongEnergyHandler {
-        private final LongEnergyHandler handler;
-        private final boolean canInsert;
-        private final boolean canExtract;
-
-        DirectionalEnergyHandler(LongEnergyHandler handler, boolean canInsert, boolean canExtract) {
-            this.handler = handler;
-            this.canInsert = canInsert;
-            this.canExtract = canExtract;
-        }
+    private record DirectionalEnergyHandler(LongEnergyHandler handler, boolean canInsert,
+                                            boolean canExtract) implements LongEnergyHandler {
 
         @Override
-        public long getAmountAsLong() {
-            return handler.getAmountAsLong();
-        }
+            public long getAmountAsLong() {
+                return handler.getAmountAsLong();
+            }
 
-        @Override
-        public long getCapacityAsLong() {
-            return handler.getCapacityAsLong();
-        }
+            @Override
+            public long getCapacityAsLong() {
+                return handler.getCapacityAsLong();
+            }
 
-        @Override
-        public long getTransferLimit() {
-            return handler.getTransferLimit();
-        }
+            @Override
+            public long getTransferLimit() {
+                return handler.getTransferLimit();
+            }
 
-        @Override
-        public int insert(int amount, TransactionContext tx) {
-            TransferPreconditions.checkNonNegative(amount);
-            if (!canInsert) return 0;
-            return handler.insert(amount, tx);
-        }
+            @Override
+            public int insert(int amount, TransactionContext tx) {
+                TransferPreconditions.checkNonNegative(amount);
+                if (!canInsert) return 0;
+                return handler.insert(amount, tx);
+            }
 
-        @Override
-        public int extract(int amount, TransactionContext tx) {
-            TransferPreconditions.checkNonNegative(amount);
-            if (!canExtract) return 0;
-            return handler.extract(amount, tx);
-        }
+            @Override
+            public int extract(int amount, TransactionContext tx) {
+                TransferPreconditions.checkNonNegative(amount);
+                if (!canExtract) return 0;
+                return handler.extract(amount, tx);
+            }
 
-        @Override
-        public long insertLong(long amount, TransactionContext tx) {
-            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-            if (!canInsert) return 0L;
-            return handler.insertLong(amount, tx);
-        }
+            @Override
+            public long insertLong(long amount, TransactionContext tx) {
+                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+                if (!canInsert) return 0L;
+                return handler.insertLong(amount, tx);
+            }
 
-        @Override
-        public long extractLong(long amount, TransactionContext tx) {
-            if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-            if (!canExtract) return 0L;
-            return handler.extractLong(amount, tx);
+            @Override
+            public long extractLong(long amount, TransactionContext tx) {
+                if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
+                if (!canExtract) return 0L;
+                return handler.extractLong(amount, tx);
+            }
         }
-    }
 
     private static LongEnergyHandler energyHandler(LongValueStorage storage) {
         return new LongEnergyHandler() {
@@ -305,43 +297,54 @@ public final class ModCapabilities {
         };
     }
 
-    private static final class ResourceStorageHandler<R extends Resource> implements ResourceHandler<R> {
-        private final ResourceStorage<R> storage;
-        private final boolean canInsert;
-        private final boolean canExtract;
+    private record ResourceStorageHandler<R extends Resource>(ResourceStorage<R> storage, boolean canInsert,
+                                                              boolean canExtract) implements ResourceHandler<R> {
 
-        private ResourceStorageHandler(ResourceStorage<R> storage, boolean canInsert, boolean canExtract) {
-            this.storage = storage;
-            this.canInsert = canInsert;
-            this.canExtract = canExtract;
+        @Override
+        public int size() {
+            return storage.size();
         }
 
-        @Override public int size() { return storage.size(); }
-        @Override public R getResource(int slot) {
-            R resource = storage.resource(slot);
-            return resource == null ? emptyResource() : resource;
-        }
-        @Override public long getAmountAsLong(int slot) { return storage.amount(slot); }
-        @Override public long getCapacityAsLong(int slot, R resource) { return storage.capacity(slot, resource); }
-        @Override public boolean isValid(int slot, R resource) {
-            TransferPreconditions.checkNonEmpty(resource);
-            return storage.isValid(slot, resource);
-        }
-        @Override public int insert(int slot, R resource, int amount, TransactionContext tx) {
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            return canInsert ? (int) storage.insert(slot, resource, amount, tx) : 0;
-        }
-        @Override public int extract(int slot, R resource, int amount, TransactionContext tx) {
-            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
-            return canExtract ? (int) storage.extract(slot, resource, amount, tx) : 0;
+        @Override
+        public R getResource(int slot) {
+                R resource = storage.resource(slot);
+                return resource == null ? emptyResource() : resource;
+            }
+
+        @Override
+        public long getAmountAsLong(int slot) {
+            return storage.amount(slot);
         }
 
-        @SuppressWarnings("unchecked")
-        private R emptyResource() {
-            if (storage.resourceType() == ItemResource.class) return (R) ItemResource.EMPTY;
-            if (storage.resourceType() == FluidResource.class) return (R) FluidResource.EMPTY;
-            throw new IllegalStateException("Missing empty resource for " + storage.resourceType().getName());
+        @Override
+        public long getCapacityAsLong(int slot, R resource) {
+            return storage.capacity(slot, resource);
         }
-    }
+
+        @Override
+        public boolean isValid(int slot, R resource) {
+                TransferPreconditions.checkNonEmpty(resource);
+                return storage.isValid(slot, resource);
+            }
+
+        @Override
+        public int insert(int slot, R resource, int amount, TransactionContext tx) {
+                TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+                return canInsert ? (int) storage.insert(slot, resource, amount, tx) : 0;
+            }
+
+        @Override
+        public int extract(int slot, R resource, int amount, TransactionContext tx) {
+                TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+                return canExtract ? (int) storage.extract(slot, resource, amount, tx) : 0;
+            }
+
+            @SuppressWarnings("unchecked")
+            private R emptyResource() {
+                if (storage.resourceType() == ItemResource.class) return (R) ItemResource.EMPTY;
+                if (storage.resourceType() == FluidResource.class) return (R) FluidResource.EMPTY;
+                throw new IllegalStateException("Missing empty resource for " + storage.resourceType().getName());
+            }
+        }
 
 }

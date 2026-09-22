@@ -34,9 +34,9 @@ public final class ModelGen extends ModelProvider {
 
     @Override
     protected void registerModels(BlockModelGenerators blockModels, ItemModelGenerators itemModels) {
-        registerModels((BlockModelRegistration) (block, name) -> blockModels.createTrivialBlock(block.get(), TexturedModel.CUBE.updateTexture(
+        registerModels((block, name) -> blockModels.createTrivialBlock(block.get(), TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, textureFor(name)))),
-                (ItemModelRegistration) (item, name) -> itemModels.generateFlatItem(item.get(), ModelTemplates.FLAT_ITEM));
+                (item, name) -> itemModels.generateFlatItem(item.get(), ModelTemplates.FLAT_ITEM));
     }
 
     static List<GeneratedModel> collectRegisteredModels() {

@@ -50,35 +50,35 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
     }
 
     private static <T> DataResult<T> encode(ComponentPredicate predicate, DynamicOps<T> ops, T prefix) {
-        if (predicate instanceof Exact exact) {
+        if (predicate instanceof Exact(Dynamic<?> value1)) {
             return ops.mapBuilder()
                     .add("type", ops.createString("exact"))
-                    .add("value", exact.value.convert(ops).getValue())
+                    .add("value", value1.convert(ops).getValue())
                     .build(prefix);
         }
-        if (predicate instanceof MapValue map) {
+        if (predicate instanceof MapValue(Map<String, ComponentPredicate> values2)) {
             Map<T, T> values = new LinkedHashMap<>();
-            for (var entry : map.values.entrySet()) {
+            for (var entry : values2.entrySet()) {
                 var encoded = CODEC.encodeStart(ops, entry.getValue()).result();
                 if (encoded.isEmpty()) return DataResult.error(() -> "Could not encode component predicate " + entry.getKey());
                 values.put(ops.createString(entry.getKey()), encoded.get());
             }
             return ops.mapBuilder().add("type", ops.createString("map")).add("values", ops.createMap(values)).build(prefix);
         }
-        if (predicate instanceof ListValue list) {
+        if (predicate instanceof ListValue(List<ComponentPredicate> values1)) {
             List<T> values = new ArrayList<>();
-            for (ComponentPredicate value : list.values) {
+            for (ComponentPredicate value : values1) {
                 var encoded = CODEC.encodeStart(ops, value).result();
                 if (encoded.isEmpty()) return DataResult.error(() -> "Could not encode component list predicate");
                 values.add(encoded.get());
             }
             return ops.mapBuilder().add("type", ops.createString("list")).add("values", ops.createList(values.stream())).build(prefix);
         }
-        if (predicate instanceof Range range) {
+        if (predicate instanceof Range(double min, double max)) {
             return ops.mapBuilder()
                     .add("type", ops.createString("range"))
-                    .add("min", ops.createDouble(range.min))
-                    .add("max", ops.createDouble(range.max))
+                    .add("min", ops.createDouble(min))
+                    .add("max", ops.createDouble(max))
                     .build(prefix);
         }
         TextValue text = (TextValue) predicate;
@@ -120,7 +120,7 @@ public sealed interface ComponentPredicate permits ComponentPredicate.Exact, Com
             case "text" -> dynamic.get("value").result()
                     .map(value -> ComponentSerialization.CODEC.parse(value).flatMap(text -> dynamic.get("mode").asString()
                             .flatMap(mode -> TextMode.byName(mode)
-                                    .<DataResult<ComponentPredicate>>map(textMode -> DataResult.success(ComponentPredicate.text(text, textMode)))
+                                    .map(textMode -> DataResult.success(ComponentPredicate.text(text, textMode)))
                                     .orElseGet(() -> DataResult.error(() -> "Unknown component text mode " + mode)))))
                     .orElseGet(() -> DataResult.error(() -> "Component text predicate is missing a value"));
             default -> DataResult.error(() -> "Unknown component predicate type " + type);

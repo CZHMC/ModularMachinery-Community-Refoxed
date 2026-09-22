@@ -202,15 +202,17 @@ public final class SharedIoCoordinator {
 
     private MainThreadStep.Result executeTickWorksetStep(MachineAsyncCoordinator.TaskKey ignored,
                                                           MainThreadStep step) {
-        if (!(step instanceof MainThreadStep.TickWorkset result)) {
+        if (!(step instanceof MainThreadStep.TickWorkset(
+                long worksetId, List<AsyncRequirementPlanner.PlanResult> intents
+        ))) {
             return MainThreadStep.Result.failure(new IllegalArgumentException("Unexpected domain tick workset step"));
         }
-        TickWorkset workset = submittedTickWork.remove(result.worksetId());
-        if (workset == null || workset.entries().size() != result.intents().size()) {
+        TickWorkset workset = submittedTickWork.remove(worksetId);
+        if (workset == null || workset.entries().size() != intents.size()) {
             return MainThreadStep.Result.failure(new IllegalStateException("Domain tick workset became stale"));
         }
         for (int index = 0; index < workset.entries().size(); index++) {
-            workset.entries().get(index).committer().accept(result.intents().get(index));
+            workset.entries().get(index).committer().accept(intents.get(index));
         }
         return MainThreadStep.Result.success();
     }

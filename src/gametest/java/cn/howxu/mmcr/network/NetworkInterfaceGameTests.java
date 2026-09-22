@@ -460,7 +460,7 @@ public final class NetworkInterfaceGameTests {
         @Override
         @SuppressWarnings({"rawtypes", "unchecked"})
         public MapCodec<? extends GameTestInstance> codec() {
-            return (MapCodec) MapCodec.unit(this);
+            return MapCodec.unit(this);
         }
 
         @Override

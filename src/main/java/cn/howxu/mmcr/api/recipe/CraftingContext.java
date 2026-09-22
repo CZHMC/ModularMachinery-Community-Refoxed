@@ -319,9 +319,11 @@ public final class CraftingContext {
         List<AsyncResourceValue> values = new ArrayList<>();
         for (AsyncRequirementPlanner.Capability capability : capabilities) {
             if (!capability.directions().contains(direction)
-                    || !(capability.snapshot() instanceof AsyncCapabilitySnapshot.Resource snapshot)
-                    || !capabilityId.equals(snapshot.capabilityId())) continue;
-            snapshot.slots().stream().map(AsyncCapabilitySnapshot.ResourceSlot::resource)
+                    || !(capability.snapshot() instanceof AsyncCapabilitySnapshot.Resource(
+                    Identifier id, List<AsyncCapabilitySnapshot.ResourceSlot> slots
+            ))
+                    || !capabilityId.equals(id)) continue;
+            slots.stream().map(AsyncCapabilitySnapshot.ResourceSlot::resource)
                     .flatMap(java.util.Optional::stream).filter(value -> !values.contains(value)).forEach(values::add);
         }
         return values;
@@ -342,10 +344,14 @@ public final class CraftingContext {
             MachineRequirement requirement = source.get(index);
             if (direction != null && requirement.io() != direction) continue;
             if (consumedAtStart.contains(index)) continue;
-            if (retainedInputs.contains(index) && requirement instanceof ItemRequirement item
-                    && item.io() == RecipeModifier.IOType.INPUT && item.consumeChance() > 0F) {
-                requirement = new ItemRequirement(item.io(), item.item(), item.count(),
-                        item.stack(null), item.chance(), item.tags(), item.components(), 0F);
+            if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
+                    RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
+                    net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
+                    cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components, float consumeChance
+            )
+                    && io == RecipeModifier.IOType.INPUT && consumeChance > 0F) {
+                requirement = new ItemRequirement(io, item1, count,
+                        stack, chance, tags, components, 0F);
             }
             requirements.add(requirement);
             requirementIndexes.add(index);

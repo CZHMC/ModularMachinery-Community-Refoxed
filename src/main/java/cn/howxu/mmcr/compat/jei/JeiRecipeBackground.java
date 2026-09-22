@@ -25,7 +25,7 @@ public final class JeiRecipeBackground implements IScalableDrawable {
 
     @Override
     public void draw(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height) {
-        int scale = (int) Math.round(Minecraft.getInstance().getWindow().getGuiScale());
+        int scale = Math.round(Minecraft.getInstance().getWindow().getGuiScale());
         scale = Math.max(1, Math.min(4, scale));
         Identifier texture = MMCR.id("textures/gui/jei/" + textureDirectory + "/" + scale + "x.png");
         guiGraphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0.0F, 0.0F, width, height, width, height);

@@ -191,7 +191,7 @@ public class LongResourceStorage<R> extends SnapshotJournal<LongResourceStorage.
     }
 
     private void checkResource(R resource) {
-        if (resource == null || !resourceType.isInstance(resource) || empty.test(resource)) {
+        if (!resourceType.isInstance(resource) || empty.test(resource)) {
             throw new IllegalArgumentException("Expected resource to be non-empty: " + resource);
         }
     }

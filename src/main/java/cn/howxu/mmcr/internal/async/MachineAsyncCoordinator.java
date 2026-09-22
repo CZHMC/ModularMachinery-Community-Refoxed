@@ -265,11 +265,15 @@ public final class MachineAsyncCoordinator {
         if (yielded instanceof AsyncContinuation.Yield.Complete) {
             task.finished = true;
             signalProgress();
-        } else if (yielded instanceof AsyncContinuation.Yield.MainThread mainThread) {
-            batch.pendingMainSteps.add(new PendingMainStep(task, List.of(mainThread.step()),
-                    results -> mainThread.resume().apply(results.getFirst())));
-        } else if (yielded instanceof AsyncContinuation.Yield.MainThreadBatch mainThreadBatch) {
-            batch.pendingMainSteps.add(new PendingMainStep(task, mainThreadBatch.steps(), mainThreadBatch.resume()));
+        } else if (yielded instanceof AsyncContinuation.Yield.MainThread(
+                MainThreadStep step, Function<MainThreadStep.Result, AsyncContinuation> resume1
+        )) {
+            batch.pendingMainSteps.add(new PendingMainStep(task, List.of(step),
+                    results -> resume1.apply(results.getFirst())));
+        } else if (yielded instanceof AsyncContinuation.Yield.MainThreadBatch(
+                List<MainThreadStep> steps, Function<List<MainThreadStep.Result>, AsyncContinuation> resume
+        )) {
+            batch.pendingMainSteps.add(new PendingMainStep(task, steps, resume));
         }
     }
 
@@ -314,8 +318,8 @@ public final class MachineAsyncCoordinator {
                     signalProgress();
                     return;
                 }
-                if (result instanceof MainThreadStep.Result.Failure failure) {
-                    fail(batch, pending.task, failure.cause());
+                if (result instanceof MainThreadStep.Result.Failure(Throwable cause)) {
+                    fail(batch, pending.task, cause);
                     return;
                 }
                 pending.results.add(result);

@@ -34,14 +34,16 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
 
         @Override
         public Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot, AsyncCapabilityRequest request) {
-            if (!(snapshot instanceof AsyncCapabilitySnapshot.Resource resourceSnapshot)
+            if (!(snapshot instanceof AsyncCapabilitySnapshot.Resource(
+                    Identifier id, List<AsyncCapabilitySnapshot.ResourceSlot> slots1
+            ))
                     || !(request instanceof AsyncCapabilityRequest.Resource resourceRequest)
-                    || !capabilityId.equals(resourceSnapshot.capabilityId())
+                    || !capabilityId.equals(id)
                     || !capabilityId.equals(resourceRequest.capabilityId())) {
                 return Optional.empty();
             }
 
-            List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(resourceSnapshot.slots());
+            List<AsyncCapabilitySnapshot.ResourceSlot> slots = new ArrayList<>(slots1);
             List<AsyncCapabilityOperation> operations = new ArrayList<>(resourceRequest.actions().size());
             for (AsyncResourceAction action : resourceRequest.actions()) {
                 List<AsyncCapabilityOperation.Resource> actionOperations = planAction(slots, action);
@@ -98,24 +100,28 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
 
         @Override
         public Optional<AsyncCapabilityOperation> plan(AsyncCapabilitySnapshot snapshot, AsyncCapabilityRequest request) {
-            if (!(snapshot instanceof AsyncCapabilitySnapshot.Scalar scalarSnapshot)
-                    || !(request instanceof AsyncCapabilityRequest.Scalar scalarRequest)
-                    || !capabilityId.equals(scalarSnapshot.capabilityId())
-                    || !capabilityId.equals(scalarRequest.capabilityId())) {
+            if (!(snapshot instanceof AsyncCapabilitySnapshot.Scalar(
+                    Identifier capabilityId1, long amount2, long capacity, long transferLimit
+            ))
+                    || !(request instanceof AsyncCapabilityRequest.Scalar(
+                    Identifier id, long parallelism, long amount1, boolean insert
+            ))
+                    || !capabilityId.equals(capabilityId1)
+                    || !capabilityId.equals(id)) {
                 return Optional.empty();
             }
 
-            long available = scalarRequest.insert()
-                    ? scalarSnapshot.capacity() - scalarSnapshot.amount()
-                    : scalarSnapshot.amount();
-            long maximum = scaled(scalarSnapshot.transferLimit(), scalarRequest.parallelism());
-            long amount = Math.min(scalarRequest.amount(), Math.min(available, maximum));
+            long available = insert
+                    ? capacity - amount2
+                    : amount2;
+            long maximum = scaled(transferLimit, parallelism);
+            long amount = Math.min(amount1, Math.min(available, maximum));
             if (amount <= 0L) return Optional.empty();
 
             List<AsyncCapabilityOperation> operations = new ArrayList<>();
             while (amount > 0L) {
-                long operationAmount = Math.min(amount, scalarSnapshot.transferLimit());
-                operations.add(new AsyncCapabilityOperation.Scalar(capabilityId, operationAmount, scalarRequest.insert()));
+                long operationAmount = Math.min(amount, transferLimit);
+                operations.add(new AsyncCapabilityOperation.Scalar(capabilityId, operationAmount, insert));
                 amount -= operationAmount;
             }
             return Optional.of(operations.size() == 1 ? operations.getFirst() : new AsyncCapabilityOperation.Group(operations));

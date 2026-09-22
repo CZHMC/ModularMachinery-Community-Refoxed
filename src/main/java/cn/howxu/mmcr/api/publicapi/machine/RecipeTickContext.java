@@ -14,16 +14,9 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class RecipeTickContext {
-    private final MachineBehaviorContext machineContext;
-    private final MachineRecipe recipe;
-    private final int currentTick;
-    private final int totalTick;
-    private final long parallelism;
-    private final List<RecipeRequirement> requirements;
-    private final List<MachineOutput> outputs;
-    private final CapabilitySnapshot capabilitySnapshot;
-
+public record RecipeTickContext(MachineBehaviorContext machineContext, MachineRecipe recipe, int currentTick,
+                                int totalTick, long parallelism, List<RecipeRequirement> requirements,
+                                List<MachineOutput> outputs, CapabilitySnapshot capabilitySnapshot) {
     public RecipeTickContext(MachineRecipe recipe, int currentTick, int totalTick, long parallelism) {
         this(MachineBehaviorContext.empty(), recipe,
                 currentTick, totalTick, parallelism,
@@ -54,37 +47,5 @@ public final class RecipeTickContext {
         this.requirements = List.copyOf(Objects.requireNonNull(requirements, "requirements"));
         this.outputs = MachineOutput.copyList(Objects.requireNonNull(outputs, "outputs"));
         this.capabilitySnapshot = Objects.requireNonNull(capabilitySnapshot, "capabilitySnapshot");
-    }
-
-    public MachineRecipe recipe() {
-        return recipe;
-    }
-
-    public MachineBehaviorContext machineContext() {
-        return machineContext;
-    }
-
-    public int currentTick() {
-        return currentTick;
-    }
-
-    public int totalTick() {
-        return totalTick;
-    }
-
-    public long parallelism() {
-        return parallelism;
-    }
-
-    public List<RecipeRequirement> requirements() {
-        return requirements;
-    }
-
-    public List<MachineOutput> outputs() {
-        return outputs;
-    }
-
-    public CapabilitySnapshot capabilitySnapshot() {
-        return capabilitySnapshot;
     }
 }

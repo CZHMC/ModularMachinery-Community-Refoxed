@@ -125,49 +125,42 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
                 .toList();
     }
 
-    private static final class ActualCountSlotView implements IRecipeSlotView {
-        private final IRecipeSlotView delegate;
-        private final int count;
-
-        private ActualCountSlotView(IRecipeSlotView delegate, int count) {
-            this.delegate = delegate;
-            this.count = count;
-        }
+    private record ActualCountSlotView(IRecipeSlotView delegate, int count) implements IRecipeSlotView {
 
         @Override
-        public Stream<ITypedIngredient<?>> getAllIngredients() {
-            return getAllIngredientsList().stream().filter(Objects::nonNull);
-        }
-
-        @Override
-        public List<@Nullable ITypedIngredient<?>> getAllIngredientsList() {
-            List<@Nullable ITypedIngredient<?>> ingredients = new ArrayList<>(delegate.getAllIngredientsList().size());
-            for (ITypedIngredient<?> ingredient : delegate.getAllIngredientsList()) {
-                ingredients.add(ingredient == null ? null : withActualCount(ingredient, count));
+            public Stream<ITypedIngredient<?>> getAllIngredients() {
+                return getAllIngredientsList().stream().filter(Objects::nonNull);
             }
-            return Collections.unmodifiableList(ingredients);
-        }
 
-        @Override
-        public Optional<ITypedIngredient<?>> getDisplayedIngredient() {
-            return delegate.getDisplayedIngredient().map(ingredient -> withActualCount(ingredient, count));
-        }
+            @Override
+            public List<@Nullable ITypedIngredient<?>> getAllIngredientsList() {
+                List<@Nullable ITypedIngredient<?>> ingredients = new ArrayList<>(delegate.getAllIngredientsList().size());
+                for (ITypedIngredient<?> ingredient : delegate.getAllIngredientsList()) {
+                    ingredients.add(ingredient == null ? null : withActualCount(ingredient, count));
+                }
+                return Collections.unmodifiableList(ingredients);
+            }
 
-        @Override
-        public RecipeIngredientRole getRole() {
-            return delegate.getRole();
-        }
+            @Override
+            public Optional<ITypedIngredient<?>> getDisplayedIngredient() {
+                return delegate.getDisplayedIngredient().map(ingredient -> withActualCount(ingredient, count));
+            }
 
-        @Override
-        public void drawHighlight(GuiGraphicsExtractor guiGraphics, int color) {
-            delegate.drawHighlight(guiGraphics, color);
-        }
+            @Override
+            public RecipeIngredientRole getRole() {
+                return delegate.getRole();
+            }
 
-        @Override
-        public Optional<String> getSlotName() {
-            return delegate.getSlotName();
+            @Override
+            public void drawHighlight(GuiGraphicsExtractor guiGraphics, int color) {
+                delegate.drawHighlight(guiGraphics, color);
+            }
+
+            @Override
+            public Optional<String> getSlotName() {
+                return delegate.getSlotName();
+            }
         }
-    }
 
     private static ITypedIngredient<?> withActualCount(ITypedIngredient<?> ingredient, int count) {
         ItemStack stack = ingredient.getIngredient(VanillaTypes.ITEM_STACK).orElse(null);

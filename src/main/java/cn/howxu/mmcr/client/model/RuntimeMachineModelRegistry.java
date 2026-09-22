@@ -176,8 +176,7 @@ public final class RuntimeMachineModelRegistry {
                     portStyleDefinition(block),
                     DynamicOverlayItemModel.Description.portOverlay(MMCR.id("block/overlay_data_storage")));
         }
-        if (block instanceof UpgradeBusBlock) {
-            UpgradeBusBlock upgradeBus = (UpgradeBusBlock) block;
+        if (block instanceof UpgradeBusBlock upgradeBus) {
             return new RuntimeBlockModelDefinition(
                     block,
                     blockName,

@@ -22,8 +22,8 @@ public final class InputInterfaceKind implements InterfaceLogicKind {
     public static final InputInterfaceKind INSTANCE = new InputInterfaceKind();
 
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
-            AE2ResourceFamilies.ITEM.inputBinding(host -> ((InputInterfaceBlockEntity) host).itemStorage(), false),
-            AE2ResourceFamilies.FLUID.inputBinding(host -> ((InputInterfaceBlockEntity) host).fluidStorage(), false)));
+            AE2ResourceFamilies.ITEM.inputBinding(host -> host.itemStorage(), false),
+            AE2ResourceFamilies.FLUID.inputBinding(host -> host.fluidStorage(), false)));
 
     private InputInterfaceKind() {}
 

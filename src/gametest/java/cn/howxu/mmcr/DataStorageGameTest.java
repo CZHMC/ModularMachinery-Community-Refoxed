@@ -294,8 +294,10 @@ public final class DataStorageGameTest {
 
     private static PktControllerScreenTextPayload lastScreenTextPacket(ServerPlayer player) {
         return ((RecordingConnection) player.connection).packets.stream()
-                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
-                        && custom.payload() instanceof PktControllerScreenTextPayload)
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket(
+                        net.minecraft.network.protocol.common.custom.CustomPacketPayload payload
+                )
+                        && payload instanceof PktControllerScreenTextPayload)
                 .map(packet -> (PktControllerScreenTextPayload) ((ClientboundCustomPayloadPacket) packet).payload())
                 .reduce((first, second) -> second)
                 .orElse(null);

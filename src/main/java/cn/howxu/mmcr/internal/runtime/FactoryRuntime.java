@@ -335,14 +335,14 @@ public final class FactoryRuntime {
     }
 
     private MainThreadStep.Result executeAsyncSearchStep(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep step) {
-        if (!(step instanceof MainThreadStep.FactorySearch search)) {
+        if (!(step instanceof MainThreadStep.FactorySearch(String laneId, long catalogVersion, long searchId))) {
             return MainThreadStep.Result.failure(new IllegalArgumentException("Unexpected factory async step"));
         }
-        FactoryRecipeThread lane = lanes.stream().filter(candidate -> candidate.laneId().equals(search.laneId()))
+        FactoryRecipeThread lane = lanes.stream().filter(candidate -> candidate.laneId().equals(laneId))
                 .findFirst().orElse(null);
         AsyncSearchRequest request = lane == null ? null : pendingAsyncSearches.get(lane);
-        if (lane == null || request == null || request.searchId() != search.searchId()
-                || !asyncSearchStillValid(lane, request, search.catalogVersion())) {
+        if (lane == null || request == null || request.searchId() != searchId
+                || !asyncSearchStillValid(lane, request, catalogVersion)) {
             if (lane != null) pendingAsyncSearches.remove(lane);
             return MainThreadStep.Result.failure(new IllegalStateException("Factory async search became stale"));
         }
@@ -366,9 +366,9 @@ public final class FactoryRuntime {
                     reserveStart(lane, started, activeCounts);
                     if (started) markLaneStateChanged();
                     return true;
-                }, () -> validateAsyncSearchRequest(lane, request, search.catalogVersion(), taskKey, level),
+                }, () -> validateAsyncSearchRequest(lane, request, catalogVersion, taskKey, level),
                 () -> controller.currentRuntimeSnapshot().structure().version(),
-                () -> controller.currentRuntimeSnapshot().stateVersion(), search.catalogVersion(),
+                () -> controller.currentRuntimeSnapshot().stateVersion(), catalogVersion,
                 this::currentCatalogVersion, () -> MachineAsyncCoordinator.get(level).resume(taskKey)));
         return MainThreadStep.Result.pending();
     }
@@ -635,7 +635,7 @@ public final class FactoryRuntime {
         while (snapshots.size() < laneLimit) {
             int index = snapshots.size();
             snapshots.add(new ThreadSnapshot(index, "idle-" + index, false, false, false,
-                    "", 0, 0, 1, (ExecutionStatus) null, false, "",
+                    "", 0, 0, 1, null, false, "",
                     ControllerRecipePresentation.empty()));
         }
         return List.copyOf(snapshots);
@@ -1352,7 +1352,7 @@ public final class FactoryRuntime {
 
         public static ThreadSnapshot idleBase() {
             return new ThreadSnapshot(0, "base", true, false, false, "", 0, 0, 1L,
-                    (ExecutionStatus) null, false, "", ControllerRecipePresentation.empty());
+                    null, false, "", ControllerRecipePresentation.empty());
         }
     }
 }

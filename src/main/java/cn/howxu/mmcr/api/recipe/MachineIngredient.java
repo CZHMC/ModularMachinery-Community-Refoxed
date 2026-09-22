@@ -17,25 +17,29 @@ public sealed interface MachineIngredient {
 
     private static <T> DataResult<T> encode(MachineIngredient ingredient, DynamicOps<T> ops, T prefix) {
         var builder = ops.mapBuilder().add("type", ops.createString(ingredient.type()));
-        if (ingredient instanceof ItemIngredient item) {
+        if (ingredient instanceof ItemIngredient(
+                Ingredient item1, int count, DataComponentPredicateSet components, float chance
+        )) {
             builder = builder
-                    .add("item", item.item(), Ingredient.CODEC)
-                    .add("count", ops.createInt(item.count()));
-            if (!item.components().isEmpty()) builder = builder.add("components", item.components(), DataComponentPredicateSet.CODEC);
-            if (item.consumeChance() != 1F) builder = builder.add("consume_chance", ops.createFloat(item.consumeChance()));
+                    .add("item", item1, Ingredient.CODEC)
+                    .add("count", ops.createInt(count));
+            if (!components.isEmpty()) builder = builder.add("components", components, DataComponentPredicateSet.CODEC);
+            if (chance != 1F) builder = builder.add("consume_chance", ops.createFloat(chance));
             return builder.build(prefix);
         }
-        if (ingredient instanceof FluidIngredient fluid) {
+        if (ingredient instanceof FluidIngredient(
+                net.neoforged.neoforge.fluids.crafting.FluidIngredient fluid1, int amount, float consumeChance
+        )) {
             builder = builder
-                    .add("fluid", fluid.fluid(), net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC)
-                    .add("amount", ops.createInt(fluid.amount()));
-            if (fluid.consumeChance() != 1F) builder = builder.add("consume_chance", ops.createFloat(fluid.consumeChance()));
+                    .add("fluid", fluid1, net.neoforged.neoforge.fluids.crafting.FluidIngredient.CODEC)
+                    .add("amount", ops.createInt(amount));
+            if (consumeChance != 1F) builder = builder.add("consume_chance", ops.createFloat(consumeChance));
             return builder.build(prefix);
         }
-        if (ingredient instanceof EnergyIngredient energy) {
+        if (ingredient instanceof EnergyIngredient(RecipeModifier.IOType io, long fePerTick)) {
             return builder
-                    .add("io", ops.createString(energy.io().getKey()))
-                    .add("fe_per_tick", ops.createLong(energy.fePerTick()))
+                    .add("io", ops.createString(io.getKey()))
+                    .add("fe_per_tick", ops.createLong(fePerTick))
                     .build(prefix);
         }
         return DataResult.error(() -> "Unknown machine ingredient: " + ingredient);

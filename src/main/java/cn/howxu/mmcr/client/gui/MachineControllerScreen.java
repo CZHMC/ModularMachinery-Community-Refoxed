@@ -152,8 +152,10 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
 
     static Component levelLine(MachineLevel level) {
         var type = MachineLevelRegistry.getType(level.typeId());
-        if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState predicate)) return Component.empty();
-        return Component.translatable("gui.mmcr.controller.level", type.displayName(), predicate.state().getBlock().getName());
+        if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState(
+                net.minecraft.world.level.block.state.BlockState state
+        ))) return Component.empty();
+        return Component.translatable("gui.mmcr.controller.level", type.displayName(), state.getBlock().getName());
     }
 
     static Component parallelLine(long parallelism, long maxParallelism) {

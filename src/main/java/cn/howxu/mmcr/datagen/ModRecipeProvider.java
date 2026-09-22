@@ -541,12 +541,12 @@ public final class ModRecipeProvider extends RecipeProvider {
         return ItemTags.create(Identifier.fromNamespaceAndPath("c", path));
     }
 
-    protected ShapedRecipeBuilder shaped(ItemLike result, int count) {
+    private ShapedRecipeBuilder shaped(ItemLike result, int count) {
         return ShapedRecipeBuilder.shaped(items, RecipeCategory.MISC, result, count)
                 .unlockedBy(getHasName(result), has(result));
     }
 
-    protected ShapelessRecipeBuilder shapeless(ItemLike result, int count) {
+    private ShapelessRecipeBuilder shapeless(ItemLike result, int count) {
         return ShapelessRecipeBuilder.shapeless(items, RecipeCategory.MISC, result, count)
                 .unlockedBy(getHasName(result), has(result));
     }

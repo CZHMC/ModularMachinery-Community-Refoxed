@@ -90,7 +90,7 @@ public final class NetworkInterfaceBindingCoordinator {
         for (int index = maxConnections; index < connections.size(); index++) {
             StoredConnection stored = connections.get(index);
             NetworkInterfaceBlockEntity.Connection connection = stored.connection;
-            GlobalPos sourceEndpoint = GlobalPos.of(((ServerLevel) stored.network.getLevel()).dimension(), stored.network.getBlockPos());
+            GlobalPos sourceEndpoint = GlobalPos.of(stored.network.getLevel().dimension(), stored.network.getBlockPos());
             disconnect(server, sourceEndpoint, controller.machineReference(), connection.endpoint(), connection.machine());
         }
     }
@@ -99,7 +99,7 @@ public final class NetworkInterfaceBindingCoordinator {
         if (server == null || controller == null) return;
         MachineReference reference = controller.machineReference();
         for (NetworkInterfaceBlockEntity network : activeInterfaces(server, controller)) {
-            GlobalPos endpoint = GlobalPos.of(((ServerLevel) network.getLevel()).dimension(), network.getBlockPos());
+            GlobalPos endpoint = GlobalPos.of(network.getLevel().dimension(), network.getBlockPos());
             for (NetworkInterfaceBlockEntity.Connection connection : network.connections()) {
                 disconnect(server, endpoint, reference, connection.endpoint(), connection.machine());
             }
@@ -167,7 +167,7 @@ public final class NetworkInterfaceBindingCoordinator {
     }
 
     private static GlobalPos controllerKey(MachineControllerBlockEntity controller) {
-        return GlobalPos.of(((ServerLevel) controller.getLevel()).dimension(), controller.getBlockPos());
+        return GlobalPos.of(controller.getLevel().dimension(), controller.getBlockPos());
     }
 
     private static boolean formed(MachineControllerBlockEntity controller) {

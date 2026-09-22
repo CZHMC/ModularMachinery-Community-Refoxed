@@ -247,7 +247,7 @@ public final class PreviewLevel extends Level {
     }
 
     private static Holder<DimensionType> overworldType() {
-        return Holder.direct(new DimensionType(true, false, false, false, 1.0D, false ? 0 : 256,
+        return Holder.direct(new DimensionType(true, false, false, false, 1.0D, 256,
                 256, 256, BlockTags.INFINIBURN_OVERWORLD, 0.0F,
                 new DimensionType.MonsterSettings(ConstantInt.of(0), 0),
                 DimensionType.Skybox.OVERWORLD, CardinalLighting.Type.DEFAULT,

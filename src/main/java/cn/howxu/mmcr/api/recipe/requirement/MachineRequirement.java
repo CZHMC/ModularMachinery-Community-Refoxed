@@ -47,16 +47,21 @@ public interface MachineRequirement {
     }
 
     static MachineRequirement fromInput(MachineIngredient ingredient) {
-        if (ingredient instanceof MachineIngredient.ItemIngredient item) {
-            return new ItemRequirement(RecipeModifier.IOType.INPUT, item.item(), item.count(), ItemStack.EMPTY,
-                    1F, List.of(), item.components(), item.consumeChance());
+        if (ingredient instanceof MachineIngredient.ItemIngredient(
+                net.minecraft.world.item.crafting.Ingredient item1, int count, DataComponentPredicateSet components,
+                float chance
+        )) {
+            return new ItemRequirement(RecipeModifier.IOType.INPUT, item1, count, ItemStack.EMPTY,
+                    1F, List.of(), components, chance);
         }
-        if (ingredient instanceof MachineIngredient.FluidIngredient fluid) {
-            return new FluidRequirement(RecipeModifier.IOType.INPUT, fluid.fluid(), fluid.amount(), FluidStack.EMPTY,
-                    1F, List.of(), fluid.consumeChance());
+        if (ingredient instanceof MachineIngredient.FluidIngredient(
+                net.neoforged.neoforge.fluids.crafting.FluidIngredient fluid1, int amount, float consumeChance
+        )) {
+            return new FluidRequirement(RecipeModifier.IOType.INPUT, fluid1, amount, FluidStack.EMPTY,
+                    1F, List.of(), consumeChance);
         }
-        if (ingredient instanceof MachineIngredient.EnergyIngredient energy) {
-            return new EnergyRequirement(energy.io(), energy.fePerTick());
+        if (ingredient instanceof MachineIngredient.EnergyIngredient(RecipeModifier.IOType io, long fePerTick)) {
+            return new EnergyRequirement(io, fePerTick);
         }
         throw new IllegalArgumentException("Unknown machine ingredient: " + ingredient);
     }
@@ -122,7 +127,7 @@ public interface MachineRequirement {
     @SuppressWarnings("unchecked")
     private static <T> DataResult<MachineRequirement> decodeByType(RequirementType<?> type, DynamicOps<T> ops,
                                                                     T input) {
-        Codec<? extends MachineRequirement> codec = (Codec<? extends MachineRequirement>) type.codec().codec();
+        Codec<? extends MachineRequirement> codec = type.codec().codec();
         return codec.parse(ops, input).flatMap(requirement -> {
             if (requirement == null || type != requirement.type() || requirement.io() == null) {
                 return DataResult.error(() -> "Decoded requirement does not match registered type: " + type.id());

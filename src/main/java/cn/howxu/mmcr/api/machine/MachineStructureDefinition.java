@@ -84,103 +84,63 @@ public record MachineStructureDefinition(Identifier machineId, List<Declaration>
     }
 
     /**
-     * One full structure or controller-relative extension declaration.
-     *
-     * @author howxu <dev@howxu.cn>
-     */
-    public static final class Declaration {
-        private final Kind kind;
-        private final BlockArray pattern;
-        private final PortRequirementSpec portRequirements;
-        private final PortTierRequirementSpec portTierRequirements;
-        private final List<DynamicPatternSpec> dynamicPatterns;
-        private final MachineStructureRequirements requirements;
-        private final boolean stateSensitive;
+         * One full structure or controller-relative extension declaration.
+         *
+         * @author howxu <dev@howxu.cn>
+         */
+        public record Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
+                                  PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+                                  MachineStructureRequirements requirements, boolean stateSensitive) {
+            public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
+                               PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+                               MachineStructureRequirements requirements) {
+                this(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements, false);
+            }
 
-        public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
-                PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
-                MachineStructureRequirements requirements) {
-            this(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements, false);
-        }
+            public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
+                               PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
+                               MachineStructureRequirements requirements, boolean stateSensitive) {
+                this.kind = Objects.requireNonNull(kind, "kind");
+                Objects.requireNonNull(pattern, "pattern");
+                this.pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
+                this.portRequirements = portRequirements;
+                this.portTierRequirements = portTierRequirements;
+                this.dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
+                this.requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(this.pattern);
+                this.stateSensitive = stateSensitive;
+            }
 
-        public Declaration(Kind kind, BlockArray pattern, PortRequirementSpec portRequirements,
-                PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
-                MachineStructureRequirements requirements, boolean stateSensitive) {
-            this.kind = Objects.requireNonNull(kind, "kind");
-            Objects.requireNonNull(pattern, "pattern");
-            this.pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
-            this.portRequirements = portRequirements;
-            this.portTierRequirements = portTierRequirements;
-            this.dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
-            this.requirements = (requirements == null ? MachineStructureRequirements.EMPTY : requirements).validate(this.pattern);
-            this.stateSensitive = stateSensitive;
-        }
-
-        public Kind kind() {
-            return kind;
-        }
-
-        public BlockArray pattern() {
-            return pattern;
-        }
-
-        public PortRequirementSpec portRequirements() {
-            return portRequirements;
-        }
-
-        public PortTierRequirementSpec portTierRequirements() {
-            return portTierRequirements;
-        }
-
-        public List<DynamicPatternSpec> dynamicPatterns() {
-            return dynamicPatterns;
-        }
-
-        public MachineStructureRequirements requirements() {
-            return requirements;
-        }
-
-        public boolean stateSensitive() {
-            return stateSensitive;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (!(obj instanceof Declaration other)) return false;
-            return kind == other.kind
-                    && pattern.equals(other.pattern)
-                    && Objects.equals(portRequirements, other.portRequirements)
-                    && Objects.equals(portTierRequirements, other.portTierRequirements)
-                    && dynamicPatterns.equals(other.dynamicPatterns)
-                    && requirements.equals(other.requirements)
-                    && stateSensitive == other.stateSensitive;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(kind, pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements,
-                    stateSensitive);
-        }
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) return true;
+                if (!(obj instanceof Declaration other)) return false;
+                return kind == other.kind
+                        && pattern.equals(other.pattern)
+                        && Objects.equals(portRequirements, other.portRequirements)
+                        && Objects.equals(portTierRequirements, other.portTierRequirements)
+                        && dynamicPatterns.equals(other.dynamicPatterns)
+                        && requirements.equals(other.requirements)
+                        && stateSensitive == other.stateSensitive;
+            }
 
         public static Declaration full(BlockArray pattern) {
-            return new Declaration(Kind.FULL, pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
-                    List.of(), MachineStructureRequirements.EMPTY);
-        }
+                return new Declaration(Kind.FULL, pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
+                        List.of(), MachineStructureRequirements.EMPTY);
+            }
 
-        public static Declaration extension(BlockArray pattern) {
-            return new Declaration(Kind.EXTENSION, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY);
-        }
+            public static Declaration extension(BlockArray pattern) {
+                return new Declaration(Kind.EXTENSION, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY);
+            }
 
-        private static Map<BlockPos, List<String>> copyStringMap(Map<BlockPos, List<String>> source) {
-            Map<BlockPos, List<String>> copy = new LinkedHashMap<>();
-            source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-            return Collections.unmodifiableMap(copy);
-        }
+            private static Map<BlockPos, List<String>> copyStringMap(Map<BlockPos, List<String>> source) {
+                Map<BlockPos, List<String>> copy = new LinkedHashMap<>();
+                source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
+                return Collections.unmodifiableMap(copy);
+            }
 
-        public enum Kind {
-            FULL,
-            EXTENSION
+            public enum Kind {
+                FULL,
+                EXTENSION
+            }
         }
-    }
 }

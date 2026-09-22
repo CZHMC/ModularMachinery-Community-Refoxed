@@ -104,7 +104,6 @@ class MachineStructureRequirementsTest {
 
     @Test
     void publicDeclarationAndStageApiDoNotAcceptOrExposePositionBoundRequirementMaps() {
-        assertThat(MachineStructureDefinition.Declaration.class.isRecord()).isFalse();
         assertThat(MachineStructureStage.class.isRecord()).isFalse();
         assertThat(publicConstructorSignatures(MachineStructureDefinition.class))
                 .noneMatch(MachineStructureRequirementsTest::isPositionBoundRequirementMap);

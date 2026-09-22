@@ -214,7 +214,7 @@ public final class MachineBuilder {
 
     public MachineBuilder requestProcess(Identifier requestId, cn.howxu.mmcr.api.publicapi.network.RequestProcess process) {
         Objects.requireNonNull(process, "process");
-        return requestProcessInternal(requestId, (RequestProcess) (body, request, senderStorage, receiverStorage) -> process.process(
+        return requestProcessInternal(requestId, (body, request, senderStorage, receiverStorage) -> process.process(
                 RequestBody.fromInternal(body),
                 new RequestInfo(request.requestId(),
                         MachineReference.fromInternal(request.peer())),
@@ -234,7 +234,7 @@ public final class MachineBuilder {
     @Deprecated(forRemoval = true)
     public MachineBuilder requestFailedLegacy(Identifier requestId, cn.howxu.mmcr.api.network.RequestFailed failure) {
         Objects.requireNonNull(failure, "failure");
-        return requestFailed(requestId, (RequestFailed) (body, request, senderStorage, reason) -> failure.fail(
+        return requestFailed(requestId, (body, request, senderStorage, reason) -> failure.fail(
                 (cn.howxu.mmcr.api.network.RequestBody) body.bridgeValue(),
                 new cn.howxu.mmcr.api.network.RequestInfo(request.requestId(),
                         (cn.howxu.mmcr.api.network.MachineReference) request.peer().bridgeValue()),

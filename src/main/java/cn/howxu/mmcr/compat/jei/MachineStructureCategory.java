@@ -60,7 +60,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     @Override public Component getTitle() { return Component.translatable("jei.mmcr.multiblock_structure"); }
     @Override
     public int getWidth() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 168;
             case 2 -> 168;
             case 3 -> 168;
@@ -70,7 +70,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public int getHeight() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 300;
             case 2 -> 280;
             case 3 -> 220;
@@ -163,7 +163,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     }
 
     private static int materialY() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> MATERIAL_Y_1X;
             case 2 -> MATERIAL_Y_2X;
             case 3 -> MATERIAL_Y_3X;
@@ -172,7 +172,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     }
 
     private static int transferButtonY() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> TRANSFER_BUTTON_Y;
             case 2 -> TRANSFER_BUTTON_Y_2X;
             case 3 -> TRANSFER_BUTTON_Y_3X;
@@ -185,7 +185,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     }
 
     private static int previewHeight() {
-        return switch ((int) Minecraft.getInstance().getWindow().getGuiScale()) {
+        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
             case 1 -> 253;
             case 2 -> 233;
             case 3 -> 173;

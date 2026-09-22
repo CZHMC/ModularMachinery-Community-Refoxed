@@ -161,7 +161,7 @@ public final class RequirementHandlerRegistry {
     private static <T> T dispatch(MachineRequirement requirement, HandlerCall<T> call) {
         if (requirement == null || requirement.type() == null) return null;
         RequirementHandler<?> handler = handlerFor(requirement.type());
-        return handler == null ? null : call.apply((RequirementHandler) handler, requirement);
+        return handler == null ? null : call.apply(handler, requirement);
     }
 
     @FunctionalInterface

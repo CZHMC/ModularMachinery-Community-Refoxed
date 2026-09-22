@@ -183,10 +183,10 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
 
     private CapabilityResult commitAsync(AsyncCapabilityOperation operation,
                                           net.neoforged.neoforge.transfer.transaction.TransactionContext transaction) {
-        if (operation instanceof AsyncCapabilityOperation.Group group) {
+        if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
             try (net.neoforged.neoforge.transfer.transaction.Transaction nested =
                          net.neoforged.neoforge.transfer.transaction.Transaction.open(transaction)) {
-                for (AsyncCapabilityOperation child : group.operations()) {
+                for (AsyncCapabilityOperation child : operations) {
                     CapabilityResult result = commitAsync(child, nested);
                     if (!result.success()) return result;
                 }
@@ -194,14 +194,16 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
             }
             return CapabilityResult.successful();
         }
-        if (!(operation instanceof AsyncCapabilityOperation.Scalar scalar)
-                || !type().id().equals(scalar.capabilityId())) {
+        if (!(operation instanceof AsyncCapabilityOperation.Scalar(
+                net.minecraft.resources.Identifier capabilityId, long amount, boolean insert
+        ))
+                || !type().id().equals(capabilityId)) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        long moved = scalar.insert() ? storage.insert(scalar.amount(), transaction)
-                : storage.extract(scalar.amount(), transaction);
-        return moved == scalar.amount() ? CapabilityResult.successful()
-                : failure(scalar.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+        long moved = insert ? storage.insert(amount, transaction)
+                : storage.extract(amount, transaction);
+        return moved == amount ? CapabilityResult.successful()
+                : failure(insert ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Override

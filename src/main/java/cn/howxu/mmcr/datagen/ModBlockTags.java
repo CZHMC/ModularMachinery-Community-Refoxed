@@ -13,12 +13,13 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.PackOutput;
 import net.minecraft.resources.Identifier;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagEntry;
 import net.minecraft.tags.TagKey;
 import net.neoforged.neoforge.common.data.BlockTagsProvider;
 
 import net.minecraft.world.level.block.Block;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import org.jspecify.annotations.NonNull;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -33,7 +34,7 @@ public final class ModBlockTags extends BlockTagsProvider {
     }
 
     @Override
-    protected void addTags(HolderLookup.Provider provider) {
+    protected void addTags(HolderLookup.@NonNull Provider provider) {
         // 新增了扳手功能 因此这个易于挖掘的标签可以去掉了
         // tag(BlockTags.MINEABLE_WITH_PICKAXE).add(ModBlocks.BLOCKS.values().stream()
         //         .map(holder -> holder.get())
@@ -41,7 +42,7 @@ public final class ModBlockTags extends BlockTagsProvider {
         //         .toArray(Block[]::new));
         tag(blockTag("machine_casings")).add(ModBlocks.BASIC_CASING.get());
         tag(blockTag("machines")).add(ModBlocks.BLOCKS.values().stream()
-                .map(holder -> holder.get())
+                .map(DeferredHolder::get)
                 .filter(ModBlockTags::isFixedMachineComponent)
                 .toArray(Block[]::new));
         tag(blockTag("ports")).add(ModBlocks.SMART_INTERFACE.get(), ModBlocks.NETWORK_INTERFACE.get());

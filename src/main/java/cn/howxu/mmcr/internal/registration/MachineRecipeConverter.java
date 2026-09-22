@@ -105,14 +105,18 @@ public final class MachineRecipeConverter {
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement fluid) {
             return new FluidRequirement(toInternalIo(fluid.io()), fluid.ingredient(), fluid.amount(), fluid.stack(), fluid.chance(), List.of(), fluid.consumeChance());
         }
-        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement energy) {
-            return new EnergyRequirement(toInternalIo(energy.io()), energy.fePerTick());
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(RecipeIo io2, long fePerTick)) {
+            return new EnergyRequirement(toInternalIo(io2), fePerTick);
         }
-        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement smart) {
-            return new SmartInterfaceRequirement(toInternalIo(smart.io()), smart.interfaceType(), smart.minValue(), smart.maxValue());
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement(
+                RecipeIo io1, String interfaceType, float minValue, float maxValue
+        )) {
+            return new SmartInterfaceRequirement(toInternalIo(io1), interfaceType, minValue, maxValue);
         }
-        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement level) {
-            return new LevelRequirement(toInternalIo(level.io()), level.typeId(), level.levelId());
+        if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement(
+                RecipeIo io, Identifier typeId, Identifier levelId
+        )) {
+            return new LevelRequirement(toInternalIo(io), typeId, levelId);
         }
         if (value instanceof cn.howxu.mmcr.api.publicapi.recipe.StageRequirement stage) {
             return StageRequirement.input(stage.minStage());
@@ -169,19 +173,23 @@ public final class MachineRecipeConverter {
 
     private static ComponentPredicate toPublicPredicate(
             cn.howxu.mmcr.api.recipe.component.ComponentPredicate predicate) {
-        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.Exact exact) {
-            return ComponentPredicate.exact((JsonElement) exact.value().convert(JsonOps.INSTANCE).getValue());
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.Exact(Dynamic<?> value1)) {
+            return ComponentPredicate.exact(value1.convert(JsonOps.INSTANCE).getValue());
         }
-        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.MapValue map) {
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.MapValue(
+                Map<String, cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values1
+        )) {
             Map<String, ComponentPredicate> values = new LinkedHashMap<>();
-            map.values().forEach((key, value) -> values.put(key, toPublicPredicate(value)));
+            values1.forEach((key, value) -> values.put(key, toPublicPredicate(value)));
             return ComponentPredicate.map(values);
         }
-        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.ListValue list) {
-            return ComponentPredicate.list(list.values().stream().map(MachineRecipeConverter::toPublicPredicate).toList());
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.ListValue(
+                List<cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values
+        )) {
+            return ComponentPredicate.list(values.stream().map(MachineRecipeConverter::toPublicPredicate).toList());
         }
-        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.Range range) {
-            return ComponentPredicate.range(range.min(), range.max());
+        if (predicate instanceof cn.howxu.mmcr.api.recipe.component.ComponentPredicate.Range(double min, double max)) {
+            return ComponentPredicate.range(min, max);
         }
         var text = (cn.howxu.mmcr.api.recipe.component.ComponentPredicate.TextValue) predicate;
         return ComponentPredicate.text(text.value().getString(), ComponentPredicate.TextMode.valueOf(text.mode().name()));
@@ -204,17 +212,17 @@ public final class MachineRecipeConverter {
             return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.exact(
                     new Dynamic<>(JsonOps.INSTANCE, exact.value().deepCopy()));
         }
-        if (predicate instanceof ComponentPredicate.MapValue map) {
+        if (predicate instanceof ComponentPredicate.MapValue(Map<String, ComponentPredicate> values1)) {
             Map<String, cn.howxu.mmcr.api.recipe.component.ComponentPredicate> values = new HashMap<>();
-            map.values().forEach((key, value) -> values.put(key, toInternalPredicate(value)));
+            values1.forEach((key, value) -> values.put(key, toInternalPredicate(value)));
             return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.map(values);
         }
-        if (predicate instanceof ComponentPredicate.ListValue list) {
+        if (predicate instanceof ComponentPredicate.ListValue(List<ComponentPredicate> values)) {
             return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.list(
-                    list.values().stream().map(MachineRecipeConverter::toInternalPredicate).toList());
+                    values.stream().map(MachineRecipeConverter::toInternalPredicate).toList());
         }
-        if (predicate instanceof ComponentPredicate.Range range) {
-            return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.range(range.min(), range.max());
+        if (predicate instanceof ComponentPredicate.Range(double min, double max)) {
+            return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.range(min, max);
         }
         ComponentPredicate.TextValue text = (ComponentPredicate.TextValue) predicate;
         return cn.howxu.mmcr.api.recipe.component.ComponentPredicate.text(text.value(),

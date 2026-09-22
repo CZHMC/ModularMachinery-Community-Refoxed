@@ -48,7 +48,7 @@ public class NETWORK_CENTER_MACHINE {
                     .appearance(a -> a.machineBasicBlock(Identifier.parse("minecraft:black_wool")))
                     .networkInterface(1, 16)
                     .allowNetworkMachine(NETWORK_PRODUCER_MACHINE.NETWORK_PRODUCER_MACHINE)
-                    .requestProcess(REPORT_POWER, (RequestProcess) (body, request, senderStorage, receiverStorage) -> {
+                    .requestProcess(REPORT_POWER, (body, request, senderStorage, receiverStorage) -> {
                         if (receiverStorage == null) return;
                         double reported = body.get("power").flatMap(DataValue::asDouble).orElse(0.0);
                         long hash = request.peer().hash();

@@ -122,8 +122,7 @@ public final class ModBlockEntities {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static DeferredHolder<BlockEntityType<?>, BlockEntityType<?>> register(
             String name, Supplier<BlockEntityType<?>> supplier) {
-        return (DeferredHolder<BlockEntityType<?>, BlockEntityType<?>>) (DeferredHolder<?, ?>)
-                REGISTER.register(name, supplier);
+        return REGISTER.register(name, supplier);
     }
 
     public static void register(IEventBus bus) {

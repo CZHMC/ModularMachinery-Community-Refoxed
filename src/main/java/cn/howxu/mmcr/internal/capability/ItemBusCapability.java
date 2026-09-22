@@ -220,9 +220,9 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
     }
 
     private CapabilityResult commitAsync(AsyncCapabilityOperation operation, TransactionContext transaction) {
-        if (operation instanceof AsyncCapabilityOperation.Group group) {
+        if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
             try (Transaction nested = Transaction.open(transaction)) {
-                for (AsyncCapabilityOperation child : group.operations()) {
+                for (AsyncCapabilityOperation child : operations) {
                     CapabilityResult result = commitAsync(child, nested);
                     if (!result.success()) return result;
                 }
@@ -230,31 +230,34 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
             }
             return CapabilityResult.successful();
         }
-        if (!(operation instanceof AsyncCapabilityOperation.Resource resource)
-                || !type().id().equals(resource.capabilityId())) {
+        if (!(operation instanceof AsyncCapabilityOperation.Resource(
+                net.minecraft.resources.Identifier capabilityId, int slot,
+                cn.howxu.mmcr.api.capability.async.AsyncResourceValue resource1, long amount, boolean insert
+        ))
+                || !type().id().equals(capabilityId)) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         ItemResource nativeResource;
         try {
-            nativeResource = NativeAsyncResourceValues.item(resource.resource());
+            nativeResource = NativeAsyncResourceValues.item(resource1);
         } catch (IllegalArgumentException exception) {
             return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
         }
         ItemResource current;
         try {
-            current = storage.resource(resource.slot());
+            current = storage.resource(slot);
         } catch (IndexOutOfBoundsException exception) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
         boolean matches = current != null && !current.isEmpty() && current.equals(nativeResource);
-        if ((!resource.insert() && !matches) || (resource.insert() && current != null && !current.isEmpty() && !matches)) {
-            return failure(resource.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+        if ((!insert && !matches) || (insert && current != null && !current.isEmpty() && !matches)) {
+            return failure(insert ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
         }
-        long moved = resource.insert()
-                ? storage.insertResource(resource.slot(), nativeResource, resource.amount(), transaction)
-                : storage.extractResource(resource.slot(), nativeResource, resource.amount(), transaction);
-        return moved == resource.amount() ? CapabilityResult.successful()
-                : failure(resource.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+        long moved = insert
+                ? storage.insertResource(slot, nativeResource, amount, transaction)
+                : storage.extractResource(slot, nativeResource, amount, transaction);
+        return moved == amount ? CapabilityResult.successful()
+                : failure(insert ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
     }
 
     @Override

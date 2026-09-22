@@ -85,58 +85,62 @@ public final class WorldPreviewCompileInput {
     BlockColors blockColors() { return blockColors; }
     boolean ambientOcclusion() { return ambientOcclusion; }
 
-    private static final class SnapshotRegion implements BlockAndTintGetter {
-        private final Map<Long, BlockState> states;
-        private final Map<Long, Biome> biomes;
-        private final Biome defaultBiome;
-        private final int minY;
-        private final int height;
-        private final LevelLightEngine lightEngine;
+    private record SnapshotRegion(Map<Long, BlockState> states, Map<Long, Biome> biomes, Biome defaultBiome, int minY,
+                                  int height, LevelLightEngine lightEngine) implements BlockAndTintGetter {
+            private SnapshotRegion(Map<Long, BlockState> states, Map<Long, Biome> biomes, Biome defaultBiome,
+                                   int minY, int height, LevelLightEngine lightEngine) {
+                this.states = Map.copyOf(states);
+                this.biomes = Map.copyOf(biomes);
+                this.defaultBiome = defaultBiome;
+                this.minY = minY;
+                this.height = height;
+                this.lightEngine = lightEngine;
+            }
 
-        private SnapshotRegion(Map<Long, BlockState> states, Map<Long, Biome> biomes, Biome defaultBiome,
-                int minY, int height, LevelLightEngine lightEngine) {
-            this.states = Map.copyOf(states);
-            this.biomes = Map.copyOf(biomes);
-            this.defaultBiome = defaultBiome;
-            this.minY = minY;
-            this.height = height;
-            this.lightEngine = lightEngine;
+            @Override
+            public BlockState getBlockState(BlockPos position) {
+                return states.getOrDefault(position.asLong(), Blocks.AIR.defaultBlockState());
+            }
+
+            @Override
+            public FluidState getFluidState(BlockPos position) {
+                return getBlockState(position).getFluidState();
+            }
+
+            @Override
+            public BlockEntity getBlockEntity(BlockPos position) {
+                return null;
+            }
+
+            @Override
+            public int getHeight() {
+                return height;
+            }
+
+            @Override
+            public int getMinY() {
+                return minY;
+            }
+
+            @Override
+            public int getBrightness(LightLayer lightLayer, BlockPos position) {
+                return WorldPreviewMeshCompiler.FULL_BRIGHT_LEVEL;
+            }
+
+            @Override
+            public LevelLightEngine getLightEngine() {
+                return lightEngine;
+            }
+
+            @Override
+            public CardinalLighting cardinalLighting() {
+                return CardinalLighting.DEFAULT;
+            }
+
+            @Override
+            public int getBlockTint(BlockPos position, ColorResolver resolver) {
+                return resolver.getColor(biomes.getOrDefault(position.asLong(), defaultBiome),
+                        position.getX(), position.getZ());
+            }
         }
-
-        @Override
-        public BlockState getBlockState(BlockPos position) {
-            return states.getOrDefault(position.asLong(), Blocks.AIR.defaultBlockState());
-        }
-
-        @Override
-        public FluidState getFluidState(BlockPos position) {
-            return getBlockState(position).getFluidState();
-        }
-
-        @Override
-        public BlockEntity getBlockEntity(BlockPos position) { return null; }
-
-        @Override
-        public int getHeight() { return height; }
-
-        @Override
-        public int getMinY() { return minY; }
-
-        @Override
-        public int getBrightness(LightLayer lightLayer, BlockPos position) {
-            return WorldPreviewMeshCompiler.FULL_BRIGHT_LEVEL;
-        }
-
-        @Override
-        public LevelLightEngine getLightEngine() { return lightEngine; }
-
-        @Override
-        public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }
-
-        @Override
-        public int getBlockTint(BlockPos position, ColorResolver resolver) {
-            return resolver.getColor(biomes.getOrDefault(position.asLong(), defaultBiome),
-                    position.getX(), position.getZ());
-        }
-    }
 }

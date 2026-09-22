@@ -79,7 +79,7 @@ public sealed interface BlockPredicate {
         }
     }
 
-    public static List<Block> blocksInTag(TagKey<Block> tag) {
+    static List<Block> blocksInTag(TagKey<Block> tag) {
         List<Block> blocks = new ArrayList<>();
         for (Block block : BuiltInRegistries.BLOCK) {
             if (block.builtInRegistryHolder().is(tag)) blocks.add(block);

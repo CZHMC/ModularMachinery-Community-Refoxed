@@ -41,65 +41,60 @@ public final class BlockStructureItemStorage implements StructureItemStorage {
 
     private interface StorageAccess extends StructureItemSource, StructureItemSink {}
 
-    private static final class HandlerAccess implements StorageAccess {
-        private final ResourceHandler<ItemResource> handler;
-
-        private HandlerAccess(ResourceHandler<ItemResource> handler) {
-            this.handler = handler;
-        }
+    private record HandlerAccess(ResourceHandler<ItemResource> handler) implements StorageAccess {
 
         @Override
-        public List<ItemStack> copyStacks() {
-            List<ItemStack> stacks = new ArrayList<>(handler.size());
-            for (int slot = 0; slot < handler.size(); slot++) {
-                ItemResource resource = handler.getResource(slot);
-                stacks.add(resource.isEmpty() ? ItemStack.EMPTY : resource.toStack((int) handler.getAmountAsLong(slot)));
+            public List<ItemStack> copyStacks() {
+                List<ItemStack> stacks = new ArrayList<>(handler.size());
+                for (int slot = 0; slot < handler.size(); slot++) {
+                    ItemResource resource = handler.getResource(slot);
+                    stacks.add(resource.isEmpty() ? ItemStack.EMPTY : resource.toStack((int) handler.getAmountAsLong(slot)));
+                }
+                return stacks;
             }
-            return stacks;
-        }
 
-        @Override
-        public boolean canExtractAll(List<ItemStack> requirements) {
-            try (Transaction transaction = Transaction.openRoot()) {
-                return extractAll(requirements, transaction);
+            @Override
+            public boolean canExtractAll(List<ItemStack> requirements) {
+                try (Transaction transaction = Transaction.openRoot()) {
+                    return extractAll(requirements, transaction);
+                }
             }
-        }
 
-        @Override
-        public boolean extractAll(List<ItemStack> requirements) {
-            try (Transaction transaction = Transaction.openRoot()) {
-                if (!extractAll(requirements, transaction)) return false;
-                transaction.commit();
+            @Override
+            public boolean extractAll(List<ItemStack> requirements) {
+                try (Transaction transaction = Transaction.openRoot()) {
+                    if (!extractAll(requirements, transaction)) return false;
+                    transaction.commit();
+                    return true;
+                }
+            }
+
+            @Override
+            public boolean accept(ItemStack stack) {
+                if (stack.isEmpty()) return true;
+                try (Transaction transaction = Transaction.openRoot()) {
+                    int remaining = stack.getCount();
+                    ItemResource resource = ItemResource.of(stack);
+                    for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
+                        int inserted = handler.insert(slot, resource, remaining, transaction);
+                        remaining -= inserted;
+                    }
+                    if (remaining > 0) return false;
+                    transaction.commit();
+                    return true;
+                }
+            }
+
+            private boolean extractAll(List<ItemStack> requirements, Transaction transaction) {
+                for (ItemStack requirement : requirements) {
+                    int remaining = requirement.getCount();
+                    ItemResource resource = ItemResource.of(requirement);
+                    for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
+                        remaining -= handler.extract(slot, resource, remaining, transaction);
+                    }
+                    if (remaining > 0) return false;
+                }
                 return true;
             }
         }
-
-        @Override
-        public boolean accept(ItemStack stack) {
-            if (stack.isEmpty()) return true;
-            try (Transaction transaction = Transaction.openRoot()) {
-                int remaining = stack.getCount();
-                ItemResource resource = ItemResource.of(stack);
-                for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
-                    int inserted = handler.insert(slot, resource, remaining, transaction);
-                    remaining -= inserted;
-                }
-                if (remaining > 0) return false;
-                transaction.commit();
-                return true;
-            }
-        }
-
-        private boolean extractAll(List<ItemStack> requirements, Transaction transaction) {
-            for (ItemStack requirement : requirements) {
-                int remaining = requirement.getCount();
-                ItemResource resource = ItemResource.of(requirement);
-                for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
-                    remaining -= handler.extract(slot, resource, remaining, transaction);
-                }
-                if (remaining > 0) return false;
-            }
-            return true;
-        }
-    }
 }
