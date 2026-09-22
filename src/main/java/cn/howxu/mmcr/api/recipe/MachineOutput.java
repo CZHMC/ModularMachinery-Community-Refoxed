@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -168,7 +169,8 @@ public interface MachineOutput {
     static float clampChance(float chance) {
         if (Float.isNaN(chance)) return 1F;
         if (chance < 0F) return 0F;
-        return Math.min(chance, 1F);
+        if (chance > 1F) return 1F;
+        return chance;
     }
 
     record AggregationKey(@org.jetbrains.annotations.Nullable OutputType<?> type,

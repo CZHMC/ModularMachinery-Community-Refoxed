@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.NetworkInterfaceSpec;
 import cn.howxu.mmcr.api.network.KeyCardBinding;
+import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.network.NetworkApi;
 import cn.howxu.mmcr.api.network.RequestBody;
 import cn.howxu.mmcr.api.network.RequestFailed;
@@ -28,6 +29,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestInstance;
 import net.minecraft.gametest.framework.TestData;
@@ -254,7 +256,7 @@ public final class NetworkInterfaceGameTests {
                 new NetworkInterfaceSpec(1, 2, Set.of(REQUEST_TARGET_ID)), Map.of(), Map.of());
         MachineFixture target = placeMachineWithStorage(helper, new BlockPos(10, 1, 1), REQUEST_TARGET_ID,
                 new NetworkInterfaceSpec(1, 2, Set.of(REQUEST_SOURCE_ID)),
-                Map.of(REQUEST_ID, (_, _, sender, receiver) -> observed.set(new DataStorage[]{sender, receiver})), Map.of());
+                Map.of(REQUEST_ID, (body, request, sender, receiver) -> observed.set(new DataStorage[]{sender, receiver})), Map.of());
         sendRequestAfterFormation(helper, source, target, () -> {
             DataStorage[] storages = observed.get();
             helper.assertTrue(storages != null && storages[0] == source.storage().storage()

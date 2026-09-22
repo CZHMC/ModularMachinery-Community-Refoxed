@@ -3,13 +3,19 @@ package cn.howxu.mmcr.internal.registration;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
+import cn.howxu.mmcr.api.publicapi.recipe.FluidInput;
+import cn.howxu.mmcr.api.publicapi.recipe.FluidOutput;
 import cn.howxu.mmcr.api.publicapi.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemInput;
+import cn.howxu.mmcr.api.publicapi.recipe.ItemOutput;
+import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
@@ -19,13 +25,16 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
-
+import com.google.gson.JsonElement;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Objects;
 import net.minecraft.core.component.DataComponentType;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.core.registries.BuiltInRegistries;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
@@ -119,23 +128,28 @@ public final class MachineRecipeConverter {
         Objects.requireNonNull(value, "value");
         RecipeIo io = value.io() == RecipeModifier.IOType.INPUT ? RecipeIo.INPUT : RecipeIo.OUTPUT;
         if (!value.tags().isEmpty()) return codecBackedRequirement(value, io);
-        return switch (value) {
-            case ItemRequirement item ->
-                    new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(io, item.item(), item.count(), item.stack(),
-                            item.chance(), toPublicComponents(item.components()), item.consumeChance());
-            case FluidRequirement fluid ->
-                    new cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement(io, fluid.fluid(), fluid.amount(),
-                            fluid.stack(), fluid.chance(), fluid.consumeChance());
-            case EnergyRequirement energy ->
-                    new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(io, energy.fePerTick());
-            case SmartInterfaceRequirement smart ->
-                    new cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement(io, smart.interfaceType(),
-                            smart.minValue(), smart.maxValue());
-            case LevelRequirement level ->
-                    new cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement(io, level.typeId(), level.levelId());
-            case StageRequirement stage -> new cn.howxu.mmcr.api.publicapi.recipe.StageRequirement(stage.minStage());
-            default -> codecBackedRequirement(value, io);
-        };
+        if (value instanceof ItemRequirement item) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement(io, item.item(), item.count(), item.stack(),
+                    item.chance(), toPublicComponents(item.components()), item.consumeChance());
+        }
+        if (value instanceof FluidRequirement fluid) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.FluidRequirement(io, fluid.fluid(), fluid.amount(),
+                    fluid.stack(), fluid.chance(), fluid.consumeChance());
+        }
+        if (value instanceof EnergyRequirement energy) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.EnergyRequirement(io, energy.fePerTick());
+        }
+        if (value instanceof SmartInterfaceRequirement smart) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.SmartInterfaceRequirement(io, smart.interfaceType(),
+                    smart.minValue(), smart.maxValue());
+        }
+        if (value instanceof LevelRequirement level) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement(io, level.typeId(), level.levelId());
+        }
+        if (value instanceof StageRequirement stage) {
+            return new cn.howxu.mmcr.api.publicapi.recipe.StageRequirement(stage.minStage());
+        }
+        return codecBackedRequirement(value, io);
     }
 
     private static CustomRecipeIo codecBackedRequirement(MachineRequirement value, RecipeIo io) {
