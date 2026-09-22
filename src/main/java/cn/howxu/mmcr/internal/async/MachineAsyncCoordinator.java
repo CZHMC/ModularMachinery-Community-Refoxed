@@ -83,8 +83,11 @@ public final class MachineAsyncCoordinator {
                                            @Nullable MainThreadStepExecutor mainStepExecutor) {
         Task task = new Task(key);
         if (tasks.putIfAbsent(key, task) != null) return SubmissionResult.DUPLICATE;
-        TickBatch batch = batches.computeIfAbsent(key.gameTime(), TickBatch::new);
-        batch.tasks.put(key, task);
+        TickBatch batch = batches.compute(key.gameTime(), (gameTime, current) -> {
+            TickBatch target = current == null ? new TickBatch(gameTime) : current;
+            target.tasks.put(key, task);
+            return target;
+        });
         if (mainStepExecutor != null) mainStepExecutors.put(key, mainStepExecutor);
         if (schedule(batch, task, continuation)) return SubmissionResult.ACCEPTED;
         removeTask(batch, task);
@@ -114,7 +117,8 @@ public final class MachineAsyncCoordinator {
             for (Task task : batch.tasks.values()) {
                 if (task.finished || task.cancelled) removeTask(batch, task);
             }
-            if (!batch.hasLiveTask()) batches.remove(batch.gameTime, batch);
+            batches.computeIfPresent(batch.gameTime, (gameTime, current) ->
+                    current == batch && !batch.hasLiveTask() ? null : current);
         } finally {
             completingFence = false;
         }
