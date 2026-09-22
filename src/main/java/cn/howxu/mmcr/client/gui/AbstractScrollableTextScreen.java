@@ -136,6 +136,11 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), true);
     }
 
+    protected final void renderTextLine(GuiGraphicsExtractor graphics, ControllerTextLine line, int x, int y) {
+        if (line.icon() != null) renderIcon(graphics, line.icon(), x + line.leftIndent(), y);
+        graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), false);
+    }
+
     protected final void renderScrollableTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         TextViewport viewport = scrollableTextViewport();
         if (!containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) return;

@@ -128,13 +128,13 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
                 lineIndex++;
                 continue;
             }
-            Component line = itemLine(entry);
+            ControllerTextLine line = itemRenderLine(entry);
             int y = textLineY(visibleTextRow(lineIndex));
-            graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
-                    (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
-            addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
-                    TEXT_DETAIL_LINE_SPACING,
-                    ExtendedItemScreen.tooltipLines(entry));
+            renderTextLine(graphics, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                    (int) (y / TEXT_DETAIL_SCALE));
+            addTooltip(leftPos + ROW_X, topPos + y,
+                    (int) ((line.textXOffset() + font.width(line.text())) * TEXT_DETAIL_SCALE),
+                    TEXT_DETAIL_LINE_SPACING, line.tooltip());
             lineIndex++;
         }
         return lineIndex;
@@ -162,13 +162,13 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
                 lineIndex++;
                 continue;
             }
-            Component line = fluidLine(entry);
+            ControllerTextLine line = fluidRenderLine(entry);
             int y = textLineY(visibleTextRow(lineIndex));
-            graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
-                    (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
-            addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
-                    TEXT_DETAIL_LINE_SPACING,
-                    ExtendedFluidScreen.tooltipLines(entry));
+            renderTextLine(graphics, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                    (int) (y / TEXT_DETAIL_SCALE));
+            addTooltip(leftPos + ROW_X, topPos + y,
+                    (int) ((line.textXOffset() + font.width(line.text())) * TEXT_DETAIL_SCALE),
+                    TEXT_DETAIL_LINE_SPACING, line.tooltip());
             lineIndex++;
         }
         return lineIndex;
@@ -191,6 +191,18 @@ public final class ExtendedCombinedScreen extends AbstractPortScreen<ExtendedCom
     private static Component fluidLine(FluidStorageEntry entry) {
         return Component.literal(ReadableNumber.format(entry.amount()) + " ")
                 .append(entry.resource().getHoverName());
+    }
+
+    private static ControllerTextLine itemRenderLine(ItemStorageEntry entry) {
+        return new ControllerTextLine(itemLine(entry), TEXT_COLOR,
+                new ControllerTextLine.ItemIcon(entry.resource().toStack(1)),
+                ExtendedItemScreen.tooltipLines(entry));
+    }
+
+    private static ControllerTextLine fluidRenderLine(FluidStorageEntry entry) {
+        return new ControllerTextLine(fluidLine(entry), TEXT_COLOR,
+                new ControllerTextLine.FluidIcon(entry.resource().toStack(1)),
+                ExtendedFluidScreen.tooltipLines(entry));
     }
 
     private static List<ItemStorageEntry> nonEmptyItems(List<ItemStorageEntry> entries) {

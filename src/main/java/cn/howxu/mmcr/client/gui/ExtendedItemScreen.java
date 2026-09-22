@@ -99,11 +99,13 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
                 row++;
                 continue;
             }
-            Component line = displayLine(entry);
+            ControllerTextLine line = renderLine(entry);
             int y = textLineY(visibleTextRow(row++));
-            graphics.text(font, line, (int) (ROW_X / TEXT_DETAIL_SCALE), (int) (y / TEXT_DETAIL_SCALE), TEXT_COLOR, false);
-            addTooltip(leftPos + ROW_X, topPos + y, (int) (font.width(line) * TEXT_DETAIL_SCALE),
-                    TEXT_DETAIL_LINE_SPACING, tooltipLines(entry));
+            renderTextLine(graphics, line, (int) (ROW_X / TEXT_DETAIL_SCALE),
+                    (int) (y / TEXT_DETAIL_SCALE));
+            addTooltip(leftPos + ROW_X, topPos + y,
+                    (int) ((line.textXOffset() + font.width(line.text())) * TEXT_DETAIL_SCALE),
+                    TEXT_DETAIL_LINE_SPACING, line.tooltip());
         }
         graphics.pose().popMatrix();
     }
@@ -122,6 +124,11 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     private static Component displayLine(ItemStorageEntry entry) {
         return Component.literal(ReadableNumber.format(entry.amount()) + " ")
                 .append(entry.resource().getHoverName());
+    }
+
+    private static ControllerTextLine renderLine(ItemStorageEntry entry) {
+        return new ControllerTextLine(displayLine(entry), TEXT_COLOR,
+                new ControllerTextLine.ItemIcon(entry.resource().toStack(1)), tooltipLines(entry));
     }
 
     private static Component emptyLine() {
