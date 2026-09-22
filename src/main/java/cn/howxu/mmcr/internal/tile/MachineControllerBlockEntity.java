@@ -3966,7 +3966,6 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 domain, new SharedIoCoordinator.LaneKey(getBlockPos(), "base"), runtimeStructureVersion,
                 snapshot.stateVersion(),
                 () -> {
-                    if (!validateSharedRuntime(token, domain)) return false;
                     boolean wasActive = runtime.craftingRuntime().active();
                     runtime.craftingRuntime().tick();
                     if (runtime.craftingRuntime().finishPending()) {

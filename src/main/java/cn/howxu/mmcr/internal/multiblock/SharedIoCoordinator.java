@@ -304,6 +304,7 @@ public final class SharedIoCoordinator {
                 successful.add(request);
                 continue;
             }
+            // Validation and commit are deliberately adjacent; transactions must not repeat request validation.
             if (request.tryCommit()) {
                 request.onCommitted();
                 cursors.put(domainId, request.laneKey());

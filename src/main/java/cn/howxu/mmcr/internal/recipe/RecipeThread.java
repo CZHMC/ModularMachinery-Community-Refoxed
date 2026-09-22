@@ -521,7 +521,6 @@ public abstract class RecipeThread {
                 structureVersion,
                 stateVersion,
                 () -> {
-                    if (!validateCurrentRuntime(token, domain)) return false;
                     if (!runtime.prepareAsyncTick(runtimeSnapshot)) {
                         finishAsyncTick();
                         return true;
@@ -560,9 +559,8 @@ public abstract class RecipeThread {
                     return enqueued;
                 },
                 () -> {
-                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
+                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
                             && validateCurrentRuntime(token, domain);
-                      boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                       if (!valid) clearPendingTick();
                       return valid;
                 },
@@ -837,13 +835,11 @@ public abstract class RecipeThread {
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()), snapshot.structure().version(),
                 snapshot.stateVersion(), () -> {
-                    if (!validateCurrentRuntime(token, domain)) return false;
                     asyncTickCommitted = runtime.commitAsyncTick(intent);
                     return true;
                 }, () -> {
-                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
+                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
                             && validateCurrentRuntime(token, domain);
-                    boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                     if (!valid) {
                         clearPendingTick();
                         MachineAsyncCoordinator.get(level).resume(key);
@@ -863,7 +859,6 @@ public abstract class RecipeThread {
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()), structureVersion,
                 stateVersion, () -> {
-                    if (!validateCurrentRuntime(token, domain)) return false;
                     boolean committed = runtime.commitAsyncTick(intent);
                     if (committed && runtime.completeAsyncTickAfterInputs()) {
                         runtime.completeAsyncTickAfterRecipe();
@@ -874,9 +869,8 @@ public abstract class RecipeThread {
                     MachineAsyncCoordinator.get(level).complete(key);
                     return true;
                 }, () -> {
-                    boolean runtimeValid = lifecycleEpoch == controller.lifecycleEpoch()
+                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
                             && validateCurrentRuntime(token, domain);
-                    boolean valid = catalogVersion == currentCatalogVersion() && runtimeValid;
                     if (!valid) {
                         clearPendingTick();
                         MachineAsyncCoordinator.get(level).complete(key);

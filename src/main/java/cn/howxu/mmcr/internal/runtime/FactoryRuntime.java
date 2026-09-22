@@ -355,7 +355,6 @@ public final class FactoryRuntime {
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), lane.laneId()),
                 request.context().snapshot().structure().version(), request.context().snapshot().stateVersion(), () -> {
-                    if (!asyncSearchStillValid(lane, request, search.catalogVersion())) return false;
                     pendingAsyncSearches.remove(lane);
                     Map<Identifier, Integer> activeCounts = activeRecipeCounts();
                     List<MachineRecipe> available = filterAvailableCandidates(request.candidates(), activeCounts);
