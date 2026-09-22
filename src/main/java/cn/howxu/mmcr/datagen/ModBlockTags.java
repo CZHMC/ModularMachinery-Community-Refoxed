@@ -34,10 +34,11 @@ public final class ModBlockTags extends BlockTagsProvider {
 
     @Override
     protected void addTags(HolderLookup.Provider provider) {
-        tag(BlockTags.MINEABLE_WITH_PICKAXE).add(ModBlocks.BLOCKS.values().stream()
-                .map(holder -> holder.get())
-                .filter(block -> !(block instanceof MachineControllerBlock))
-                .toArray(Block[]::new));
+        // 新增了扳手功能 因此这个易于挖掘的标签可以去掉了
+        // tag(BlockTags.MINEABLE_WITH_PICKAXE).add(ModBlocks.BLOCKS.values().stream()
+        //         .map(holder -> holder.get())
+        //         .filter(block -> !(block instanceof MachineControllerBlock))
+        //         .toArray(Block[]::new));
         tag(blockTag("machine_casings")).add(ModBlocks.BASIC_CASING.get());
         tag(blockTag("machines")).add(ModBlocks.BLOCKS.values().stream()
                 .map(holder -> holder.get())
