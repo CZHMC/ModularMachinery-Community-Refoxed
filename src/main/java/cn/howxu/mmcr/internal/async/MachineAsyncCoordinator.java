@@ -191,17 +191,33 @@ public final class MachineAsyncCoordinator {
     }
 
     public void completeUntilIdleForTesting(IntSupplier resolveSharedIo) {
-        for (int pass = 0; pass < 64; pass++) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30L);
+        while (true) {
+            int observedProgress = progress.get();
             completeTick(resolveSharedIo);
             if (tasks.isEmpty()) return;
+            if (System.nanoTime() >= deadline) {
+                throw new AssertionError("Async test work did not become idle; tasks=" + tasks.size()
+                        + ", batches=" + batches.size());
+            }
+            if (hasPendingMainStepForTesting() || progress.get() != observedProgress) continue;
             try {
-                awaitPendingMainStepForTesting(1, TimeUnit.SECONDS);
+                synchronized (progressMonitor) {
+                    while (!tasks.isEmpty() && !hasPendingMainStepForTesting()
+                            && progress.get() == observedProgress) {
+                        long remaining = deadline - System.nanoTime();
+                        if (remaining <= 0L) {
+                            throw new AssertionError("Async test work did not become idle; tasks=" + tasks.size()
+                                    + ", batches=" + batches.size());
+                        }
+                        TimeUnit.NANOSECONDS.timedWait(progressMonitor, remaining);
+                    }
+                }
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new AssertionError("Interrupted while waiting for async test work", exception);
             }
         }
-        throw new AssertionError("Async test work did not become idle");
     }
 
     public boolean awaitPendingMainStepForTesting(long timeout, TimeUnit unit) throws InterruptedException {

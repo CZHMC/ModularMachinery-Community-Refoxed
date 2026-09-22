@@ -147,6 +147,18 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void complete_until_idle_is_not_limited_to_sixty_four_continuation_fences() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        AtomicInteger completedSteps = new AtomicInteger();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L),
+                continuationChain(65, completedSteps));
+
+        coordinator.completeUntilIdleForTesting(() -> 0);
+
+        assertThat(completedSteps).hasValue(65);
+    }
+
+    @Test
     void complete_tick_does_not_run_a_later_tick() {
         List<String> phases = new CopyOnWriteArrayList<>();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
@@ -161,6 +173,14 @@ class MachineAsyncCoordinatorTest {
         coordinator.completeTick();
 
         assertThat(phases).containsExactly("current");
+    }
+
+    private static AsyncContinuation continuationChain(int remaining, AtomicInteger completedSteps) {
+        return ignored -> {
+            if (remaining == 0) return AsyncContinuation.Yield.complete();
+            return AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(completedSteps::incrementAndGet),
+                    result -> continuationChain(remaining - 1, completedSteps));
+        };
     }
 
     @Test
