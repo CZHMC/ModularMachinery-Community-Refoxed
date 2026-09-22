@@ -675,7 +675,8 @@ class MachineBehaviorRuntimeTest {
         RuntimeTestFixtures.advanceGameTime(controller.getLevel());
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(),
                 controller.getBlockPos());
-        assertThat(phases).containsExactly("pre", "beforeStart", "post", "pre", "recipeTick", "beforeFinish", "post");
+        assertThat(phases).containsExactly("pre", "beforeStart", "post", "pre", "recipeTick", "beforeFinish",
+                "beforeStart", "post");
         assertThat(preContexts).hasSize(2);
         assertThat(postContexts).hasSize(2);
         assertThat(preContexts.get(0)).isNotSameAs(postContexts.get(0));
