@@ -155,40 +155,40 @@ class PktRecipeLockPayloadTest {
         assertThat(PktRecipeLockPayload.toggleOnServer(player, invalidIndex)).isFalse();
     }
 
-    // @Test
-    // void server_handler_accepts_a_valid_formed_controller_thread_and_publishes_lock_state() throws Exception {
-    //     BlockPos controllerPos = new BlockPos(1, 2, 3);
-    //     MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
-    //     BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
-    //             new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
-    //     DynamicMachine machine = new DynamicMachine(MMCR.id("recipe_lock_success"), "Recipe Lock Success",
-    //             pattern,
-    //             MachineControllerSpec.defaultsFor(MMCR.id("recipe_lock_success")));
-    //     RuntimeTestFixtures.registerRecipePool(machine.registryName());
-    //     RuntimeTestFixtures.formStructure(controller, machine);
-    //     TestServerLevel level = serverLevel(controller);
-    //     controller.setLevel(level);
-    //     MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_lock_success_recipe"), machine.registryName(), 20,
-    //             List.of(), List.of());
-    //     RecipeRegistry.registerStatic(recipe);
-    //     controller.tickRuntimeWork(level, controllerPos);
-    //     asyncLevel = level;
-    //     SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
-    //     sharedIo.resolve(level);
-    //     MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
-    //     MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
-    //     assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
-    //     ServerPlayer player = player(level, controllerPos);
-    //     player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
-    //     PktRecipeLockPayload payload = new PktRecipeLockPayload(controllerPos, 0);
-    //     assertThat(PktRecipeLockPayload.toggleOnServer(player, payload)).isTrue();
-    //     assertThat(controller.recipeLocked()).isTrue();
-    //     assertThat(controller.lockedRecipeId()).isEqualTo(recipe.id());
-    //     assertThat(PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot()).recipeLocked()).isTrue();
-    //     assertThat(PktRecipeLockPayload.toggleOnServer(player, payload)).isTrue();
-    //     assertThat(controller.recipeLocked()).isFalse();
-    //     assertThat(PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot()).recipeLocked()).isFalse();
-    // }
+    @Test
+    void server_handler_accepts_a_valid_formed_controller_thread_and_publishes_lock_state() throws Exception {
+        BlockPos controllerPos = new BlockPos(1, 2, 3);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controllerPos);
+        BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        DynamicMachine machine = new DynamicMachine(MMCR.id("recipe_lock_success"), "Recipe Lock Success",
+                pattern,
+                MachineControllerSpec.defaultsFor(MMCR.id("recipe_lock_success")));
+        RuntimeTestFixtures.registerRecipePool(machine.registryName());
+        RuntimeTestFixtures.formStructure(controller, machine);
+        TestServerLevel level = serverLevel(controller);
+        controller.setLevel(level);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_lock_success_recipe"), machine.registryName(), 20,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        controller.tickRuntimeWork(level, controllerPos);
+        asyncLevel = level;
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        ServerPlayer player = player(level, controllerPos);
+        player.containerMenu = new MachineControllerMenu(1, new Inventory(null, null), controller);
+        PktRecipeLockPayload payload = new PktRecipeLockPayload(controllerPos, 0);
+        assertThat(PktRecipeLockPayload.toggleOnServer(player, payload)).isTrue();
+        assertThat(controller.recipeLocked()).isTrue();
+        assertThat(controller.lockedRecipeId()).isEqualTo(recipe.id());
+        assertThat(PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot()).recipeLocked()).isTrue();
+        assertThat(PktRecipeLockPayload.toggleOnServer(player, payload)).isTrue();
+        assertThat(controller.recipeLocked()).isFalse();
+        assertThat(PktMachineStatePayload.from(controllerPos, controller.runtimeSnapshot()).recipeLocked()).isFalse();
+    }
 
     @Test
     void machine_state_payload_preserves_locked_recipe_id_and_detects_lock_changes() {
