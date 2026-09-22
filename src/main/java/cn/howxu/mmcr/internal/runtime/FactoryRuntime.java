@@ -51,6 +51,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -159,6 +160,7 @@ public final class FactoryRuntime {
         Runnable finishCallback = onFinished == null ? () -> { } : onFinished;
         List<FactoryRecipeThread> laneSnapshot = List.copyOf(lanes);
         Map<FactoryRecipeThread, LaneObservation> observations = new IdentityHashMap<>();
+        Map<Identifier, Integer> analyzedActiveCounts = new HashMap<>();
         for (FactoryRecipeThread lane : laneSnapshot) {
             observations.put(lane, observe(lane));
             if (!lane.isStartPending() && !lane.runtime().active()) startReservations.remove(lane);
@@ -185,14 +187,16 @@ public final class FactoryRuntime {
             lane.setSearchGameTime(gameTime);
             lane.setSearchContextKey(searchContextKey(context, lane, recipeLocks.get(lane)));
             lane.tick(context.snapshot());
+            accumulateActiveRecipeCount(lane, analyzedActiveCounts);
         }
+        LaneAnalysis analysis = new LaneAnalysis(observations, analyzedActiveCounts);
+        Map<Identifier, Integer> activeCounts = analysis.activeRecipeCounts();
 
         Set<FactoryRecipeThread> readyThisTick = Collections.newSetFromMap(new IdentityHashMap<>());
         for (FactoryRecipeThread lane : laneSnapshot) {
             if (readyLanes.remove(lane)) readyThisTick.add(lane);
         }
 
-        Map<Identifier, Integer> activeCounts = activeRecipeCounts();
         if (controller.activeWorkMode() == MachineWorkMode.ASYNC
                 && controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null
                 && context.gameTime() == level.getGameTime()) {
@@ -244,7 +248,7 @@ public final class FactoryRuntime {
             if (baseRuntime != null) baseRuntime.tickIdle();
         }
         clearFinishedContinuations();
-        for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : observations.entrySet()) {
+        for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : analysis.observations().entrySet()) {
             if (lanes.contains(entry.getKey()) && !entry.getValue().equals(observe(entry.getKey()))) {
                 markLaneStateChanged();
             }
@@ -1107,6 +1111,20 @@ public final class FactoryRuntime {
         return counts;
     }
 
+    private void accumulateActiveRecipeCount(FactoryRecipeThread lane, Map<Identifier, Integer> counts) {
+        Identifier reservation = startReservations.get(lane);
+        if (reservation != null && !lane.isStartPending() && !lane.runtime().active()) {
+            startReservations.remove(lane);
+            reservation = null;
+        }
+        if (reservation != null) counts.merge(reservation, 1, Integer::sum);
+        if (lane.getStatus() == RecipeThread.Status.FAILED) return;
+        MachineRecipe pendingRecipe = lane.getPendingStartRecipe();
+        if (pendingRecipe != null && reservation == null) counts.merge(pendingRecipe.id(), 1, Integer::sum);
+        MachineRecipe activeRecipe = lane.runtime().recipe();
+        if (activeRecipe != null) counts.merge(activeRecipe.id(), 1, Integer::sum);
+    }
+
     public int activeRecipeCountFor(Identifier recipeId) {
         return activeRecipeCounts().getOrDefault(recipeId, 0);
     }
@@ -1273,6 +1291,10 @@ public final class FactoryRuntime {
     private record LaneObservation(CraftingStateSnapshot runtime, RecipeThread.Status status,
                                    boolean startPending, @Nullable MachineRecipe pendingRecipe,
                                    @Nullable Identifier lockedRecipe) {
+    }
+
+    private record LaneAnalysis(Map<FactoryRecipeThread, LaneObservation> observations,
+                                Map<Identifier, Integer> activeRecipeCounts) {
     }
 
     /** Immutable runtime-owned lane snapshot. */
