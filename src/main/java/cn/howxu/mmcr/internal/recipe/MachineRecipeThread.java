@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.recipe;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -10,7 +9,6 @@ import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
-import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -34,7 +32,6 @@ public final class MachineRecipeThread extends RecipeThread {
     private long lastRecipeComponentStateVersion = Long.MIN_VALUE;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
     private boolean restartPending;
-    private @Nullable AsyncContinuation pendingAsyncFinishRestart;
     private @Nullable PendingAsyncSearch pendingAsyncSearch;
     private long nextAsyncSearchId;
 
@@ -61,8 +58,6 @@ public final class MachineRecipeThread extends RecipeThread {
     @Override
     protected void onFinished() {
         if (lastRecipe != null && !recipeBelongsToCurrentMachine(lastRecipe)) {
-            MMCR.LOG.info("[LastRecipe] normal clear controller={} recipe={} reason=machine_pool_changed",
-                    controller.getBlockPos(), lastRecipe.id());
             clearLastRecipe();
         } else if (lastRecipe != null && lastRecipeCatalogVersion != Long.MIN_VALUE) {
             MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(currentMachine());
@@ -71,41 +66,26 @@ public final class MachineRecipeThread extends RecipeThread {
                     .findFirst().orElse(null);
             if (lastRecipeCatalogVersion != catalog.version()
                     && (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current, registryAccess()))) {
-                MMCR.LOG.info("[LastRecipe] normal clear controller={} recipe={} reason=catalog_definition_changed savedCatalog={} currentCatalog={} currentPresent={}",
-                        controller.getBlockPos(), lastRecipe.id(), lastRecipeCatalogVersion, catalog.version(), current != null);
                 clearLastRecipe();
             }
         }
-        MMCR.LOG.info("[LastRecipe] normal finished controller={} mode={} runtimeActive={} asyncRestartPending={} lastRecipe={}",
-                controller.getBlockPos(), controller.activeWorkMode(), runtime.active(), pendingAsyncFinishRestart != null,
-                lastRecipe == null ? null : lastRecipe.id());
         if (controlsControllerRuntime) {
-            controller.onNormalRecipeThreadFinished(runtime.active() || pendingAsyncFinishRestart != null);
+            controller.onNormalRecipeThreadFinished(runtime.active() || isStartPending());
         }
     }
 
     @Override
     protected void onRecipeFinished() {
         markRecipeFinished();
-        MMCR.LOG.info("[LastRecipe] normal completion controller={} mode={} remembered={} restartPending={}",
-                controller.getBlockPos(), controller.activeWorkMode(), lastRecipe == null ? null : lastRecipe.id(), restartPending);
         MachineRecipe restartRecipe = consumeRestartRecipe(RecipeRegistry.catalogForMachine(currentMachine()).recipes(),
                 controller.getMaxParallelism(), controller.currentRuntimeSnapshot().structure().version());
-        if (restartRecipe == null) {
-            MMCR.LOG.info("[LastRecipe] normal restart skipped controller={} mode={}",
-                    controller.getBlockPos(), controller.activeWorkMode());
-            return;
-        }
+        if (restartRecipe == null) return;
         if (controller.activeWorkMode() == MachineWorkMode.ASYNC) {
-            pendingAsyncFinishRestart = prepareAsyncStartContinuation(restartRecipe, controller.getMaxParallelism(),
+            enqueueAsyncFinishRestart(restartRecipe, controller.getMaxParallelism(),
                     controller.currentRuntimeSnapshot().structure().version(), null);
-            MMCR.LOG.info("[LastRecipe] normal async restart prepared controller={} recipe={} prepared={}",
-                    controller.getBlockPos(), restartRecipe.id(), pendingAsyncFinishRestart != null);
         } else {
-            boolean started = startRecipe(restartRecipe, controller.getMaxParallelism(),
+            startRecipe(restartRecipe, controller.getMaxParallelism(),
                     controller.currentRuntimeSnapshot().structure().version());
-            MMCR.LOG.info("[LastRecipe] normal sync restart committed controller={} recipe={} started={} runtimeActive={} failure={}",
-                    controller.getBlockPos(), restartRecipe.id(), started, runtime.active(), runtime.failure());
         }
     }
 
@@ -130,10 +110,6 @@ public final class MachineRecipeThread extends RecipeThread {
         lastRecipeModifierVersion = snapshot.modifierVersion();
         lastRecipeComponentStateVersion = snapshot.stateVersion();
         lastRecipeCatalogVersion = RecipeRegistry.catalogForMachine(currentMachine()).version();
-        MMCR.LOG.info("[LastRecipe] normal remember controller={} recipe={} mode={} structure={} capability={} modifier={} state={} catalog={}",
-                controller.getBlockPos(), recipe.id(), controller.activeWorkMode(), lastRecipeStructureVersion,
-                lastRecipeCapabilityVersion, lastRecipeModifierVersion, lastRecipeComponentStateVersion,
-                lastRecipeCatalogVersion);
     }
 
     public void markRecipeFinished() {
@@ -192,31 +168,15 @@ public final class MachineRecipeThread extends RecipeThread {
         restartPending = false;
         MachineRecipe retryRecipe = lastRecipe;
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        boolean parallelAvailable = availableParallelism > 0;
-        boolean structureCurrent = lastRecipeStructureVersion == structureVersion;
-        boolean capabilityCurrent = lastRecipeCapabilityVersion == snapshot.capabilityVersion();
-        boolean modifierCurrent = lastRecipeModifierVersion == snapshot.modifierVersion();
-        boolean stateCurrent = lastRecipeComponentStateVersion == snapshot.stateVersion();
-        boolean lockMatches = retryRecipe != null
-                && (controller.lockedRecipeId() == null || controller.lockedRecipeId().equals(retryRecipe.id()));
-        boolean machineMatches = retryRecipe != null && recipeBelongsToCurrentMachine(retryRecipe);
-        boolean candidatePresent = retryRecipe != null && candidatesForMachine(candidates).contains(retryRecipe);
-        boolean canRestart = retryRecipe != null && parallelAvailable && structureCurrent && capabilityCurrent
-                && modifierCurrent && stateCurrent && lockMatches && machineMatches && candidatePresent;
-        MMCR.LOG.info("[LastRecipe] normal eligibility controller={} recipe={} eligible={} parallel={}/{} structure={}/{} capability={}/{} modifier={}/{} state={}/{} lock={} lockMatches={} machineMatches={} candidatePresent={}",
-                controller.getBlockPos(), retryRecipe == null ? null : retryRecipe.id(), canRestart,
-                availableParallelism, parallelAvailable, lastRecipeStructureVersion, structureVersion,
-                lastRecipeCapabilityVersion, snapshot.capabilityVersion(), lastRecipeModifierVersion,
-                snapshot.modifierVersion(), lastRecipeComponentStateVersion, snapshot.stateVersion(),
-                controller.lockedRecipeId(), lockMatches, machineMatches, candidatePresent);
+        boolean canRestart = retryRecipe != null && availableParallelism > 0
+                && lastRecipeStructureVersion == structureVersion
+                && lastRecipeCapabilityVersion == snapshot.capabilityVersion()
+                && lastRecipeModifierVersion == snapshot.modifierVersion()
+                && lastRecipeComponentStateVersion == snapshot.stateVersion()
+                && (controller.lockedRecipeId() == null || controller.lockedRecipeId().equals(retryRecipe.id()))
+                && recipeBelongsToCurrentMachine(retryRecipe)
+                && candidatesForMachine(candidates).contains(retryRecipe);
         return canRestart ? retryRecipe : null;
-    }
-
-    @Override
-    protected @Nullable AsyncContinuation consumeAsyncFinishRestart() {
-        AsyncContinuation restart = pendingAsyncFinishRestart;
-        pendingAsyncFinishRestart = null;
-        return restart;
     }
 
     @Override

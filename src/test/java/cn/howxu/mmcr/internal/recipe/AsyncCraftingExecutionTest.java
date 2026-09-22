@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
@@ -41,6 +42,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.fml.config.IConfigSpec;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -68,6 +70,11 @@ class AsyncCraftingExecutionTest {
         var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
         constructor.setAccessible(true);
         ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+    }
+
+    @AfterEach
+    void cleanup() {
+        RecipeRegistry.clearForTesting();
     }
 
     @Test
@@ -137,6 +144,43 @@ class AsyncCraftingExecutionTest {
                 controller.runtimeSnapshot().structure().version())).isTrue();
         completeTick(controller);
         assertThat(thread.runtime().active()).isTrue();
+    }
+
+    @Test
+    void async_last_recipe_restarts_inside_the_finish_shared_io_fence() throws InterruptedException {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller,
+                new DynamicMachine(machineId, "same fence restart", new BlockArray(Map.of())));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("same_fence_last_recipe"), machineId, 1,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        completeTick(controller);
+        thread.tick();
+        completeTick(controller);
+        assertThat(thread.runtime().finishPending()).isTrue();
+
+        thread.tick();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        assertThat(coordinator.awaitPendingMainStepForTesting(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        coordinator.completeTick();
+        assertThat(coordinator.awaitPendingMainStepForTesting(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        coordinator.completeTick();
+        assertThat(coordinator.awaitPendingMainStepForTesting(1, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        coordinator.completeTick(() -> sharedIo.resolve(level));
+
+        assertThat(thread.runtime().active()).isTrue();
+        assertThat(thread.runtime().recipe()).isEqualTo(recipe);
     }
 
     @Test

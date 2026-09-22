@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.recipe;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
@@ -16,7 +15,6 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
-import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
@@ -58,7 +56,6 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long lastRecipeComponentStateVersion = Long.MIN_VALUE;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
     private Runnable finishContinuation = () -> { };
-    private @Nullable AsyncContinuation pendingAsyncFinishRestart;
     private int failureStreak;
     private long nextSearchTick = Long.MIN_VALUE;
     private @Nullable RecipeSearchContextKey lastSearchFailureKey;
@@ -75,7 +72,6 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long filteredCandidateCatalogVersion = Long.MIN_VALUE;
     private long filteredCandidateRecipeSetVersion = Long.MIN_VALUE;
     private List<MachineRecipe> filteredCandidates = List.of();
-    private boolean restartDecisionLogged;
 
     private FactoryRecipeThread(MachineControllerBlockEntity controller,
                                   boolean coreThread, boolean baseThread, String threadName) {
@@ -271,7 +267,6 @@ public final class FactoryRecipeThread extends RecipeThread {
         searchGameTimeSet = false;
         failureResourceMatchers = Map.of();
         failureCandidates = List.of();
-        restartDecisionLogged = false;
         MachineRecipe recipe = runtime.recipe();
         if (recipe != null) {
             ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
@@ -283,10 +278,6 @@ public final class FactoryRecipeThread extends RecipeThread {
             lastRecipeModifierVersion = snapshot.modifierVersion();
             lastRecipeComponentStateVersion = snapshot.stateVersion();
             lastRecipeCatalogVersion = RecipeRegistry.catalogForMachine(machine).version();
-            MMCR.LOG.info("[LastRecipe] factory remember controller={} lane={} recipe={} mode={} structure={} capability={} modifier={} state={} catalog={}",
-                    controller.getBlockPos(), laneId(), recipe.id(), controller.activeWorkMode(),
-                    lastRecipeStructureVersion, lastRecipeCapabilityVersion, lastRecipeModifierVersion,
-                    lastRecipeComponentStateVersion, lastRecipeCatalogVersion);
         }
     }
     @Override
@@ -294,8 +285,6 @@ public final class FactoryRecipeThread extends RecipeThread {
         idleTicks = 0;
         lastIdleGameTime = Long.MIN_VALUE;
         if (lastRecipe != null && !recipeBelongsToCurrentMachine(lastRecipe)) {
-            MMCR.LOG.info("[LastRecipe] factory clear controller={} lane={} recipe={} reason=machine_pool_changed",
-                    controller.getBlockPos(), laneId(), lastRecipe.id());
             clearLastRecipe();
             return;
         }
@@ -306,15 +295,9 @@ public final class FactoryRecipeThread extends RecipeThread {
                     .findFirst().orElse(null);
             if (lastRecipeCatalogVersion != catalog.version()
                     && (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current, registryAccess()))) {
-                MMCR.LOG.info("[LastRecipe] factory clear controller={} lane={} recipe={} reason=catalog_definition_changed savedCatalog={} currentCatalog={} currentPresent={}",
-                        controller.getBlockPos(), laneId(), lastRecipe.id(), lastRecipeCatalogVersion,
-                        catalog.version(), current != null);
                 clearLastRecipe();
             }
         }
-        MMCR.LOG.info("[LastRecipe] factory finished controller={} lane={} mode={} runtimeActive={} asyncRestartPending={} lastRecipe={}",
-                controller.getBlockPos(), laneId(), controller.activeWorkMode(), runtime.active(),
-                pendingAsyncFinishRestart != null, lastRecipe == null ? null : lastRecipe.id());
     }
 
     @Override
@@ -339,22 +322,11 @@ public final class FactoryRecipeThread extends RecipeThread {
                                              @Nullable Identifier lockedRecipeId) {
         if (!tryRestartEligibility(candidates, availableParallelism, structureVersion, capabilityVersion,
                 modifierVersion, componentStateVersion, lockedRecipeId, context.catalogVersion())) return false;
-        pendingAsyncFinishRestart = prepareAsyncStartContinuation(lastRecipe, availableParallelism, structureVersion, context);
-        MMCR.LOG.info("[LastRecipe] factory async restart prepared controller={} lane={} recipe={} prepared={}",
-                controller.getBlockPos(), laneId(), lastRecipe == null ? null : lastRecipe.id(),
-                pendingAsyncFinishRestart != null);
-        return pendingAsyncFinishRestart != null;
+        return enqueueAsyncFinishRestart(lastRecipe, availableParallelism, structureVersion, context);
     }
 
     @Override protected void onRecipeFinished() {
         finishContinuation.run();
-    }
-
-    @Override
-    protected @Nullable AsyncContinuation consumeAsyncFinishRestart() {
-        AsyncContinuation restart = pendingAsyncFinishRestart;
-        pendingAsyncFinishRestart = null;
-        return restart;
     }
 
     @Override
@@ -463,60 +435,31 @@ public final class FactoryRecipeThread extends RecipeThread {
                                           @Nullable Identifier lockedRecipeId, long catalogVersion,
                                           @Nullable FactorySearchContext context) {
         MachineRecipe retryRecipe = lastRecipe;
-        boolean parallelAvailable = availableParallelism > 0;
-        boolean lockMatches = retryRecipe != null && (lockedRecipeId == null || lockedRecipeId.equals(retryRecipe.id()));
-        boolean structureCurrent = lastRecipeStructureVersion == structureVersion;
-        boolean capabilityCurrent = lastRecipeCapabilityVersion == capabilityVersion;
-        boolean modifierCurrent = lastRecipeModifierVersion == modifierVersion;
-        boolean stateCurrent = lastRecipeComponentStateVersion == componentStateVersion;
-        boolean machineMatches = retryRecipe != null && recipeBelongsToCurrentMachine(retryRecipe);
-        boolean candidatePresent = retryRecipe != null && candidatesFor(candidates, catalogVersion).contains(retryRecipe);
-        boolean canRestart = retryRecipe != null && parallelAvailable && lockMatches && structureCurrent
-                && capabilityCurrent && modifierCurrent && stateCurrent && machineMatches && candidatePresent;
-        logRestartDecision("direct", retryRecipe, canRestart, availableParallelism, parallelAvailable, lockedRecipeId,
-                lockMatches, structureVersion, capabilityVersion, modifierVersion, componentStateVersion,
-                machineMatches, candidatePresent);
+        boolean canRestart = retryRecipe != null && availableParallelism > 0
+                && (lockedRecipeId == null || lockedRecipeId.equals(retryRecipe.id()))
+                && lastRecipeStructureVersion == structureVersion
+                && lastRecipeCapabilityVersion == capabilityVersion
+                && lastRecipeModifierVersion == modifierVersion
+                && lastRecipeComponentStateVersion == componentStateVersion
+                && recipeBelongsToCurrentMachine(retryRecipe)
+                && candidatesFor(candidates, catalogVersion).contains(retryRecipe);
         if (!canRestart) return false;
         failureCandidates = List.of(retryRecipe);
-        boolean started = startRecipe(retryRecipe, availableParallelism, structureVersion, context);
-        MMCR.LOG.info("[LastRecipe] factory direct restart controller={} lane={} recipe={} started={} runtimeActive={} failure={}",
-                controller.getBlockPos(), laneId(), retryRecipe.id(), started, runtime.active(), runtime.failure());
-        return started;
+        return startRecipe(retryRecipe, availableParallelism, structureVersion, context);
     }
 
     private boolean tryRestartEligibility(List<MachineRecipe> candidates, long availableParallelism,
                                           long structureVersion, long capabilityVersion, long modifierVersion,
                                           long componentStateVersion, @Nullable Identifier lockedRecipeId,
                                           long catalogVersion) {
-        boolean parallelAvailable = availableParallelism > 0;
-        boolean lockMatches = lastRecipe != null && (lockedRecipeId == null || lockedRecipeId.equals(lastRecipe.id()));
-        boolean structureCurrent = lastRecipeStructureVersion == structureVersion;
-        boolean capabilityCurrent = lastRecipeCapabilityVersion == capabilityVersion;
-        boolean modifierCurrent = lastRecipeModifierVersion == modifierVersion;
-        boolean stateCurrent = lastRecipeComponentStateVersion == componentStateVersion;
-        boolean machineMatches = lastRecipe != null && recipeBelongsToCurrentMachine(lastRecipe);
-        boolean candidatePresent = lastRecipe != null && candidatesFor(candidates, catalogVersion).contains(lastRecipe);
-        boolean eligible = lastRecipe != null && parallelAvailable && lockMatches && structureCurrent
-                && capabilityCurrent && modifierCurrent && stateCurrent && machineMatches && candidatePresent;
-        logRestartDecision("async", lastRecipe, eligible, availableParallelism, parallelAvailable, lockedRecipeId,
-                lockMatches, structureVersion, capabilityVersion, modifierVersion, componentStateVersion,
-                machineMatches, candidatePresent);
-        return eligible;
-    }
-
-    private void logRestartDecision(String path, @Nullable MachineRecipe recipe, boolean eligible,
-                                    long availableParallelism, boolean parallelAvailable,
-                                    @Nullable Identifier lockedRecipeId, boolean lockMatches,
-                                    long structureVersion, long capabilityVersion, long modifierVersion,
-                                    long componentStateVersion, boolean machineMatches, boolean candidatePresent) {
-        if (restartDecisionLogged && !eligible) return;
-        restartDecisionLogged = true;
-        MMCR.LOG.info("[LastRecipe] factory eligibility controller={} lane={} path={} recipe={} eligible={} parallel={}/{} structure={}/{} capability={}/{} modifier={}/{} state={}/{} lock={} lockMatches={} machineMatches={} candidatePresent={}",
-                controller.getBlockPos(), laneId(), path, recipe == null ? null : recipe.id(), eligible,
-                availableParallelism, parallelAvailable, lastRecipeStructureVersion, structureVersion,
-                lastRecipeCapabilityVersion, capabilityVersion, lastRecipeModifierVersion, modifierVersion,
-                lastRecipeComponentStateVersion, componentStateVersion, lockedRecipeId, lockMatches,
-                machineMatches, candidatePresent);
+        return lastRecipe != null && availableParallelism > 0
+                && (lockedRecipeId == null || lockedRecipeId.equals(lastRecipe.id()))
+                && lastRecipeStructureVersion == structureVersion
+                && lastRecipeCapabilityVersion == capabilityVersion
+                && lastRecipeModifierVersion == modifierVersion
+                && lastRecipeComponentStateVersion == componentStateVersion
+                && recipeBelongsToCurrentMachine(lastRecipe)
+                && candidatesFor(candidates, catalogVersion).contains(lastRecipe);
     }
 
     @Override
@@ -539,7 +482,6 @@ public final class FactoryRecipeThread extends RecipeThread {
         lastRecipeModifierVersion = Long.MIN_VALUE;
         lastRecipeComponentStateVersion = Long.MIN_VALUE;
         lastRecipeCatalogVersion = Long.MIN_VALUE;
-        restartDecisionLogged = false;
     }
 
     @Override

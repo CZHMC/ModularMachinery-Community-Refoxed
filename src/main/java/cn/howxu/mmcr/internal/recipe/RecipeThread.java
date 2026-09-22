@@ -281,6 +281,37 @@ public abstract class RecipeThread {
     protected @Nullable AsyncContinuation prepareAsyncStartContinuation(MachineRecipe next, long requestedParallelism,
                                                                          long structureVersion,
                                                                          @Nullable FactorySearchContext context) {
+        PendingAsyncStart pending = preparePendingAsyncStart(next, requestedParallelism, structureVersion, context);
+        return pending == null ? null : AsyncCraftingExecution.start(asyncLaneId(), pending.snapshot().catalogVersion());
+    }
+
+    protected boolean enqueueAsyncFinishRestart(MachineRecipe next, long requestedParallelism, long structureVersion,
+                                                @Nullable FactorySearchContext context) {
+        PendingAsyncStart pending = preparePendingAsyncStart(next, requestedParallelism, structureVersion, context);
+        if (pending == null) return false;
+        RecipeStartContext.ExecutionSnapshot preparedStart = runtime.prepareAsyncStart(next, requestedParallelism);
+        runtime.flushAsyncScreenText();
+        if (preparedStart == null) {
+            failAsyncStart(pending);
+            return false;
+        }
+        boolean enqueued = requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(),
+                pending.token(), pending.snapshot(), preparedStart,
+                () -> {
+                    if (isPendingStart(pending.token(), pending.recipe())) failAsyncStart(pending);
+                });
+        if (enqueued) {
+            pendingAsyncStart = null;
+            pendingAsyncStartExecution = null;
+        } else {
+            failAsyncStart(pending);
+        }
+        return enqueued;
+    }
+
+    private @Nullable PendingAsyncStart preparePendingAsyncStart(MachineRecipe next, long requestedParallelism,
+                                                                 long structureVersion,
+                                                                 @Nullable FactorySearchContext context) {
         if (next == null || requestedParallelism <= 0 || pendingAsyncStart != null) return null;
         ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
         Identifier recipePoolId = recipePoolForMachine(currentSnapshot);
@@ -295,7 +326,7 @@ public abstract class RecipeThread {
         long token = beginPendingStart(domain, next, startSnapshot);
         pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, token, startSnapshot);
         pendingAsyncStartExecution = null;
-        return AsyncCraftingExecution.start(asyncLaneId(), startSnapshot.catalogVersion());
+        return pendingAsyncStart;
     }
 
     private long beginPendingStart(StructureClaimRegistry.ResourceDomain domain, MachineRecipe next,
