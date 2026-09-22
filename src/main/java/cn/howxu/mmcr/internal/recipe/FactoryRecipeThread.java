@@ -445,7 +445,8 @@ public final class FactoryRecipeThread extends RecipeThread {
                                           @Nullable Identifier lockedRecipeId, long catalogVersion,
                                           @Nullable FactorySearchContext context) {
         MachineRecipe retryRecipe = lastRecipe;
-        boolean canRestart = lockedRecipeId == null && retryRecipe != null && availableParallelism > 0
+        boolean canRestart = retryRecipe != null && availableParallelism > 0
+                && (lockedRecipeId == null || lockedRecipeId.equals(retryRecipe.id()))
                 && lastRecipeStructureVersion == structureVersion
                 && lastRecipeCapabilityVersion == capabilityVersion
                 && lastRecipeModifierVersion == modifierVersion
@@ -462,7 +463,8 @@ public final class FactoryRecipeThread extends RecipeThread {
                                           long structureVersion, long capabilityVersion, long modifierVersion,
                                           long componentStateVersion, @Nullable Identifier lockedRecipeId,
                                           long catalogVersion) {
-        boolean eligible = lockedRecipeId == null && lastRecipe != null && availableParallelism > 0
+        boolean eligible = lastRecipe != null && availableParallelism > 0
+                && (lockedRecipeId == null || lockedRecipeId.equals(lastRecipe.id()))
                 && lastRecipeStructureVersion == structureVersion
                 && lastRecipeCapabilityVersion == capabilityVersion
                 && lastRecipeModifierVersion == modifierVersion

@@ -937,12 +937,13 @@ public abstract class RecipeThread {
         clearPendingTick();
         if (wasActive && !runtime.active()) {
             if (runtime.failure() == null) {
-                onFinished();
+                controller.clearRecipeScreenText(laneId());
                 onRecipeFinished();
+                onFinished();
             } else {
                 onRecipeFailure();
+                controller.clearRecipeScreenText(laneId());
             }
-            controller.clearRecipeScreenText(laneId());
         }
     }
 

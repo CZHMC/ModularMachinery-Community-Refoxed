@@ -46,6 +46,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -312,6 +313,52 @@ class MachineWorkModeIntegrationTest {
         }
 
         assertThat(phases).containsSubsequence("start", "tick", "finish");
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void normal_controller_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
+        assertNormalControllerContinuesLastRecipe(mode, false);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void locked_normal_controller_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
+        assertNormalControllerContinuesLastRecipe(mode, true);
+    }
+
+    private void assertNormalControllerContinuesLastRecipe(MachineWorkMode mode, boolean locked) {
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        AtomicInteger starts = new AtomicInteger();
+        RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.builder()
+                .beforeStart(context -> starts.incrementAndGet())
+                .build()));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_last_recipe_continuation"), machineId, 1,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        ConfigTestSupport.setMachineWorkMode(mode);
+
+        controller.serverTick();
+        completeAsyncLevelTick(level);
+        assertThat(controller.runtimeSnapshot().crafting().status().isCrafting()).isTrue();
+        if (locked) assertThat(controller.toggleFactoryRecipeLock(0)).isTrue();
+
+        for (int tick = 0; tick < 6 && starts.get() < 2; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            controller.serverTick();
+            completeAsyncLevelTick(level);
+            assertThat(controller.runtimeSnapshot().crafting().status().isCrafting())
+                    .as("mode=%s locked=%s starts=%s state=%s", mode, locked, starts.get(),
+                            controller.runtimeSnapshot().crafting())
+                    .isTrue();
+            assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        }
+
+        assertThat(starts).hasValueGreaterThanOrEqualTo(2);
     }
 
     private static DynamicMachine normalMachine(Identifier machineId, RecipeBehavior behavior) {

@@ -74,6 +74,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -482,6 +484,44 @@ class FactoryRuntimeTest {
 
         assertThat(runtime.activeRuntimes()).hasSize(1);
         assertThat(runtime.activeRuntimes().getFirst().recipe()).isEqualTo(cached);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void factory_lane_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
+        assertFactoryLaneContinuesLastRecipe(mode, false);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void locked_factory_lane_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
+        assertFactoryLaneContinuesLastRecipe(mode, true);
+    }
+
+    private void assertFactoryLaneContinuesLastRecipe(MachineWorkMode mode, boolean locked) {
+        MachineControllerBlockEntity controller = factoryController("test_cube");
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe recipe = recipe("factory_last_recipe_continuation", 1);
+        RecipeRegistry.registerStatic(recipe);
+        ConfigTestSupport.setMachineWorkMode(mode);
+
+        runtime.tick(List.of(recipe), 1, level.getGameTime());
+        resolveSharedRequests(controller);
+        assertThat(runtime.activeRuntimes()).hasSize(1);
+        if (locked) assertThat(runtime.toggleRecipeLock(0)).isTrue();
+
+        for (int tick = 0; tick < 4; tick++) {
+            RuntimeTestFixtures.advanceGameTime(level);
+            runtime.tick(List.of(recipe), 1, level.getGameTime());
+            resolveSharedRequests(controller);
+            assertThat(runtime.activeRuntimes()).hasSize(1);
+            assertThat(runtime.activeRuntimes().getFirst().recipe()).isEqualTo(recipe);
+        }
+
+        assertThat(runtime.searchAttemptsForTesting()).isEqualTo(1L);
     }
 
     @Test

@@ -71,24 +71,29 @@ public final class MachineRecipeThread extends RecipeThread {
                 clearLastRecipe();
             }
         }
-        if (controlsControllerRuntime) controller.onNormalRecipeThreadFinished();
+        if (controlsControllerRuntime) {
+            controller.onNormalRecipeThreadFinished(runtime.active() || pendingAsyncFinishRestart != null);
+        }
     }
 
     @Override
     protected void onRecipeFinished() {
         markRecipeFinished();
-        if (controller.activeWorkMode() != MachineWorkMode.ASYNC || controller.lockedRecipeId() != null) return;
         MachineRecipe restartRecipe = consumeRestartRecipe(RecipeRegistry.catalogForMachine(currentMachine()).recipes(),
                 controller.getMaxParallelism(), controller.currentRuntimeSnapshot().structure().version());
-        if (restartRecipe != null) {
+        if (restartRecipe == null) return;
+        if (controller.activeWorkMode() == MachineWorkMode.ASYNC) {
             pendingAsyncFinishRestart = prepareAsyncStartContinuation(restartRecipe, controller.getMaxParallelism(),
                     controller.currentRuntimeSnapshot().structure().version(), null);
+        } else {
+            startRecipe(restartRecipe, controller.getMaxParallelism(),
+                    controller.currentRuntimeSnapshot().structure().version());
         }
     }
 
     @Override
     protected void onRecipeFailure() {
-        if (controlsControllerRuntime) controller.onNormalRecipeThreadFinished();
+        if (controlsControllerRuntime) controller.onNormalRecipeThreadFinished(false);
     }
 
     @Override
@@ -170,6 +175,7 @@ public final class MachineRecipeThread extends RecipeThread {
                 && lastRecipeCapabilityVersion == snapshot.capabilityVersion()
                 && lastRecipeModifierVersion == snapshot.modifierVersion()
                 && lastRecipeComponentStateVersion == snapshot.stateVersion()
+                && (controller.lockedRecipeId() == null || controller.lockedRecipeId().equals(retryRecipe.id()))
                 && recipeBelongsToCurrentMachine(retryRecipe)
                 && candidatesForMachine(candidates).contains(retryRecipe);
         return canRestart ? retryRecipe : null;

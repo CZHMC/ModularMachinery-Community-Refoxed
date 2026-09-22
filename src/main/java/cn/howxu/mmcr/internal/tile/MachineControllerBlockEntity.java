@@ -427,13 +427,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         setChanged();
     }
 
-    public void onNormalRecipeThreadFinished() {
+    public void onNormalRecipeThreadFinished(boolean restarting) {
         lastFailure = runtime.craftingRuntime().failure();
-        if (!runtime.craftingRuntime().active()) {
-            if (lastFailure == null) playFinishSound();
+        if (lastFailure == null) playFinishSound();
+        if (!restarting && !runtime.craftingRuntime().active()) {
             setActiveState(false);
         }
-        syncRuntimeStateIfChanged();
+        if (!restarting || runtime.craftingRuntime().active()) syncRuntimeStateIfChanged();
         setChanged();
     }
 
@@ -1733,11 +1733,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!runtime.craftingRuntime().active() && !sharedStartPending) {
             startedThisTick = tryStartNewRecipe();
         }
-        if (runtime.craftingRuntime().active() && !startedThisTick && tickActiveRecipe()) {
-            normalRecipeThread.markRecipeFinished();
-            if (!normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
-                    currentRuntimeSnapshot().structure().version())) tryStartNewRecipe();
-        }
+        if (runtime.craftingRuntime().active() && !startedThisTick) tickActiveRecipe();
         if (!runtime.craftingRuntime().active()) runtime.craftingRuntime().tickIdle();
     }
 
@@ -3769,6 +3765,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
         setActiveState(true);
+        normalRecipeThread.rememberStartedRecipe();
         syncRuntimeStateIfChanged();
         recipeSearchRetryCounter = 0;
         lastFailure = null;
@@ -3815,27 +3812,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 && !runtime.craftingRuntime().active();
     }
 
-    private boolean tickActiveRecipe() {
-        if (!runtime.craftingRuntime().active()) return false;
+    private void tickActiveRecipe() {
+        if (!runtime.craftingRuntime().active()) return;
         if (usesSharedIoCoordinator()) {
             tickSharedRecipe();
-            return false;
+            return;
         }
-        boolean wasActive = runtime.craftingRuntime().active();
-        runtime.craftingRuntime().tick();
-        if (runtime.craftingRuntime().finishPending()) runtime.craftingRuntime().finish();
-        lastFailure = runtime.craftingRuntime().failure();
-        if (wasActive && !runtime.craftingRuntime().active()) {
-            boolean finished = runtime.craftingRuntime().failure() == null;
-            lastFailure = finished ? null : runtime.craftingRuntime().failure();
-            if (finished) {
-                playFinishSound();
-            }
-            setActiveState(false);
-            syncRuntimeStateIfChanged();
-        }
-        setChanged();
-        return wasActive && !runtime.craftingRuntime().active() && runtime.craftingRuntime().failure() == null;
+        normalRecipeThread.tick();
     }
 
     private boolean usesSharedIoCoordinator() {
@@ -4014,16 +3997,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     if (!validateSharedRuntime(token, domain)) return false;
                     boolean wasActive = runtime.craftingRuntime().active();
                     runtime.craftingRuntime().finish();
-                    completeSharedRuntime(wasActive);
+                    boolean restarting = false;
                     // SharedIoCoordinator resolves starts submitted while committing finishes in this tick.
                     if (wasActive && !runtime.craftingRuntime().active()
                             && runtime.craftingRuntime().failure() == null) {
                         normalRecipeThread.markRecipeFinished();
                         MachineRecipe restartRecipe = normalRecipeThread.consumeRestartRecipe(recipesForMachine(),
                                 getMaxParallelism(), currentRuntimeSnapshot().structure().version());
-                        if (restartRecipe != null) requestSharedStart(restartRecipe);
-                        else tryStartNewRecipe();
+                        if (restartRecipe != null) {
+                            requestSharedStart(restartRecipe);
+                            restarting = sharedStartPending;
+                        } else {
+                            tryStartNewRecipe();
+                            restarting = sharedStartPending;
+                        }
                     }
+                    completeSharedRuntime(wasActive, restarting);
                     return true;
                   },
                   () -> lifecycleEpoch == lifecycleEpoch() && validateSharedRuntime(token, domain),
@@ -4069,15 +4058,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void completeSharedRuntime(boolean wasActive) {
+        completeSharedRuntime(wasActive, false);
+    }
+
+    private void completeSharedRuntime(boolean wasActive, boolean restarting) {
         clearSharedTickPending();
         syncCraftingFailure();
         if (wasActive && !runtime.craftingRuntime().active()) {
             boolean finished = runtime.craftingRuntime().failure() == null;
             lastFailure = finished ? null : runtime.craftingRuntime().failure();
             if (finished) playFinishSound();
-            setActiveState(false);
+            if (!restarting) setActiveState(false);
         }
-        syncRuntimeStateIfChanged();
+        if (!restarting) syncRuntimeStateIfChanged();
         setChanged();
     }
 
