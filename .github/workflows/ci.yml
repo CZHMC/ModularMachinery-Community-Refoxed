@@ -22,16 +22,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run Client Data
-        run: gradle runClientData --no-daemon
+        run: gradle runClientData
 
       - name: Run Server Data
-        run: gradle runServerData --no-daemon
+        run: gradle runServerData
 
       - name: Compile Test
-        run: gradle compileJava --no-daemon
+        run: gradle compileJava
       
       - name: Unit Test and GameTest
-        run: gradle test --no-daemon
+        run: gradle test
 
       - name: Gametest Server
-        run: gradle runGameTestServer --no-daemon
+        run: gradle runGameTestServer

@@ -60,25 +60,25 @@ jobs:
           perl -0pi -e 's/^mod_version=.*/mod_version=${{ needs.resolve-version.outputs.version }}/m' gradle.properties
 
       - name: Run Client Data
-        run: gradle runClientData --no-daemon
+        run: gradle runClientData
 
       - name: Run Server Data
-        run: gradle runServerData --no-daemon
+        run: gradle runServerData
 
       - name: Compile Test
-        run: gradle compileJava --no-daemon
+        run: gradle compileJava
 
       - name: Unit Test and GameTest
-        run: gradle test --no-daemon
+        run: gradle test
 
       - name: Gametest Server
-        run: gradle runGameTestServer --no-daemon
+        run: gradle runGameTestServer
 
       - name: Build
-        run: gradle build --no-daemon
+        run: gradle build
 
       - name: Publish to Maven
-        run: gradle publish --no-daemon
+        run: gradle publish
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
