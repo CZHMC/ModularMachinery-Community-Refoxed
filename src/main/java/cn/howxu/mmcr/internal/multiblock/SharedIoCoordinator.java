@@ -285,7 +285,6 @@ public final class SharedIoCoordinator {
             }
         }
         pending.removeAll(matching);
-        matching.removeIf(request -> !request.isStillValid());
         matching.sort(REQUEST_ORDER);
         return matching;
     }
@@ -334,11 +333,10 @@ public final class SharedIoCoordinator {
         }
 
         default boolean isStillValid() {
-            boolean valid = controllerStructureVersion() == controllerStructureVersionSupplier().getAsLong()
-                    && controllerStateVersion() == controllerStateVersionSupplier().getAsLong()
-                    && validator().getAsBoolean();
-            if (!valid) discard();
-            return valid;
+            boolean versionsCurrent = controllerStructureVersion() == controllerStructureVersionSupplier().getAsLong()
+                    && controllerStateVersion() == controllerStateVersionSupplier().getAsLong();
+            boolean runtimeValid = validator().getAsBoolean();
+            return versionsCurrent && runtimeValid;
         }
 
         default void discard() {

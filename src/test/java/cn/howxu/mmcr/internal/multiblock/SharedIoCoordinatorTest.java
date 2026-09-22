@@ -95,6 +95,42 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void invalid_request_runs_its_validator_once_per_resolution() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        AtomicInteger validations = new AtomicInteger();
+
+        coordinator.enqueue(tick(domain, A, 1L, () -> true,
+                () -> {
+                    validations.incrementAndGet();
+                    return false;
+                }, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(validations).hasValue(1);
+    }
+
+    @Test
+    void finish_spawned_start_runs_its_validator_once_per_resolution() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator();
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        AtomicInteger validations = new AtomicInteger();
+        coordinator.enqueue(finish(domain, A, 1L, () -> {
+            coordinator.enqueue(start(domain, A, 1L, 1L, ignored -> 1L, ignored -> { },
+                    () -> {
+                        validations.incrementAndGet();
+                        return true;
+                    }, () -> 1L));
+            return true;
+        }, () -> true, () -> 1L));
+
+        coordinator.resolve(domain);
+
+        assertThat(validations).hasValue(1);
+    }
+
+    @Test
     void round_robin_moves_past_the_last_base_lane_of_the_same_controller() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator();
         StructureClaimRegistry.ResourceDomain domain = domain(A);
