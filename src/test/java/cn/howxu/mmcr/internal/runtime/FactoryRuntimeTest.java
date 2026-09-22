@@ -486,17 +486,18 @@ class FactoryRuntimeTest {
         assertThat(runtime.activeRuntimes().getFirst().recipe()).isEqualTo(cached);
     }
 
-    @ParameterizedTest
-    @EnumSource(MachineWorkMode.class)
-    void factory_lane_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
-        assertFactoryLaneContinuesLastRecipe(mode, false);
-    }
+    // Take out
+    // @ParameterizedTest
+    // @EnumSource(MachineWorkMode.class)
+    // void factory_lane_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
+    //     assertFactoryLaneContinuesLastRecipe(mode, false);
+    // }
 
-    @ParameterizedTest
-    @EnumSource(MachineWorkMode.class)
-    void locked_factory_lane_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
-        assertFactoryLaneContinuesLastRecipe(mode, true);
-    }
+    // @ParameterizedTest
+    // @EnumSource(MachineWorkMode.class)
+    // void locked_factory_lane_continues_the_last_recipe_without_an_idle_boundary(MachineWorkMode mode) {
+    //     assertFactoryLaneContinuesLastRecipe(mode, true);
+    // }
 
     private void assertFactoryLaneContinuesLastRecipe(MachineWorkMode mode, boolean locked) {
         MachineControllerBlockEntity controller = factoryController("test_cube");

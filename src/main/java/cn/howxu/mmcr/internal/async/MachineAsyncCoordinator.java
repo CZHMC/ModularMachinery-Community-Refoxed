@@ -220,7 +220,7 @@ public final class MachineAsyncCoordinator {
                 }
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                // throw new AssertionError("Interrupted while waiting for async test work", exception);
+                throw new AssertionError("Interrupted while waiting for async test work", exception);
             }
         }
     }
