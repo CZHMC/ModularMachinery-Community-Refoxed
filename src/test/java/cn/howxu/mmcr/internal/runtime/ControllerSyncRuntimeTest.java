@@ -507,7 +507,7 @@ class ControllerSyncRuntimeTest {
                 true, true, 1, 2, 8, Map.of());
     }
 
-    private void resolveSharedRequests(MachineControllerBlockEntity controller) {
+    private void resolveSharedRequestsresolveSharedRequests(MachineControllerBlockEntity controller) {
         level = (ServerLevel) controller.getLevel();
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
         sharedIo.resolve(level);
