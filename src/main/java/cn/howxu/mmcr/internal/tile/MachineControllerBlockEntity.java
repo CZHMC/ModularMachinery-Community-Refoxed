@@ -2356,7 +2356,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
         MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(serverLevel()).submitDetailed(taskKey,
                 ignored -> AsyncContinuation.Yield.mainThread(new MainThreadStep.StructureScan(
                         batch.identity(), candidateIdentity, batch.match()), result -> context -> AsyncContinuation.Yield.complete()),
-                this::executeStructureScanStep);
+                this::executeStructureScanStep,
+                new MachineAsyncCoordinator.TaskHooks(
+                        () -> Objects.equals(pendingStructureScanTask, taskKey)
+                                && taskKey.lifecycleEpoch() == lifecycleEpoch,
+                        (ignored, outcome) -> {
+                            if (outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded
+                                    || !Objects.equals(pendingStructureScanTask, taskKey)) return;
+                            pendingStructureScanTask = null;
+                            runtime.requestStructureCheck();
+                        }));
         if (submission != MachineAsyncCoordinator.SubmissionResult.ACCEPTED) {
             pendingStructureScanTask = null;
             runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);

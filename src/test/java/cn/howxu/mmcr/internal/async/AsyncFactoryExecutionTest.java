@@ -166,13 +166,6 @@ class AsyncFactoryExecutionTest {
         completeAsyncLevelTick(level);
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
-        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
-        assertThat(coordinator.failureFor(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                level.getGameTime(), MachineWorkMode.ASYNC, "factory-search/base", controller.lifecycleEpoch())))
-                .isNull();
-        assertThat(coordinator.failureFor(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                level.getGameTime(), MachineWorkMode.ASYNC, "factory-search/factory-0", controller.lifecycleEpoch())))
-                .isNull();
 
         RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 0);
         RuntimeTestFixtures.advanceGameTime(level);

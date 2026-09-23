@@ -318,10 +318,22 @@ public final class FactoryRuntime {
         AsyncSearchRequest request = new AsyncSearchRequest(context, candidates, lock, ++nextAsyncSearchId, workerRequest);
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                 level.getGameTime(), MachineWorkMode.ASYNC, "factory-search/" + lane.laneId(), controller.lifecycleEpoch());
-        if (!MachineAsyncCoordinator.get(level).submit(taskKey,
-                new FactorySearchContinuation(lane.laneId(), context.catalogVersion(), request.searchId(), workerRequest),
-                this::executeAsyncSearchStep)) return false;
         pendingAsyncSearches.put(lane, request);
+        MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(level).submitDetailed(taskKey,
+                new FactorySearchContinuation(lane.laneId(), context.catalogVersion(), request.searchId(), workerRequest),
+                this::executeAsyncSearchStep,
+                new MachineAsyncCoordinator.TaskHooks(
+                        () -> taskKey.lifecycleEpoch() == controller.lifecycleEpoch()
+                                && pendingAsyncSearches.get(lane) == request,
+                        (ignored, outcome) -> {
+                            if (!(outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded)) {
+                                pendingAsyncSearches.remove(lane, request);
+                            }
+                        }));
+        if (submission != MachineAsyncCoordinator.SubmissionResult.ACCEPTED) {
+            pendingAsyncSearches.remove(lane, request);
+            return false;
+        }
         searchAttemptsForTesting++;
         return true;
     }

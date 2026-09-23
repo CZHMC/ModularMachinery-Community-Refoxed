@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.async;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import net.minecraft.core.BlockPos;
@@ -19,7 +20,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 
@@ -41,7 +44,6 @@ public final class MachineAsyncCoordinator {
     private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
     private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStepExecutor> mainStepExecutors = new ConcurrentHashMap<>();
-    private final Map<TaskKey, MainThreadStep.Result.Failure> failures = new ConcurrentHashMap<>();
     private final Object progressMonitor = new Object();
     private final AtomicInteger progress = new AtomicInteger();
     private boolean completingFence;
@@ -81,7 +83,12 @@ public final class MachineAsyncCoordinator {
 
     public SubmissionResult submitDetailed(TaskKey key, AsyncContinuation continuation,
                                            @Nullable MainThreadStepExecutor mainStepExecutor) {
-        Task task = new Task(key);
+        return submitDetailed(key, continuation, mainStepExecutor, TaskHooks.defaults());
+    }
+
+    public SubmissionResult submitDetailed(TaskKey key, AsyncContinuation continuation,
+                                           @Nullable MainThreadStepExecutor mainStepExecutor, TaskHooks hooks) {
+        Task task = new Task(key, hooks);
         if (tasks.putIfAbsent(key, task) != null) return SubmissionResult.DUPLICATE;
         TickBatch batch = batches.compute(key.gameTime(), (gameTime, current) -> {
             TickBatch target = current == null ? new TickBatch(gameTime) : current;
@@ -95,7 +102,11 @@ public final class MachineAsyncCoordinator {
     }
 
     public void pumpMainThreadSteps() {
-        for (TickBatch batch : batches.values()) pumpMainThreadSteps(batch);
+        for (TickBatch batch : batches.values()) {
+            drainTerminations(batch);
+            pumpMainThreadSteps(batch);
+            drainTerminations(batch);
+        }
     }
 
     public void completeTick() {
@@ -110,13 +121,13 @@ public final class MachineAsyncCoordinator {
         TickBatch batch = entry.getValue();
         completingFence = true;
         try {
+            drainTerminations(batch);
             admitWaitingWorkers(batch);
             int completedSteps = pumpReadyMainThreadSteps(batch);
+            drainTerminations(batch);
             if (resolveSharedIo.getAsInt() > 0) signalProgress();
             if (completedSteps == 0 || !batch.deferredMainSteps.isEmpty()) pumpNewerMainThreadSteps(batch.gameTime);
-            for (Task task : batch.tasks.values()) {
-                if (task.finished || task.cancelled) removeTask(batch, task);
-            }
+            drainAllTerminations();
             batches.computeIfPresent(batch.gameTime, (gameTime, current) ->
                     current == batch && !batch.hasLiveTask() ? null : current);
         } finally {
@@ -138,10 +149,7 @@ public final class MachineAsyncCoordinator {
             if (task.key.equals(retainedTaskKey)) continue;
             TickBatch batch = batches.get(task.key.gameTime());
             if (batch == null) continue;
-            synchronized (task) {
-                task.cancelled = true;
-            }
-            removeTask(batch, task);
+            requestTermination(batch, task, new TaskOutcome.Cancelled("controller cancelled"));
         }
     }
 
@@ -149,10 +157,7 @@ public final class MachineAsyncCoordinator {
         Task task = tasks.get(key);
         TickBatch batch = task == null ? null : batches.get(key.gameTime());
         if (task == null || batch == null) return;
-        synchronized (task) {
-            task.cancelled = true;
-        }
-        removeTask(batch, task);
+        requestTermination(batch, task, new TaskOutcome.Cancelled("controller cancelled"));
     }
 
     public void resume(TaskKey key) {
@@ -162,7 +167,7 @@ public final class MachineAsyncCoordinator {
     public void resume(TaskKey key, MainThreadStep.Result result) {
         Task task = tasks.get(key);
         TickBatch batch = task == null ? null : batches.get(key.gameTime());
-        if (task == null || batch == null) return;
+        if (task == null || batch == null || !taskActive(batch, task)) return;
         PendingMainStep pending = batch.deferredMainSteps.remove(key);
         if (pending == null) return;
         pending.results.add(result);
@@ -174,20 +179,12 @@ public final class MachineAsyncCoordinator {
         Task task = tasks.get(key);
         TickBatch batch = task == null ? null : batches.get(key.gameTime());
         if (task == null || batch == null) return;
-        synchronized (task) {
-            task.finished = true;
-        }
-        removeTask(batch, task);
-        signalProgress();
+        requestTermination(batch, task, new TaskOutcome.Succeeded());
     }
 
     public static synchronized void discard(ServerLevel level) {
         MachineAsyncCoordinator coordinator = COORDINATORS.remove(level);
         if (coordinator != null) coordinator.cancelAll();
-    }
-
-    public MainThreadStep.Result.@Nullable Failure failureFor(TaskKey key) {
-        return failures.get(key);
     }
 
     public boolean hasPendingMainStepForTesting() {
@@ -242,11 +239,12 @@ public final class MachineAsyncCoordinator {
     }
 
     private boolean schedule(TickBatch batch, Task task, AsyncContinuation continuation) {
+        if (task.terminationRequested.get()) return true;
         batch.runningWorkers.incrementAndGet();
         try {
             executor.execute(() -> {
                 try {
-                    if (!task.cancelled) handleYield(batch, task,
+                    if (taskActive(batch, task)) handleYield(batch, task,
                             continuation.advance(new AsyncExecutionContext(task.key)));
                 } catch (Throwable throwable) {
                     fail(batch, task, throwable);
@@ -265,15 +263,20 @@ public final class MachineAsyncCoordinator {
     private void admitWaitingWorkers(TickBatch batch) {
         while (true) {
             WorkerSegment segment = batch.waitingWorkers.peek();
-            if (segment == null || !schedule(batch, segment.task, segment.continuation)) return;
+            if (segment == null) return;
+            if (segment.task.terminationRequested.get()) {
+                batch.waitingWorkers.poll();
+                continue;
+            }
+            if (!taskActive(batch, segment.task) || !schedule(batch, segment.task, segment.continuation)) return;
             batch.waitingWorkers.poll();
         }
     }
 
     private void handleYield(TickBatch batch, Task task, AsyncContinuation.Yield yielded) {
+        if (task.terminationRequested.get()) return;
         if (yielded instanceof AsyncContinuation.Yield.Complete) {
-            task.finished = true;
-            signalProgress();
+            requestTermination(batch, task, new TaskOutcome.Succeeded());
         } else if (yielded instanceof AsyncContinuation.Yield.MainThread(
                 MainThreadStep step, Function<MainThreadStep.Result, AsyncContinuation> resume1
         )) {
@@ -311,8 +314,9 @@ public final class MachineAsyncCoordinator {
     private void executePendingMainStep(TickBatch batch, PendingMainStep pending) {
         if (beforePendingMainStep != null) beforePendingMainStep.run();
         synchronized (pending.task) {
-            if (pending.task.cancelled) return;
+            if (!taskActive(batch, pending.task)) return;
             while (pending.nextStep < pending.steps.size()) {
+                if (pending.task.terminationRequested.get()) return;
                 MainThreadStep step = pending.steps.get(pending.nextStep);
                 MainThreadStep.Result result;
                 try {
@@ -335,6 +339,7 @@ public final class MachineAsyncCoordinator {
                 pending.nextStep++;
             }
         }
+        if (pending.task.terminationRequested.get()) return;
         AsyncContinuation continuation;
         try {
             continuation = pending.resume.apply(List.copyOf(pending.results));
@@ -346,9 +351,44 @@ public final class MachineAsyncCoordinator {
     }
 
     private void fail(TickBatch batch, Task task, Throwable throwable) {
-        failures.put(task.key, MainThreadStep.Result.failure(throwable));
-        task.finished = true;
+        requestTermination(batch, task, new TaskOutcome.Failed(throwable));
+    }
+
+    private boolean taskActive(TickBatch batch, Task task) {
+        if (task.terminationRequested.get()) return false;
+        try {
+            if (task.hooks.validator().getAsBoolean()) return true;
+            requestTermination(batch, task, new TaskOutcome.Cancelled("task validation failed"));
+        } catch (Throwable throwable) {
+            fail(batch, task, throwable);
+        }
+        return false;
+    }
+
+    private void requestTermination(TickBatch batch, Task task, TaskOutcome outcome) {
+        if (!task.terminationRequested.compareAndSet(false, true)) return;
+        task.outcome = outcome;
+        batch.pendingTerminations.add(new PendingTermination(task, outcome));
+        signalProgress();
+    }
+
+    private void drainAllTerminations() {
+        for (TickBatch batch : batches.values()) drainTerminations(batch);
+    }
+
+    private void drainTerminations(TickBatch batch) {
+        PendingTermination pending;
+        while ((pending = batch.pendingTerminations.poll()) != null) finishTermination(batch, pending);
+    }
+
+    private void finishTermination(TickBatch batch, PendingTermination pending) {
+        Task task = pending.task();
         removeTask(batch, task);
+        try {
+            task.hooks.completion().complete(task.key, pending.outcome());
+        } catch (Throwable throwable) {
+            MMCR.LOG.error("Async task completion failed: key={} outcome={}", task.key, pending.outcome(), throwable);
+        }
     }
 
     private void removeTask(TickBatch batch, Task task) {
@@ -360,16 +400,14 @@ public final class MachineAsyncCoordinator {
 
     private void cancelAll() {
         for (TickBatch batch : batches.values()) {
-            for (Task task : batch.tasks.values()) {
-                synchronized (task) {
-                    task.cancelled = true;
-                }
+            for (Task task : List.copyOf(batch.tasks.values())) {
+                requestTermination(batch, task, new TaskOutcome.Cancelled("level unloaded"));
             }
+            drainTerminations(batch);
         }
         batches.clear();
         tasks.clear();
         mainStepExecutors.clear();
-        failures.clear();
     }
 
     private void signalProgress() {
@@ -380,6 +418,40 @@ public final class MachineAsyncCoordinator {
     }
 
     public enum SubmissionResult { ACCEPTED, DUPLICATE, REJECTED }
+
+    public sealed interface TaskOutcome permits TaskOutcome.Succeeded, TaskOutcome.Failed, TaskOutcome.Cancelled {
+        record Succeeded() implements TaskOutcome { }
+
+        record Failed(Throwable cause) implements TaskOutcome {
+            public Failed {
+                Objects.requireNonNull(cause, "cause");
+            }
+        }
+
+        record Cancelled(String reason) implements TaskOutcome {
+            public Cancelled {
+                Objects.requireNonNull(reason, "reason");
+            }
+        }
+    }
+
+    @FunctionalInterface
+    public interface TaskCompletion {
+        void complete(TaskKey key, TaskOutcome outcome);
+    }
+
+    public record TaskHooks(BooleanSupplier validator, TaskCompletion completion) {
+        private static final TaskHooks DEFAULTS = new TaskHooks(() -> true, (key, outcome) -> { });
+
+        public TaskHooks {
+            Objects.requireNonNull(validator, "validator");
+            Objects.requireNonNull(completion, "completion");
+        }
+
+        public static TaskHooks defaults() {
+            return DEFAULTS;
+        }
+    }
 
     public record TaskKey(BlockPos controllerPos, long gameTime, MachineWorkMode workMode, String laneId,
                           long lifecycleEpoch) {
@@ -404,11 +476,13 @@ public final class MachineAsyncCoordinator {
 
     private static final class Task {
         private final TaskKey key;
-        private volatile boolean cancelled;
-        private volatile boolean finished;
+        private final TaskHooks hooks;
+        private final AtomicBoolean terminationRequested = new AtomicBoolean();
+        private volatile @Nullable TaskOutcome outcome;
 
-        private Task(TaskKey key) {
+        private Task(TaskKey key, TaskHooks hooks) {
             this.key = key;
+            this.hooks = Objects.requireNonNull(hooks, "hooks");
         }
     }
 
@@ -418,6 +492,7 @@ public final class MachineAsyncCoordinator {
         private final ConcurrentLinkedQueue<PendingMainStep> pendingMainSteps = new ConcurrentLinkedQueue<>();
         private final Map<TaskKey, PendingMainStep> deferredMainSteps = new ConcurrentHashMap<>();
         private final ConcurrentLinkedQueue<WorkerSegment> waitingWorkers = new ConcurrentLinkedQueue<>();
+        private final ConcurrentLinkedQueue<PendingTermination> pendingTerminations = new ConcurrentLinkedQueue<>();
         private final AtomicInteger runningWorkers = new AtomicInteger();
 
         private TickBatch(long gameTime) {
@@ -425,7 +500,7 @@ public final class MachineAsyncCoordinator {
         }
 
         private boolean hasLiveTask() {
-            return tasks.values().stream().anyMatch(task -> !task.cancelled && !task.finished);
+            return tasks.values().stream().anyMatch(task -> !task.terminationRequested.get());
         }
     }
 
@@ -445,6 +520,9 @@ public final class MachineAsyncCoordinator {
     }
 
     private record WorkerSegment(Task task, AsyncContinuation continuation) {
+    }
+
+    private record PendingTermination(Task task, TaskOutcome outcome) {
     }
 
     @FunctionalInterface

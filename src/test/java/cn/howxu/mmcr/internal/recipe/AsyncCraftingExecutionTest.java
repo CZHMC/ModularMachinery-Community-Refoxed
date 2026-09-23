@@ -100,11 +100,8 @@ class AsyncCraftingExecutionTest {
                 controller.runtimeSnapshot().structure().version())).isTrue();
         completeTick(controller);
         long epochBeforeFinish = controller.resourceAvailabilityEpoch();
-        MachineAsyncCoordinator.TaskKey tickKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
-                level.getGameTime(), MachineWorkMode.ASYNC, thread.asyncLaneId());
         thread.tick();
         completeTick(controller);
-        assertThat(MachineAsyncCoordinator.get(level).failureFor(tickKey)).isNull();
         thread.tick();
         completeTick(controller);
 
@@ -206,6 +203,49 @@ class AsyncCraftingExecutionTest {
 
         assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(1);
         assertThat(MachineAsyncCoordinator.get(level).hasPendingMainStepForTesting()).isFalse();
+    }
+
+    @Test
+    void failed_async_tick_releases_the_lane_for_the_next_tick() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller,
+                new DynamicMachine(machineId, "failed async tick", new BlockArray(Map.of())));
+        controller.setFormed(true);
+        RuntimeTestFixtures.republish(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(controller.getBlockPos());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("failed_async_tick"), machineId, 20,
+                List.of(), List.of());
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        completeTick(controller);
+
+        var beginPendingTick = RecipeThread.class.getDeclaredMethod("beginPendingTick",
+                StructureClaimRegistry.ResourceDomain.class);
+        beginPendingTick.setAccessible(true);
+        long token = (long) beginPendingTick.invoke(thread, domain);
+        var tickTaskHooks = RecipeThread.class.getDeclaredMethod("tickTaskHooks", long.class, long.class);
+        tickTaskHooks.setAccessible(true);
+        long lifecycleEpoch = controller.lifecycleEpoch();
+        MachineAsyncCoordinator.TaskHooks hooks = (MachineAsyncCoordinator.TaskHooks)
+                tickTaskHooks.invoke(thread, token, lifecycleEpoch);
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
+        coordinator.submitDetailed(new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(), level.getGameTime(),
+                        MachineWorkMode.ASYNC, thread.asyncLaneId(), lifecycleEpoch), ignored -> {
+                    throw new IllegalStateException("planned failure");
+                }, null, hooks);
+        coordinator.completeUntilIdleForTesting(() -> 0);
+
+        assertThat(thread.tickPendingForTesting()).isFalse();
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        thread.tick(controller.currentRuntimeSnapshot());
+        assertThat(thread.tickPendingForTesting()).isTrue();
     }
 
     @Test

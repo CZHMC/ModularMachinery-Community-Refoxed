@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -299,10 +300,8 @@ class MachineAsyncCoordinatorTest {
         coordinator.submit(key, ignored -> AsyncContinuation.Yield.complete());
 
         assertThatCode(coordinator::completeTick).doesNotThrowAnyException();
-        assertThat(coordinator.failureFor(key)).isNull();
         executor.runNext();
         coordinator.completeTick();
-        assertThat(coordinator.failureFor(key)).isNull();
     }
 
     @Test
@@ -320,7 +319,6 @@ class MachineAsyncCoordinatorTest {
         });
 
         assertThat(resolutions.get()).isPositive();
-        assertThat(coordinator.failureFor(key)).isNull();
     }
 
     @Test
@@ -362,13 +360,16 @@ class MachineAsyncCoordinatorTest {
     void worker_exceptions_are_captured_without_escaping_the_pump() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
-        coordinator.submit(key, ignored -> {
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        coordinator.submitDetailed(key, ignored -> {
             throw new IllegalStateException("worker failure");
-        });
+        }, null, new MachineAsyncCoordinator.TaskHooks(() -> true,
+                (ignored, outcome) -> outcomes.add(outcome)));
 
         assertThatCode(coordinator::completeTick).doesNotThrowAnyException();
-        assertThat(coordinator.failureFor(key)).isInstanceOf(MainThreadStep.Result.Failure.class);
-        MainThreadStep.Result.Failure failure = (MainThreadStep.Result.Failure) coordinator.failureFor(key);
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Failed.class);
+        MachineAsyncCoordinator.TaskOutcome.Failed failure =
+                (MachineAsyncCoordinator.TaskOutcome.Failed) outcomes.getFirst();
         assertThat(failure.cause()).isInstanceOf(IllegalStateException.class).hasMessage("worker failure");
     }
 
@@ -377,17 +378,62 @@ class MachineAsyncCoordinatorTest {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
         AtomicBoolean resumed = new AtomicBoolean();
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
 
-        coordinator.submit(key, ignored -> AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success,
+        coordinator.submitDetailed(key, ignored -> AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success,
                 result -> context -> {
                     resumed.set(true);
                     return AsyncContinuation.Yield.complete();
-                }), (taskKey, step) -> MainThreadStep.Result.failure(new IllegalStateException("stale runtime")));
+                }), (taskKey, step) -> MainThreadStep.Result.failure(new IllegalStateException("stale runtime")),
+                new MachineAsyncCoordinator.TaskHooks(() -> true,
+                        (ignored, outcome) -> outcomes.add(outcome)));
 
         coordinator.completeTick();
 
         assertThat(resumed).isFalse();
-        assertThat(coordinator.failureFor(key)).isInstanceOf(MainThreadStep.Result.Failure.class);
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Failed.class);
+    }
+
+    @Test
+    void worker_failure_terminates_once_on_the_pump_thread() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        Thread pumpThread = Thread.currentThread();
+        List<Thread> completionThreads = new ArrayList<>();
+
+        coordinator.submitDetailed(key, ignored -> {
+            throw new IllegalStateException("worker failure");
+        }, null, new MachineAsyncCoordinator.TaskHooks(() -> true, (ignored, outcome) -> {
+            outcomes.add(outcome);
+            completionThreads.add(Thread.currentThread());
+        }));
+
+        executor.runNext();
+        assertThat(outcomes).isEmpty();
+        coordinator.completeTick();
+        coordinator.completeTick();
+
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Failed.class);
+        assertThat(completionThreads).containsExactly(pumpThread);
+    }
+
+    @Test
+    void cancellation_and_late_worker_completion_share_one_terminal_outcome() {
+        ManualExecutor executor = new ManualExecutor();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 40L);
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+
+        coordinator.submitDetailed(key, ignored -> AsyncContinuation.Yield.complete(), null,
+                new MachineAsyncCoordinator.TaskHooks(() -> true,
+                        (ignored, outcome) -> outcomes.add(outcome)));
+        coordinator.cancel(key);
+        executor.runNext();
+        coordinator.completeTick();
+
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Cancelled.class);
     }
 
     @Test
@@ -420,7 +466,6 @@ class MachineAsyncCoordinatorTest {
         coordinator.completeTick(() -> sharedIo.resolve(domain));
 
         assertThat(committed).hasValue(1);
-        assertThat(coordinator.failureFor(key)).isNull();
     }
 
     private static void await(CountDownLatch latch) {

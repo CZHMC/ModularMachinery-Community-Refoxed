@@ -145,10 +145,17 @@ public abstract class RecipeThread {
                                               Runnable clearPendingSearch) {
         if (!(controller.getLevel() instanceof ServerLevel level)) return false;
         AsyncRecipeSearch search = new AsyncRecipeSearch(request);
-        return MachineAsyncCoordinator.get(level).submit(taskKey,
+        return MachineAsyncCoordinator.get(level).submitDetailed(taskKey,
                 new AsyncRecipeSearchContinuation(search, catalogVersion, searchId, searchLaneId),
                 (key, step) -> applyAsyncRecipeSearch(key, step, search, catalogVersion, searchId,
-                        searchLaneId, clearPendingSearch));
+                        searchLaneId, clearPendingSearch),
+                new MachineAsyncCoordinator.TaskHooks(
+                        () -> isAsyncRecipeSearchCurrent(taskKey, request, catalogVersion, searchLaneId),
+                        (ignored, outcome) -> {
+                            if (!(outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded)) {
+                                clearPendingSearch.run();
+                            }
+                        })) == MachineAsyncCoordinator.SubmissionResult.ACCEPTED;
     }
 
     private MainThreadStep.Result applyAsyncRecipeSearch(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep step,
@@ -248,8 +255,9 @@ public abstract class RecipeThread {
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                     serverLevel.getGameTime(), controller.activeWorkMode(), asyncLaneId(), controller.lifecycleEpoch());
+            PendingAsyncStart pending = pendingAsyncStart;
             MachineAsyncCoordinator.SubmissionResult submission = coordinator.submitDetailed(taskKey, continuation,
-                    this::executeAsyncMainStep);
+                    this::executeAsyncMainStep, asyncStartTaskHooks(pending, taskKey.lifecycleEpoch()));
             if (submission == MachineAsyncCoordinator.SubmissionResult.ACCEPTED) return true;
             if (submission == MachineAsyncCoordinator.SubmissionResult.REJECTED) {
                 rejectAsyncStart(pendingAsyncStart);
@@ -384,10 +392,12 @@ public abstract class RecipeThread {
     }
 
     private void failAsyncStart(PendingAsyncStart pending) {
-        if (pending == null) return;
+        if (pending == null || !isPendingStartGeneration(pending)) return;
         RecipeSearchContextKey failureKey = pending.snapshot().searchContextKey();
-        pendingAsyncStart = null;
-        pendingAsyncStartExecution = null;
+        if (pendingAsyncStart == pending) {
+            pendingAsyncStart = null;
+            pendingAsyncStartExecution = null;
+        }
         clearPendingStart(pending.token(), pending.recipe());
         controller.clearRecipeScreenText(laneId());
         onStartFailed(failureKey);
@@ -430,6 +440,21 @@ public abstract class RecipeThread {
             return false;
         }
         return true;
+    }
+
+    private boolean isPendingStartGeneration(PendingAsyncStart pending) {
+        return startPending && pendingStartToken == pending.token() && pendingStartRecipe == pending.recipe();
+    }
+
+    private MachineAsyncCoordinator.TaskHooks asyncStartTaskHooks(PendingAsyncStart pending, long lifecycleEpoch) {
+        return new MachineAsyncCoordinator.TaskHooks(
+                () -> lifecycleEpoch == controller.lifecycleEpoch() && isPendingStartGeneration(pending),
+                (ignored, outcome) -> {
+                    if (!(outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded)
+                            && lifecycleEpoch == controller.lifecycleEpoch() && isPendingStartGeneration(pending)) {
+                        failAsyncStart(pending);
+                    }
+                });
     }
 
     private long currentCatalogVersion() {
@@ -575,8 +600,8 @@ public abstract class RecipeThread {
                             asyncLaneId(), lifecycleEpoch);
                     boolean enqueued = SharedIoCoordinator.get(level).enqueueTickWork(level, domain, taskKey,
                             preparedPlan, intent -> commitTickWorksetIntent(token, domain, lifecycleEpoch,
-                                    catalogVersion, intent), this::clearPendingTick);
-                    if (!enqueued) clearPendingTick();
+                                    catalogVersion, intent), () -> failAsyncTick(token, lifecycleEpoch));
+                    if (!enqueued) failAsyncTick(token, lifecycleEpoch);
                     return enqueued;
                 },
                 () -> {
@@ -614,8 +639,9 @@ public abstract class RecipeThread {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(level);
         MachineAsyncCoordinator.TaskKey key = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                 level.getGameTime(), controller.activeWorkMode(), asyncLaneId(), controller.lifecycleEpoch());
-        if (!coordinator.submit(key, AsyncCraftingExecution.finish(asyncLaneId(), pendingTickCatalogVersion),
-                this::executeAsyncMainStep)) clearPendingTick();
+        if (coordinator.submitDetailed(key, AsyncCraftingExecution.finish(asyncLaneId(), pendingTickCatalogVersion),
+                this::executeAsyncMainStep, tickTaskHooks(token, key.lifecycleEpoch()))
+                != MachineAsyncCoordinator.SubmissionResult.ACCEPTED) clearPendingTick();
     }
 
     private void enqueueFinish(ServerLevel level, StructureClaimRegistry.ResourceDomain domain, long token,
@@ -946,6 +972,27 @@ public abstract class RecipeThread {
         clearPendingTick();
         completeIfFinished(wasActive);
         controller.syncRecipeRuntimeFailure(runtime);
+    }
+
+    private void failAsyncTick(long token, long lifecycleEpoch) {
+        if (lifecycleEpoch != controller.lifecycleEpoch() || !tickPending || pendingTickToken != token) return;
+        runtime.discardAsyncTickPreparation();
+        finishAsyncTick();
+    }
+
+    private MachineAsyncCoordinator.TaskHooks tickTaskHooks(long token, long lifecycleEpoch) {
+        return new MachineAsyncCoordinator.TaskHooks(
+                () -> lifecycleEpoch == controller.lifecycleEpoch()
+                        && tickPending && pendingTickToken == token,
+                (ignored, outcome) -> {
+                    if (!(outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded)) {
+                        failAsyncTick(token, lifecycleEpoch);
+                    }
+                });
+    }
+
+    boolean tickPendingForTesting() {
+        return tickPending;
     }
 
     private void completeIfFinished(boolean wasActive) {

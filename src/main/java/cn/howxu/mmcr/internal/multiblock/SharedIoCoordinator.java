@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.multiblock;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
@@ -7,6 +8,7 @@ import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
@@ -192,12 +195,25 @@ public final class SharedIoCoordinator {
                 laneKey.controllerPos(), laneKey.gameTime(), laneKey.workMode(),
                 "domain-tick/" + domain.id() + "/" + worksetId, laneKey.lifecycleEpoch());
         TickWorkset workset = new TickWorkset(worksetId, worksetKey, List.copyOf(entries));
-        submittedTickWork.put(worksetId, workset);
-        MachineAsyncCoordinator.SubmissionResult submission = MachineAsyncCoordinator.get(first.level()).submitDetailed(
-                worksetKey, new TickWorksetContinuation(workset), this::executeTickWorksetStep);
+        submitTickWorkset(MachineAsyncCoordinator.get(first.level()), workset, new TickWorksetContinuation(workset));
+    }
+
+    private void submitTickWorkset(MachineAsyncCoordinator coordinator, TickWorkset workset,
+                                   AsyncContinuation continuation) {
+        submittedTickWork.put(workset.id(), workset);
+        MachineAsyncCoordinator.SubmissionResult submission = coordinator.submitDetailed(
+                workset.taskKey(), continuation, this::executeTickWorksetStep,
+                new MachineAsyncCoordinator.TaskHooks(
+                        () -> submittedTickWork.get(workset.id()) == workset,
+                        (ignored, outcome) -> {
+                            if (!submittedTickWork.remove(workset.id(), workset)) return;
+                            if (!(outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded)) {
+                                workset.entries().forEach(TickWorkEntry::discardWork);
+                            }
+                        }));
         if (submission == MachineAsyncCoordinator.SubmissionResult.ACCEPTED) return;
-        submittedTickWork.remove(worksetId);
-        entries.forEach(TickWorkEntry::discardWork);
+        submittedTickWork.remove(workset.id(), workset);
+        workset.entries().forEach(TickWorkEntry::discardWork);
     }
 
     private MainThreadStep.Result executeTickWorksetStep(MachineAsyncCoordinator.TaskKey ignored,
@@ -207,14 +223,22 @@ public final class SharedIoCoordinator {
         ))) {
             return MainThreadStep.Result.failure(new IllegalArgumentException("Unexpected domain tick workset step"));
         }
-        TickWorkset workset = submittedTickWork.remove(worksetId);
+        TickWorkset workset = submittedTickWork.get(worksetId);
         if (workset == null || workset.entries().size() != intents.size()) {
             return MainThreadStep.Result.failure(new IllegalStateException("Domain tick workset became stale"));
         }
+        Throwable firstFailure = null;
         for (int index = 0; index < workset.entries().size(); index++) {
-            workset.entries().get(index).committer().accept(intents.get(index));
+            TickWorkEntry entry = workset.entries().get(index);
+            try {
+                entry.commit(intents.get(index));
+            } catch (Throwable throwable) {
+                entry.failCommit();
+                if (firstFailure == null) firstFailure = throwable;
+                MMCR.LOG.error("Shared IO tick work commit failed: key={}", entry.laneTaskKey(), throwable);
+            }
         }
-        return MainThreadStep.Result.success();
+        return firstFailure == null ? MainThreadStep.Result.success() : MainThreadStep.Result.failure(firstFailure);
     }
 
     private static List<AsyncRequirementPlanner.PlanResult> planTickWorkset(TickWorkset workset) {
@@ -244,15 +268,86 @@ public final class SharedIoCoordinator {
         return List.copyOf(results);
     }
 
-    private record TickWorkEntry(ServerLevel level, MachineAsyncCoordinator.TaskKey laneTaskKey,
-                                 AsyncRequirementPlanner.PreparedPlan preparedPlan,
-                                 Consumer<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
-        private void discardWork() {
+    private static final class TickWorkEntry {
+        private final ServerLevel level;
+        private final MachineAsyncCoordinator.TaskKey laneTaskKey;
+        private final AsyncRequirementPlanner.PreparedPlan preparedPlan;
+        private final Consumer<AsyncRequirementPlanner.PlanResult> committer;
+        private final Runnable discard;
+        private final AtomicBoolean terminal = new AtomicBoolean();
+
+        private TickWorkEntry(ServerLevel level, MachineAsyncCoordinator.TaskKey laneTaskKey,
+                              AsyncRequirementPlanner.PreparedPlan preparedPlan,
+                              Consumer<AsyncRequirementPlanner.PlanResult> committer, Runnable discard) {
+            this.level = level;
+            this.laneTaskKey = laneTaskKey;
+            this.preparedPlan = preparedPlan;
+            this.committer = committer;
+            this.discard = discard;
+        }
+
+        private ServerLevel level() { return level; }
+        private MachineAsyncCoordinator.TaskKey laneTaskKey() { return laneTaskKey; }
+        private AsyncRequirementPlanner.PreparedPlan preparedPlan() { return preparedPlan; }
+
+        private synchronized void commit(AsyncRequirementPlanner.PlanResult intent) {
+            if (terminal.get()) return;
+            committer.accept(intent);
+            terminal.set(true);
+        }
+
+        private synchronized void failCommit() {
+            if (!terminal.compareAndSet(false, true)) return;
+            discard.run();
+        }
+
+        private synchronized void discardWork() {
+            if (!terminal.compareAndSet(false, true)) return;
             discard.run();
         }
     }
 
     private record TickWorkset(long id, MachineAsyncCoordinator.TaskKey taskKey, List<TickWorkEntry> entries) { }
+
+    void submitTickWorksetForTesting(MachineAsyncCoordinator coordinator, AsyncContinuation continuation,
+                                     int entryCount, Runnable discard) {
+        List<Consumer<AsyncRequirementPlanner.PlanResult>> committers = new ArrayList<>(entryCount);
+        List<Runnable> discards = new ArrayList<>(entryCount);
+        for (int index = 0; index < entryCount; index++) {
+            committers.add(ignored -> { });
+            discards.add(discard);
+        }
+        submitTickWorksetForTesting(coordinator, continuation, committers, discards);
+    }
+
+    void submitTickWorksetForTesting(MachineAsyncCoordinator coordinator,
+                                     List<Consumer<AsyncRequirementPlanner.PlanResult>> committers,
+                                     List<Runnable> discards) {
+        submitTickWorksetForTesting(coordinator, null, committers, discards);
+    }
+
+    private void submitTickWorksetForTesting(MachineAsyncCoordinator coordinator,
+                                             AsyncContinuation continuation,
+                                             List<Consumer<AsyncRequirementPlanner.PlanResult>> committers,
+                                             List<Runnable> discards) {
+        if (committers.size() != discards.size()) throw new IllegalArgumentException("Mismatched test workset entries");
+        long worksetId = ++nextTickWorksetId;
+        MachineAsyncCoordinator.TaskKey key = new MachineAsyncCoordinator.TaskKey(
+                BlockPos.ZERO, worksetId, MachineWorkMode.ASYNC,
+                "test-domain-tick/" + worksetId);
+        AsyncRequirementPlanner.PreparedPlan plan = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
+        List<TickWorkEntry> entries = new ArrayList<>(committers.size());
+        for (int index = 0; index < committers.size(); index++) {
+            entries.add(new TickWorkEntry(null, key, plan, committers.get(index), discards.get(index)));
+        }
+        TickWorkset workset = new TickWorkset(worksetId, key, List.copyOf(entries));
+        submitTickWorkset(coordinator, workset,
+                continuation == null ? new TickWorksetContinuation(workset) : continuation);
+    }
+
+    int submittedTickWorkCountForTesting() {
+        return submittedTickWork.size();
+    }
 
     private record TickWorksetContinuation(TickWorkset workset) implements AsyncContinuation {
         @Override

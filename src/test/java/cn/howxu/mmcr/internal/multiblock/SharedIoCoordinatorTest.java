@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -74,6 +75,39 @@ class SharedIoCoordinatorTest {
         coordinator.cancel(A);
 
         assertThat(discarded).hasValue(1);
+    }
+
+    @Test
+    void failed_domain_tick_workset_discards_every_entry_and_releases_the_submission() {
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        AtomicInteger discarded = new AtomicInteger();
+
+        sharedIo.submitTickWorksetForTesting(coordinator, ignored -> {
+            throw new IllegalStateException("planned failure");
+        }, 2, discarded::incrementAndGet);
+        coordinator.completeTick();
+
+        assertThat(discarded).hasValue(2);
+        assertThat(sharedIo.submittedTickWorkCountForTesting()).isZero();
+    }
+
+    @Test
+    void failed_entry_commit_is_discarded_without_blocking_later_entries() {
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        AtomicInteger firstDiscarded = new AtomicInteger();
+        AtomicInteger secondCommitted = new AtomicInteger();
+
+        sharedIo.submitTickWorksetForTesting(coordinator, List.of(
+                ignored -> { throw new IllegalStateException("commit failure"); },
+                ignored -> secondCommitted.incrementAndGet()),
+                List.of(firstDiscarded::incrementAndGet, () -> { }));
+        coordinator.completeUntilIdleForTesting(() -> 0);
+
+        assertThat(firstDiscarded).hasValue(1);
+        assertThat(secondCommitted).hasValue(1);
+        assertThat(sharedIo.submittedTickWorkCountForTesting()).isZero();
     }
 
     @Test
