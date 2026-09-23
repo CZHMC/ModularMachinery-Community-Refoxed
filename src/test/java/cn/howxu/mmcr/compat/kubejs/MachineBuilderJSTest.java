@@ -332,6 +332,22 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void server_tick_hooks_preserve_recipe_callback_registration_flags() {
+        MachineRegistration registration = new MachineBuilderJS(MMCR.id("registered_recipe_hook_flags"))
+                .preServerTick(context -> { })
+                .createObject();
+
+        RecipeBehavior behavior = (RecipeBehavior) registration.behavior();
+        assertThat(behavior.hasPreServerTick()).isTrue();
+        assertThat(behavior.hasPostServerTick()).isFalse();
+        assertThat(behavior.hasIdleStart()).isFalse();
+        assertThat(behavior.hasIdleEnd()).isFalse();
+        assertThat(behavior.hasBeforeStart()).isFalse();
+        assertThat(behavior.hasRecipeTick()).isFalse();
+        assertThat(behavior.hasBeforeFinish()).isFalse();
+    }
+
+    @Test
     void builder_maps_direct_registration_settings() {
         MachineControllerSpec controllerSpec = new MachineControllerSpec(
                 Identifier.parse("mmcr_kubejs:explicit_controller"),

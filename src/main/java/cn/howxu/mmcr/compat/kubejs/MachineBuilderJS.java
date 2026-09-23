@@ -197,15 +197,17 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         if (!(behavior instanceof RecipeBehavior recipe)) {
             throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
         }
-        return RecipeBehavior.builder()
-                .idleStart(recipe.idleStart())
-                .idleEnd(recipe.idleEnd())
-                .beforeStart(recipe.beforeStart())
-                .recipeTick(recipe.recipeTick())
-                .beforeFinish(recipe.beforeFinish())
-                .preServerTick(preServerTick == null ? recipe.preServerTick() : preServerTick)
-                .postServerTick(postServerTick == null ? recipe.postServerTick() : postServerTick)
-                .build();
+        RecipeBehavior.Builder builder = RecipeBehavior.builder();
+        if (recipe.hasIdleStart()) builder.idleStart(recipe.idleStart());
+        if (recipe.hasIdleEnd()) builder.idleEnd(recipe.idleEnd());
+        if (recipe.hasBeforeStart()) builder.beforeStart(recipe.beforeStart());
+        if (recipe.hasRecipeTick()) builder.recipeTick(recipe.recipeTick());
+        if (recipe.hasBeforeFinish()) builder.beforeFinish(recipe.beforeFinish());
+        if (preServerTick != null) builder.preServerTick(preServerTick);
+        else if (recipe.hasPreServerTick()) builder.preServerTick(recipe.preServerTick());
+        if (postServerTick != null) builder.postServerTick(postServerTick);
+        else if (recipe.hasPostServerTick()) builder.postServerTick(recipe.postServerTick());
+        return builder.build();
     }
 
     public MachineBuilderJS recipePool(String recipePoolId) {

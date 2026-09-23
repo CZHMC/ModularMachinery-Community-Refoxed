@@ -56,6 +56,23 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void resolving_one_domain_preserves_requests_for_other_domains() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(8, 8);
+        StructureClaimRegistry.ResourceDomain first = domain(1L, A);
+        StructureClaimRegistry.ResourceDomain second = domain(2L, B);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(first, A, 1L, () -> { committed.add("first"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(second, B, 1L, () -> { committed.add("second"); return true; }, () -> true, () -> 1L));
+
+        coordinator.resolve(first);
+        assertThat(committed).containsExactly("first");
+        assertThat(coordinator.pendingRequestCountForTesting()).isEqualTo(1);
+
+        coordinator.resolve(second);
+        assertThat(committed).containsExactly("first", "second");
+    }
+
+    @Test
     void request_budget_is_shared_within_one_game_time_and_resets_on_the_next() {
         SharedIoCoordinator coordinator = new SharedIoCoordinator(1, 8);
         StructureClaimRegistry.ResourceDomain domain = domain(A);

@@ -143,23 +143,27 @@ public final class SharedIoCoordinator {
             StructureClaimRegistry.ResourceDomain domain = owner == null ? null : registry.domainFor(owner);
             if (domain != null) knownDomains.put(domain.id(), domain);
         }
-        return resolveKnownDomains(knownDomains);
+        return resolveKnownDomains(knownDomains, true);
     }
 
     public int resolve(StructureClaimRegistry.ResourceDomain domain) {
-        return resolveKnownDomains(Map.of(domain.id(), domain));
+        return resolveKnownDomains(Map.of(domain.id(), domain), false);
     }
 
     int resolveKnownDomainsForTesting(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains) {
-        return resolveKnownDomains(knownDomains);
+        return resolveKnownDomains(knownDomains, true);
     }
 
-    private int resolveKnownDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains) {
-        discardStaleDomains(knownDomains);
+    private int resolveKnownDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains,
+                                    boolean discardUnknownDomains) {
+        discardStaleDomains(knownDomains, discardUnknownDomains);
         int progress = 0;
         Set<Request> attempted = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<Request> eligible = Collections.newSetFromMap(new IdentityHashMap<>());
-        domains.values().forEach(bucket -> eligible.addAll(bucket.allRequests()));
+        domains.forEach((key, bucket) -> {
+            StructureClaimRegistry.ResourceDomain domain = knownDomains.get(key.id);
+            if (domain != null && domain.generation() == key.generation) eligible.addAll(bucket.allRequests());
+        });
         try (AsyncPlanningFacet.CaptureScope ignored = AsyncPlanningFacet.beginCaptureScope()) {
             while (remainingRequests > 0) {
                 DomainKey key = nextDomainWithWork(attempted, eligible);
@@ -224,10 +228,12 @@ public final class SharedIoCoordinator {
         bucket.requests.get(successor).values().forEach(eligible::addAll);
     }
 
-    private void discardStaleDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains) {
+    private void discardStaleDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains,
+                                     boolean discardUnknownDomains) {
         for (DomainKey key : List.copyOf(domains.keySet())) {
             StructureClaimRegistry.ResourceDomain current = knownDomains.get(key.id);
             if (current != null && current.generation() == key.generation) continue;
+            if (current == null && !discardUnknownDomains) continue;
             DomainBucket bucket = domains.remove(key);
             if (bucket != null) for (Request request : bucket.allRequests()) {
                 request.discard();
