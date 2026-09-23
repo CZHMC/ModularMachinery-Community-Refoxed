@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.TickFacet;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -1490,13 +1492,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         if (behavior instanceof TickBehavior tickBehavior) {
                             setActiveState(true);
                             try {
-                                TickBehaviorContext context = runtime.tickBehaviorContext();
-                                var tickResult = runtime.craftingRuntime().handleCapabilityTickResult(
-                                        runtime.componentRuntime().executeTickPhase(
-                                                context.capabilityTickContext(tickBehavior.capabilityTickPhase())));
-                                if (tickResult.failure() == null) {
+                                boolean hasCapabilityTick = runtime.componentRuntime().capabilities().stream()
+                                        .anyMatch(capability -> capability.facet(TickFacet.class).isPresent());
+                                TickBehaviorContext context = hasCapabilityTick || tickBehavior.hasServerTick()
+                                        ? runtime.tickBehaviorContext() : null;
+                                var tickResult = hasCapabilityTick
+                                        ? runtime.componentRuntime().executeTickPhase(
+                                                context.capabilityTickContext(tickBehavior.capabilityTickPhase()))
+                                        : CapabilityTickResult.empty();
+                                runtime.craftingRuntime().handleCapabilityTickResult(tickResult);
+                                if (tickResult.failure() == null && tickBehavior.hasServerTick()) {
                                     tickBehavior.serverTick().accept(context);
-                                } else {
+                                } else if (tickResult.failure() != null) {
                                     setActiveState(false);
                                 }
                             } catch (RuntimeException exception) {
@@ -1504,20 +1511,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
                             }
                         } else {
                             RecipeBehavior recipeBehavior = behavior instanceof RecipeBehavior recipe ? recipe : null;
-                            if (recipeBehavior != null) {
+                            if (recipeBehavior != null && recipeBehavior.hasPreServerTick()) {
                                 invokeServerTickCallback("preServerTick", recipeBehavior.preServerTick(), tickState);
                             }
                             try {
                                 boolean idleBefore = !hasActiveOperation();
-                                    if (recipeBehavior != null && idleBefore) {
+                                    if (recipeBehavior != null && idleBefore && recipeBehavior.hasIdleStart()) {
                                         invokeIdleCallback("idleStart", recipeBehavior.idleStart(), tickState);
                                     }
                                 factoryTickResult = dispatchRuntimeRecipeWork(runtimeLevel, tickState, factoryController);
-                                if (recipeBehavior != null && !hasActiveOperation()) {
+                                if (recipeBehavior != null && !hasActiveOperation() && recipeBehavior.hasIdleEnd()) {
                                     invokeIdleCallback("idleEnd", recipeBehavior.idleEnd(), tickState);
                                 }
                             } finally {
-                                if (recipeBehavior != null) {
+                                if (recipeBehavior != null && recipeBehavior.hasPostServerTick()) {
                                     invokeServerTickCallback("postServerTick", recipeBehavior.postServerTick(), tickState);
                                 }
                             }
@@ -1666,6 +1673,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public Map<Long, Integer> buildTaskPlacementsPerTickForTesting() {
         return Map.copyOf(buildTaskPlacementsPerTickForTesting);
+    }
+
+    public int behaviorContextBuildCountForTesting() {
+        return runtime.behaviorContextBuildCountForTesting();
     }
 
     private boolean advanceBuildTask() {

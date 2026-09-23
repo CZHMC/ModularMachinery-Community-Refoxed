@@ -9,12 +9,14 @@ import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
  * @author howxu <dev@howxu.cn>
  */
 public final class TickBehavior implements MachineBehavior {
-    private static final TickBehavior DEFAULTS = new TickBehavior(context -> { });
+    private static final TickBehavior DEFAULTS = new Builder().build();
 
     private final TickCallback serverTick;
+    private final boolean serverTickRegistered;
 
-    private TickBehavior(TickCallback serverTick) {
-        this.serverTick = Objects.requireNonNull(serverTick, "serverTick");
+    private TickBehavior(Builder builder) {
+        serverTick = builder.serverTick;
+        serverTickRegistered = builder.serverTickRegistered;
     }
 
     public static TickBehavior defaults() {
@@ -34,20 +36,26 @@ public final class TickBehavior implements MachineBehavior {
         return serverTick;
     }
 
+    public boolean hasServerTick() {
+        return serverTickRegistered;
+    }
+
     public CapabilityTickPhase capabilityTickPhase() {
         return CapabilityTickPhase.IDLE;
     }
 
     public static final class Builder {
         private TickCallback serverTick = context -> { };
+        private boolean serverTickRegistered;
 
         public Builder serverTick(TickCallback callback) {
             serverTick = Objects.requireNonNull(callback, "serverTick");
+            serverTickRegistered = true;
             return this;
         }
 
         public TickBehavior build() {
-            return new TickBehavior(serverTick);
+            return new TickBehavior(this);
         }
     }
 }

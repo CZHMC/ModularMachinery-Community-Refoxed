@@ -39,6 +39,7 @@ import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -139,20 +140,26 @@ public final class CraftingRuntime {
         List<RecipeModifier> contextModifiers = contextModifiers(runtime);
         List<MachineRequirement> recipeRequirements = recipe.runtimeRequirements(contextModifiers);
         List<MachineOutput> outputs = runtimeMachineOutputs(recipe, runtime);
-        MachineBehaviorContext machineContext = behaviorContext();
-        RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
-                effectiveParallelism, duration(recipe, runtime),
-                MachineRecipeConverter.toPublicRequirements(recipeRequirements), outputs);
-        try {
-            behavior.beforeStart().accept(startContext);
-        } catch (RuntimeException exception) {
-            logCallbackFailure("beforeStart", runtime, recipe, exception);
-            return null;
-        } finally {
-            flushScreenTextReplacements(machineContext.screenText());
+        RecipeStartContext.ExecutionSnapshot effective;
+        if (behavior.hasBeforeStart()) {
+            MachineBehaviorContext machineContext = behaviorContext();
+            RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
+                    effectiveParallelism, duration(recipe, runtime),
+                    MachineRecipeConverter.toPublicRequirements(recipeRequirements), outputs);
+            try {
+                behavior.beforeStart().accept(startContext);
+            } catch (RuntimeException exception) {
+                logCallbackFailure("beforeStart", runtime, recipe, exception);
+                return null;
+            } finally {
+                flushScreenTextReplacements(machineContext.screenText());
+            }
+            if (startContext.cancelled()) return null;
+            effective = startContext.snapshot();
+        } else {
+            effective = new RecipeStartContext.ExecutionSnapshot(duration(recipe, runtime),
+                    MachineRecipeConverter.toPublicRequirements(recipeRequirements), outputs);
         }
-        if (startContext.cancelled()) return null;
-        RecipeStartContext.ExecutionSnapshot effective = startContext.snapshot();
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRecipeConverter::toRequirement).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
@@ -266,6 +273,10 @@ public final class CraftingRuntime {
         if (behavior == null) return null;
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
         List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers(runtime));
+        if (!behavior.hasBeforeStart()) {
+            return new RecipeStartContext.ExecutionSnapshot(duration(recipe, runtime),
+                    MachineRecipeConverter.toPublicRequirements(requirements), runtimeMachineOutputs(recipe, runtime));
+        }
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, duration(recipe, runtime),
@@ -362,12 +373,14 @@ public final class CraftingRuntime {
                         .toPublicRequirements(effectiveRequirements()), activeOutputs(),
                 new CapabilitySnapshot(components.capabilities()));
         if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, machineContext, recipeTickContext)) return status;
-        try {
-            behavior.recipeTick().accept(recipeTickContext);
-        } catch (RuntimeException exception) {
-            logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
-        } finally {
-            flushScreenTextReplacements(machineContext.screenText());
+        if (behavior.hasRecipeTick()) {
+            try {
+                behavior.recipeTick().accept(recipeTickContext);
+            } catch (RuntimeException exception) {
+                logCallbackFailure("recipeTick", runtime, activeRecipe.getRecipe(), exception);
+            } finally {
+                flushScreenTextReplacements(machineContext.screenText());
+            }
         }
         CraftingContext context = context(runtime);
         PlanningResult result = planPerTick(context);
@@ -455,12 +468,14 @@ public final class CraftingRuntime {
         AsyncTickPreparation preparation = asyncTickPreparation;
         RecipeBehavior behavior = preparation == null ? null : recipeBehavior(preparation.runtime());
         if (preparation == null || behavior == null) return null;
-        try {
-            behavior.recipeTick().accept(preparation.tickContext());
-        } catch (RuntimeException exception) {
-            logCallbackFailure("recipeTick", preparation.runtime(), activeRecipe.getRecipe(), exception);
-        } finally {
-            flushAsyncScreenText();
+        if (behavior.hasRecipeTick()) {
+            try {
+                behavior.recipeTick().accept(preparation.tickContext());
+            } catch (RuntimeException exception) {
+                logCallbackFailure("recipeTick", preparation.runtime(), activeRecipe.getRecipe(), exception);
+            } finally {
+                flushAsyncScreenText();
+            }
         }
         List<MachineRequirement> requirements = perTickRequirements();
         if (requirements.isEmpty()) return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
@@ -492,7 +507,8 @@ public final class CraftingRuntime {
             invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
             return false;
         }
-        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_INPUTS, behaviorContext(), preparation.tickContext())) {
+        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_INPUTS,
+                preparation.machineContext(), preparation.tickContext())) {
             if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, currentGameTime());
             asyncTickPreparation = null;
             return false;
@@ -508,7 +524,8 @@ public final class CraftingRuntime {
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         int gameTime = currentGameTime();
         if (activeRecipe.needsFinishCommit()) {
-            if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) {
+            if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE,
+                    preparation.machineContext(), preparation.tickContext())) {
                 if (activeRecipe != null) activeRecipe.applyTickGrant(true, false, gameTime);
                 return status;
             }
@@ -517,13 +534,17 @@ public final class CraftingRuntime {
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
-        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE, behaviorContext(), preparation.tickContext())) return status;
+        if (!executeAsyncTickPhase(CapabilityTickPhase.AFTER_RECIPE,
+                preparation.machineContext(), preparation.tickContext())) return status;
         status = CraftingStatus.working();
         failure = null;
         return status;
     }
 
     public CapabilityTickResult tickIdle() {
+        if (components.capabilities().stream().noneMatch(capability -> capability.facet(TickFacet.class).isPresent())) {
+            return handleCapabilityTickResult(CapabilityTickResult.empty());
+        }
         MachineBehaviorContext machineContext = behaviorContext();
         return handleCapabilityTickResult(components.executeTickPhase(new CapabilityTickContext(capabilityGameTime(), CapabilityTickPhase.IDLE,
                 null, 1L, new CapabilitySnapshot(components.capabilities()), machineContext)));
@@ -641,9 +662,14 @@ public final class CraftingRuntime {
             finishBlocked(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.FINISH, Map.of()));
             return null;
         }
+        RecipeFinishContext finishContext;
+        if (!behavior.hasBeforeFinish()) {
+            return new RecipeFinishContext(activeRecipe.getRecipe(), activeRecipe.getMaxParallelism(),
+                    activeRecipe.getParallelism(), activeOutputs());
+        }
         MachineBehaviorContext machineContext = behaviorContext();
-        RecipeFinishContext finishContext = new RecipeFinishContext(machineContext,
-                activeRecipe.getRecipe(), activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(), activeOutputs());
+        finishContext = new RecipeFinishContext(machineContext, activeRecipe.getRecipe(),
+                activeRecipe.getMaxParallelism(), activeRecipe.getParallelism(), activeOutputs());
         try {
             behavior.beforeFinish().accept(finishContext);
         } catch (RuntimeException exception) {

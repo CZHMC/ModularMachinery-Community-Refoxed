@@ -171,6 +171,41 @@ class MachineBehaviorTest {
     }
 
     @Test
+    void recipe_behavior_distinguishes_defaults_from_explicit_callbacks() {
+        RecipeBehavior defaults = RecipeBehavior.defaults();
+        RecipeBehavior explicit = RecipeBehavior.builder()
+                .idleStart(context -> { })
+                .idleEnd(context -> { })
+                .beforeStart(context -> { })
+                .recipeTick(context -> { })
+                .beforeFinish(context -> { })
+                .preServerTick(context -> { })
+                .postServerTick(context -> { })
+                .build();
+
+        assertThat(defaults.hasIdleStart()).isFalse();
+        assertThat(defaults.hasIdleEnd()).isFalse();
+        assertThat(defaults.hasBeforeStart()).isFalse();
+        assertThat(defaults.hasRecipeTick()).isFalse();
+        assertThat(defaults.hasBeforeFinish()).isFalse();
+        assertThat(defaults.hasPreServerTick()).isFalse();
+        assertThat(defaults.hasPostServerTick()).isFalse();
+        assertThat(explicit.hasIdleStart()).isTrue();
+        assertThat(explicit.hasIdleEnd()).isTrue();
+        assertThat(explicit.hasBeforeStart()).isTrue();
+        assertThat(explicit.hasRecipeTick()).isTrue();
+        assertThat(explicit.hasBeforeFinish()).isTrue();
+        assertThat(explicit.hasPreServerTick()).isTrue();
+        assertThat(explicit.hasPostServerTick()).isTrue();
+    }
+
+    @Test
+    void tick_behavior_distinguishes_default_from_explicit_server_tick() {
+        assertThat(TickBehavior.defaults().hasServerTick()).isFalse();
+        assertThat(TickBehavior.builder().serverTick(context -> { }).build().hasServerTick()).isTrue();
+    }
+
+    @Test
     void tick_behavior_has_tick_kind_and_retains_callback() {
         AtomicInteger calls = new AtomicInteger();
         TickBehavior behavior = TickBehavior.builder()

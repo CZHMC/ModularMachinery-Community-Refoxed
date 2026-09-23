@@ -107,6 +107,13 @@ class PublicMachineBuilderTest {
         RecipeBehavior behavior = (RecipeBehavior) definition.behavior();
         behavior.preServerTick().accept(null);
         behavior.postServerTick().accept(null);
+        assertThat(behavior.hasPreServerTick()).isTrue();
+        assertThat(behavior.hasPostServerTick()).isTrue();
+        assertThat(behavior.hasIdleStart()).isFalse();
+        assertThat(behavior.hasIdleEnd()).isFalse();
+        assertThat(behavior.hasBeforeStart()).isFalse();
+        assertThat(behavior.hasRecipeTick()).isFalse();
+        assertThat(behavior.hasBeforeFinish()).isFalse();
         assertThat(preCalls).hasValue(1);
         assertThat(postCalls).hasValue(1);
     }

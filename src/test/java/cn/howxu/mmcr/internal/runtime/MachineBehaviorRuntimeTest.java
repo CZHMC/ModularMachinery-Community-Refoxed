@@ -376,6 +376,51 @@ class MachineBehaviorRuntimeTest {
     }
 
     @Test
+    void absent_server_hooks_do_not_build_callback_only_contexts() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        RuntimeTestFixtures.formStructure(controller, machine(controller.machineId(), RecipeBehavior.defaults()));
+        int before = controller.behaviorContextBuildCountForTesting();
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(controller.behaviorContextBuildCountForTesting()).isEqualTo(before);
+    }
+
+    @Test
+    void explicit_server_hooks_each_receive_a_fresh_context() {
+        List<MachineBehaviorContext> contexts = new ArrayList<>();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        RuntimeTestFixtures.formStructure(controller, machine(controller.machineId(), RecipeBehavior.builder()
+                .preServerTick(contexts::add)
+                .postServerTick(contexts::add)
+                .build()));
+        int before = controller.behaviorContextBuildCountForTesting();
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(controller.behaviorContextBuildCountForTesting()).isEqualTo(before + 2);
+        assertThat(contexts).hasSize(2);
+        assertThat(contexts.get(0)).isNotSameAs(contexts.get(1));
+    }
+
+    @Test
+    void direct_tick_without_callback_runs_capability_phase_with_one_context() {
+        AtomicInteger phases = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        RuntimeTestFixtures.formStructure(controller, machine(controller.machineId(), TickBehavior.defaults()));
+        installTickCapability(controller, new TickCapability(context -> {
+            phases.incrementAndGet();
+            return CapabilityTickResult.empty();
+        }));
+        int before = controller.behaviorContextBuildCountForTesting();
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(phases).hasValue(1);
+        assertThat(controller.behaviorContextBuildCountForTesting()).isEqualTo(before + 1);
+    }
+
+    @Test
     void factory_idle_phase_propagates_a_blocked_result_to_the_factory_failure() {
         AtomicInteger idleCalls = new AtomicInteger();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);

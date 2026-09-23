@@ -91,6 +91,7 @@ public final class MachineControllerRuntime {
     private long cachedFoundLevelEpoch = Long.MIN_VALUE;
     private List<String> cachedFoundLevelIds = List.of();
     private int snapshotBuildCountForTesting;
+    private int behaviorContextBuildCountForTesting;
 
     MachineControllerRuntime(MachineControllerBlockEntity controller) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -173,9 +174,14 @@ public final class MachineControllerRuntime {
         Level currentLevel = controller.getLevel();
         ServerLevel level = currentLevel instanceof ServerLevel serverLevel ? serverLevel : null;
         long gameTime = currentLevel == null ? 0L : currentLevel.getGameTime();
+        behaviorContextBuildCountForTesting++;
         return new MachineBehaviorContext(controller, level, controller.getBlockPos(), machine.registryName(), gameTime,
                 screenText, primaryDataStorage,
                 new MachineIoView(capabilitySnapshot), components.upgradeItems(), jadeText);
+    }
+
+    int behaviorContextBuildCountForTesting() {
+        return behaviorContextBuildCountForTesting;
     }
 
     public ControllerScreenTextState recipeScreenText(String laneId) {
