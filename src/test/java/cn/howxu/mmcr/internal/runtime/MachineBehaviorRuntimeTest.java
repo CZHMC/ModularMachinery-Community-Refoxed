@@ -50,6 +50,9 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.data.DataValue;
@@ -95,6 +98,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -691,6 +695,37 @@ class MachineBehaviorRuntimeTest {
     }
 
     @Test
+    void async_recipe_tick_callback_runs_on_the_controller_tick_thread() {
+        Identifier machineId = TEST_MACHINE_ID;
+        AtomicReference<Thread> callbackThread = new AtomicReference<>();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        RuntimeTestFixtures.formStructure(controller, machine(machineId, RecipeBehavior.builder()
+                .recipeTick(context -> callbackThread.set(Thread.currentThread()))
+                .build()));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(MMCR.id("recipe_callback_thread"), machineId, 20,
+                List.of(), List.of()));
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+
+        try {
+            controller.serverTick();
+            completeAsyncLevelTick(level);
+            RuntimeTestFixtures.advanceGameTime(level);
+            Thread controllerTickThread = Thread.currentThread();
+
+            controller.serverTick();
+
+            assertThat(callbackThread).hasValue(controllerTickThread);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @Test
     void recipe_machine_hook_failure_does_not_skip_the_other_hook() {
         AtomicInteger postCalls = new AtomicInteger();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
@@ -794,6 +829,13 @@ class MachineBehaviorRuntimeTest {
     private static ItemRequirement output(Item item) {
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                 new ItemStack(item), 1F, List.of());
+    }
+
+    private static void completeAsyncLevelTick(ServerLevel level) {
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        sharedIo.resolve(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
     private static void installTickCapability(MachineControllerBlockEntity controller, TickCapability capability) {

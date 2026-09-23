@@ -561,43 +561,32 @@ public abstract class RecipeThread {
         long stateVersion = runtimeSnapshot.stateVersion();
         long catalogVersion = currentCatalogVersion();
         long lifecycleEpoch = controller.lifecycleEpoch();
+        AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan(runtimeSnapshot);
+        if (preparedPlan == null) {
+            finishAsyncTick();
+            return;
+        }
+        if (preparedPlan.requirements().isEmpty()
+                && preparedPlan.initialMainThreadRequirements().isEmpty()) {
+            AsyncRequirementPlanner.PlanResult empty = new AsyncRequirementPlanner.PlanResult(List.of(), List.of());
+            boolean committed = runtime.commitAsyncTick(empty);
+            if (committed && runtime.completeAsyncTickAfterInputs()) {
+                runtime.completeAsyncTickAfterRecipe();
+            } else if (!committed) {
+                runtime.discardAsyncTickPreparation();
+            }
+            finishAsyncTick();
+            return;
+        }
+        MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(
+                controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(),
+                asyncLaneId(), lifecycleEpoch);
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
                 structureVersion,
                 stateVersion,
                 () -> {
-                    if (!runtime.prepareAsyncTick(runtimeSnapshot)) {
-                        finishAsyncTick();
-                        return true;
-                    }
-                    if (!runtime.executeAsyncCapabilityTick(CapabilityTickPhase.BEFORE_RECIPE)) {
-                        runtime.discardAsyncTickPreparation();
-                        runtime.flushAsyncScreenText();
-                        finishAsyncTick();
-                        return true;
-                    }
-                    AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan();
-                    runtime.flushAsyncScreenText();
-                    if (preparedPlan == null) {
-                        finishAsyncTick();
-                        return true;
-                    }
-                    if (preparedPlan.requirements().isEmpty()
-                            && preparedPlan.initialMainThreadRequirements().isEmpty()) {
-                        AsyncRequirementPlanner.PlanResult empty = new AsyncRequirementPlanner.PlanResult(List.of(), List.of());
-                        boolean committed = runtime.commitAsyncTick(empty);
-                        if (committed && runtime.completeAsyncTickAfterInputs()) {
-                            runtime.completeAsyncTickAfterRecipe();
-                        } else if (!committed) {
-                            runtime.discardAsyncTickPreparation();
-                        }
-                        finishAsyncTick();
-                        return true;
-                    }
-                    MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(
-                            controller.getBlockPos(), level.getGameTime(), controller.activeWorkMode(),
-                            asyncLaneId(), lifecycleEpoch);
                     boolean enqueued = SharedIoCoordinator.get(level).enqueueTickWork(level, domain, taskKey,
                             preparedPlan, intent -> commitTickWorksetIntent(token, domain, lifecycleEpoch,
                                     catalogVersion, intent), () -> failAsyncTick(token, lifecycleEpoch));
@@ -713,11 +702,6 @@ public abstract class RecipeThread {
                 }
             } else if (lifecycle.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
                 asyncFinishPrepared = runtime.prepareAsyncFinish();
-            } else if (lifecycle.kind() == MainThreadStep.Kind.RECIPE_TICK) {
-                if (!runtime.prepareAsyncTick(controller.currentRuntimeSnapshot())) {
-                    finishAsyncTick();
-                    return MainThreadStep.Result.value(false);
-                }
             }
             return validatedAsyncResult(key, step, MainThreadStep.Result.success());
         }
@@ -742,12 +726,6 @@ public abstract class RecipeThread {
             return validatedAsyncResult(key, step, MainThreadStep.Result.success());
         }
         if (step instanceof MainThreadStep.ScreenTextFlush screenTextFlush) {
-            if (screenTextFlush.source() == MainThreadStep.Kind.RECIPE_TICK) {
-                AsyncRequirementPlanner.PreparedPlan preparedPlan = runtime.prepareAsyncTickPlan();
-                runtime.flushAsyncScreenText();
-                return validatedAsyncResult(key, step,
-                        preparedPlan == null ? MainThreadStep.Result.success() : MainThreadStep.Result.value(preparedPlan));
-            }
             runtime.flushAsyncScreenText();
             return validatedAsyncResult(key, step, MainThreadStep.Result.success());
         }

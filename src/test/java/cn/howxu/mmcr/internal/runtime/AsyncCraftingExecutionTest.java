@@ -91,51 +91,6 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
-    void tick_batches_main_thread_preparation_before_worker_planning() {
-        AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
-
-        AsyncContinuation.Yield yield = execution.advance(new AsyncExecutionContext(
-                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
-
-        AsyncContinuation.Yield.MainThreadBatch batch = (AsyncContinuation.Yield.MainThreadBatch) yield;
-        assertThat(batch.steps()).containsExactly(
-                new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, "base", 1L),
-                new MainThreadStep.CapabilityTick(cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase.BEFORE_RECIPE,
-                        "base", 1L),
-                new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK, "base", 1L));
-    }
-
-    @Test
-    void tick_yields_intent_commit_after_main_thread_preparation() {
-        AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
-        AsyncContinuation.Yield.MainThreadBatch first = (AsyncContinuation.Yield.MainThreadBatch) execution.advance(new AsyncExecutionContext(
-                new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
-        AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
-
-        AsyncContinuation.Yield next = first.resume().apply(List.of(MainThreadStep.Result.success(),
-                MainThreadStep.Result.success(), MainThreadStep.Result.value(prepared))).advance(new AsyncExecutionContext(
-                        new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L)));
-
-        assertThat(((AsyncContinuation.Yield.MainThread) next).step())
-                .isInstanceOf(MainThreadStep.TickTransitionCommit.class);
-    }
-
-    @Test
-    void tick_yields_one_transition_for_all_post_plan_commit_phases() {
-        AsyncCraftingExecution execution = AsyncCraftingExecution.tick("base", 1L);
-        AsyncExecutionContext context = new AsyncExecutionContext(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L));
-        AsyncContinuation.Yield.MainThreadBatch preparation = (AsyncContinuation.Yield.MainThreadBatch) execution.advance(context);
-        AsyncRequirementPlanner.PreparedPlan prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
-        AsyncContinuation.Yield.MainThread transition = (AsyncContinuation.Yield.MainThread) preparation.resume()
-                .apply(List.of(MainThreadStep.Result.success(), MainThreadStep.Result.success(),
-                        MainThreadStep.Result.value(prepared))).advance(context);
-
-        assertThat(transition.step()).isInstanceOf(MainThreadStep.TickTransitionCommit.class);
-        assertThat(transition.resume().apply(MainThreadStep.Result.success()).advance(context))
-                .isInstanceOf(AsyncContinuation.Yield.Complete.class);
-    }
-
-    @Test
     void start_yields_a_screen_flush_step_before_shared_io_request() {
         AsyncCraftingExecution execution = AsyncCraftingExecution.start("base", 1L);
         AsyncContinuation.Yield first = execution.advance(new AsyncExecutionContext(

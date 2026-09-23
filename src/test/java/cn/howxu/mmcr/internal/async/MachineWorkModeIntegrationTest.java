@@ -215,6 +215,37 @@ class MachineWorkModeIntegrationTest {
         assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(1);
     }
 
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void submitted_recipe_tick_is_surrounded_by_server_tick_hooks(MachineWorkMode mode) {
+        List<String> phases = new ArrayList<>();
+        Identifier machineId = MMCR.id("test_cube");
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.builder()
+                .preServerTick(context -> phases.add("pre"))
+                .recipeTick(context -> phases.add("recipe"))
+                .postServerTick(context -> phases.add("post"))
+                .build()));
+        level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(MMCR.id("callback_order_recipe"), machineId, 20,
+                List.of(), List.of()));
+        ConfigTestSupport.setMachineWorkMode(mode);
+
+        controller.serverTick();
+        completeAsyncLevelTick(level);
+        assertThat(controller.runtimeSnapshot().crafting().status().isCrafting())
+                .as("mode=%s state=%s", mode, controller.runtimeSnapshot().crafting())
+                .isTrue();
+        phases.clear();
+        RuntimeTestFixtures.advanceGameTime(level);
+        controller.serverTick();
+
+        assertThat(phases).containsSubsequence("pre", "recipe", "post");
+        assertThat(phases.indexOf("recipe")).isLessThan(phases.indexOf("post"));
+    }
+
     @Test
     void reset_machine_cancels_an_uncommitted_async_lane() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);

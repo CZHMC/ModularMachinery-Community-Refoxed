@@ -21,7 +21,6 @@ public interface MainThreadStep {
     enum Kind {
         GENERIC,
         BEFORE_START,
-        RECIPE_TICK,
         BEFORE_FINISH,
         CAPABILITY_TICK,
         UNSUPPORTED_REQUIREMENT,

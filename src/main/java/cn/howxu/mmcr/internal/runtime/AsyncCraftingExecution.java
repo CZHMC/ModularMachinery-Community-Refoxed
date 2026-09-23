@@ -4,9 +4,6 @@ import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
-import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
-
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -23,7 +20,6 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
             java.util.List.of());
     private boolean planned;
     private boolean lifecycleYielded;
-    private boolean capabilityTickYielded;
     private boolean screenFlushYielded;
     private boolean intentCommitYielded;
 
@@ -38,13 +34,6 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
         this.preparedPlan = null;
         this.laneId = Objects.requireNonNull(laneId, "laneId");
         this.sharedIoRequest = Objects.requireNonNull(sharedIoRequest, "sharedIoRequest");
-        this.catalogVersion = catalogVersion;
-    }
-
-    private AsyncCraftingExecution(String laneId, long catalogVersion) {
-        this.preparedPlan = null;
-        this.laneId = Objects.requireNonNull(laneId, "laneId");
-        this.sharedIoRequest = null;
         this.catalogVersion = catalogVersion;
     }
 
@@ -64,11 +53,6 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
 
     public static AsyncCraftingExecution finish(String laneId, long catalogVersion) {
         return new AsyncCraftingExecution(laneId, MainThreadStep.Kind.BEFORE_FINISH, catalogVersion);
-    }
-
-    /** Requests the main-thread tick preparation before worker-side native requirement planning. */
-    public static AsyncCraftingExecution tick(String laneId, long catalogVersion) {
-        return new AsyncCraftingExecution(laneId, catalogVersion);
     }
 
     @Override
@@ -91,26 +75,6 @@ public final class AsyncCraftingExecution implements AsyncContinuation {
                     result -> result instanceof MainThreadStep.Result.Value(Object value1)
                     && value1 instanceof AsyncContinuation continuation
                     ? continuation : ignoredContext -> AsyncContinuation.Yield.complete());
-        }
-        if (preparedPlan == null) {
-            if (!lifecycleYielded) {
-                lifecycleYielded = true;
-                capabilityTickYielded = true;
-                screenFlushYielded = true;
-                return AsyncContinuation.Yield.mainThreadBatch(List.of(
-                        new MainThreadStep.Lifecycle(MainThreadStep.Kind.RECIPE_TICK, laneId, catalogVersion),
-                        new MainThreadStep.CapabilityTick(CapabilityTickPhase.BEFORE_RECIPE, laneId, catalogVersion),
-                        new MainThreadStep.ScreenTextFlush(MainThreadStep.Kind.RECIPE_TICK, laneId, catalogVersion)), results -> ignored -> {
-                if (results.get(1) instanceof MainThreadStep.Result.Value(Object value2) && Boolean.FALSE.equals(value2)) {
-                    return AsyncContinuation.Yield.complete();
-                }
-                if (results.get(2) instanceof MainThreadStep.Result.Value(Object value1)
-                        && value1 instanceof AsyncRequirementPlanner.PreparedPlan prepared) {
-                    return AsyncCraftingExecution.plan(prepared, laneId, catalogVersion).advance(ignored);
-                }
-                return AsyncContinuation.Yield.complete();
-                });
-            }
         }
         if (!planned) {
             planResult = preparedPlan.plan();

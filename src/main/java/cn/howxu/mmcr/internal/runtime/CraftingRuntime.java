@@ -443,16 +443,24 @@ public final class CraftingRuntime {
         asyncTickPreparation = null;
     }
 
-    /** Produces the worker-safe native requirement plan after main-thread tick callbacks have completed. */
-    public @Nullable AsyncRequirementPlanner.PreparedPlan prepareAsyncTickPlan() {
+    /** Runs main-thread tick preparation and captures the worker-safe native requirement plan. */
+    public @Nullable AsyncRequirementPlanner.PreparedPlan prepareAsyncTickPlan(
+            ControllerRuntimeSnapshot runtimeSnapshot) {
+        if (!prepareAsyncTick(runtimeSnapshot)) return null;
+        if (!executeAsyncCapabilityTick(CapabilityTickPhase.BEFORE_RECIPE)) {
+            discardAsyncTickPreparation();
+            flushAsyncScreenText();
+            return null;
+        }
         AsyncTickPreparation preparation = asyncTickPreparation;
-        if (preparation == null) return null;
-        RecipeBehavior behavior = recipeBehavior(preparation.runtime());
-        if (behavior == null) return null;
+        RecipeBehavior behavior = preparation == null ? null : recipeBehavior(preparation.runtime());
+        if (preparation == null || behavior == null) return null;
         try {
             behavior.recipeTick().accept(preparation.tickContext());
         } catch (RuntimeException exception) {
             logCallbackFailure("recipeTick", preparation.runtime(), activeRecipe.getRecipe(), exception);
+        } finally {
+            flushAsyncScreenText();
         }
         List<MachineRequirement> requirements = perTickRequirements();
         if (requirements.isEmpty()) return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
