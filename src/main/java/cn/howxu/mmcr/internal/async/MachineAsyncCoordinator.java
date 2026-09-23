@@ -15,8 +15,8 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executor;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -38,27 +38,42 @@ public final class MachineAsyncCoordinator {
     private static final ThreadFactory WORKER_THREAD_FACTORY = runnable ->
             new Thread(runnable, "MMCR-AsyncWorker-" + WORKER_THREAD_ID.getAndIncrement());
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
-            0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), WORKER_THREAD_FACTORY);
+            0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(ServerConfig.asyncWorkerQueueCapacity()),
+            WORKER_THREAD_FACTORY, new ThreadPoolExecutor.AbortPolicy());
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
+    private final int mainStepBudget;
+    private final boolean autoResetBudgetForTesting;
     private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
+    private final ConcurrentLinkedQueue<TickBatch> readyBatches = new ConcurrentLinkedQueue<>();
     private final Map<TaskKey, Task> tasks = new ConcurrentHashMap<>();
     private final Map<TaskKey, MainThreadStepExecutor> mainStepExecutors = new ConcurrentHashMap<>();
     private final Object progressMonitor = new Object();
     private final AtomicInteger progress = new AtomicInteger();
+    private long budgetGameTime = Long.MIN_VALUE;
+    private int remainingMainSteps;
+    private int nextBatchOffset;
     private boolean completingFence;
 
     private MachineAsyncCoordinator(Executor executor) {
-        this(executor, null);
+        this(executor, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
     }
 
     private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep) {
+        this(executor, beforePendingMainStep, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
+    }
+
+    private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep,
+                                    int mainStepBudget, boolean autoResetBudgetForTesting) {
         this.executor = executor;
         this.beforePendingMainStep = beforePendingMainStep;
+        this.mainStepBudget = mainStepBudget;
+        this.autoResetBudgetForTesting = autoResetBudgetForTesting;
     }
 
     public static synchronized MachineAsyncCoordinator get(ServerLevel level) {
-        return COORDINATORS.computeIfAbsent(level, ignored -> new MachineAsyncCoordinator(WORKERS));
+        return COORDINATORS.computeIfAbsent(level, ignored -> new MachineAsyncCoordinator(
+                WORKERS, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), false));
     }
 
     public static MachineAsyncCoordinator forTesting(Executor executor) {
@@ -69,8 +84,8 @@ public final class MachineAsyncCoordinator {
         return new MachineAsyncCoordinator(executor, beforePendingMainStep);
     }
 
-    static MachineAsyncCoordinator forTesting(Executor executor, int workerCount) {
-        return new MachineAsyncCoordinator(executor);
+    static MachineAsyncCoordinator forTesting(Executor executor, int mainStepBudget) {
+        return new MachineAsyncCoordinator(executor, null, mainStepBudget, true);
     }
 
     public boolean submit(TaskKey key, AsyncContinuation continuation) {
@@ -96,9 +111,16 @@ public final class MachineAsyncCoordinator {
             return target;
         });
         if (mainStepExecutor != null) mainStepExecutors.put(key, mainStepExecutor);
-        if (schedule(batch, task, continuation)) return SubmissionResult.ACCEPTED;
-        removeTask(batch, task);
-        return SubmissionResult.REJECTED;
+        if (!schedule(batch, task, continuation)) {
+            batch.waitingWorkers.add(new WorkerSegment(task, continuation));
+        }
+        return SubmissionResult.ACCEPTED;
+    }
+
+    public void beginLevelTick(long gameTime) {
+        if (budgetGameTime == gameTime) return;
+        budgetGameTime = gameTime;
+        remainingMainSteps = mainStepBudget;
     }
 
     public void pumpMainThreadSteps() {
@@ -116,6 +138,7 @@ public final class MachineAsyncCoordinator {
     /** Completes the earliest tick batch together with shared-IO arbitration. */
     public void completeTick(IntSupplier resolveSharedIo) {
         Objects.requireNonNull(resolveSharedIo, "resolveSharedIo");
+        if (autoResetBudgetForTesting) beginLevelTick(budgetGameTime + 1L);
         Map.Entry<Long, TickBatch> entry = batches.firstEntry();
         if (entry == null) return;
         TickBatch batch = entry.getValue();
@@ -123,10 +146,13 @@ public final class MachineAsyncCoordinator {
         try {
             drainTerminations(batch);
             admitWaitingWorkers(batch);
-            int completedSteps = pumpReadyMainThreadSteps(batch);
+            int completedSteps = pumpReadyMainThreadSteps(batch, remainingMainSteps);
+            remainingMainSteps -= completedSteps;
             drainTerminations(batch);
             if (resolveSharedIo.getAsInt() > 0) signalProgress();
-            if (completedSteps == 0 || !batch.deferredMainSteps.isEmpty()) pumpNewerMainThreadSteps(batch.gameTime);
+            if (remainingMainSteps > 0 && (completedSteps == 0 || !batch.deferredMainSteps.isEmpty())) {
+                remainingMainSteps -= pumpNewerMainThreadSteps(batch.gameTime, remainingMainSteps);
+            }
             drainAllTerminations();
             batches.computeIfPresent(batch.gameTime, (gameTime, current) ->
                     current == batch && !batch.hasLiveTask() ? null : current);
@@ -172,6 +198,7 @@ public final class MachineAsyncCoordinator {
         if (pending == null) return;
         pending.results.add(result);
         batch.pendingMainSteps.add(pending);
+        readyBatches.add(batch);
         signalProgress();
     }
 
@@ -268,9 +295,24 @@ public final class MachineAsyncCoordinator {
                 batch.waitingWorkers.poll();
                 continue;
             }
-            if (!taskActive(batch, segment.task) || !schedule(batch, segment.task, segment.continuation)) return;
+            if (!queuedTaskActive(batch, segment.task)) {
+                batch.waitingWorkers.poll();
+                continue;
+            }
+            if (!schedule(batch, segment.task, segment.continuation)) return;
             batch.waitingWorkers.poll();
         }
+    }
+
+    private boolean queuedTaskActive(TickBatch batch, Task task) {
+        if (task.terminationRequested.get()) return false;
+        try {
+            if (task.hooks.validator().getAsBoolean()) return true;
+            requestTermination(batch, task, new TaskOutcome.Cancelled("stale while queued"));
+        } catch (Throwable throwable) {
+            fail(batch, task, throwable);
+        }
+        return false;
     }
 
     private void handleYield(TickBatch batch, Task task, AsyncContinuation.Yield yielded) {
@@ -282,10 +324,12 @@ public final class MachineAsyncCoordinator {
         )) {
             batch.pendingMainSteps.add(new PendingMainStep(task, List.of(step),
                     results -> resume1.apply(results.getFirst())));
+            readyBatches.add(batch);
         } else if (yielded instanceof AsyncContinuation.Yield.MainThreadBatch(
                 List<MainThreadStep> steps, Function<List<MainThreadStep.Result>, AsyncContinuation> resume
         )) {
             batch.pendingMainSteps.add(new PendingMainStep(task, steps, resume));
+            readyBatches.add(batch);
         }
     }
 
@@ -295,8 +339,8 @@ public final class MachineAsyncCoordinator {
     }
 
     /** Processes only work ready when this level-end fence began. */
-    private int pumpReadyMainThreadSteps(TickBatch batch) {
-        int readySteps = batch.pendingMainSteps.size();
+    private int pumpReadyMainThreadSteps(TickBatch batch, int budget) {
+        int readySteps = Math.min(batch.pendingMainSteps.size(), budget);
         int completedSteps = 0;
         for (int index = 0; index < readySteps; index++) {
             PendingMainStep pending = batch.pendingMainSteps.poll();
@@ -307,8 +351,18 @@ public final class MachineAsyncCoordinator {
         return completedSteps;
     }
 
-    private void pumpNewerMainThreadSteps(long gameTime) {
-        for (TickBatch batch : batches.tailMap(gameTime, false).values()) pumpReadyMainThreadSteps(batch);
+    private int pumpNewerMainThreadSteps(long gameTime, int budget) {
+        int completed = 0;
+        int readyCount = readyBatches.size();
+        for (int index = 0; index < readyCount && completed < budget; index++) {
+            TickBatch batch = readyBatches.poll();
+            if (batch == null) break;
+            if (batch.gameTime <= gameTime || batch.pendingMainSteps.isEmpty()) continue;
+            completed += pumpReadyMainThreadSteps(batch, budget - completed);
+            if (!batch.pendingMainSteps.isEmpty()) readyBatches.add(batch);
+            nextBatchOffset++;
+        }
+        return completed;
     }
 
     private void executePendingMainStep(TickBatch batch, PendingMainStep pending) {

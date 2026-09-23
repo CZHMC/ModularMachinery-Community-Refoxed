@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,6 +37,94 @@ class SharedIoCoordinatorTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void request_budget_round_robins_between_domains() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(2, 8);
+        StructureClaimRegistry.ResourceDomain first = domain(1L, A);
+        StructureClaimRegistry.ResourceDomain second = domain(2L, B);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(first, A, 1L, () -> { committed.add("A1"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(first, A, 1L, () -> { committed.add("A2"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(second, B, 1L, () -> { committed.add("B1"); return true; }, () -> true, () -> 1L));
+
+        coordinator.beginLevelTick(10L);
+        coordinator.resolveKnownDomainsForTesting(Map.of(first.id(), first, second.id(), second));
+
+        assertThat(committed).containsExactly("A1", "B1");
+    }
+
+    @Test
+    void request_budget_is_shared_within_one_game_time_and_resets_on_the_next() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(1, 8);
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(domain, A, 1L, () -> { committed.add("first"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(domain, B, 1L, () -> { committed.add("second"); return true; }, () -> true, () -> 1L));
+
+        coordinator.beginLevelTick(10L);
+        coordinator.resolveKnownDomainsForTesting(Map.of(domain.id(), domain));
+        coordinator.beginLevelTick(10L);
+        coordinator.resolveKnownDomainsForTesting(Map.of(domain.id(), domain));
+        assertThat(committed).containsExactly("first");
+
+        coordinator.beginLevelTick(11L);
+        coordinator.resolveKnownDomainsForTesting(Map.of(domain.id(), domain));
+        assertThat(committed).containsExactly("first", "second");
+    }
+
+    @Test
+    void small_budget_rotates_between_start_tick_and_finish_requests() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(1, 8);
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(start(domain, A, 1L, 1L, ignored -> 1L,
+                ignored -> committed.add("start"), () -> true, () -> 1L));
+        coordinator.enqueue(tick(domain, A, 1L,
+                () -> { committed.add("tick"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(finish(domain, A, 1L,
+                () -> { committed.add("finish"); return true; }, () -> true, () -> 1L));
+
+        for (long gameTime = 1L; gameTime <= 3L; gameTime++) {
+            coordinator.beginLevelTick(gameTime);
+            coordinator.resolveKnownDomainsForTesting(Map.of(domain.id(), domain));
+        }
+
+        assertThat(committed).containsExactly("start", "tick", "finish");
+    }
+
+    @Test
+    void generation_change_discards_the_old_bucket_and_owner_index() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(8, 8);
+        StructureClaimRegistry.ResourceDomain oldDomain = new StructureClaimRegistry.ResourceDomain(1L, 1L, Set.of(A));
+        StructureClaimRegistry.ResourceDomain newDomain = new StructureClaimRegistry.ResourceDomain(1L, 2L, Set.of(A));
+        AtomicInteger validations = new AtomicInteger();
+        coordinator.enqueue(tick(oldDomain, A, 1L, () -> true,
+                () -> { validations.incrementAndGet(); return false; }, () -> 1L));
+
+        coordinator.beginLevelTick(1L);
+        coordinator.resolveKnownDomainsForTesting(Map.of(newDomain.id(), newDomain));
+
+        assertThat(validations).hasValue(1);
+        assertThat(coordinator.pendingRequestCountForTesting()).isZero();
+        assertThat(coordinator.indexedControllerCountForTesting()).isZero();
+    }
+
+    @Test
+    void cancelling_a_controller_only_removes_its_indexed_requests() {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(8, 8);
+        StructureClaimRegistry.ResourceDomain domain = domain(A, B);
+        List<String> committed = new ArrayList<>();
+        coordinator.enqueue(tick(domain, A, 1L, () -> { committed.add("A"); return true; }, () -> true, () -> 1L));
+        coordinator.enqueue(tick(domain, B, 1L, () -> { committed.add("B"); return true; }, () -> true, () -> 1L));
+
+        coordinator.cancel(A);
+        coordinator.beginLevelTick(1L);
+        coordinator.resolveKnownDomainsForTesting(Map.of(domain.id(), domain));
+
+        assertThat(committed).containsExactly("B");
+        assertThat(coordinator.pendingRequestCountForTesting()).isZero();
     }
 
     @Test
@@ -108,6 +197,85 @@ class SharedIoCoordinatorTest {
         assertThat(firstDiscarded).hasValue(1);
         assertThat(secondCommitted).hasValue(1);
         assertThat(sharedIo.submittedTickWorkCountForTesting()).isZero();
+    }
+
+    @Test
+    void domain_tick_worksets_are_batched_and_serialized() {
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator(8, 2);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.forTesting(Runnable::run);
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        var key = new MachineAsyncCoordinator.TaskKey(A, 1L);
+        for (int index = 0; index < 5; index++) {
+            sharedIo.enqueueTickWorkForTesting(domain, key, ignored -> { }, () -> { });
+        }
+
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        assertThat(sharedIo.submittedTickWorkEntryCountsForTesting()).containsExactly(2);
+        assertThat(sharedIo.pendingTickWorkCountForTesting()).isEqualTo(3);
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        assertThat(sharedIo.submittedTickWorkEntryCountsForTesting()).containsExactly(2);
+
+        async.completeUntilIdleForTesting(() -> 0);
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        assertThat(sharedIo.submittedTickWorkEntryCountsForTesting()).containsExactly(2);
+        async.completeUntilIdleForTesting(() -> 0);
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        assertThat(sharedIo.submittedTickWorkEntryCountsForTesting()).containsExactly(1);
+        async.completeUntilIdleForTesting(() -> 0);
+
+        assertThat(sharedIo.pendingTickWorkCountForTesting()).isZero();
+        assertThat(sharedIo.submittedTickWorkCountForTesting()).isZero();
+    }
+
+    @Test
+    void failed_workset_releases_the_domain_for_the_next_batch() {
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator(8, 2);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.forTesting(Runnable::run);
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        var key = new MachineAsyncCoordinator.TaskKey(A, 1L);
+        AtomicInteger discarded = new AtomicInteger();
+        AtomicInteger committed = new AtomicInteger();
+        sharedIo.enqueueTickWorkForTesting(domain, key,
+                ignored -> { throw new IllegalStateException("commit failure"); }, discarded::incrementAndGet);
+        sharedIo.enqueueTickWorkForTesting(domain, key, ignored -> committed.incrementAndGet(), () -> { });
+        sharedIo.enqueueTickWorkForTesting(domain, key, ignored -> committed.incrementAndGet(), () -> { });
+
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        async.completeUntilIdleForTesting(() -> 0);
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        async.completeUntilIdleForTesting(() -> 0);
+
+        assertThat(discarded).hasValue(1);
+        assertThat(committed).hasValue(2);
+        assertThat(sharedIo.pendingTickWorkCountForTesting()).isZero();
+    }
+
+    @Test
+    void later_batch_plans_from_the_snapshot_committed_by_the_previous_batch() {
+        var capabilityId = MMCR.id("energy");
+        AsyncCapabilitySnapshot snapshot = new AsyncCapabilitySnapshot.Scalar(capabilityId, 10L, 10L, 10L);
+        AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
+                new AsyncCapabilityPlanner.Scalar(capabilityId), snapshot, Set.of(IOType.INPUT));
+        AsyncRequirementPlanner.Requirement requirement = new AsyncRequirementPlanner.Requirement(0, 6L,
+                IOType.INPUT, List.of(new AsyncCapabilityRequest.Scalar(capabilityId, 1L, 6L, false)));
+        AsyncRequirementPlanner.PreparedPlan plan = new AsyncRequirementPlanner.PreparedPlan(
+                List.of(requirement), List.of(capability), List.of());
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator(8, 1);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.forTesting(Runnable::run);
+        StructureClaimRegistry.ResourceDomain domain = domain(A);
+        var key = new MachineAsyncCoordinator.TaskKey(A, 1L);
+        List<AsyncRequirementPlanner.PlanResult> committed = new ArrayList<>();
+        sharedIo.enqueueTickWorkForTesting(domain, key, plan, committed::add, () -> { });
+        sharedIo.enqueueTickWorkForTesting(domain, key, plan, committed::add, () -> { });
+
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        async.completeUntilIdleForTesting(() -> 0);
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        async.completeUntilIdleForTesting(() -> 0);
+
+        assertThat(committed.get(0).operations()).hasSize(1);
+        assertThat(committed.get(1).operations()).isEmpty();
+        assertThat(committed.get(1).mainThreadRequirements()).containsExactly(0);
     }
 
     @Test
@@ -228,9 +396,9 @@ class SharedIoCoordinatorTest {
         coordinator.resolve(domain);
 
         assertThat(committed).containsExactly(
-                "start:B", "start:C", "start:A",
-                "tick:C", "tick:A", "tick:B",
-                "finish:A", "finish:B", "finish:C");
+                "start:B", "tick:C", "finish:A",
+                "start:C", "tick:A", "finish:B",
+                "start:A", "tick:B", "finish:C");
     }
 
     @Test
@@ -526,7 +694,11 @@ class SharedIoCoordinatorTest {
     }
 
     private static StructureClaimRegistry.ResourceDomain domain(BlockPos... positions) {
-        return new StructureClaimRegistry.ResourceDomain(1L, 1L, Set.of(positions));
+        return domain(1L, positions);
+    }
+
+    private static StructureClaimRegistry.ResourceDomain domain(long id, BlockPos... positions) {
+        return new StructureClaimRegistry.ResourceDomain(id, 1L, Set.of(positions));
     }
 
     private static SharedIoCoordinator.LaneKey lane(BlockPos position) {

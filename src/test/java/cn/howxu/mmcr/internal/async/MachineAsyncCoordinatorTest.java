@@ -9,10 +9,14 @@ import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -104,16 +108,62 @@ class MachineAsyncCoordinatorTest {
 
     @Test
     void worker_saturation_queues_a_tick_task_without_rejecting_it() {
-        ManualExecutor executor = new ManualExecutor();
+        SaturatingExecutor executor = new SaturatingExecutor(2);
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, 1);
-        var running = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
-        var rejected = new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L);
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
 
-        assertThat(coordinator.submitDetailed(running, ignored -> AsyncContinuation.Yield.complete(), null))
+        assertThat(coordinator.submitDetailed(key, ignored -> AsyncContinuation.Yield.complete(), null,
+                new MachineAsyncCoordinator.TaskHooks(() -> true, (ignored, outcome) -> outcomes.add(outcome))))
                 .isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
-        assertThat(coordinator.submitDetailed(rejected, ignored -> AsyncContinuation.Yield.complete(), null))
-                .isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
-        assertThat(executor.pendingTaskCount()).isEqualTo(2);
+        coordinator.completeTick();
+        assertThat(outcomes).isEmpty();
+
+        coordinator.completeTick();
+        assertThat(outcomes).isEmpty();
+        executor.runNext();
+        coordinator.completeTick();
+
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Succeeded.class);
+    }
+
+    @Test
+    void main_step_budget_defers_excess_work_until_the_next_fence() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 2);
+        List<Integer> completed = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            int value = index;
+            coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(index, 0, 0), 7L), ignored ->
+                    AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> completed.add(value)),
+                            result -> context -> AsyncContinuation.Yield.complete()));
+        }
+
+        coordinator.completeTick();
+        assertThat(completed).containsExactly(0, 1);
+
+        coordinator.completeTick();
+        assertThat(completed).containsExactly(0, 1, 2);
+    }
+
+    @Test
+    void main_thread_batch_consumes_one_budget_unit_and_runs_atomically() {
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 1);
+        List<String> completed = new ArrayList<>();
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored ->
+                AsyncContinuation.Yield.mainThreadBatch(List.of(
+                                new MainThreadStep.TestStep(() -> completed.add("batch-1")),
+                                new MainThreadStep.TestStep(() -> completed.add("batch-2")),
+                                new MainThreadStep.TestStep(() -> completed.add("batch-3"))),
+                        results -> context -> AsyncContinuation.Yield.complete()));
+        coordinator.submit(new MachineAsyncCoordinator.TaskKey(new BlockPos(1, 0, 0), 7L), ignored ->
+                AsyncContinuation.Yield.mainThread(new MainThreadStep.TestStep(() -> completed.add("single")),
+                        result -> context -> AsyncContinuation.Yield.complete()));
+
+        coordinator.completeTick();
+        assertThat(completed).containsExactly("batch-1", "batch-2", "batch-3");
+
+        coordinator.completeTick();
+        assertThat(completed).containsExactly("batch-1", "batch-2", "batch-3", "single");
     }
 
     @Test
@@ -510,6 +560,27 @@ class MachineAsyncCoordinatorTest {
 
         int pendingTaskCount() {
             return tasks.size();
+        }
+    }
+
+    private static final class SaturatingExecutor implements Executor {
+        private final Queue<Runnable> accepted = new ArrayDeque<>();
+        private int rejections;
+
+        private SaturatingExecutor(int rejections) {
+            this.rejections = rejections;
+        }
+
+        @Override
+        public void execute(Runnable command) {
+            if (rejections-- > 0) throw new RejectedExecutionException("saturated");
+            accepted.add(command);
+        }
+
+        private void runNext() {
+            Runnable command = accepted.poll();
+            if (command == null) throw new AssertionError("Expected an accepted worker task");
+            command.run();
         }
     }
 }

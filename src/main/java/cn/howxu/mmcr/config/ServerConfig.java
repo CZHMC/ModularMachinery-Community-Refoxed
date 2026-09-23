@@ -29,6 +29,10 @@ public final class ServerConfig {
     public static final int DEFAULT_ASSEMBLY_MAX_BLOCKS_PER_OPERATION = MultiblockAssemblyService.MAX_BLOCKS_PER_OPERATION;
     public static final int DEFAULT_ASYNC_WORKER_COUNT = Math.min(Math.max(Runtime.getRuntime().availableProcessors() / 4, 4), 8);
     public static final int DEFAULT_ASYNC_WORKER_PROGRESS_WAIT_MS = 10;
+    public static final int DEFAULT_ASYNC_WORKER_QUEUE_CAPACITY = Math.max(256, DEFAULT_ASYNC_WORKER_COUNT * 64);
+    public static final int DEFAULT_ASYNC_MAIN_THREAD_STEPS_PER_LEVEL_TICK = 1_024;
+    public static final int DEFAULT_ASYNC_SHARED_IO_REQUESTS_PER_LEVEL_TICK = 4_096;
+    public static final int DEFAULT_ASYNC_SHARED_IO_WORKSET_ENTRIES = 256;
     public static final int DEFAULT_FACTORY_IDLE_TIMEOUT_TICKS = 200;
     public static final int DEFAULT_TERMINAL_CONTROLLER_ACCESS_RADIUS = 96;
     public static final ModConfigSpec.IntValue MACHINE_CHECK_INTERVAL_TICKS;
@@ -55,6 +59,10 @@ public final class ServerConfig {
     public static final ModConfigSpec.EnumValue<MachineWorkMode> MACHINE_WORK_MODE;
     public static final ModConfigSpec.IntValue ASYNC_WORKER_COUNT;
     public static final ModConfigSpec.IntValue ASYNC_WORKER_PROGRESS_WAIT_MS;
+    public static final ModConfigSpec.IntValue ASYNC_WORKER_QUEUE_CAPACITY;
+    public static final ModConfigSpec.IntValue ASYNC_MAIN_THREAD_STEPS_PER_LEVEL_TICK;
+    public static final ModConfigSpec.IntValue ASYNC_SHARED_IO_REQUESTS_PER_LEVEL_TICK;
+    public static final ModConfigSpec.IntValue ASYNC_SHARED_IO_WORKSET_ENTRIES;
     public static final ModConfigSpec.IntValue FACTORY_IDLE_TIMEOUT_TICKS;
     public static final ModConfigSpec.IntValue TERMINAL_CONTROLLER_ACCESS_RADIUS;
     public static final ModConfigSpec SPEC;
@@ -87,6 +95,21 @@ public final class ServerConfig {
                 .comment("Milliseconds to wait for asynchronous worker progress before another fence pass")
                 .worldRestart()
                 .defineInRange("worker_progress_wait_ms", DEFAULT_ASYNC_WORKER_PROGRESS_WAIT_MS, 1, 1_000);
+        ASYNC_WORKER_QUEUE_CAPACITY = builder
+                .comment("Maximum queued asynchronous worker segments; requires restarting the server process")
+                .worldRestart()
+                .defineInRange("worker_queue_capacity", DEFAULT_ASYNC_WORKER_QUEUE_CAPACITY, 1, 1_000_000);
+        ASYNC_MAIN_THREAD_STEPS_PER_LEVEL_TICK = builder
+                .comment("Maximum asynchronous main-thread logic units processed per level tick")
+                .defineInRange("main_thread_steps_per_level_tick", DEFAULT_ASYNC_MAIN_THREAD_STEPS_PER_LEVEL_TICK,
+                        1, 1_000_000);
+        ASYNC_SHARED_IO_REQUESTS_PER_LEVEL_TICK = builder
+                .comment("Maximum shared IO requests processed per level tick")
+                .defineInRange("shared_io_requests_per_level_tick", DEFAULT_ASYNC_SHARED_IO_REQUESTS_PER_LEVEL_TICK,
+                        1, 1_000_000);
+        ASYNC_SHARED_IO_WORKSET_ENTRIES = builder
+                .comment("Maximum entries submitted in one shared IO workset")
+                .defineInRange("shared_io_workset_entries", DEFAULT_ASYNC_SHARED_IO_WORKSET_ENTRIES, 1, 1_000_000);
         builder.pop();
 
         builder.push("factory");
@@ -247,6 +270,24 @@ public final class ServerConfig {
 
     public static long asyncWorkerProgressWaitMillis() {
         return valueOrDefault(ASYNC_WORKER_PROGRESS_WAIT_MS, DEFAULT_ASYNC_WORKER_PROGRESS_WAIT_MS);
+    }
+
+    public static int asyncWorkerQueueCapacity() {
+        return valueOrDefault(ASYNC_WORKER_QUEUE_CAPACITY, DEFAULT_ASYNC_WORKER_QUEUE_CAPACITY);
+    }
+
+    public static int asyncMainThreadStepsPerLevelTick() {
+        return valueOrDefault(ASYNC_MAIN_THREAD_STEPS_PER_LEVEL_TICK,
+                DEFAULT_ASYNC_MAIN_THREAD_STEPS_PER_LEVEL_TICK);
+    }
+
+    public static int asyncSharedIoRequestsPerLevelTick() {
+        return valueOrDefault(ASYNC_SHARED_IO_REQUESTS_PER_LEVEL_TICK,
+                DEFAULT_ASYNC_SHARED_IO_REQUESTS_PER_LEVEL_TICK);
+    }
+
+    public static int asyncSharedIoWorksetEntries() {
+        return valueOrDefault(ASYNC_SHARED_IO_WORKSET_ENTRIES, DEFAULT_ASYNC_SHARED_IO_WORKSET_ENTRIES);
     }
 
     public static int factoryIdleTimeoutTicks() {

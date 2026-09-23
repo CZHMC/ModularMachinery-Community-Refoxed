@@ -33,6 +33,9 @@ public final class SharedIoEvents {
         ModuleConnectionCoordinator.tick(level);
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
         MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        long gameTime = level.getGameTime();
+        sharedIo.beginLevelTick(gameTime);
+        async.beginLevelTick(gameTime);
         async.completeTick(() -> sharedIo.resolve(level));
         sharedIo.resolve(level);
         async.completeTick(() -> sharedIo.resolve(level));
