@@ -785,8 +785,12 @@ class FactoryRuntimeTest {
     @Test
     void catalog_change_before_shared_tick_commit_stops_the_old_recipe_without_advancing_it() {
         Identifier recipeId = MMCR.id("factory_reload_pending_tick_recipe");
-        MachineRecipe oldRecipe = recipe(recipeId.getPath(), 20);
-        MachineRecipe replacement = recipe(recipeId.getPath(), 40);
+        MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
+        MachineRecipe replacement = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 40,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
 
         MachineControllerBlockEntity controller = factoryController("test_cube");
@@ -961,9 +965,11 @@ class FactoryRuntimeTest {
         Identifier machineId = MMCR.id("test_cube");
         Identifier recipeId = MMCR.id("factory_reload_completion_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, machineId, 1,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
         MachineRecipe newRecipe = RecipeTestSupport.create(recipeId, machineId, 20,
-                List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
         RecipeRegistry.replaceDynamic(Map.of(recipeId, oldRecipe));
 
         MachineControllerBlockEntity controller = factoryController(machineId.getPath());
@@ -1231,7 +1237,8 @@ class FactoryRuntimeTest {
     void stale_async_runtime_request_completes_as_a_failed_lane_and_keeps_backoff() {
         MachineControllerBlockEntity controller = factoryController("test_cube");
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_version_failure_recipe"),
-                MMCR.id("test_cube"), 20, List.of(), List.of());
+                MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(cn.howxu.mmcr.api.recipe.requirement.StageRequirement.input(1)));
         RecipeRegistry.registerStatic(recipe);
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
@@ -1838,8 +1845,12 @@ class FactoryRuntimeTest {
         if (controller.resourceDomain() != null) {
             ServerLevel level = (ServerLevel) controller.getLevel();
             SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+            MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+            long gameTime = level.getGameTime();
+            sharedIo.beginLevelTick(gameTime);
+            async.beginLevelTick(gameTime);
             sharedIo.resolve(controller.resourceDomain());
-            MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+            async.completeUntilIdleForTesting(() -> sharedIo.resolve(level));
             MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
         }
     }

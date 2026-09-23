@@ -181,7 +181,7 @@ class AsyncCraftingExecutionTest {
     }
 
     @Test
-    void empty_per_tick_workset_completes_in_the_first_shared_io_resolution() {
+    void empty_per_tick_workset_completes_without_shared_io_resolution() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
@@ -199,9 +199,9 @@ class AsyncCraftingExecutionTest {
         completeTick(controller);
 
         thread.tick();
-        assertThat(SharedIoCoordinator.get(level).resolve(level)).isEqualTo(1);
 
         assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(1);
+        assertThat(SharedIoCoordinator.get(level).resolve(level)).isZero();
         assertThat(MachineAsyncCoordinator.get(level).hasPendingMainStepForTesting()).isFalse();
     }
 
@@ -244,8 +244,10 @@ class AsyncCraftingExecutionTest {
         assertThat(thread.tickPendingForTesting()).isFalse();
 
         RuntimeTestFixtures.advanceGameTime(level);
+        int tickBeforeRetry = thread.runtime().activeRecipe().getTick();
         thread.tick(controller.currentRuntimeSnapshot());
-        assertThat(thread.tickPendingForTesting()).isTrue();
+        assertThat(thread.tickPendingForTesting()).isFalse();
+        assertThat(thread.runtime().activeRecipe().getTick()).isEqualTo(tickBeforeRetry + 1);
     }
 
     @Test
@@ -309,8 +311,12 @@ class AsyncCraftingExecutionTest {
     private static void completeTick(MachineControllerBlockEntity controller) {
         ServerLevel level = (ServerLevel) controller.getLevel();
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        long gameTime = level.getGameTime();
+        sharedIo.beginLevelTick(gameTime);
+        async.beginLevelTick(gameTime);
         sharedIo.resolve(level);
-        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        async.completeUntilIdleForTesting(() -> sharedIo.resolve(level));
         MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 

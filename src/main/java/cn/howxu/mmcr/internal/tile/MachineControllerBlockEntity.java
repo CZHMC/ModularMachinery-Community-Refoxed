@@ -2369,8 +2369,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         batch.identity(), candidateIdentity, batch.match()), result -> context -> AsyncContinuation.Yield.complete()),
                 this::executeStructureScanStep,
                 new MachineAsyncCoordinator.TaskHooks(
-                        () -> Objects.equals(pendingStructureScanTask, taskKey)
-                                && taskKey.lifecycleEpoch() == lifecycleEpoch,
+                        () -> Objects.equals(pendingStructureScanTask, taskKey),
                         (ignored, outcome) -> {
                             if (outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded
                                     || !Objects.equals(pendingStructureScanTask, taskKey)) return;

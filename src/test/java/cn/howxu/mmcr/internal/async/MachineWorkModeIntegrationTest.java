@@ -408,8 +408,12 @@ class MachineWorkModeIntegrationTest {
 
     private static void completeAsyncLevelTick(ServerLevel level) {
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        long gameTime = level.getGameTime();
+        sharedIo.beginLevelTick(gameTime);
+        async.beginLevelTick(gameTime);
         sharedIo.resolve(level);
-        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> sharedIo.resolve(level));
+        async.completeUntilIdleForTesting(() -> sharedIo.resolve(level));
         MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
