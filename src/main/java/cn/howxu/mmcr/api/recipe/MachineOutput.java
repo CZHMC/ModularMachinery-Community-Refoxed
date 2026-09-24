@@ -6,7 +6,9 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
@@ -19,6 +21,12 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public interface MachineOutput {
+    Codec<ItemStack> RECIPE_ITEM_STACK_CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.create(instance -> instance.group(
+            Item.CODEC_WITH_BOUND_COMPONENTS.fieldOf("id").forGetter(ItemStack::typeHolder),
+            Codec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("count", 1).forGetter(ItemStack::getCount),
+            DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY)
+                    .forGetter(ItemStack::getComponentsPatch)
+    ).apply(instance, ItemStack::new)));
     Codec<MachineOutput> CODEC = Codec.of(OutputRegistry::encode, OutputRegistry::decode);
 
     OutputType<? extends MachineOutput> outputType();
@@ -81,7 +89,7 @@ public interface MachineOutput {
                 Identifier.fromNamespaceAndPath("mmcr", "item"),
                 RecordCodecBuilder.mapCodec(instance -> instance.group(
                         Codec.STRING.fieldOf("type").forGetter(ignored -> "item"),
-                        ItemStack.CODEC.fieldOf("stack").forGetter(ItemOutput::stack),
+                        RECIPE_ITEM_STACK_CODEC.fieldOf("stack").forGetter(ItemOutput::stack),
                         Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(ItemOutput::chance)
                 ).apply(instance, (ignored, stack, chance) -> new ItemOutput(stack, chance))),
                 (output, chance) -> new ItemOutput(output.stack(), chance),

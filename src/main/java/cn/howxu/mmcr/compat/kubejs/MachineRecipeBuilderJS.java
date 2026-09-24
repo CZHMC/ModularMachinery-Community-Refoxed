@@ -530,7 +530,7 @@ public class MachineRecipeBuilderJS {
             var ops = RecipesKubeEvent.INSTANCE.get().ops.json();
             for (int index = 0; index < componentOutputs.size(); index++) {
                 var output = componentOutputs.get(index);
-                recipeOutputs.add(output.index() + index, ItemStack.CODEC.parse(ops, output.stack()).getOrThrow());
+                recipeOutputs.add(output.index() + index, MachineOutput.RECIPE_ITEM_STACK_CODEC.parse(ops, output.stack()).getOrThrow());
                 recipeOutputChances.add(output.index() + index, 1F);
             }
         }
