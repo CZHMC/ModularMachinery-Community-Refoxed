@@ -42,6 +42,7 @@ public final class MachineAsyncCoordinator {
             WORKER_THREAD_FACTORY, new ThreadPoolExecutor.AbortPolicy());
     private final Executor executor;
     private final @Nullable Runnable beforePendingMainStep;
+    private final @Nullable Runnable afterTerminationDrainForTesting;
     private final int mainStepBudget;
     private final boolean autoResetBudgetForTesting;
     private final ConcurrentSkipListMap<Long, TickBatch> batches = new ConcurrentSkipListMap<>();
@@ -56,17 +57,24 @@ public final class MachineAsyncCoordinator {
     private boolean completingFence;
 
     private MachineAsyncCoordinator(Executor executor) {
-        this(executor, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
+        this(executor, null, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
     }
 
     private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep) {
-        this(executor, beforePendingMainStep, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
+        this(executor, beforePendingMainStep, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
     }
 
     private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep,
                                     int mainStepBudget, boolean autoResetBudgetForTesting) {
+        this(executor, beforePendingMainStep, null, mainStepBudget, autoResetBudgetForTesting);
+    }
+
+    private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep,
+                                    @Nullable Runnable afterTerminationDrainForTesting, int mainStepBudget,
+                                    boolean autoResetBudgetForTesting) {
         this.executor = executor;
         this.beforePendingMainStep = beforePendingMainStep;
+        this.afterTerminationDrainForTesting = afterTerminationDrainForTesting;
         this.mainStepBudget = mainStepBudget;
         this.autoResetBudgetForTesting = autoResetBudgetForTesting;
     }
@@ -82,6 +90,12 @@ public final class MachineAsyncCoordinator {
 
     static MachineAsyncCoordinator forTesting(Executor executor, Runnable beforePendingMainStep) {
         return new MachineAsyncCoordinator(executor, beforePendingMainStep);
+    }
+
+    static MachineAsyncCoordinator forTesting(Executor executor, @Nullable Runnable beforePendingMainStep,
+                                              Runnable afterTerminationDrainForTesting) {
+        return new MachineAsyncCoordinator(executor, beforePendingMainStep, afterTerminationDrainForTesting,
+                ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
     }
 
     static MachineAsyncCoordinator forTesting(Executor executor, int mainStepBudget) {
@@ -154,8 +168,9 @@ public final class MachineAsyncCoordinator {
                 remainingMainSteps -= pumpNewerMainThreadSteps(batch.gameTime, remainingMainSteps);
             }
             drainAllTerminations();
+            if (afterTerminationDrainForTesting != null) afterTerminationDrainForTesting.run();
             batches.computeIfPresent(batch.gameTime, (gameTime, current) ->
-                    current == batch && !batch.hasLiveTask() ? null : current);
+                    current == batch && batch.tasks.isEmpty() ? null : current);
         } finally {
             completingFence = false;
         }
@@ -553,9 +568,6 @@ public final class MachineAsyncCoordinator {
             this.gameTime = gameTime;
         }
 
-        private boolean hasLiveTask() {
-            return tasks.values().stream().anyMatch(task -> !task.terminationRequested.get());
-        }
     }
 
     private static final class PendingMainStep {

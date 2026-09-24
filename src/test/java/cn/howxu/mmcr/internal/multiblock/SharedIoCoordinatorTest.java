@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -196,6 +197,30 @@ class SharedIoCoordinatorTest {
 
         assertThat(discarded).hasValue(2);
         assertThat(sharedIo.submittedTickWorkCountForTesting()).isZero();
+    }
+
+    @Test
+    void resolving_while_a_domain_workset_is_in_flight_keeps_that_workset_current() throws Exception {
+        SharedIoCoordinator sharedIo = new SharedIoCoordinator();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.forTesting(workers::add);
+        ServerLevel level = allocate(ServerLevel.class);
+        StructureClaimRegistry registry = StructureClaimRegistry.get(level);
+        assertThat(registry.claim(A, List.of()).accepted()).isTrue();
+        StructureClaimRegistry.ResourceDomain domain = registry.domainFor(A);
+        AtomicInteger committed = new AtomicInteger();
+        AtomicInteger discarded = new AtomicInteger();
+
+        sharedIo.enqueueTickWorkForTesting(domain, new MachineAsyncCoordinator.TaskKey(A, 1L),
+                ignored -> committed.incrementAndGet(), discarded::incrementAndGet);
+        sharedIo.submitPendingTickWorksetForTesting(domain, async);
+        sharedIo.resolve(level);
+
+        workers.removeFirst().run();
+        async.completeTick();
+
+        assertThat(committed).hasValue(1);
+        assertThat(discarded).hasValue(0);
     }
 
     @Test

@@ -355,6 +355,24 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void completion_requested_after_the_terminal_drain_is_finished_by_the_next_fence() {
+        ManualExecutor executor = new ManualExecutor();
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(executor, null, () -> {
+            if (executor.pendingTaskCount() > 0) executor.runNext();
+        });
+        var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);
+
+        coordinator.submitDetailed(key, ignored -> AsyncContinuation.Yield.complete(), null,
+                new MachineAsyncCoordinator.TaskHooks(() -> true, (ignored, outcome) -> outcomes.add(outcome)));
+
+        coordinator.completeTick();
+        coordinator.completeTick();
+
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Succeeded.class);
+    }
+
+    @Test
     void tick_fence_keeps_a_deferred_shared_io_request_for_the_next_level_tick() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
         var key = new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L);

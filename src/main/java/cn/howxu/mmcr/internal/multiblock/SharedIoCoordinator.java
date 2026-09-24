@@ -143,6 +143,11 @@ public final class SharedIoCoordinator {
             StructureClaimRegistry.ResourceDomain domain = owner == null ? null : registry.domainFor(owner);
             if (domain != null) knownDomains.put(domain.id(), domain);
         }
+        for (TickWorkset workset : submittedTickWork.values()) {
+            StructureClaimRegistry.ResourceDomain domain = registry.domainFor(
+                    workset.entries().getFirst().laneTaskKey().controllerPos());
+            if (domain != null) knownDomains.put(domain.id(), domain);
+        }
         return resolveKnownDomains(knownDomains, true);
     }
 
