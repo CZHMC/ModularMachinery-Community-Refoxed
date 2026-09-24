@@ -109,6 +109,36 @@ class MachineOutputCodecTest {
     }
 
     @Test
+    void item_output_caps_long_json_counts_at_the_native_stack_limit() {
+        JsonObject stack = new JsonObject();
+        stack.addProperty("id", "minecraft:iron_nugget");
+        stack.addProperty("count", Long.MAX_VALUE);
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "item");
+        json.add("stack", stack);
+
+        MachineOutput decoded = MachineOutput.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(decoded).isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                output -> assertThat(output.stack().getCount()).isEqualTo(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void fluid_output_caps_long_json_amounts_at_the_native_stack_limit() {
+        JsonObject stack = new JsonObject();
+        stack.addProperty("id", "minecraft:water");
+        stack.addProperty("amount", Long.MAX_VALUE);
+        JsonObject json = new JsonObject();
+        json.addProperty("type", "fluid");
+        json.add("stack", stack);
+
+        MachineOutput decoded = MachineOutput.CODEC.parse(jsonOps(), json).getOrThrow();
+
+        assertThat(decoded).isInstanceOfSatisfying(MachineOutput.FluidOutput.class,
+                output -> assertThat(output.stack().getAmount()).isEqualTo(Integer.MAX_VALUE));
+    }
+
+    @Test
     void custom_output_roundtrips_through_the_registered_codec() {
         TestOutput output = new TestOutput(7, 0.25F);
 

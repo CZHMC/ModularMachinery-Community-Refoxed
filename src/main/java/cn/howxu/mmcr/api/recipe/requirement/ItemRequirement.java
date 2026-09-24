@@ -27,7 +27,8 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
                     .forGetter(ItemRequirement::io),
             Ingredient.CODEC.optionalFieldOf("item").forGetter(value -> Optional.ofNullable(value.item())),
-            Codec.INT.optionalFieldOf("count", 0).forGetter(ItemRequirement::count),
+            Codec.LONG.optionalFieldOf("count", 0L).xmap(MachineOutput::optionalRecipeStackAmount,
+                    Integer::longValue).forGetter(ItemRequirement::count),
             MachineOutput.RECIPE_ITEM_STACK_CODEC.optionalFieldOf("stack", ItemStack.EMPTY).forGetter(ItemRequirement::stack),
             Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(ItemRequirement::chance),
             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(ItemRequirement::tags),

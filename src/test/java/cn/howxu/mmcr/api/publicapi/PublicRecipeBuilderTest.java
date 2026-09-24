@@ -233,6 +233,13 @@ class PublicRecipeBuilderTest {
     }
 
     @Test
+    void stage_requirement_rejects_values_above_the_supported_stage_limit() {
+        assertThatThrownBy(() -> new StageRequirement(65))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stage minimum must not exceed 64");
+    }
+
+    @Test
     void adapts_public_recipe_values_to_internal_recipe_semantics() {
         ItemStack itemOutput = new ItemStack(Items.GOLD_INGOT, 2);
         FluidStack fluidOutput = new FluidStack(Fluids.WATER, 250);

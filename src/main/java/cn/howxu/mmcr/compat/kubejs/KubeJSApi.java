@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -235,27 +236,43 @@ public final class KubeJSApi {
         return requirements.isEmpty() ? PortTierRequirementSpec.none() : new PortTierRequirementSpec(requirements);
     }
 
-    public MachineIngredient itemInput(String itemId, int count, float consumeChance) {
-        return new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), count, null, consumeChance);
+    public MachineIngredient itemInput(String itemId, long count, float consumeChance) {
+        return new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), MachineOutput.recipeStackAmount(count), null, consumeChance);
     }
 
-    public MachineIngredient tagInput(String tagId, int count, float consumeChance) {
+    public MachineIngredient itemInput(String itemId, int count, float consumeChance) {
+        return itemInput(itemId, (long) count, consumeChance);
+    }
+
+    public MachineIngredient tagInput(String tagId, long count, float consumeChance) {
         var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
         var items = RegistryAccessContainer.current.lookup(Registries.ITEM)
                 .orElseThrow(() -> new IllegalStateException("Item registry unavailable"));
-        return new MachineIngredient.ItemIngredient(Ingredient.of(items.getOrThrow(tag)), count, null, consumeChance);
+        return new MachineIngredient.ItemIngredient(Ingredient.of(items.getOrThrow(tag)), MachineOutput.recipeStackAmount(count), null, consumeChance);
+    }
+
+    public MachineIngredient tagInput(String tagId, int count, float consumeChance) {
+        return tagInput(tagId, (long) count, consumeChance);
+    }
+
+    public MachineIngredient fluidInput(String fluidId, long amount) {
+        Identifier identifier = Identifier.parse(fluidId);
+        if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
+        return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.getValue(identifier)), MachineOutput.recipeStackAmount(amount));
     }
 
     public MachineIngredient fluidInput(String fluidId, int amount) {
+        return fluidInput(fluidId, (long) amount);
+    }
+
+    public FluidStack fluidStack(String fluidId, long amount) {
         Identifier identifier = Identifier.parse(fluidId);
         if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
-        return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.getValue(identifier)), amount);
+        return new FluidStack(BuiltInRegistries.FLUID.getValue(identifier), MachineOutput.recipeStackAmount(amount));
     }
 
     public FluidStack fluidStack(String fluidId, int amount) {
-        Identifier identifier = Identifier.parse(fluidId);
-        if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
-        return new FluidStack(BuiltInRegistries.FLUID.getValue(identifier), amount);
+        return fluidStack(fluidId, (long) amount);
     }
 
     public MachineIngredient energyInput(long fePerTick) { return new MachineIngredient.EnergyIngredient(fePerTick); }
@@ -324,26 +341,47 @@ public final class KubeJSApi {
         return SmartInterfaceRequirement.output(type, value);
     }
 
-    public MachineRequirement itemOutputRequirement(String itemId, int count, float chance) {
-        return MachineRequirement.itemOutput(new ItemStack(requireItem(itemId), count), chance);
+    public MachineRequirement itemOutputRequirement(String itemId, long count, float chance) {
+        return MachineRequirement.itemOutput(new ItemStack(requireItem(itemId), MachineOutput.recipeStackAmount(count)), chance);
     }
 
-    public MachineRequirement itemOutputRequirementWithComponents(String itemId, int count, JsonElement components, float chance) {
+    public MachineRequirement itemOutputRequirement(String itemId, int count, float chance) {
+        return itemOutputRequirement(itemId, (long) count, chance);
+    }
+
+    public MachineRequirement itemOutputRequirementWithComponents(String itemId, long count, JsonElement components, float chance) {
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
-                new ItemStack(requireItem(itemId), count), chance, List.of(),
+                new ItemStack(requireItem(itemId), MachineOutput.recipeStackAmount(count)), chance, List.of(),
                 DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
     }
 
-    public MachineRequirement itemInputRequirement(String itemId, int count) {
-        return MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), count));
+    public MachineRequirement itemOutputRequirementWithComponents(String itemId, int count, JsonElement components,
+                                                                    float chance) {
+        return itemOutputRequirementWithComponents(itemId, (long) count, components, chance);
     }
 
-    public MachineRequirement fluidInputRequirement(String fluidId, int amount) {
+    public MachineRequirement itemInputRequirement(String itemId, long count) {
+        return MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), MachineOutput.recipeStackAmount(count)));
+    }
+
+    public MachineRequirement itemInputRequirement(String itemId, int count) {
+        return itemInputRequirement(itemId, (long) count);
+    }
+
+    public MachineRequirement fluidInputRequirement(String fluidId, long amount) {
         return MachineRequirement.fromInput(fluidInput(fluidId, amount));
     }
 
-    public MachineRequirement fluidOutputRequirement(String fluidId, int amount, float chance) {
+    public MachineRequirement fluidInputRequirement(String fluidId, int amount) {
+        return fluidInputRequirement(fluidId, (long) amount);
+    }
+
+    public MachineRequirement fluidOutputRequirement(String fluidId, long amount, float chance) {
         return MachineRequirement.fluidOutput(fluidStack(fluidId, amount), chance);
+    }
+
+    public MachineRequirement fluidOutputRequirement(String fluidId, int amount, float chance) {
+        return fluidOutputRequirement(fluidId, (long) amount, chance);
     }
 
     private static Block requireBlock(String id) {

@@ -114,9 +114,6 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
                 requirement.tags(), consumeChance);
     }
     private static void validateSync(LoadedChemicalRequirement requirement) {
-        if (requirement.ingredient().amount() > 10_000_000_000L) {
-            throw new IllegalArgumentException("Invalid chemical amount: " + requirement.ingredient().amount());
-        }
         if (requirement.tags().size() > 1024) throw new IllegalArgumentException("Invalid tag count");
     }
 

@@ -11,6 +11,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.FluidInstance;
 
 import java.util.List;
 import java.util.Objects;
@@ -23,11 +24,26 @@ import java.util.Objects;
 public interface MachineOutput {
     Codec<ItemStack> RECIPE_ITEM_STACK_CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.create(instance -> instance.group(
             Item.CODEC_WITH_BOUND_COMPONENTS.fieldOf("id").forGetter(ItemStack::typeHolder),
-            Codec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("count", 1).forGetter(ItemStack::getCount),
+            Codec.LONG.optionalFieldOf("count", 1L).forGetter(stack -> (long) stack.getCount()),
             DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY)
                     .forGetter(ItemStack::getComponentsPatch)
-    ).apply(instance, ItemStack::new)));
+    ).apply(instance, (holder, count, components) -> new ItemStack(holder, recipeStackAmount(count), components))));
+    Codec<FluidStack> RECIPE_FLUID_STACK_CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.create(instance -> instance.group(
+            FluidInstance.FLUID_HOLDER_CODEC_WITH_BOUND_COMPONENTS.fieldOf("id").forGetter(FluidStack::typeHolder),
+            Codec.LONG.fieldOf("amount").forGetter(stack -> (long) stack.getAmount()),
+            DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY)
+                    .forGetter(FluidStack::getComponentsPatch)
+    ).apply(instance, (holder, amount, components) -> new FluidStack(holder, recipeStackAmount(amount), components))));
     Codec<MachineOutput> CODEC = Codec.of(OutputRegistry::encode, OutputRegistry::decode);
+
+    static int recipeStackAmount(long amount) {
+        if (amount < 1L) throw new IllegalArgumentException("Recipe stack amount must be positive");
+        return (int) Math.min(amount, Integer.MAX_VALUE);
+    }
+
+    static int optionalRecipeStackAmount(long amount) {
+        return amount == 0L ? 0 : recipeStackAmount(amount);
+    }
 
     OutputType<? extends MachineOutput> outputType();
 
@@ -134,7 +150,7 @@ public interface MachineOutput {
                 Identifier.fromNamespaceAndPath("mmcr", "fluid"),
                 RecordCodecBuilder.mapCodec(instance -> instance.group(
                         Codec.STRING.fieldOf("type").forGetter(ignored -> "fluid"),
-                        FluidStack.CODEC.fieldOf("stack").forGetter(FluidOutput::stack),
+                        RECIPE_FLUID_STACK_CODEC.fieldOf("stack").forGetter(FluidOutput::stack),
                         Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(FluidOutput::chance)
                 ).apply(instance, (ignored, stack, chance) -> new FluidOutput(stack, chance))),
                 (output, chance) -> new FluidOutput(output.stack(), chance),

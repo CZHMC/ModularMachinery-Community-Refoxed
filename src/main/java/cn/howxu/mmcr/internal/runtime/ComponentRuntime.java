@@ -337,21 +337,24 @@ public final class ComponentRuntime {
         if (machine == null || !machine.parallelizable()) {
             return 1L;
         }
-        long max = 0L;
-        for (ProcessingComponent component : components) {
-            if (component.getContainer() instanceof ParallelControllerBlockEntity parallel) {
-                int current = parallel.currentParallelism();
-                max += current;
-            }
-        }
+        long max = components.stream()
+                .filter(component -> component.getContainer() instanceof ParallelControllerBlockEntity)
+                .map(component -> (ParallelControllerBlockEntity) component.getContainer())
+                .mapToLong(ParallelControllerBlockEntity::currentParallelism)
+                .reduce(0L, ComponentRuntime::saturatingAdd);
         long levelBonus = foundLevels.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
                 .map(Map.Entry::getValue)
                 .mapToLong(foundLevel -> foundLevel.modifier().parallelismBonus())
-                .sum();
-        long effective = Math.max(1L, max) + levelBonus;
-        long bounded = Math.min(Long.MAX_VALUE, Math.max(1L, effective));
-        return Math.min(Math.max(1L, machine.maxParallelism()), bounded);
+                .reduce(0L, ComponentRuntime::saturatingAdd);
+        long effective = saturatingAdd(Math.max(1L, max), levelBonus);
+        return Math.min(Math.max(1L, machine.maxParallelism()), Math.max(1L, effective));
+    }
+
+    private static long saturatingAdd(long first, long second) {
+        if (second > 0L && first > Long.MAX_VALUE - second) return Long.MAX_VALUE;
+        if (second < 0L && first < Long.MIN_VALUE - second) return Long.MIN_VALUE;
+        return first + second;
     }
 
     public void clear() {

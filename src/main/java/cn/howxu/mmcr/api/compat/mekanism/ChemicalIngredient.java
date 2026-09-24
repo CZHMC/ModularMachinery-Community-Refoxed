@@ -17,6 +17,7 @@ public record ChemicalIngredient(Kind kind, Identifier id, long amount) {
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(id, "id");
         if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
+        amount = Math.min(amount, Integer.MAX_VALUE);
     }
 
     public enum Kind {

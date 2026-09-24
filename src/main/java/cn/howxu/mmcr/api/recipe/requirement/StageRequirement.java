@@ -26,7 +26,7 @@ public record StageRequirement(RecipeModifier.IOType io, int minStage) implement
         if (io != RecipeModifier.IOType.INPUT) {
             throw new IllegalArgumentException("Stage requirements must use input direction");
         }
-        if (minStage < 1) throw new IllegalArgumentException("Stage minimum must be at least 1");
+        if (minStage < 1 || minStage > 64) throw new IllegalArgumentException("Stage minimum must be in [1, 64]");
     }
 
     public static StageRequirement input(int minStage) {

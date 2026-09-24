@@ -842,7 +842,17 @@ class PluginBindingTest {
                 .recipePool("mmcr:test_machine_name")
                 .itemOutputWithComponents("minecraft:diamond_sword", -1, JsonParser.parseString("{}")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Component item output count must not be negative: -1");
+                .hasMessage("Component item output count must be positive: -1");
+    }
+
+    @Test
+    void item_output_caps_long_count_at_the_native_stack_limit() {
+        MachineRecipe recipe = createInRecipeEvent(new MachineRecipeBuilderJS("mmcr:long_item_output")
+                .recipePool("mmcr:test_machine_name")
+                .itemOutput("minecraft:iron_ingot", Long.MAX_VALUE));
+
+        assertThat(recipe.machineOutputs()).singleElement().isInstanceOfSatisfying(MachineOutput.ItemOutput.class,
+                output -> assertThat(output.stack().getCount()).isEqualTo(Integer.MAX_VALUE));
     }
 
     @Test

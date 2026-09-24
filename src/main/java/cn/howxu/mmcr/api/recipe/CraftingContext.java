@@ -295,8 +295,8 @@ public final class CraftingContext {
         }
         if (requirement instanceof LoadedHeatRequirement heat) {
             boolean minimumTemperature = heat.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
-            double value = minimumTemperature ? heat.heat().value() : heat.heat().value() * parallelism;
-            if (!Double.isFinite(value) || value < 0D) return null;
+            double value = minimumTemperature ? heat.heat().value() : saturatingHeatMultiply(heat.heat().value(), parallelism);
+            if (value < 0D) return null;
             long accountingAmount = Math.max(1L, value >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) Math.ceil(value));
             return new AsyncRequirementPlanner.Requirement(index, accountingAmount,
                     minimumTemperature ? IOType.INPUT : IOType.OUTPUT,
@@ -332,6 +332,11 @@ public final class CraftingContext {
     private static long scaled(long amount, long parallelism) {
         if (amount <= 0L) return 0L;
         return amount > Long.MAX_VALUE / parallelism ? Long.MAX_VALUE : amount * parallelism;
+    }
+
+    private static double saturatingHeatMultiply(double amount, long multiplier) {
+        if (amount <= 0D || multiplier <= 0L) return 0D;
+        return amount >= Double.MAX_VALUE / multiplier ? Double.MAX_VALUE : amount * multiplier;
     }
 
     private PlanningResult plan(List<MachineRequirement> source, long parallelism, RecipeModifier.IOType direction,

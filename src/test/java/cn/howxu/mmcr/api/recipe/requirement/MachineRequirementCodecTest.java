@@ -109,7 +109,14 @@ class MachineRequirementCodecTest {
     void stage_requirement_rejects_non_positive_minimum_stage() {
         assertThatThrownBy(() -> StageRequirement.input(0))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Stage minimum must be at least 1");
+                .hasMessage("Stage minimum must be in [1, 64]");
+    }
+
+    @Test
+    void stage_requirement_rejects_minimum_stage_above_64() {
+        assertThatThrownBy(() -> StageRequirement.input(65))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stage minimum must be in [1, 64]");
     }
 
     @Test

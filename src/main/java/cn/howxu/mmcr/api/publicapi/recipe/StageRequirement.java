@@ -16,5 +16,6 @@ public record StageRequirement(RecipeIo io, int minStage) implements RecipeRequi
             throw new IllegalArgumentException("Stage requirements must use input direction");
         }
         if (minStage < 1) throw new IllegalArgumentException("Stage minimum must be at least 1");
+        if (minStage > 64) throw new IllegalArgumentException("Stage minimum must not exceed 64");
     }
 }

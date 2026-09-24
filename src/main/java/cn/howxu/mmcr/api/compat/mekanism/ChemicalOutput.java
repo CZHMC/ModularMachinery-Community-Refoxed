@@ -16,6 +16,7 @@ public record ChemicalOutput(Identifier id, long amount, float chance) {
     public ChemicalOutput {
         Objects.requireNonNull(id, "id");
         if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
+        amount = Math.min(amount, Integer.MAX_VALUE);
         if (!Float.isFinite(chance) || chance < 0F || chance > 1F) {
             throw new IllegalArgumentException("chance must be between 0 and 1");
         }

@@ -277,6 +277,17 @@ class MachineRecipeTest {
     }
 
     @Test
+    void rejects_more_than_64_level_requirements_before_validating_individual_levels() {
+        List<cn.howxu.mmcr.api.recipe.requirement.MachineRequirement> requirements =
+                java.util.Collections.nCopies(65, LevelRequirement.input(Identifier.parse("test:coil"),
+                        Identifier.parse("test:kanthal")));
+
+        assertThatThrownBy(() -> MachineRecipe.validateLevelRequirements(requirements))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A recipe may require at most 64 machine levels");
+    }
+
+    @Test
     void recipe_preserves_canonical_requirements_and_outputs() {
         var nugget = bindItemComponents(Items.IRON_NUGGET);
         var recipe = RecipeTestSupport.create(

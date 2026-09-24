@@ -24,8 +24,9 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
                     .forGetter(FluidRequirement::io),
             FluidIngredient.CODEC.optionalFieldOf("fluid").forGetter(value -> Optional.ofNullable(value.fluid())),
-            Codec.INT.optionalFieldOf("amount", 0).forGetter(FluidRequirement::amount),
-            FluidStack.CODEC.optionalFieldOf("stack", FluidStack.EMPTY).forGetter(FluidRequirement::stack),
+            Codec.LONG.optionalFieldOf("amount", 0L).xmap(MachineOutput::optionalRecipeStackAmount,
+                    Integer::longValue).forGetter(FluidRequirement::amount),
+            MachineOutput.RECIPE_FLUID_STACK_CODEC.optionalFieldOf("stack", FluidStack.EMPTY).forGetter(FluidRequirement::stack),
             Codec.FLOAT.optionalFieldOf("chance", 1F).forGetter(FluidRequirement::chance),
             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(FluidRequirement::tags),
             Codec.FLOAT.optionalFieldOf("consume_chance", 1F).forGetter(FluidRequirement::consumeChance)

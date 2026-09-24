@@ -189,33 +189,63 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    public MachineRecipeBuilderJS itemInput(String itemId, int count) {
+    public MachineRecipeBuilderJS itemInput(String itemId, long count) {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 1F);
     }
 
-    public MachineRecipeBuilderJS tagInput(String tagId, int count) {
+    public MachineRecipeBuilderJS itemInput(String itemId, int count) {
+        return itemInput(itemId, (long) count);
+    }
+
+    public MachineRecipeBuilderJS tagInput(String tagId, long count) {
         return addItemInput(Ingredient.of(tagItems(tagId)), count,
                 DataComponentPredicateSet.EMPTY, 1F);
     }
 
-    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components) {
+    public MachineRecipeBuilderJS tagInput(String tagId, int count) {
+        return tagInput(tagId, (long) count);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, long count, JsonElement components) {
         return itemInputWithComponents(itemId, count, components, 1F);
     }
 
-    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components, float consumeChance) {
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components) {
+        return itemInputWithComponents(itemId, (long) count, components);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, long count, JsonElement components, float consumeChance) {
         return addItemInput(Ingredient.of(item(itemId)), count, componentPredicates(components), consumeChance);
     }
 
-    public MachineRecipeBuilderJS tagInputWithComponents(String tagId, int count, JsonElement components, float consumeChance) {
+    public MachineRecipeBuilderJS itemInputWithComponents(String itemId, int count, JsonElement components,
+                                                            float consumeChance) {
+        return itemInputWithComponents(itemId, (long) count, components, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS tagInputWithComponents(String tagId, long count, JsonElement components, float consumeChance) {
         return addItemInput(Ingredient.of(tagItems(tagId)), count, componentPredicates(components), consumeChance);
     }
 
-    public MachineRecipeBuilderJS notConsumableItemInput(String itemId, int count) {
+    public MachineRecipeBuilderJS tagInputWithComponents(String tagId, int count, JsonElement components,
+                                                           float consumeChance) {
+        return tagInputWithComponents(tagId, (long) count, components, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS notConsumableItemInput(String itemId, long count) {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 0F);
     }
 
-    public MachineRecipeBuilderJS chancedItemInput(String itemId, int count, float consumeChance) {
+    public MachineRecipeBuilderJS notConsumableItemInput(String itemId, int count) {
+        return notConsumableItemInput(itemId, (long) count);
+    }
+
+    public MachineRecipeBuilderJS chancedItemInput(String itemId, long count, float consumeChance) {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS chancedItemInput(String itemId, int count, float consumeChance) {
+        return chancedItemInput(itemId, (long) count, consumeChance);
     }
 
     /**
@@ -226,8 +256,12 @@ public class MachineRecipeBuilderJS {
      * @return this builder
      * @author howxu <dev@howxu.cn>
      */
-    public MachineRecipeBuilderJS fluidInput(String fluidId, int amount) {
+    public MachineRecipeBuilderJS fluidInput(String fluidId, long amount) {
         return addFluidInput(fluidId, amount, 1F);
+    }
+
+    public MachineRecipeBuilderJS fluidInput(String fluidId, int amount) {
+        return fluidInput(fluidId, (long) amount);
     }
 
     /**
@@ -239,12 +273,16 @@ public class MachineRecipeBuilderJS {
      * @return this builder
      * @author howxu <dev@howxu.cn>
      */
-    public MachineRecipeBuilderJS fluidInput(String fluidId, int amount, double consumeChance) {
+    public MachineRecipeBuilderJS fluidInput(String fluidId, long amount, double consumeChance) {
         return addFluidInput(fluidId, amount, (float) consumeChance);
     }
 
-    private MachineRecipeBuilderJS addFluidInput(String fluidId, int amount, float consumeChance) {
-        inputs.add(new MachineIngredient.FluidIngredient(FluidIngredient.of(fluid(fluidId)), amount, consumeChance));
+    public MachineRecipeBuilderJS fluidInput(String fluidId, int amount, double consumeChance) {
+        return fluidInput(fluidId, (long) amount, consumeChance);
+    }
+
+    private MachineRecipeBuilderJS addFluidInput(String fluidId, long amount, float consumeChance) {
+        inputs.add(new MachineIngredient.FluidIngredient(FluidIngredient.of(fluid(fluidId)), MachineOutput.recipeStackAmount(amount), consumeChance));
         return this;
     }
 
@@ -252,21 +290,29 @@ public class MachineRecipeBuilderJS {
         return BuiltInRegistries.FLUID.getValue(Identifier.parse(fluidId));
     }
 
-    public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
-        outputs.add(new ItemStack(item(itemId), count));
+    public MachineRecipeBuilderJS itemOutput(String itemId, long count) {
+        outputs.add(new ItemStack(item(itemId), MachineOutput.recipeStackAmount(count)));
         outputChances.add(1F);
         return this;
     }
 
-    public MachineRecipeBuilderJS chancedItemOutput(String itemId, int count, float chance) {
-        outputs.add(new ItemStack(item(itemId), count));
+    public MachineRecipeBuilderJS itemOutput(String itemId, int count) {
+        return itemOutput(itemId, (long) count);
+    }
+
+    public MachineRecipeBuilderJS chancedItemOutput(String itemId, long count, float chance) {
+        outputs.add(new ItemStack(item(itemId), MachineOutput.recipeStackAmount(count)));
         outputChances.add(chance);
         return this;
     }
 
-    public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, int count, JsonElement components) {
-        if (count < 0) {
-            throw new IllegalArgumentException("Component item output count must not be negative: " + count);
+    public MachineRecipeBuilderJS chancedItemOutput(String itemId, int count, float chance) {
+        return chancedItemOutput(itemId, (long) count, chance);
+    }
+
+    public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, long count, JsonElement components) {
+        if (count < 1L) {
+            throw new IllegalArgumentException("Component item output count must be positive: " + count);
         }
         JsonObject stack = new JsonObject();
         stack.addProperty("id", itemId);
@@ -274,6 +320,10 @@ public class MachineRecipeBuilderJS {
         stack.add("components", components.deepCopy());
         componentOutputs.add(new ComponentOutput(outputs.size(), stack));
         return this;
+    }
+
+    public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, int count, JsonElement components) {
+        return itemOutputWithComponents(itemId, (long) count, components);
     }
 
     /**
@@ -474,8 +524,8 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
-    private MachineRecipeBuilderJS addItemInput(Ingredient item, int count, DataComponentPredicateSet components, float consumeChance) {
-        inputs.add(new MachineIngredient.ItemIngredient(item, count, components, consumeChance));
+    private MachineRecipeBuilderJS addItemInput(Ingredient item, long count, DataComponentPredicateSet components, float consumeChance) {
+        inputs.add(new MachineIngredient.ItemIngredient(item, MachineOutput.recipeStackAmount(count), components, consumeChance));
         return this;
     }
 

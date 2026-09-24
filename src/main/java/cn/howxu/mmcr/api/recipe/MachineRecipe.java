@@ -276,6 +276,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     static void validateLevelRequirements(List<MachineRequirement> requirements) {
+        long levelRequirementCount = requirements.stream().filter(LevelRequirement.class::isInstance).count();
+        if (levelRequirementCount > 64) {
+            throw new IllegalArgumentException("A recipe may require at most 64 machine levels");
+        }
         var typeIds = new HashSet<Identifier>();
         for (MachineRequirement requirement : requirements) {
             if (!(requirement instanceof LevelRequirement levelRequirement)) continue;

@@ -593,6 +593,33 @@ class MekanismRecipeHandlerTest {
         assertThat(port.handledHeat()).isEqualTo(5D);
     }
 
+    @Test
+    void heat_output_saturates_at_double_maximum_for_long_parallelism() {
+        LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+        FakeHeatPort port = new FakeHeatPort(360D, IOType.OUTPUT);
+
+        RequirementPlan planned = heatHandler().plan(LoadedHeatRequirement.outputHeat(Double.MAX_VALUE),
+                List.of(port), testContext());
+        RequirementPlan materialized = planned.materialize(Long.MAX_VALUE, new PlanningReservations(), null);
+
+        assertThat(materialized.successful()).isTrue();
+        try (Transaction transaction = Transaction.open(null)) {
+            CapabilityResult result = materialized.operations().getFirst().commit(transaction);
+            assertThat(result.success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(port.handledHeat()).isEqualTo(Double.MAX_VALUE);
+    }
+
+    @Test
+    void chemical_declarations_cap_long_amounts_at_the_native_stack_limit() {
+        Identifier id = Identifier.parse("mekanism:oxygen");
+
+        assertThat(ChemicalIngredient.chemical(id, Long.MAX_VALUE).amount()).isEqualTo((long) Integer.MAX_VALUE);
+        assertThat(cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput.of(id, Long.MAX_VALUE, 1F).amount())
+                .isEqualTo((long) Integer.MAX_VALUE);
+    }
+
     @SuppressWarnings("unchecked")
     private static RequirementHandler<LoadedChemicalRequirement> chemicalHandler() {
         RequirementType<LoadedChemicalRequirement> type = LoadedChemicalRequirement.TYPE;

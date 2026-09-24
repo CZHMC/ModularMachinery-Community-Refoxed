@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -46,6 +47,7 @@ import java.util.Map;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -119,6 +121,36 @@ class KubeJSApiTest {
         assertThatThrownBy(() -> api.fluidInput("test:missing_fluid", 1)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> api.anyOf()).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> api.portTierRequirements(List.of("item_input_bus>=missing"))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void retains_the_int_quantity_method_descriptors_for_compiled_extensions() {
+        assertThatCode(() -> {
+            KubeJSApi.class.getMethod("itemInput", String.class, int.class, float.class);
+            KubeJSApi.class.getMethod("tagInput", String.class, int.class, float.class);
+            KubeJSApi.class.getMethod("fluidInput", String.class, int.class);
+            KubeJSApi.class.getMethod("fluidStack", String.class, int.class);
+            KubeJSApi.class.getMethod("itemOutputRequirement", String.class, int.class, float.class);
+            KubeJSApi.class.getMethod("itemOutputRequirementWithComponents", String.class, int.class,
+                    JsonElement.class, float.class);
+            KubeJSApi.class.getMethod("itemInputRequirement", String.class, int.class);
+            KubeJSApi.class.getMethod("fluidInputRequirement", String.class, int.class);
+            KubeJSApi.class.getMethod("fluidOutputRequirement", String.class, int.class, float.class);
+            MachineRecipeBuilderJS.class.getMethod("itemInput", String.class, int.class);
+            MachineRecipeBuilderJS.class.getMethod("tagInput", String.class, int.class);
+            MachineRecipeBuilderJS.class.getMethod("itemInputWithComponents", String.class, int.class, JsonElement.class);
+            MachineRecipeBuilderJS.class.getMethod("itemInputWithComponents", String.class, int.class,
+                    JsonElement.class, float.class);
+            MachineRecipeBuilderJS.class.getMethod("tagInputWithComponents", String.class, int.class,
+                    JsonElement.class, float.class);
+            MachineRecipeBuilderJS.class.getMethod("notConsumableItemInput", String.class, int.class);
+            MachineRecipeBuilderJS.class.getMethod("chancedItemInput", String.class, int.class, float.class);
+            MachineRecipeBuilderJS.class.getMethod("fluidInput", String.class, int.class);
+            MachineRecipeBuilderJS.class.getMethod("fluidInput", String.class, int.class, double.class);
+            MachineRecipeBuilderJS.class.getMethod("itemOutput", String.class, int.class);
+            MachineRecipeBuilderJS.class.getMethod("chancedItemOutput", String.class, int.class, float.class);
+            MachineRecipeBuilderJS.class.getMethod("itemOutputWithComponents", String.class, int.class, JsonElement.class);
+        }).doesNotThrowAnyException();
     }
 
     @Test

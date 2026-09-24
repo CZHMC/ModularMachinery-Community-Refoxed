@@ -46,6 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -280,6 +281,33 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void negative_level_parallelism_bonus_reduces_the_effective_limit_without_wrapping() {
+        Identifier machineId = Identifier.fromNamespaceAndPath("mmcr_test", "negative_parallel_machine");
+        Identifier levelId = Identifier.fromNamespaceAndPath("mmcr_test", "negative_parallel_level");
+        var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
+        ParallelControllerBlockEntity controller = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
+                new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
+        MachineLevel level = new MachineLevel(levelId, levelId, 1, new BlockPredicate.Any(), ItemStack.EMPTY,
+                new LevelModifier(1D, 1D, 1D, -Integer.MAX_VALUE, 0));
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(controller, "controller")));
+        runtime.replaceLevels(Map.of(levelId, level));
+
+        Machine machine = parallelizableMachine(machineId);
+
+        assertThat(runtime.maxParallelism(machine)).isEqualTo(1L);
+    }
+
+    @Test
+    void parallelism_saturating_add_clamps_both_long_overflow_directions() throws Exception {
+        Method saturatingAdd = ComponentRuntime.class.getDeclaredMethod("saturatingAdd", long.class, long.class);
+        saturatingAdd.setAccessible(true);
+
+        assertThat((long) saturatingAdd.invoke(null, Long.MAX_VALUE, 1L)).isEqualTo(Long.MAX_VALUE);
+        assertThat((long) saturatingAdd.invoke(null, Long.MIN_VALUE, -1L)).isEqualTo(Long.MIN_VALUE);
+    }
+
+    @Test
     void modifier_version_changes_only_for_effective_modifier_changes_and_preserves_order() {
         RecipeModifier first = new RecipeModifier("first", RecipeModifier.IOType.INPUT, 1F,
                 RecipeModifier.Operation.ADD, false);
@@ -414,6 +442,35 @@ class ComponentRuntimeTest {
 
     private static ProcessingComponent component(BlockEntity host, String tag) {
         return new ProcessingComponent(null, host, BlockPos.ZERO, BlockPos.ZERO, List.of(tag), null);
+    }
+
+    private static Machine parallelizableMachine(Identifier id) {
+        return new Machine() {
+            @Override
+            public Identifier registryName() {
+                return id;
+            }
+
+            @Override
+            public BlockArray pattern() {
+                return new BlockArray(Map.of());
+            }
+
+            @Override
+            public MachineControllerSpec controller() {
+                return MachineControllerSpec.defaultsFor(id);
+            }
+
+            @Override
+            public long maxParallelism() {
+                return Long.MAX_VALUE;
+            }
+
+            @Override
+            public boolean parallelizable() {
+                return true;
+            }
+        };
     }
 
     private static final class TestCapabilityHost extends BlockEntity implements CapabilityHost {

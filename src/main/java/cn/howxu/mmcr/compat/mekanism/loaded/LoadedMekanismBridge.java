@@ -732,8 +732,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
         private static RequirementPlan.OperationPlan heatPlan(LoadedHeatRequirement requirement,
                                                                List<HeatPort> ports, long parallelism) {
-            double amount = requirement.heat().value() * parallelism;
-            if (!Double.isFinite(amount) || amount < 0D) {
+            double amount = saturatingHeatMultiply(requirement.heat().value(), parallelism);
+            if (amount < 0D) {
                 return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement,
                         MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
                         Map.of("requested_heat", Long.toString(
@@ -861,5 +861,10 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         double requested = heat * parallelism;
         return !Double.isFinite(requested) || requested >= Long.MAX_VALUE
                 ? Long.MAX_VALUE : (long) Math.ceil(requested);
+    }
+
+    private static double saturatingHeatMultiply(double heat, long parallelism) {
+        if (heat <= 0D || parallelism <= 0L) return 0D;
+        return heat >= Double.MAX_VALUE / parallelism ? Double.MAX_VALUE : heat * parallelism;
     }
 }
