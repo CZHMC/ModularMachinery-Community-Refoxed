@@ -15,7 +15,7 @@ ServerEvents.recipes(event => {
                 io: 'output',
                 stack: {
                     id: 'minecraft:leather',
-                    count: 1
+                    count: MMCR.getValues().INT_MAX
                 }
             },
             {
