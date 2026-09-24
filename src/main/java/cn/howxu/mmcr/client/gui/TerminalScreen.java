@@ -34,6 +34,7 @@ public final class TerminalScreen extends Screen {
     private TerminalData data;
     private boolean controllerAvailable;
     private boolean storageAvailable;
+    private boolean ae2Available;
     private List<Integer> stages;
     private List<Integer> previewLayers;
     private Component machineName;
@@ -140,9 +141,15 @@ public final class TerminalScreen extends Screen {
 
     public void applyState(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
             List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
+        applyState(data, controllerAvailable, storageAvailable, true, stages, machineName, previewLayers, statusKey);
+    }
+
+    public void applyState(TerminalData data, boolean controllerAvailable, boolean storageAvailable, boolean ae2Available,
+            List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
         this.data = data;
         this.controllerAvailable = controllerAvailable;
         this.storageAvailable = storageAvailable;
+        this.ae2Available = ae2Available;
         this.stages = List.copyOf(stages);
         this.machineName = machineName == null ? Component.empty() : machineName;
         this.previewLayers = List.copyOf(previewLayers);
@@ -245,7 +252,11 @@ public final class TerminalScreen extends Screen {
 
     private TerminalInventoryMode nextInventoryMode() {
         TerminalInventoryMode[] modes = TerminalInventoryMode.values();
-        return modes[(data.inventoryMode().ordinal() + 1) % modes.length];
+        int index = data.inventoryMode().ordinal();
+        do {
+            index = (index + 1) % modes.length;
+        } while (modes[index] == TerminalInventoryMode.AE2 && !ae2Available);
+        return modes[index];
     }
 
     private List<LevelType> levelTypes() {

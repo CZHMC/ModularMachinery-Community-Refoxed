@@ -222,7 +222,7 @@ public final class ModEventRegistration {
         static EventHandlers production() {
             return new EventHandlers(
                     ModCapabilities::register,
-                    event -> registerPayloads(event.registrar("4")),
+                    event -> registerPayloads(event.registrar("5")),
                     GameTestRegistration::registerTests,
                     StructureDirtyEvents::onBlockPlaced,
                     StructureDirtyEvents::onBlocksPlaced,

@@ -99,6 +99,9 @@ public final class TerminalService {
             case SET_INVENTORY_MODE -> {
                 TerminalInventoryMode[] modes = TerminalInventoryMode.values();
                 if (value < 0 || value >= modes.length) return rejected(player, stack, "message.mmcr.terminal.invalid_mode");
+                if (modes[value] == TerminalInventoryMode.AE2 && !AE2Bridge.get().available()) {
+                    return rejected(player, stack, "message.mmcr.terminal.invalid_mode");
+                }
                 setData(stack, data.withInventoryMode(modes[value]));
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
@@ -255,6 +258,11 @@ public final class TerminalService {
     private static void sendState(ServerPlayer player, ItemStack stack, String statusKey) {
         if (player == null || player.connection == null || stack == null || !stack.is(ModItems.TERMINAL.get())) return;
         TerminalData data = TerminalData.from(stack);
+        boolean ae2Available = AE2Bridge.get().available();
+        if (!ae2Available && data.inventoryMode() == TerminalInventoryMode.AE2) {
+            data = data.withInventoryMode(TerminalInventoryMode.INVENTORY);
+            setData(stack, data);
+        }
         MachineControllerBlockEntity controller = controllerAt(player, data.controller()).orElse(null);
         StructureSnapshot structure = controller == null ? null : controller.currentRuntimeSnapshot().structure();
         Machine machine = structure == null ? null
@@ -263,7 +271,7 @@ public final class TerminalService {
         TerminalData stateData = controller == null ? data : normalize(controller, data);
         BlockArray pattern = previewPattern(controller, data, structure, machine, stages);
         PacketDistributor.sendToPlayer(player, new PktTerminalStatePayload(stateData,
-                controller != null, StructureItemStorageResolver.resolve(player, data).isPresent(),
+                controller != null, StructureItemStorageResolver.resolve(player, data).isPresent(), ae2Available,
                 stages,
                 machine == null ? Component.translatable("gui.mmcr.terminal.no_controller")
                         : machine.displayName(),

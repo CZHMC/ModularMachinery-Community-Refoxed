@@ -43,9 +43,16 @@ public final class TerminalClientHandler {
 
     public static void applyState(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
             List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
+        applyState(data, controllerAvailable, storageAvailable, true, stages, machineName, previewLayers, statusKey);
+    }
+
+    public static void applyState(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
+            boolean ae2Available, List<Integer> stages, Component machineName, List<Integer> previewLayers,
+            String statusKey) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof TerminalScreen screen) {
-            screen.applyState(data, controllerAvailable, storageAvailable, stages, machineName, previewLayers, statusKey);
+            screen.applyState(data, controllerAvailable, storageAvailable, ae2Available, stages, machineName,
+                    previewLayers, statusKey);
         }
         if (data.previewEnabled()) {
             MultiblockPreviewClientHandler.setSelectedLayer(data.previewLayer());

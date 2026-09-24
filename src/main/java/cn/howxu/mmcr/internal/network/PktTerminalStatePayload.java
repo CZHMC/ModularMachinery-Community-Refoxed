@@ -23,8 +23,8 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record PktTerminalStatePayload(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
-                                       List<Integer> stages, Component machineName, List<Integer> previewLayers,
-                                       String statusKey) implements CustomPacketPayload {
+                                        boolean ae2Available, List<Integer> stages, Component machineName,
+                                        List<Integer> previewLayers, String statusKey) implements CustomPacketPayload {
     public static final int MAX_PREVIEW_LAYERS = 128;
     public static final Type<PktTerminalStatePayload> TYPE = new Type<>(MMCR.id("terminal_state"));
     private static final StreamCodec<ByteBuf, List<Integer>> STAGES_CODEC =
@@ -43,12 +43,17 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
 
     public PktTerminalStatePayload(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
             List<Integer> stages, String statusKey) {
-        this(data, controllerAvailable, storageAvailable, stages, Component.empty(), List.of(), statusKey);
+        this(data, controllerAvailable, storageAvailable, true, stages, Component.empty(), List.of(), statusKey);
     }
 
     public PktTerminalStatePayload(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
             String statusKey) {
-        this(data, controllerAvailable, storageAvailable, List.of(), Component.empty(), List.of(), statusKey);
+        this(data, controllerAvailable, storageAvailable, true, List.of(), Component.empty(), List.of(), statusKey);
+    }
+
+    public PktTerminalStatePayload(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
+            List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
+        this(data, controllerAvailable, storageAvailable, true, stages, machineName, previewLayers, statusKey);
     }
 
     @Override
@@ -57,14 +62,15 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
     }
 
     public void handle(IPayloadContext context) {
-        context.enqueueWork(() -> TerminalClientHandler.applyState(data, controllerAvailable, storageAvailable, stages,
-                machineName, previewLayers, statusKey));
+        context.enqueueWork(() -> TerminalClientHandler.applyState(data, controllerAvailable, storageAvailable,
+                ae2Available, stages, machineName, previewLayers, statusKey));
     }
 
     private static void write(RegistryFriendlyByteBuf buffer, PktTerminalStatePayload payload) {
         TerminalData.STREAM_CODEC.encode(buffer, payload.data);
         ByteBufCodecs.BOOL.encode(buffer, payload.controllerAvailable);
         ByteBufCodecs.BOOL.encode(buffer, payload.storageAvailable);
+        ByteBufCodecs.BOOL.encode(buffer, payload.ae2Available);
         STAGES_CODEC.encode(buffer, payload.stages);
         ComponentSerialization.STREAM_CODEC.encode(buffer, payload.machineName);
         buffer.writeVarInt(payload.previewLayers.size());
@@ -74,8 +80,8 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
 
     private static PktTerminalStatePayload read(RegistryFriendlyByteBuf buffer) {
         return new PktTerminalStatePayload(TerminalData.STREAM_CODEC.decode(buffer),
-                ByteBufCodecs.BOOL.decode(buffer), ByteBufCodecs.BOOL.decode(buffer), STAGES_CODEC.decode(buffer),
-                ComponentSerialization.STREAM_CODEC.decode(buffer), readPreviewLayers(buffer),
+                ByteBufCodecs.BOOL.decode(buffer), ByteBufCodecs.BOOL.decode(buffer), ByteBufCodecs.BOOL.decode(buffer),
+                STAGES_CODEC.decode(buffer), ComponentSerialization.STREAM_CODEC.decode(buffer), readPreviewLayers(buffer),
                 ByteBufCodecs.STRING_UTF8.decode(buffer));
     }
 
