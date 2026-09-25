@@ -34,7 +34,7 @@ import java.util.LinkedHashMap;
 public final class RuntimeMachineResourcePack implements PackResources {
     private static final String PACK_ID = "mmcr/runtime_machine_models";
     private static final PackLocationInfo LOCATION = new PackLocationInfo(
-            PACK_ID, Component.literal("MMCR Dynamical Resources"), PackSource.BUILT_IN, Optional.empty());
+            PACK_ID, Component.translatable("pack.mmc.dynamical_resources"), PackSource.BUILT_IN, Optional.empty());
 
     private final PackLocationInfo location;
 

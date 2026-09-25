@@ -173,10 +173,11 @@ public class Client {
     private static void registerRuntimeResourcePack(AddPackFindersEvent event) {
         if (event.getPackType() == PackType.CLIENT_RESOURCES) {
             event.addRepositorySource(RuntimeMachineResourcePack.source());
+            // ae2 arrow resources
             event.addPackFinders(
-                    MMCR.id("mmcr_arrow_interfaces"),
+                    MMCR.id("arrow_interfaces"),
                     PackType.CLIENT_RESOURCES,
-                    Component.literal("MMCR 箭头版接口"),
+                    Component.translatable("pack.mmcr.arrow_interfaces_resource"),
                     PackSource.BUILT_IN,
                     false,
                     Pack.Position.TOP

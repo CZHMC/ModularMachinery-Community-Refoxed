@@ -1,4 +1,6 @@
 {
+  "pack.mmc.dynamical_resources": "MMCR Dynamical Resources",
+  "pack.mmcr.arrow_interfaces_resource": "MMCR AE2 Arrowed Interfaces",
   "block.mmcr.basic_casing": "Basic Machine Casing",
   "block.mmcr.data_storage": "Data Storage",
   "block.mmcr.appflux_me_flux_input_interface": "ME Flux Input Interface",
