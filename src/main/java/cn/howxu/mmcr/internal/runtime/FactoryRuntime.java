@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.EffectiveRecipeSet;
 import cn.howxu.mmcr.internal.recipe.RecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
@@ -97,6 +98,7 @@ public final class FactoryRuntime {
     private Set<Identifier> cachedIndexedLockedRecipeIds = Set.of();
     private List<MachineRecipe> cachedIndexedCandidates = List.of();
     private @Nullable Identifier cachedCandidateRecipePoolId;
+    private final EffectiveRecipeSet.Cache effectiveRecipeCache = new EffectiveRecipeSet.Cache();
 
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism) {
         return tick(candidates, maxParallelism, currentGameTime());
@@ -314,8 +316,10 @@ public final class FactoryRuntime {
             workerRequest = captureWorkerSearch(context, candidates, lock);
         } catch (RuntimeException exception) {
             searchAttemptsForTesting++;
-            lane.startSearchResult(context, candidates, context.snapshot().structure().version(), lock,
-                    new FactoryRecipeThread.SearchResult(null, exception, false));
+            boolean started = lane.startSearchResult(context, candidates, context.snapshot().structure().version(), lock,
+                    FactoryRecipeThread.search(context, candidates, context.snapshot().structure().version(), lock));
+            reserveStart(lane, started, activeCounts);
+            if (started) markLaneStateChanged();
             return false;
         }
         AsyncSearchRequest request = new AsyncSearchRequest(context, candidates, lock, ++nextAsyncSearchId, workerRequest);
@@ -409,11 +413,12 @@ public final class FactoryRuntime {
         return RecipeRegistry.catalogForMachine(machine).version();
     }
 
-    private static WorkerSearchRequest captureWorkerSearch(FactorySearchContext context,
-                                                           List<MachineRecipe> candidates,
-                                                           @Nullable Identifier lockedRecipeId) {
+    private WorkerSearchRequest captureWorkerSearch(FactorySearchContext context,
+                                                     List<MachineRecipe> candidates,
+                                                     @Nullable Identifier lockedRecipeId) {
         return new WorkerSearchRequest(AsyncRequirementPlanner.captureRecipeSearch(context.snapshot(), candidates,
-                context.maxParallelism(), lockedRecipeId, context.capabilities(), context.modifiers()));
+                context.maxParallelism(), lockedRecipeId, context.capabilities(), context.modifiers(),
+                context.catalogVersion(), effectiveRecipeCache));
     }
 
     private record AsyncSearchRequest(FactorySearchContext context, List<MachineRecipe> candidates,
@@ -948,7 +953,7 @@ public final class FactoryRuntime {
             ordered = filterIndexedCandidates(ordered, catalog, inputItems, lockedRecipeIds);
         }
         return new FactorySearchContext(snapshot, ordered, controller.componentRuntime().capabilities(),
-                MachineModifier.recipeModifiers(controller.componentRuntime().modifierList()), catalog.version(),
+                controller.componentRuntime().modifierList(), catalog.version(),
                 controller.resourceAvailabilityEpoch(), maxParallelism, gameTime);
     }
 

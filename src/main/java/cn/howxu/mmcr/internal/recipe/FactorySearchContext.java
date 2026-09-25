@@ -1,8 +1,8 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 
 import java.util.List;
@@ -16,7 +16,7 @@ public record FactorySearchContext(
         ControllerRuntimeSnapshot snapshot,
         List<MachineRecipe> orderedCandidates,
         List<MachineCapability> capabilities,
-        List<RecipeModifier> modifiers,
+        List<MachineModifier> modifiers,
         long catalogVersion,
         long resourceAvailabilityEpoch,
         long maxParallelism,

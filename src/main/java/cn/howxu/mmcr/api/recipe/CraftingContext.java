@@ -28,12 +28,12 @@ import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -70,21 +70,31 @@ public final class CraftingContext {
         if (requirements == null || parallelism <= 0L) {
             throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
         }
-        Set<Identifier> capabilityIds = new LinkedHashSet<>();
-        for (MachineRequirement requirement : requirements) {
-            if (requirement == null) continue;
-            capabilityIds.add(requirement instanceof LoadedHeatRequirement
-                    ? MekanismRecipeTypes.HEAT : requirement.type().id());
-        }
+        return prepareAsyncPlan(requirements, parallelism, captureAsyncCapabilities());
+    }
+
+    public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities() {
+        return captureAsyncCapabilities(null);
+    }
+
+    public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities(@Nullable Set<Identifier> capabilityIds) {
         List<AsyncRequirementPlanner.Capability> asyncCapabilities = new ArrayList<>();
         for (MachineCapability capability : capabilities) {
-            if (!capabilityIds.contains(capability.type().id())) continue;
+            if (capabilityIds != null && !capabilityIds.contains(capability.type().id())) continue;
             AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElse(null);
             if (facet == null) continue;
             AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();
             AsyncCapabilityPlanner planner = facet.workerPlanner();
             asyncCapabilities.add(new AsyncRequirementPlanner.Capability(planner, snapshot,
                     capability.directions().values()));
+        }
+        return List.copyOf(asyncCapabilities);
+    }
+
+    public static AsyncRequirementPlanner.PreparedPlan prepareAsyncPlan(List<MachineRequirement> requirements,
+            long parallelism, List<AsyncRequirementPlanner.Capability> asyncCapabilities) {
+        if (requirements == null || parallelism <= 0L) {
+            throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
         }
         List<AsyncRequirementPlanner.Requirement> preparedRequirements = new ArrayList<>();
         List<Integer> fallback = new ArrayList<>();

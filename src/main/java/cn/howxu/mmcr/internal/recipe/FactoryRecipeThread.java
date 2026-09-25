@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -372,7 +373,8 @@ public final class FactoryRecipeThread extends RecipeThread {
         if (machineId == null || context.maxParallelism() <= 0) return new SearchResult(null, null, false);
         try {
             return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId, structureVersion,
-                    context.maxParallelism(), candidates, lockedRecipeId, context.capabilities(), context.modifiers()).compute(),
+                    context.maxParallelism(), candidates, lockedRecipeId, context.capabilities(),
+                    MachineModifier.recipeModifiers(context.modifiers())).compute(),
                     null, false);
         } catch (RuntimeException exception) {
             return new SearchResult(null, exception, false);

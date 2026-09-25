@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
@@ -38,6 +39,7 @@ public abstract class RecipeThread {
 
     protected final MachineControllerBlockEntity controller;
     protected final CraftingRuntime runtime;
+    protected final EffectiveRecipeSet.Cache effectiveRecipeCache = new EffectiveRecipeSet.Cache();
     private boolean startPending;
     private @Nullable MachineRecipe pendingStartRecipe;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingStartDomain;
@@ -123,7 +125,7 @@ public abstract class RecipeThread {
         try {
             result = new RecipeSearchTask(snapshot, machineId, structureVersion,
                     context.maxParallelism(), machineCandidates, lockedRecipeId,
-                    context.capabilities(), context.modifiers()).compute();
+                    context.capabilities(), MachineModifier.recipeModifiers(context.modifiers())).compute();
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);

@@ -138,11 +138,9 @@ public final class MachineRecipeThread extends RecipeThread {
         try {
             request = AsyncRequirementPlanner.captureRecipeSearch(snapshot, candidatesForMachine(candidates), availableParallelism,
                     lockedRecipeId, controller.componentRuntime().capabilities(),
-                    MachineModifier.recipeModifiers(controller.componentRuntime().modifierList()));
+                    controller.componentRuntime().modifierList(), catalogVersion, effectiveRecipeCache);
         } catch (RuntimeException exception) {
-            controller.clearPendingConflictStart();
-            onStartSearchFailed(null);
-            return false;
+            return searchAndStartRecipe(candidates, availableParallelism, structureVersion, lockedRecipeId);
         }
         long searchId = ++nextAsyncSearchId;
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
