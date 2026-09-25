@@ -1,7 +1,11 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -45,5 +49,20 @@ class PktMachineAppearancePayloadTest {
         assertThatThrownBy(() -> new PktMachineAppearancePayload(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("specs null");
+    }
+
+    @Test
+    void stream_codec_preserves_controller_state_overlays() {
+        Identifier machineId = Identifier.parse("mmcr:stateful");
+        PktMachineAppearancePayload payload = new PktMachineAppearancePayload(Map.of(machineId,
+                new MachineAppearanceSpec(Identifier.parse("mmcr:basic_casing"), null, null,
+                        Identifier.parse("mmcr:block/custom_idle"), Identifier.parse("mmcr:block/custom_active"))));
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY,
+                ConnectionType.NEOFORGE);
+
+        PktMachineAppearancePayload.STREAM_CODEC.encode(buffer, payload);
+
+        assertThat(PktMachineAppearancePayload.STREAM_CODEC.decode(buffer)).isEqualTo(payload);
+        buffer.release();
     }
 }

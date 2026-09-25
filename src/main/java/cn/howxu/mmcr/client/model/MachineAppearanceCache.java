@@ -92,15 +92,17 @@ public final class MachineAppearanceCache {
         Map<Identifier, MachineAppearanceSpec> replacement = new LinkedHashMap<>();
         for (String key : properties.stringPropertyNames()) {
             String[] values = properties.getProperty(key).split(",", -1);
-            if (values.length != 3) {
-                MMCR.LOG.warn("Ignoring invalid machine appearance entry '{}': expected 3 values", key);
+            if (values.length != 3 && values.length != 5) {
+                MMCR.LOG.warn("Ignoring invalid machine appearance entry '{}': expected 3 or 5 values", key);
                 continue;
             }
             try {
                 replacement.put(Identifier.parse(key), new MachineAppearanceSpec(
                         Identifier.parse(values[0]),
                         values[1].isEmpty() ? null : Identifier.parse(values[1]),
-                        values[2].isEmpty() ? null : Identifier.parse(values[2])));
+                        values[2].isEmpty() ? null : Identifier.parse(values[2]),
+                        values.length == 3 || values[3].isEmpty() ? null : Identifier.parse(values[3]),
+                        values.length == 3 || values[4].isEmpty() ? null : Identifier.parse(values[4])));
             } catch (RuntimeException exception) {
                 MMCR.LOG.warn("Ignoring invalid machine appearance entry '{}'", key, exception);
             }
@@ -118,7 +120,9 @@ public final class MachineAppearanceCache {
         snapshot.forEach((id, spec) -> properties.setProperty(id.toString(), String.join(",",
                 spec.machineBasicBlock().toString(),
                 spec.controllerBaseTexture() == null ? "" : spec.controllerBaseTexture().toString(),
-                spec.formedPortBaseTexture() == null ? "" : spec.formedPortBaseTexture().toString())));
+                spec.formedPortBaseTexture() == null ? "" : spec.formedPortBaseTexture().toString(),
+                spec.controllerIdleOverlayTexture().toString(),
+                spec.controllerActiveOverlayTexture().toString())));
 
         try {
             Path parent = path.getParent();

@@ -93,6 +93,13 @@ public final class DynamicOverlayBakedModel {
         return new TextureSet(resolveBase(appearance.controllerTextureSource()), controller.frontTexture());
     }
 
+    public static Identifier controllerStateOverlay(Identifier machineId, boolean active) {
+        MachineAppearanceSpec appearance = machineId == null
+                ? MachineAppearanceSpec.defaults()
+                : MachineAppearanceCache.specFor(machineId);
+        return active ? appearance.controllerActiveOverlayTexture() : appearance.controllerIdleOverlayTexture();
+    }
+
     public static TextureSet portTextures(Identifier machineId, MachineAppearanceSpec.TextureSource explicitSource,
                                           Identifier overlayTexture) {
         MachineAppearanceSpec.TextureSource source = explicitSource != null

@@ -225,7 +225,9 @@ public final class MachineDefinitionConverter {
         return new MachineAppearanceSpec(
                 spec.machineBasicBlock() != null ? spec.machineBasicBlock() : base.machineBasicBlock(),
                 spec.controllerBaseTexture(),
-                spec.formedPortBaseTexture());
+                spec.formedPortBaseTexture(),
+                spec.controllerIdleOverlayTexture(),
+                spec.controllerActiveOverlayTexture());
     }
 
     private static PortRequirementSpec toPortRequirementSpec(PortRequirements requirements) {

@@ -108,6 +108,17 @@ class MachineBuilderJSTest {
     }
 
     @Test
+    void controller_state_overlay_setters_override_appearance_defaults() {
+        var machine = new MachineBuilderJS(MMCR.id("arc_furnace"))
+                .controllerIdleOverlayTexture("mmcr:block/arc_idle")
+                .controllerActiveOverlayTexture(MMCR.id("block/arc_active"))
+                .createObject();
+
+        assertThat(machine.appearance().controllerIdleOverlayTexture()).isEqualTo(MMCR.id("block/arc_idle"));
+        assertThat(machine.appearance().controllerActiveOverlayTexture()).isEqualTo(MMCR.id("block/arc_active"));
+    }
+
+    @Test
     void allow_vertical_facing_sets_controller_spec_flag() {
         var machine = new MachineBuilderJS(MMCR.id("arc_furnace"))
                 .allowVerticalFacing()
