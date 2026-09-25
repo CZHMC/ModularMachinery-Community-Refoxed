@@ -53,3 +53,10 @@
 	path = reference/eae
 	url = https://github.com/GlodBlock/ExtendedAE
 	branch = 26.1.2-neoforge
+[submodule "reference/fusion"]
+	path = reference/fusion
+	url = https://github.com/SuperMartijn642/Fusion
+	branch = neoforge-26.1
+[submodule "reference/athena"]
+	path = reference/athena
+	url = https://github.com/terrarium-earth/Athena
