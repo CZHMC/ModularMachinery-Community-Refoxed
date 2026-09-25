@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.status.FailureTrace;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
+import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
@@ -106,6 +107,27 @@ class PktMachineStatePayloadTest {
         PktMachineStatePayload.STREAM_CODEC.encode(buffer, payload);
 
         assertThat(PktMachineStatePayload.STREAM_CODEC.decode(buffer)).isEqualTo(payload);
+        buffer.release();
+    }
+
+    @Test
+    void effective_recipe_presentation_round_trips_duration_and_parallelism() {
+        PktMachineStatePayload base = payload(List.of(), null);
+        ControllerRecipePresentation presentation = new ControllerRecipePresentation(List.of(), 2L, 3L, 4D,
+                37, 9L);
+        PktMachineStatePayload payload = new PktMachineStatePayload(base.pos(), base.recipeName(), base.formed(),
+                base.active(), base.foundLevelIds(), base.recipeLocked(), base.lockedRecipeId(), base.machineId(),
+                base.controllerRole(), base.installedModuleCount(), base.moduleConnected(), base.connectedHostId(),
+                base.craftingStatus(), base.craftingMessage(), base.failure(), base.structureAreaLoaded(),
+                base.redstonePaused(), base.tick(), base.totalTick(), base.parallelism(), base.maxParallelism(),
+                base.factoryControllerPresent(), base.factoryThreadCount(), base.activeFactoryThreadCount(),
+                base.parallelControllerCount(), base.maxParallelControllerCount(), base.dataStorageValues(),
+                base.matchedStage(), base.stageCount(), presentation);
+        RegistryFriendlyByteBuf buffer = buffer();
+
+        PktMachineStatePayload.STREAM_CODEC.encode(buffer, payload);
+
+        assertThat(PktMachineStatePayload.STREAM_CODEC.decode(buffer).recipePresentation()).isEqualTo(presentation);
         buffer.release();
     }
 

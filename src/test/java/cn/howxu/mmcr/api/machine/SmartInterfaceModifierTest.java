@@ -22,4 +22,13 @@ class SmartInterfaceModifierTest {
         assertThatIllegalArgumentException().isThrownBy(() -> SmartInterfaceModifier.numeric(
                 "mode", "parallelized", "recipe", 0F, 1F, 0F, 1F, "multiply", false));
     }
+
+    @Test
+    void finite_extreme_endpoints_stay_finite_during_interpolation() {
+        SmartInterfaceModifier mapping = SmartInterfaceModifier.numeric("speed", "duration", "input",
+                -1F, 1F, Float.MAX_VALUE, -Float.MAX_VALUE, "multiply", false);
+
+        assertThat(mapping.mappedValue(0F)).isFinite();
+        assertThat(mapping.toModifier(0F).value()).isFinite();
+    }
 }

@@ -68,9 +68,9 @@ public record SmartInterfaceModifier(String interfaceType, String target, String
 
     public float mappedValue(float value) {
         if (minValue == maxValue) return value <= minValue ? atMin : atMax;
-        float t = (value - minValue) / (maxValue - minValue);
-        t = Math.clamp(t, 0F, 1F);
-        return atMin + (atMax - atMin) * t;
+        double t = ((double) value - minValue) / ((double) maxValue - minValue);
+        t = Math.clamp(t, 0D, 1D);
+        return (float) (atMin + ((double) atMax - atMin) * t);
     }
 
     public RecipeModifier.IOType io() {

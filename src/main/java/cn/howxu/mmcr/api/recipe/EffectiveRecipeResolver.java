@@ -27,13 +27,12 @@ public final class EffectiveRecipeResolver {
                 recipe.getRecipeTotalTickTime()), 1, Integer.MAX_VALUE);
         boolean parallelized = resolveParallelized(recipe.isParallelized(), effectiveModifiers);
         long parallelism = parallelized
-                ? boundedLong(MachineModifier.apply(effectiveModifiers, ModifierTarget.PARALLELISM,
-                        snapshot.maxParallelism(), false), 1L, Long.MAX_VALUE)
+                ? Math.max(1L, snapshot.maxParallelism())
                 : 1L;
-        int factoryThreads = boundedInt(MachineModifier.apply(effectiveModifiers, ModifierTarget.FACTORY_THREADS,
-                snapshot.factory().laneLimit(), false), 1, Integer.MAX_VALUE);
+        int factoryThreads = Math.max(1, snapshot.factory().laneLimit());
+        int sourceRecipeThreads = recipe.maxThreads() <= 0 ? Integer.MAX_VALUE : recipe.maxThreads();
         int recipeThreads = boundedInt(MachineModifier.apply(effectiveModifiers, ModifierTarget.RECIPE_THREADS,
-                Math.max(1, recipe.maxThreads()), false), 1, Integer.MAX_VALUE);
+                sourceRecipeThreads, false), 1, Integer.MAX_VALUE);
 
         return new EffectiveRecipe(recipe, recipe.runtimeRequirements(recipeModifiers),
                 recipe.runtimeMachineOutputs(recipeModifiers), duration, parallelism, factoryThreads, recipeThreads,

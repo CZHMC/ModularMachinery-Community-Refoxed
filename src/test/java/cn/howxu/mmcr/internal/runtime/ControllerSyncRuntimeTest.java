@@ -279,7 +279,8 @@ class ControllerSyncRuntimeTest {
         controller.componentRuntime().replaceLevels(Map.of(MMCR.id("sync_level"), new MachineLevel(
                 MMCR.id("sync_level"), MMCR.id("sync_level_type"), 1, new BlockPredicate.Any(),
                 ItemStack.EMPTY, new ModifierDefinition(List.of(
-                        MachineModifier.numeric("parallelism", "machine", 2D, "add", false))))));
+                        MachineModifier.numeric("parallelism", "machine", 2D, "add", false),
+                        MachineModifier.parallelized(true))))));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_level_recipe"), machineId, 20,
@@ -366,7 +367,7 @@ class ControllerSyncRuntimeTest {
         controller.serverTick();
         resolveSharedRequests(controller);
 
-        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(4);
     }
 
     @Test

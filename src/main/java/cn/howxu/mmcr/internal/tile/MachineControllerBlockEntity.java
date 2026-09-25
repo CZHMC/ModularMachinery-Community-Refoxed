@@ -1312,7 +1312,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         double effective = MachineModifier.apply(runtime.componentRuntime().modifierList(),
                 ModifierTarget.FACTORY_THREADS,
                 Math.max(1L, machine.factoryThreadLimit()) + extraThreads, false);
-        return (int) Math.max(1D, Math.min(Integer.MAX_VALUE, Math.round(effective)));
+        return (int) Math.max(1D, Math.min(FactoryRuntime.MAX_LANES, Math.round(effective)));
     }
 
     public FactoryRecipeScheduler factoryScheduler() {

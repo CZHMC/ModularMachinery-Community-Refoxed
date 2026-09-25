@@ -733,6 +733,23 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void pattern_start_rejects_a_plan_captured_before_modifier_change() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_stale_pattern_modifier", 20, List.of());
+        CraftingRuntime.PreparedStart prepared = runtime.preparePatternStart(recipe, 1, List.of());
+        assertThat(prepared).isNotNull();
+        assertThat(runtime.reservePatternStart()).isTrue();
+
+        controller.componentRuntime().replaceModifiers(Map.of("changed", List.of(
+                MachineModifier.numeric("duration", "input", 2D, "multiply", false))));
+        RuntimeTestFixtures.republish(controller);
+
+        assertThat(runtime.commitPatternStart(prepared)).isFalse();
+        assertThat(runtime.active()).isFalse();
+    }
+
+    @Test
     void prefetchCommitFailureRollsBackEarlierInputOperationsAndPreservesItsStatus() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
@@ -876,7 +893,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void modifier_and_component_state_changes_invalidate_an_active_runtime() {
+    void modifier_changes_do_not_replace_an_active_effective_snapshot() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = recipe("runtime_version_changes", 20, List.of());
@@ -885,13 +902,8 @@ class CraftingRuntimeTest {
         controller.componentRuntime().replaceModifiers(Map.of("changed", List.of()));
         RuntimeTestFixtures.republish(controller);
         runtime.tick();
-        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
-
-        runtime.start(recipe, 1);
-        controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.connected(MMCR.id("host")), 1);
-        RuntimeTestFixtures.republish(controller);
-        runtime.tick();
-        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.failure()).isNull();
     }
 
     @Test
@@ -914,7 +926,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void smart_interface_change_invalidates_an_active_runtime_with_a_dedicated_failure() {
+    void smart_interface_change_keeps_an_active_runtime_on_its_effective_snapshot() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
         MachineRecipe recipe = recipe("runtime_smart_interface_change", 20, List.of());
@@ -923,14 +935,12 @@ class CraftingRuntimeTest {
 
         runtime.invalidateForSmartInterfaceChange();
 
-        assertThat(runtime.active()).isFalse();
-        assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
-        assertThat(runtime.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.smart_interface_changed");
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.failure()).isNull();
     }
 
     @Test
-    void recipe_thread_forwards_smart_interface_change_to_its_runtime() {
+    void recipe_thread_keeps_active_runtime_when_smart_interface_changes() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         MachineRecipeThread thread = new MachineRecipeThread(controller);
 
@@ -939,8 +949,8 @@ class CraftingRuntimeTest {
 
         thread.invalidateForSmartInterfaceChange();
 
-        assertThat(thread.runtime().active()).isFalse();
-        assertThat(thread.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
+        assertThat(thread.runtime().active()).isTrue();
+        assertThat(thread.runtime().failure()).isNull();
     }
 
     @Test
@@ -961,11 +971,9 @@ class CraftingRuntimeTest {
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         runtime.tick();
 
-        assertThat(runtime.finish()).isEqualTo(CraftingStatus.failure(
-                "gui.mmcr.controller.failure.smart_interface_changed"));
+        assertThat(runtime.finish()).isEqualTo(CraftingStatus.IDLE);
         assertThat(runtime.active()).isFalse();
-        assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
+        assertThat(runtime.failure()).isNull();
         assertThat(smartInterface.value("mode")).contains(9F);
     }
 
@@ -1525,6 +1533,10 @@ class CraftingRuntimeTest {
         RecipeRegistry.registerStatic(recipe);
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
         assertThat(saved.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(ControllerRecipePresentation.from(saved)).satisfies(presentation -> {
+            assertThat(presentation.durationTicks()).isEqualTo(2);
+            assertThat(presentation.parallelism()).isEqualTo(1L);
+        });
 
         TagValueOutput outputTag = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
         saved.save(outputTag);

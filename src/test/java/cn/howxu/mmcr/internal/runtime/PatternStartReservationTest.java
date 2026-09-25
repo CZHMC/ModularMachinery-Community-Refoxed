@@ -397,7 +397,7 @@ class PatternStartReservationTest {
     }
 
     @Test
-    void removing_a_factory_lane_invalidates_its_live_reservation() {
+    void lowering_factory_limit_keeps_existing_live_reservations() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime factory = new FactoryRuntime();
         factory.ensureBaseLane(controller);
@@ -410,7 +410,7 @@ class PatternStartReservationTest {
         PatternStartReservation removedReservation = reservation(recipe, factory, removable);
         PatternStartReservation baseReservation = reservation(recipe, factory, base);
         factory.setLaneLimit(1);
-        assertThat(removedReservation.commit()).isFalse();
+        assertThat(removedReservation.commit()).isTrue();
 
         factory.clear();
         assertThat(baseReservation.commit()).isFalse();

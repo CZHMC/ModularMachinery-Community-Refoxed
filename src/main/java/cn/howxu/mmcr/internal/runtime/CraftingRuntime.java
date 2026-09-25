@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
@@ -103,10 +104,8 @@ public final class CraftingRuntime {
     private long upgradeContentRevision = Long.MIN_VALUE;
     private @Nullable StructureClaimRegistry.ResourceDomain resourceDomain;
     private CraftingStatus status = CraftingStatus.IDLE;
-    private boolean finishCommitInProgress;
     private boolean patternStartReserved;
     private @Nullable PreparedStart pendingPatternStart;
-    private boolean smartInterfaceChangePending;
     private @Nullable ExecutionStatus capabilityTickFailure;
     private @Nullable AsyncTickPreparation asyncTickPreparation;
     private @Nullable RecipeFinishContext preparedAsyncFinishContext;
@@ -173,7 +172,8 @@ public final class CraftingRuntime {
         if (!result.successful() || plan == null) return null;
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return null;
-        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime, effective, plan, prefetches);
+        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime, catalogVersion(runtime), effective, plan,
+                prefetches);
         return pendingPatternStart;
     }
 
@@ -189,6 +189,10 @@ public final class CraftingRuntime {
         patternStartReserved = false;
     }
 
+    public @Nullable Identifier pendingPatternRecipeId() {
+        return pendingPatternStart == null ? null : pendingPatternStart.recipe().source().id();
+    }
+
     public boolean commitPatternStart(PreparedStart prepared) {
         return commitPatternStart(prepared, ignored -> { });
     }
@@ -196,6 +200,10 @@ public final class CraftingRuntime {
     /** Commits a prepared pattern start with related storage writes in the same input transaction. */
     public boolean commitPatternStart(PreparedStart prepared, Consumer<TransactionContext> transactionWrites) {
         if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
+        if (!preparedStartCurrent(prepared)) {
+            discardPatternStart(prepared);
+            return false;
+        }
         boolean committed = false;
         try (Transaction transaction = Transaction.openRoot()) {
             ExecutionStatus commitFailure = commitPreparedStart(prepared, transaction);
@@ -215,6 +223,10 @@ public final class CraftingRuntime {
 
     boolean commitPatternPlan(PreparedStart prepared, TransactionContext transaction) {
         if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
+        if (!preparedStartCurrent(prepared)) {
+            discardPatternStart(prepared);
+            return false;
+        }
         ExecutionStatus commitFailure = commitPreparedStart(prepared, transaction);
         if (commitFailure == null) return true;
         fail(commitFailure);
@@ -231,6 +243,21 @@ public final class CraftingRuntime {
     private void discardPatternStart(PreparedStart prepared) {
         if (pendingPatternStart == prepared) releasePatternStart();
         else releasePreparedPrefetches(prepared);
+    }
+
+    private boolean preparedStartCurrent(PreparedStart prepared) {
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        return prepared.runtime().structure().version() == current.structure().version()
+                && prepared.runtime().capabilityVersion() == current.capabilityVersion()
+                && prepared.runtime().modifierVersion() == current.modifierVersion()
+                && prepared.runtime().stateVersion() == current.stateVersion()
+                && prepared.catalogVersion() == catalogVersion(current);
+    }
+
+    private static long catalogVersion(ControllerRuntimeSnapshot runtime) {
+        Machine machine = runtime.structure().machine() == null
+                ? runtime.structure().configuredMachine() : runtime.structure().machine();
+        return RecipeRegistry.catalogForMachine(machine).version();
     }
 
     void activatePatternStart(PreparedStart prepared) {
@@ -251,11 +278,17 @@ public final class CraftingRuntime {
         controller.onPatternStartCommitted();
     }
 
-    public record PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime,
+    public record PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
                                 RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
                                 List<PreparedPrefetch> prefetches) {
         public PreparedStart {
             prefetches = List.copyOf(prefetches);
+        }
+
+        public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime,
+                             RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
+                             List<PreparedPrefetch> prefetches) {
+            this(recipe, runtime, CraftingRuntime.catalogVersion(runtime), effective, plan, prefetches);
         }
     }
 
@@ -339,7 +372,8 @@ public final class CraftingRuntime {
         }
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return fail(missingInputStatus());
-        PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, effective, plan, prefetches);
+        PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion(runtime), effective, plan,
+                prefetches);
         boolean committed = false;
         try (Transaction transaction = Transaction.openRoot()) {
             ExecutionStatus commitFailure = commitPreparedStart(prepared, transaction);
@@ -622,25 +656,17 @@ public final class CraftingRuntime {
             activeRecipe.markFinishBlocked(currentGameTime());
             return finishBlocked(result.failure());
         }
-        finishCommitInProgress = true;
         boolean committed;
         try {
             committed = finishPlan.commit();
         } catch (RuntimeException exception) {
             logFinishFailure("commit", runtime, activeRecipe.getRecipe(), exception);
             return finishBlocked(failure(BuiltinFailureReasons.FINISH, FailurePhase.FINISH, Map.of()));
-        } finally {
-            finishCommitInProgress = false;
         }
         if (!committed) {
             activeRecipe.markFinishBlocked(currentGameTime());
             return finishBlocked(finishPlan.failure());
         }
-        if (smartInterfaceChangePending) {
-            smartInterfaceChangePending = false;
-            return invalidate(BuiltinFailureReasons.SMART_INTERFACE_CHANGED, FailurePhase.RUNTIME);
-        }
-
         activeRecipe.applyTickGrant(true, true, currentGameTime());
         releaseActivePrefetches();
         activeRecipe = null;
@@ -796,10 +822,9 @@ public final class CraftingRuntime {
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         return structureVersion == structure.version()
                 && capabilityVersion == components.capabilityVersion()
-                && modifierVersion == components.modifierVersion()
-                && componentStateVersion == components.stateVersion()
-                && upgradeContentRevision == components.upgradeContentRevision()
-                && recipeBelongsToMachine(activeRecipe.getRecipe(), machine);
+                && recipeBelongsToMachine(activeRecipe.getRecipe(), machine)
+                && controller.currentRuntimeSnapshot().moduleConnectionStatus()
+                .canRunRecipe(activeRecipe.getRecipe().requiredHostIds());
     }
 
     public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
@@ -817,19 +842,13 @@ public final class CraftingRuntime {
         consumedAtStart = Set.of();
         retainedInputs = Set.of();
         resourceDomain = null;
-        smartInterfaceChangePending = false;
         patternStartReserved = false;
         failure = null;
         status = CraftingStatus.IDLE;
     }
 
     public void invalidateForSmartInterfaceChange() {
-        if (!active()) return;
-        if (finishCommitInProgress) {
-            smartInterfaceChangePending = true;
-            return;
-        }
-        invalidate(BuiltinFailureReasons.SMART_INTERFACE_CHANGED, FailurePhase.RUNTIME);
+        if (!active()) releasePatternStart();
     }
 
     public void invalidateForCatalogChange() {

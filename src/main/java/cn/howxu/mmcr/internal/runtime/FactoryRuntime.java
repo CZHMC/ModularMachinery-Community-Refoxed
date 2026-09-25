@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
  * @author howxu <dev@howxu.cn>
  */
 public final class FactoryRuntime {
-    private static final int MAX_LANES = 1024;
+    public static final int MAX_LANES = 1024;
     private final List<FactoryRecipeThread> lanes = new ArrayList<>();
     private final Map<FactoryRecipeThread, Identifier> recipeLocks = new IdentityHashMap<>();
     private final Set<FactoryRecipeThread> recipeLockUsed = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -168,13 +168,15 @@ public final class FactoryRuntime {
                 } finally {
                     // Releasing a shared lane may unblock output capacity for another lane.
                     controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null);
-                    boolean restarted = controller.activeWorkMode() == MachineWorkMode.ASYNC
+                    int laneIndex = lanes.indexOf(lane);
+                    boolean withinLaneLimit = laneIndex >= 0 && laneIndex < laneLimit;
+                    boolean restarted = withinLaneLimit && (controller.activeWorkMode() == MachineWorkMode.ASYNC
                             ? lane.prepareAsyncFinishRestart(context, context.orderedCandidates(), perThreadParallelLimit,
                             structureVersion, capabilityVersion, modifierVersion, componentStateVersion,
                             recipeLocks.get(lane))
                             : lane.tryRestartLastRecipe(context, context.orderedCandidates(), perThreadParallelLimit,
                             structureVersion, capabilityVersion, modifierVersion, componentStateVersion,
-                            recipeLocks.get(lane));
+                            recipeLocks.get(lane)));
                     if (restarted) {
                         markLaneStateChanged();
                     }
@@ -188,6 +190,8 @@ public final class FactoryRuntime {
         }
         LaneAnalysis analysis = new LaneAnalysis(observations, analyzedActiveCounts);
         Map<Identifier, Integer> activeCounts = analysis.activeRecipeCounts();
+        trimLanesToLimit();
+        laneSnapshot = List.copyOf(lanes);
 
         Set<FactoryRecipeThread> readyThisTick = Collections.newSetFromMap(new IdentityHashMap<>());
         for (FactoryRecipeThread lane : laneSnapshot) {
@@ -244,6 +248,7 @@ public final class FactoryRuntime {
             CraftingRuntime baseRuntime = lanes.isEmpty() ? null : lanes.getFirst().runtime();
             if (baseRuntime != null) baseRuntime.tickIdle();
         }
+        trimLanesToLimit();
         clearFinishedContinuations();
         for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : analysis.observations().entrySet()) {
             if (lanes.contains(entry.getKey()) && !entry.getValue().equals(observe(entry.getKey()))) {
@@ -732,7 +737,9 @@ public final class FactoryRuntime {
         EffectiveRecipe effective = effectiveRecipe(recipe);
         if (effective.recipeThreadLimit() > 0) {
             int activeForRecipe = activeRecipeCountFor(recipe.id());
-            int projected = activeForRecipe + 1 + patternStartReservations.size();
+            long reservedForRecipe = patternStartReservations.stream()
+                    .filter(lane -> recipe.id().equals(lane.runtime().pendingPatternRecipeId())).count();
+            long projected = activeForRecipe + 1L + reservedForRecipe;
             if (projected > effective.recipeThreadLimit()) return null;
         }
         for (FactoryRecipeThread lane : lanes) {
@@ -790,6 +797,8 @@ public final class FactoryRuntime {
         while (lanes.size() > this.laneLimit) {
             FactoryRecipeThread removed = lanes.stream()
                     .filter(lane -> !lane.isBaseThread())
+                    .filter(lane -> !lane.runtime().active() && !lane.isStartPending()
+                            && !patternStartReservations.contains(lane))
                     .min(Comparator.comparingLong(lane -> lane.runtime().parallelism()))
                     .orElse(null);
             if (removed == null) break;

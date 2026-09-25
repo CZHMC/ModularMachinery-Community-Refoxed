@@ -122,7 +122,7 @@ class SmartInterfaceBlockEntityTest {
     }
 
     @Test
-    void direct_value_change_invalidates_a_bound_controller_runtime() {
+    void direct_value_change_keeps_a_bound_active_runtime_on_its_effective_snapshot() {
         SmartInterfaceBlockEntity owner = createSmartInterface();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         owner.setLevel(controller.getLevel());
@@ -135,9 +135,8 @@ class SmartInterfaceBlockEntityTest {
 
         assertThat(owner.setValue("mode", 2F)).isTrue();
 
-        assertThat(runtime.active()).isFalse();
-        assertThat(runtime.failure()).isNotNull();
-        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.failure()).isNull();
     }
 
     @Test

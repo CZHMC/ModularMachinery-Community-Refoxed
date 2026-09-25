@@ -21,21 +21,29 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
-                                           long energyInputPerTick,
-                                           long energyOutputPerTick,
-                                           double heatOutputPerTick) {
+                                            long energyInputPerTick,
+                                            long energyOutputPerTick,
+                                            double heatOutputPerTick,
+                                            int durationTicks,
+                                            long parallelism) {
     public static final int MAX_OUTPUTS = 65;
 
     public ControllerRecipePresentation {
         outputs = List.copyOf(outputs == null ? List.of() : outputs);
         if (energyInputPerTick < 0L || energyOutputPerTick < 0L
-                || !Double.isFinite(heatOutputPerTick) || heatOutputPerTick < 0D) {
+                || !Double.isFinite(heatOutputPerTick) || heatOutputPerTick < 0D
+                || durationTicks < 0 || parallelism < 0L) {
             throw new IllegalArgumentException("Invalid controller recipe presentation values");
         }
     }
 
+    public ControllerRecipePresentation(List<MachineOutputAmount> outputs, long energyInputPerTick,
+                                        long energyOutputPerTick, double heatOutputPerTick) {
+        this(outputs, energyInputPerTick, energyOutputPerTick, heatOutputPerTick, 0, 0L);
+    }
+
     public static ControllerRecipePresentation empty() {
-        return new ControllerRecipePresentation(List.of(), 0L, 0L, 0D);
+        return new ControllerRecipePresentation(List.of(), 0L, 0L, 0D, 0, 0L);
     }
 
     public static ControllerRecipePresentation from(CraftingRuntime runtime) {
@@ -80,7 +88,7 @@ public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
                 energyInput = SaturatingLong.add(energyInput, amount);
             }
         }
-        return new ControllerRecipePresentation(outputs, energyInput, energyOutput, heat);
+        return new ControllerRecipePresentation(outputs, energyInput, energyOutput, heat, runtime.totalTick(), parallelism);
     }
 
     public static void write(RegistryFriendlyByteBuf buf, ControllerRecipePresentation presentation) {
@@ -96,6 +104,8 @@ public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
         buf.writeLong(value.energyInputPerTick());
         buf.writeLong(value.energyOutputPerTick());
         buf.writeDouble(value.heatOutputPerTick());
+        buf.writeVarInt(value.durationTicks());
+        buf.writeVarLong(value.parallelism());
     }
 
     public static ControllerRecipePresentation read(RegistryFriendlyByteBuf buf) {
@@ -109,7 +119,8 @@ public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
             if (amount < 0L) throw new IllegalArgumentException("Invalid controller recipe output amount");
             outputs.add(new MachineOutputAmount(MachineRecipeSyncCodec.readOutput(buf), amount));
         }
-        return new ControllerRecipePresentation(outputs, buf.readLong(), buf.readLong(), buf.readDouble());
+        return new ControllerRecipePresentation(outputs, buf.readLong(), buf.readLong(), buf.readDouble(),
+                buf.readVarInt(), buf.readVarLong());
     }
 
     private static double saturatingMultiply(double value, long multiplier) {

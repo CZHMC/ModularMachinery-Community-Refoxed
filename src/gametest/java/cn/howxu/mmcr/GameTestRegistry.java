@@ -55,7 +55,7 @@ public final class GameTestRegistry {
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
         register(event, "upgrade_bus_invalidation", 100,
-                helper -> new UpgradeBusGameTest().optionalBusesInvalidateActiveRecipe(helper));
+                helper -> new UpgradeBusGameTest().optionalBusesPreserveActiveRecipe(helper));
         register(event, "controller_tick_recipe_hooks", 100,
                 helper -> new ControllerTickGameTest().recipeMachineHooksPublishTextAndRespectRedstone(helper));
         register(event, "controller_tick_partial_io", 100,
@@ -303,10 +303,10 @@ public final class GameTestRegistry {
     public static void registerMachineStructures(MMCRMachineStructuresEvent event) {
         Identifier upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,
-                ModifierDefinition.of("item", "input", 0.0F, "add", false));
+                ModifierDefinition.of("duration", "input", 1.0F, "add", false));
         Identifier upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
         event.registerModifier(upgradeBusModifierId,
-                ModifierDefinition.of("item", "input", 1.0F, "add", false));
+                ModifierDefinition.of("duration", "input", 1.0F, "add", false));
         event.registerModifierItem(new ItemStack(Items.NETHER_STAR), upgradeBusModifierId);
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {

@@ -37,6 +37,8 @@ class EffectiveRecipeResolverTest {
 
         EffectiveRecipe effective = new EffectiveRecipeResolver().resolve(recipe, snapshot, List.of(
                 MachineModifier.numeric("duration", "input", 0D, "multiply", false),
+                MachineModifier.numeric("parallelism", "machine", 4D, "multiply", false),
+                MachineModifier.numeric("factory_threads", "machine", 2D, "add", false),
                 MachineModifier.numeric("recipe_threads", "recipe", 2D, "add", false),
                 MachineModifier.parallelized(false)));
 
@@ -45,6 +47,28 @@ class EffectiveRecipeResolverTest {
         assertThat(effective.parallelized()).isFalse();
         assertThat(effective.parallelismLimit()).isEqualTo(1L);
         assertThat(effective.modifierVersion()).isEqualTo(3L);
+        assertThat(effective.factoryThreadLimit()).isEqualTo(1);
+    }
+
+    @Test
+    void zero_recipe_thread_limit_remains_unbounded_before_modifiers_are_applied() {
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("unbounded_recipe_threads"), MMCR.id("pool"), 20,
+                List.of(), List.of(), List.of(), 0, 0, false, true, false, Set.of());
+
+        EffectiveRecipe effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(3L), List.of());
+
+        assertThat(effective.recipeThreadLimit()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void controller_wide_parallelism_is_not_modified_twice_per_recipe() {
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("single_parallel_modifier_application"),
+                MMCR.id("pool"), 20, List.of(), List.of(), List.of(), 0, 1, false, true, false, Set.of());
+
+        EffectiveRecipe effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(3L), List.of(
+                MachineModifier.numeric("parallelism", "machine", 4D, "multiply", false)));
+
+        assertThat(effective.parallelismLimit()).isEqualTo(16L);
     }
 
     @Test

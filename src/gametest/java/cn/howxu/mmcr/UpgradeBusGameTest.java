@@ -1,11 +1,11 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
@@ -35,12 +35,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * End-to-end Upgrade Bus structure and active recipe invalidation coverage.
+ * End-to-end Upgrade Bus structure and effective recipe snapshot coverage.
  *
  * @author howxu <dev@howxu.cn>
  */
 public class UpgradeBusGameTest {
-    public void optionalBusesInvalidateActiveRecipe(GameTestHelper helper) {
+    public void optionalBusesPreserveActiveRecipe(GameTestHelper helper) {
         ServerConfig.MACHINE_WORK_MODE.clearCache();
         ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
         Identifier machineId = MMCR.id("upgrade_bus_test");
@@ -106,8 +106,9 @@ public class UpgradeBusGameTest {
             helper.assertTrue(controller.componentRuntime().upgradeModifierUnits().get(modifierId) == 2L,
                     "Both Upgrade Bus items resolve to two modifier units");
             helper.assertTrue(controller.componentRuntime().modifierList().stream()
-                            .anyMatch(modifier -> modifier.getModifier() == 2.0F),
-                    "Upgrade Bus items rebuild the aggregated input modifier");
+                            .anyMatch(modifier -> modifier instanceof MachineModifier.Numeric numeric
+                                    && numeric.value() == 2D),
+                    "Upgrade Bus items rebuild the aggregated duration modifier");
 
             ItemInputBusBlockEntity input = helper.getBlockEntity(inputPos, ItemInputBusBlockEntity.class);
             ItemOutputBusBlockEntity output = helper.getBlockEntity(outputPos, ItemOutputBusBlockEntity.class);
@@ -133,9 +134,11 @@ public class UpgradeBusGameTest {
             helper.assertTrue(observedRequirements.get() != null
                             && observedRequirements.get().stream()
                             .anyMatch(requirement -> requirement instanceof cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement item
-                                    && item.count() == 3),
-                    "Recipe start callback receives the input quantity after Upgrade Bus modifiers: "
+                                    && item.count() == 1),
+                    "Duration modifiers do not alter recipe input quantities: "
                             + observedRequirements.get());
+            helper.assertTrue(controller.runtimeSnapshot().crafting().totalTick() == 23,
+                    "Recipe starts with the Upgrade Bus effective duration");
 
             try (Transaction transaction = Transaction.openRoot()) {
                 ItemResource current = firstBus.itemStorage().resource(0);
@@ -147,14 +150,12 @@ public class UpgradeBusGameTest {
             }
             controller.serverTick();
 
-            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
-                    "Bus content mutation invalidates the active recipe on the next tick");
-            helper.assertTrue(controller.runtimeSnapshot().crafting().failure() != null
-                            && BuiltinFailureReasons.VERSION_INVALIDATED.equals(
-                            controller.runtimeSnapshot().crafting().failure().reason()),
-                    "Bus mutation uses the version invalidation failure path");
-            helper.assertTrue(input.itemStorage().amount(0) == 0L,
-                    "Invalidation does not restore consumed inputs");
+            helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
+                    "Bus content mutation keeps the active effective recipe snapshot");
+            helper.assertTrue(controller.runtimeSnapshot().crafting().failure() == null,
+                    "Bus content mutation does not fail the active recipe");
+            helper.assertTrue(input.itemStorage().amount(0) == 2L,
+                    "Only the unmodified recipe input is consumed");
             helper.assertTrue(output.itemStorage().amount(0) == 0L,
                     "Invalidation does not emit recipe output");
             helper.succeed();

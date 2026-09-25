@@ -452,7 +452,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void failed_operation_clears_operation_text() throws Exception {
+    void modifier_change_keeps_active_operation_text() throws Exception {
         MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_failed_operation"));
         MachineControllerRuntime runtime = runtimeOf(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_text_failed_recipe"),
@@ -468,13 +468,14 @@ class MachineControllerBlockEntityTest {
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
         SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
 
-        assertThat(runtime.craftingRuntime().failure()).isNotNull();
-        assertThat(runtime.craftingRuntime().active()).isFalse();
-        assertThat(runtime.screenText().snapshot().lines()).isEmpty();
+        assertThat(runtime.craftingRuntime().failure()).isNull();
+        assertThat(runtime.craftingRuntime().active()).isTrue();
+        assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.scope()).isEqualTo(ControllerScreenTextScope.OPERATION));
     }
 
     @Test
-    void cancelled_operation_clears_operation_text() throws Exception {
+    void smart_interface_change_keeps_active_operation_text() throws Exception {
         EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
         Identifier machineId = MMCR.id("controller_text_cancelled_operation");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
@@ -500,9 +501,9 @@ class MachineControllerBlockEntityTest {
 
         controller.onSmartInterfaceValueChanged();
 
-        assertThat(runtime.craftingRuntime().active()).isFalse();
+        assertThat(runtime.craftingRuntime().active()).isTrue();
         assertThat(runtime.screenText().snapshot().lines())
-                .noneMatch(line -> line.scope() == ControllerScreenTextScope.OPERATION);
+                .anyMatch(line -> line.scope() == ControllerScreenTextScope.OPERATION);
     }
 
     @Test

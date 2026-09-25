@@ -105,6 +105,7 @@ class MachineControllerRecipeOutputsTest {
         assertThat(presentation.energyInputPerTick()).isEqualTo(400L);
         assertThat(presentation.energyOutputPerTick()).isEqualTo(200L);
         assertThat(presentation.heatOutputPerTick()).isEqualTo(10D);
+        assertThat(presentation.parallelism()).isEqualTo(4L);
     }
 
     @Test

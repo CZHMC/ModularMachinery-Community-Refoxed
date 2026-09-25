@@ -366,19 +366,41 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void removingAQueuedLaneInvalidatesOnlyThatLane() {
+    void lowering_lane_limit_keeps_active_lanes_until_they_finish() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
-        runtime.tick(List.of(recipe("factory_remove", 20)), 1);
+        MachineRecipe recipe = recipe("factory_remove", 2);
+        runtime.tick(List.of(recipe), 1);
         CraftingRuntime removed = runtime.activeRuntimes().getLast();
 
         runtime.setLaneLimit(1);
 
-        assertThat(runtime.activeLaneCount()).isEqualTo(1);
+        assertThat(runtime.activeLaneCount()).isEqualTo(2);
+        assertThat(runtime.contains(removed)).isTrue();
+        assertThat(removed.active()).isTrue();
+
+        runtime.tick(List.of(recipe), 1, 1L);
+        runtime.tick(List.of(recipe), 1, 2L);
+
+        assertThat(runtime.laneCount()).isEqualTo(1);
         assertThat(runtime.contains(removed)).isFalse();
-        assertThat(removed.active()).isFalse();
+    }
+
+    @Test
+    void pattern_reservations_count_only_the_same_recipe_for_thread_admission() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(2);
+        MachineRecipe first = RecipeTestSupport.create(MMCR.id("factory_reserved_first"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 1);
+        MachineRecipe second = RecipeTestSupport.create(MMCR.id("factory_reserved_second"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 1);
+
+        assertThat(runtime.reservePatternStart(first, 1L, List.of())).isNotNull();
+        assertThat(runtime.reservePatternStart(second, 1L, List.of())).isNotNull();
     }
 
     @Test
@@ -608,7 +630,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void smart_interface_change_invalidates_all_active_factory_lanes() {
+    void smart_interface_change_keeps_active_factory_lanes_on_their_effective_snapshots() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
@@ -620,12 +642,12 @@ class FactoryRuntimeTest {
 
         runtime.invalidateForSmartInterfaceChange();
 
-        assertThat(runtime.activeLaneCount()).isZero();
-        assertThat(runtime.snapshot().presentationLanes())
-                .allSatisfy(lane -> assertThat(lane.lastFailureUnloc())
-                        .isEqualTo("gui.mmcr.controller.failure.smart_interface_changed"));
-        assertThat(runtime.snapshot().failure()).isNotNull();
-        assertThat(runtime.snapshot().failure().reason()).isEqualTo(BuiltinFailureReasons.SMART_INTERFACE_CHANGED);
+        assertThat(runtime.activeLaneCount()).isEqualTo(2);
+        assertThat(runtime.snapshot().presentationLanes()).allSatisfy(lane -> {
+            assertThat(lane.active()).isTrue();
+            assertThat(lane.lastFailureUnloc()).isEmpty();
+        });
+        assertThat(runtime.snapshot().failure()).isNull();
     }
 
     @Test
@@ -1222,7 +1244,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void active_failure_arms_the_same_lane_retry_hook() {
+    void modifier_change_does_not_arm_retry_for_an_active_lane() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
         MachineRecipe recipe = recipe("factory_active_failure", 20);
@@ -1232,12 +1254,12 @@ class FactoryRuntimeTest {
         RuntimeTestFixtures.republish(controller);
         thread.tick();
 
-        assertThat(thread.runtime().failure()).isNotNull();
-        assertThat(thread.canSearch(1L, searchKey(controller))).isFalse();
+        assertThat(thread.runtime().failure()).isNull();
+        assertThat(thread.runtime().active()).isTrue();
     }
 
     @Test
-    void stale_async_runtime_request_completes_as_a_failed_lane_and_keeps_backoff() {
+    void modifier_change_during_async_tick_keeps_the_active_lane() {
         MachineControllerBlockEntity controller = factoryController("test_cube");
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_version_failure_recipe"),
                 MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
@@ -1259,15 +1281,13 @@ class FactoryRuntimeTest {
         RuntimeTestFixtures.republish(controller);
         resolveSharedRequests(controller);
 
-        assertThat(controller.runtimeSnapshot().factory().failure()).isNotNull();
-        assertThat(controller.runtimeSnapshot().factory().failure().reason())
-                .isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+        assertThat(controller.runtimeSnapshot().factory().failure()).isNull();
 
         controller.serverTick();
-        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
         resolveSharedRequests(controller);
 
-        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isZero();
+        assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(1);
     }
 
     @Test

@@ -60,6 +60,7 @@ public final class AsyncRequirementPlanner {
                 capabilityIds.add(requirement instanceof cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement
                         ? cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes.HEAT : requirement.type().id());
             }
+            candidate.outputsWithoutDerivedRequirements().forEach(output -> capabilityIds.add(output.outputType().id()));
         }
         List<Capability> asyncCapabilities = new CraftingContext(new CapabilitySnapshot(capabilities), List.of())
                 .captureAsyncCapabilities(capabilityIds);
