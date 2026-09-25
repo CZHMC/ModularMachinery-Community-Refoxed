@@ -14,6 +14,8 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
+import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
@@ -722,10 +724,11 @@ public final class FactoryRuntime {
     public @Nullable PatternLane reservePatternStart(MachineRecipe recipe, long requestedParallelism,
                                                      List<MachineCapability> requestCapabilities) {
         if (recipe == null || controller == null || paused) return null;
-        if (recipe.maxThreads() > 0) {
+        EffectiveRecipe effective = effectiveRecipe(recipe);
+        if (effective.recipeThreadLimit() > 0) {
             int activeForRecipe = activeRecipeCountFor(recipe.id());
             int projected = activeForRecipe + 1 + patternStartReservations.size();
-            if (projected > recipe.maxThreads()) return null;
+            if (projected > effective.recipeThreadLimit()) return null;
         }
         for (FactoryRecipeThread lane : lanes) {
             PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities);
@@ -1133,13 +1136,13 @@ public final class FactoryRuntime {
         return activeRecipeCounts().getOrDefault(recipeId, 0);
     }
 
-    private static List<MachineRecipe> filterAvailableCandidates(List<MachineRecipe> candidates,
-                                                                  Map<Identifier, Integer> activeCounts) {
+    private List<MachineRecipe> filterAvailableCandidates(List<MachineRecipe> candidates,
+                                                          Map<Identifier, Integer> activeCounts) {
         if (candidates == null || candidates.isEmpty()) return List.of();
         boolean filteringRequired = false;
         for (MachineRecipe recipe : candidates) {
-            if (recipe == null || (recipe.maxThreads() > 0
-                    && activeCounts.getOrDefault(recipe.id(), 0) >= recipe.maxThreads())) {
+            if (recipe == null || activeCounts.getOrDefault(recipe.id(), 0)
+                    >= effectiveRecipe(recipe).recipeThreadLimit()) {
                 filteringRequired = true;
                 break;
             }
@@ -1147,12 +1150,18 @@ public final class FactoryRuntime {
         if (!filteringRequired) return candidates;
         List<MachineRecipe> filtered = new ArrayList<>(candidates.size());
         for (MachineRecipe recipe : candidates) {
-            if (recipe != null && (recipe.maxThreads() <= 0
-                    || activeCounts.getOrDefault(recipe.id(), 0) < recipe.maxThreads())) {
+            if (recipe != null && activeCounts.getOrDefault(recipe.id(), 0)
+                    < effectiveRecipe(recipe).recipeThreadLimit()) {
                 filtered.add(recipe);
             }
         }
         return filtered.isEmpty() ? List.of() : List.copyOf(filtered);
+    }
+
+    private EffectiveRecipe effectiveRecipe(MachineRecipe recipe) {
+        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        return new EffectiveRecipeResolver().resolve(recipe, snapshot,
+                controller.componentRuntime().modifierList());
     }
 
     private void reserveStart(FactoryRecipeThread lane, boolean started,

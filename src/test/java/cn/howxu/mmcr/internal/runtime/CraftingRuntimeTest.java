@@ -491,15 +491,18 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void fluxPrefetchUsesTheSelectedParallelismForItsTotal() {
+    void fluxPrefetchClampsRequestedParallelismToTheMachineLimit() {
         PrefetchNetworkCapability network = new PrefetchNetworkCapability(12L);
         MachineControllerBlockEntity controller = controllerWithPrefetchNetwork(network);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
 
-        assertThat(runtime.start(energyRecipe("runtime_flux_parallel", 3, 2, 4), 2).isCrafting()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_flux_parallel"), MMCR.id("test_cube"), 3,
+                List.of(new EnergyRequirement(2)), List.of(), List.of(), 0, 4, false,
+                true, List.of(), false, Set.of());
+        assertThat(runtime.start(recipe, 2).isCrafting()).isTrue();
 
-        assertThat(runtime.parallelism()).isEqualTo(2L);
-        assertThat(network.extracted()).isEqualTo(12L);
+        assertThat(runtime.parallelism()).isEqualTo(1L);
+        assertThat(network.extracted()).isEqualTo(6L);
     }
 
     @Test

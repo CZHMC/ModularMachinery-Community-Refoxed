@@ -260,12 +260,14 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void ticking_gives_each_active_lane_independent_parallelism() {
+    void ticking_caps_each_active_lane_to_the_controller_parallelism() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
-        MachineRecipe recipe = recipe("factory_parallel", 20);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_parallel"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 2, false,
+                true, List.of(), false, Set.of());
 
         runtime.tick(List.of(recipe), 4);
 
@@ -274,7 +276,7 @@ class FactoryRuntimeTest {
         assertThat(snapshot.maxParallelism()).isEqualTo(4);
         assertThat(snapshot.presentationLanes()).allSatisfy(lane -> {
             assertThat(lane.active()).isTrue();
-            assertThat(lane.parallelism()).isEqualTo(4L);
+            assertThat(lane.parallelism()).isEqualTo(1L);
         });
     }
 

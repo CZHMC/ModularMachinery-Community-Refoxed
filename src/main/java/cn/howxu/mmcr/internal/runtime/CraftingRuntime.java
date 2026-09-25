@@ -24,6 +24,8 @@ import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
+import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -137,15 +139,16 @@ public final class CraftingRuntime {
                 || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return null;
-        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
-        List<RecipeModifier> contextModifiers = contextModifiers(runtime);
-        List<MachineRequirement> recipeRequirements = recipe.runtimeRequirements(contextModifiers);
-        List<MachineOutput> outputs = runtimeMachineOutputs(recipe, runtime);
+        EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
+        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
+                effectiveRecipe.parallelismLimit()));
+        List<MachineRequirement> recipeRequirements = effectiveRecipe.requirements();
+        List<MachineOutput> outputs = effectiveRecipe.outputs();
         RecipeStartContext.ExecutionSnapshot effective;
         if (behavior.hasBeforeStart()) {
             MachineBehaviorContext machineContext = behaviorContext();
             RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
-                    effectiveParallelism, duration(recipe, runtime),
+                    effectiveParallelism, effectiveRecipe.duration(),
                     MachineRecipeConverter.toPublicRequirements(recipeRequirements), outputs);
             try {
                 behavior.beforeStart().accept(startContext);
@@ -158,19 +161,19 @@ public final class CraftingRuntime {
             if (startContext.cancelled()) return null;
             effective = startContext.snapshot();
         } else {
-            effective = new RecipeStartContext.ExecutionSnapshot(duration(recipe, runtime),
+            effective = new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
                     MachineRecipeConverter.toPublicRequirements(recipeRequirements), outputs);
         }
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRecipeConverter::toRequirement).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
-        PlanningResult result = context(runtime, requestCapabilities).planInputs(startRequirements(requirements, facets), requestedParallelism,
+        PlanningResult result = context(runtime, requestCapabilities).planInputs(startRequirements(requirements, facets), effectiveParallelism,
                 Set.of(), Set.of());
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) return null;
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return null;
-        pendingPatternStart = new PreparedStart(recipe, runtime, effective, plan, prefetches);
+        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime, effective, plan, prefetches);
         return pendingPatternStart;
     }
 
@@ -231,7 +234,7 @@ public final class CraftingRuntime {
     }
 
     void activatePatternStart(PreparedStart prepared) {
-        activeRecipe = new ActiveMachineRecipe(prepared.recipe(), prepared.plan().parallelism(), prepared.effective());
+        activeRecipe = new ActiveMachineRecipe(prepared.recipe().source(), prepared.plan().parallelism(), prepared.effective());
         activeRecipe.setParallelism(prepared.plan().parallelism());
         startPlan = prepared.plan();
         finishPlan = null;
@@ -248,7 +251,7 @@ public final class CraftingRuntime {
         controller.onPatternStartCommitted();
     }
 
-    public record PreparedStart(MachineRecipe recipe, ControllerRuntimeSnapshot runtime,
+    public record PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime,
                                 RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
                                 List<PreparedPrefetch> prefetches) {
         public PreparedStart {
@@ -272,16 +275,18 @@ public final class CraftingRuntime {
                 || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return null;
-        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism, runtime.maxParallelism()));
-        List<MachineRequirement> requirements = recipe.runtimeRequirements(contextModifiers(runtime));
+        EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
+        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
+                effectiveRecipe.parallelismLimit()));
+        List<MachineRequirement> requirements = effectiveRecipe.requirements();
         if (!behavior.hasBeforeStart()) {
-            return new RecipeStartContext.ExecutionSnapshot(duration(recipe, runtime),
-                    MachineRecipeConverter.toPublicRequirements(requirements), runtimeMachineOutputs(recipe, runtime));
+            return new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
+                    MachineRecipeConverter.toPublicRequirements(requirements), effectiveRecipe.outputs());
         }
         MachineBehaviorContext machineContext = behaviorContext();
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
-                effectiveParallelism, duration(recipe, runtime),
-                MachineRecipeConverter.toPublicRequirements(requirements), runtimeMachineOutputs(recipe, runtime));
+                effectiveParallelism, effectiveRecipe.duration(),
+                MachineRecipeConverter.toPublicRequirements(requirements), effectiveRecipe.outputs());
         try {
             behavior.beforeStart().accept(startContext);
         } catch (RuntimeException exception) {
@@ -319,11 +324,14 @@ public final class CraftingRuntime {
         RecipeStartContext.ExecutionSnapshot effective = preparedStart == null
                 ? prepareAsyncStart(recipe, requestedParallelism) : preparedStart;
         if (effective == null) return status;
+        EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
+        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
+                effectiveRecipe.parallelismLimit()));
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRecipeConverter::toRequirement).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(List.of());
         CraftingContext context = context(runtime);
-        PlanningResult result = context.planInputs(startRequirements(requirements, facets), requestedParallelism,
+        PlanningResult result = context.planInputs(startRequirements(requirements, facets), effectiveParallelism,
                 Set.of(), Set.of());
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) {
@@ -331,7 +339,7 @@ public final class CraftingRuntime {
         }
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return fail(missingInputStatus());
-        PreparedStart prepared = new PreparedStart(recipe, runtime, effective, plan, prefetches);
+        PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, effective, plan, prefetches);
         boolean committed = false;
         try (Transaction transaction = Transaction.openRoot()) {
             ExecutionStatus commitFailure = commitPreparedStart(prepared, transaction);
@@ -1458,6 +1466,10 @@ public final class CraftingRuntime {
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {
         return MachineModifier.recipeModifiers(components.modifierList());
+    }
+
+    private EffectiveRecipe resolve(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
+        return new EffectiveRecipeResolver().resolve(recipe, runtime, components.modifierList());
     }
 
     /** Returns outputs using the same runtime modifier context as pattern-start preparation. */
