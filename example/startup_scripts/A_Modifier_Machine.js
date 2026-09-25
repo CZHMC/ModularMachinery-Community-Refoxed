@@ -28,7 +28,7 @@ MMCREvents.startup(event => {
     event.registerModifier(
         "mmcr_kubejs:alloy_furnace_lapis_doubling",
         api.modifierDefinition([
-            api.modifier("item", "output", 2, "multiply", false)
+            api.modifier("output", "output", 2, "multiply", false)
         ])
     )
 

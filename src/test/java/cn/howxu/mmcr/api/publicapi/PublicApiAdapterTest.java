@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineRole;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -34,6 +35,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PublicApiAdapterTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
+
+    @Test
+    void public_modifier_definitions_can_be_combined_without_internal_types() {
+        ModifierDefinition combined = ModifierDefinition.combine(
+                ModifierDefinition.of("duration", "input", 0.7D, "multiply", false),
+                ModifierDefinition.of("energy", "input", 0.8D, "multiply", false));
+
+        assertThat(combined.modifiers()).hasSize(2);
+    }
 
     @Test
     void adapters_preserve_definition_structure_and_identifiers() {

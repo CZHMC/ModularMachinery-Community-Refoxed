@@ -16,6 +16,12 @@ public record ModifierDefinition(List<MachineModifier> modifiers) {
                 target, scope, modifier, operation, affectsChance)));
     }
 
+    public static ModifierDefinition combine(ModifierDefinition... definitions) {
+        return new ModifierDefinition(List.of(definitions).stream()
+                .flatMap(definition -> definition.modifiers().stream())
+                .toList());
+    }
+
     public ModifierDefinition {
         modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
     }

@@ -3,6 +3,7 @@ ServerEvents.recipes( event => {
         type: 'mmcr:machine_recipe',
         recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
+        parallelized: true,
         requirements: [
             {
                 type: 'mmcr:level',
@@ -42,6 +43,7 @@ ServerEvents.recipes( event => {
         type: 'mmcr:machine_recipe',
         recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
+        parallelized: true,
         requirements: [
             {
                 type: 'mmcr:level',
@@ -81,6 +83,7 @@ ServerEvents.recipes( event => {
         type: 'mmcr:machine_recipe',
         recipe_pool: 'mmcr_kubejs:kubejs_thermal_smelting_furnace',
         tick_time: 300,
+        parallelized: true,
         max_threads: 4,
         requirements: [
             {
