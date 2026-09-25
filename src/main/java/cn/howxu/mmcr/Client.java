@@ -170,6 +170,14 @@ public class Client {
     private static void registerRuntimeResourcePack(AddPackFindersEvent event) {
         if (event.getPackType() == PackType.CLIENT_RESOURCES) {
             event.addRepositorySource(RuntimeMachineResourcePack.source());
+            event.addPackFinders(
+                    MMCR.id("mmcr_arrow_interfaces"),
+                    PackType.CLIENT_RESOURCES,
+                    Component.literal("MMCR 箭头版接口"),
+                    PackSource.BUILT_IN,
+                    false,
+                    Pack.Position.TOP
+            );
         }
     }
 
