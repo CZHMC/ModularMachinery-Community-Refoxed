@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -26,7 +26,7 @@ public record ControllerRuntimeSnapshot(
         long capabilityVersion,
         long modifierVersion,
         long stateVersion,
-        Map<String, List<RecipeModifier>> foundModifiers,
+        Map<String, List<MachineModifier>> foundModifiers,
         Map<Identifier, MachineLevel> foundLevels,
         Set<BlockPos> linkedPortPositions,
         ModuleConnectionStatus moduleConnectionStatus,
@@ -50,7 +50,7 @@ public record ControllerRuntimeSnapshot(
         ControllerRecipePresentation recipePresentation) {
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion, long modifierVersion,
-                                     long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
+                                     long stateVersion, Map<String, List<MachineModifier>> foundModifiers,
                                      Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
@@ -68,7 +68,7 @@ public record ControllerRuntimeSnapshot(
     }
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion,
-                                     long modifierVersion, long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
+                                     long modifierVersion, long stateVersion, Map<String, List<MachineModifier>> foundModifiers,
                                      Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
@@ -86,7 +86,7 @@ public record ControllerRuntimeSnapshot(
     }
 
     public ControllerRuntimeSnapshot(StructureSnapshot structure, long capabilityVersion,
-                                     long modifierVersion, long stateVersion, Map<String, List<RecipeModifier>> foundModifiers,
+                                     long modifierVersion, long stateVersion, Map<String, List<MachineModifier>> foundModifiers,
                                      Map<Identifier, MachineLevel> foundLevels, Set<BlockPos> linkedPortPositions,
                                      ModuleConnectionStatus moduleConnectionStatus, int installedModuleCount,
                                      CraftingStateSnapshot crafting, FactorySnapshot factory,
@@ -107,7 +107,7 @@ public record ControllerRuntimeSnapshot(
 
     public ControllerRuntimeSnapshot {
         structure = structure == null ? StructureSnapshot.empty() : structure;
-        Map<String, List<RecipeModifier>> modifierCopy = new LinkedHashMap<>();
+        Map<String, List<MachineModifier>> modifierCopy = new LinkedHashMap<>();
         if (foundModifiers != null) {
             foundModifiers.forEach((key, value) -> modifierCopy.put(key, List.copyOf(value == null ? List.of() : value)));
         }

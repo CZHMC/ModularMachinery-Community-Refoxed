@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -1507,19 +1508,15 @@ class CraftingRuntimeTest {
                 .recipeTick(context -> {
                     if (context.totalTick() != 2
                             || ((cn.howxu.mmcr.api.publicapi.recipe.ItemRequirement)
-                            context.requirements().getFirst()).count() != 2
+                            context.requirements().getFirst()).count() != 1
                             || ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
                         callbackFailure.compareAndSet(null, "legacy restore did not expose the effective snapshot");
                     }
                 }).build()));
         controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
-                new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
-                        2F, RecipeModifier.Operation.MULTIPLY, false),
-                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.INPUT,
-                        2F, RecipeModifier.Operation.MULTIPLY, false),
-                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT,
-                        2F, RecipeModifier.Operation.MULTIPLY, false))));
-        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 2));
+                MachineModifier.numeric("duration", "input", 2D, "multiply", false),
+                MachineModifier.numeric("output", "output", 2D, "multiply", false))));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
         MachineRecipe recipe = recipe("runtime_legacy_modifier_restore", 1,
                 List.of(input(Items.IRON_INGOT, 1), output(Items.GOLD_NUGGET, 1)));
         RecipeRegistry.registerStatic(recipe);
@@ -1544,7 +1541,7 @@ class CraftingRuntimeTest {
         assertThat(restored.active()).isTrue();
         assertThat(restored.activeRecipe().hasEffectiveExecutionSnapshot()).isTrue();
         assertThat(restored.totalTick()).isEqualTo(2);
-        assertThat(((ItemRequirement) restored.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(2);
+        assertThat(((ItemRequirement) restored.activeRecipe().effectiveRequirements().getFirst()).count()).isEqualTo(1);
         assertThat(((MachineOutput.ItemOutput) restored.activeRecipe().effectiveOutputs().getFirst()).stack().getCount())
                 .isEqualTo(2);
         restored.tick();
@@ -1560,8 +1557,7 @@ class CraftingRuntimeTest {
     void legacy_restore_rejects_progress_beyond_modifier_effective_duration() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
-                new RecipeModifier(IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
-                        0.5F, RecipeModifier.Operation.MULTIPLY, false))));
+                MachineModifier.numeric("duration", "input", 0.5D, "multiply", false))));
         MachineRecipe recipe = recipe("runtime_legacy_invalid_progress", 2, List.of());
         CraftingRuntime saved = new CraftingRuntime(controller, controller.componentRuntime());
 

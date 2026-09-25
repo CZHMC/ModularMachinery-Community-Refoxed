@@ -2,7 +2,7 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
@@ -249,10 +249,10 @@ class MachineRecipeLayoutTest {
         TestBootstrap.registerType(new LevelType(casingType, Component.literal("Casing")));
         TestBootstrap.registerLevel(new MachineLevel(coilLevel, coilType, 0,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
         TestBootstrap.registerLevel(new MachineLevel(casingLevel, casingType, 0,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+                new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
 
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_level_slot_layout"), MMCR.id("layout_test_machine"), 100,
@@ -276,7 +276,7 @@ class MachineRecipeLayoutTest {
         TestBootstrap.registerType(new LevelType(levelType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(levelId, levelType, 0,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+                new ItemStack(Holder.direct(Blocks.COPPER_BLOCK.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
         MachineRecipe recipe = RecipeTestSupport.create(
                 MMCR.id("jei_stage_layout"), MMCR.id("stage_layout_machine"), 100,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),

@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
@@ -1456,7 +1457,7 @@ public final class CraftingRuntime {
     }
 
     private List<RecipeModifier> contextModifiers(ControllerRuntimeSnapshot runtime) {
-        return components.modifierList();
+        return MachineModifier.recipeModifiers(components.modifierList());
     }
 
     /** Returns outputs using the same runtime modifier context as pattern-start preparation. */
@@ -1532,12 +1533,8 @@ public final class CraftingRuntime {
     private int duration(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
         List<RecipeModifier> modifiers = new ArrayList<>(recipe.modifiers());
         modifiers.addAll(contextModifiers(runtime));
-        double levelMultiplier = runtime.foundLevels().values().stream()
-                .mapToDouble(level -> level.modifier().durationMultiplier())
-                .reduce(1D, (left, right) -> left * right);
-        int levelModifiedDuration = (int) Math.round(recipe.getRecipeTotalTickTime() * levelMultiplier);
         return Math.max(1, IntegrationTypeHelper.asInt(
-                IntegrationTypeHelper.applyDuration(modifiers, levelModifiedDuration)));
+                IntegrationTypeHelper.applyDuration(modifiers, recipe.getRecipeTotalTickTime())));
     }
 
     private int currentGameTime() {

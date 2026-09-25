@@ -24,7 +24,6 @@ import cn.howxu.mmcr.api.publicapi.machine.PortTiers;
 import cn.howxu.mmcr.api.publicapi.machine.StructureRequirements;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.StructureStage;
-import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
 import cn.howxu.mmcr.api.publicapi.machine.LevelType;
 import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
@@ -58,13 +57,7 @@ public final class MachineDefinitionConverter {
 
     public static cn.howxu.mmcr.api.machine.level.MachineLevel toMachineLevel(MachineLevel level) {
         return new cn.howxu.mmcr.api.machine.level.MachineLevel(level.id(), level.typeId(), level.priority(),
-                toBlockPredicate(level.statePredicate()), level.representative().stack(), toLevelModifier(level.modifier()));
-    }
-
-    private static cn.howxu.mmcr.api.machine.level.LevelModifier toLevelModifier(LevelModifier modifier) {
-        return new cn.howxu.mmcr.api.machine.level.LevelModifier(modifier.durationMultiplier(),
-                modifier.energyMultiplier(), modifier.outputMultiplier(), modifier.parallelismBonus(),
-                modifier.factoryThreadBonus());
+                toBlockPredicate(level.statePredicate()), level.representative().stack(), level.modifier());
     }
 
     public static BlockArray toBlockArray(PatternDefinition pattern) {
@@ -313,7 +306,7 @@ public final class MachineDefinitionConverter {
     private static cn.howxu.mmcr.api.machine.SmartInterfaceModifier toInternalSmartInterfaceModifier(
             cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier modifier) {
         return new cn.howxu.mmcr.api.machine.SmartInterfaceModifier(modifier.interfaceType(), modifier.target(),
-                RecipeModifier.IOType.valueOf(modifier.io().name()),
+                modifier.scope(),
                 modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(), modifier.atMax(),
                 RecipeModifier.Operation.valueOf(modifier.operation().name()));
     }

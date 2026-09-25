@@ -16,7 +16,7 @@ import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -193,7 +193,7 @@ class MachineRecipeSchemaTest {
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerType(new LevelType(laserType, Component.literal("Lasers")));
         TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:laser"), laserType, 1,
-                new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
         assertThatIllegalArgumentException().isThrownBy(
                 () -> new MachineRecipeBuilderJS("test:recipe").requiresLevel("test:coil", "test:laser"));
@@ -208,7 +208,7 @@ class MachineRecipeSchemaTest {
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Requires Level")));
         TestBootstrap.registerLevel(new MachineLevel(levelId, typeId, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         MachineRegistry.register(new DynamicMachine(recipePoolId, "Requires Level Pool", new BlockArray(Map.of())));
 
         var builder = new MachineRecipeBuilderJS(MMCR.id("requires_level_recipe"))
@@ -240,7 +240,7 @@ class MachineRecipeSchemaTest {
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Schema Level")));
         TestBootstrap.registerLevel(new MachineLevel(levelId, typeId, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY));
+                ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
 
         MachineRecipeSchema.SCHEMA.functions.get("requiresLevel").function()

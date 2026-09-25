@@ -14,7 +14,8 @@ import cn.howxu.mmcr.api.machine.MachineRole;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehavior;
@@ -277,7 +278,8 @@ class ControllerSyncRuntimeTest {
                 new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), BlockPos.ZERO, (String) null)));
         controller.componentRuntime().replaceLevels(Map.of(MMCR.id("sync_level"), new MachineLevel(
                 MMCR.id("sync_level"), MMCR.id("sync_level_type"), 1, new BlockPredicate.Any(),
-                ItemStack.EMPTY, new LevelModifier(1D, 1D, 1D, 2, 0))));
+                ItemStack.EMPTY, new ModifierDefinition(List.of(
+                        MachineModifier.numeric("parallelism", "machine", 2D, "add", false))))));
         controller.setFormed(true);
         RuntimeTestFixtures.republish(controller);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_factory_level_recipe"), machineId, 20,
@@ -451,7 +453,7 @@ class ControllerSyncRuntimeTest {
         Identifier hostId = MMCR.id("sync_host");
         Identifier levelId = MMCR.id("sync_steel");
         MachineLevel level = new MachineLevel(levelId, MMCR.id("sync_level_type"), 1,
-                new BlockPredicate.Any(), ItemStack.EMPTY, LevelModifier.IDENTITY);
+                new BlockPredicate.Any(), ItemStack.EMPTY, ModifierDefinition.EMPTY);
         controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.connected(hostId), 2);
         controller.componentRuntime().replaceLevels(Map.of(levelId, level));
         RuntimeTestFixtures.republish(controller);

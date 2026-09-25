@@ -705,7 +705,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
             SmartInterfaceModifier modifier) {
         return new cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceModifier(modifier.interfaceType(),
                 modifier.target(),
-                cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier.IOType.valueOf(modifier.io().name()),
+                modifier.scope(),
                 modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(), modifier.atMax(),
                 cn.howxu.mmcr.api.publicapi.recipe.modifier.RecipeModifier.Operation.valueOf(modifier.operation().name()));
     }

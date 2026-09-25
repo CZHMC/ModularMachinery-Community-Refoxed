@@ -1,0 +1,66 @@
+package cn.howxu.mmcr.api.recipe;
+
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+/** Pure resolver for one source recipe and one immutable controller modifier snapshot.
+ * @author howxu <dev@howxu.cn>
+ */
+public final class EffectiveRecipeResolver {
+
+    public EffectiveRecipe resolve(MachineRecipe recipe, ControllerRuntimeSnapshot snapshot,
+                                   List<MachineModifier> modifiers) {
+        Objects.requireNonNull(recipe, "recipe");
+        Objects.requireNonNull(snapshot, "snapshot");
+        List<MachineModifier> effectiveModifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
+        List<RecipeModifier> recipeModifiers = MachineModifier.recipeModifiers(effectiveModifiers);
+        List<RecipeModifier> durationModifiers = new ArrayList<>(recipe.modifiers());
+        durationModifiers.addAll(recipeModifiers);
+
+        int duration = boundedInt(IntegrationTypeHelper.applyDuration(durationModifiers,
+                recipe.getRecipeTotalTickTime()), 1, Integer.MAX_VALUE);
+        boolean parallelized = resolveParallelized(recipe.isParallelized(), effectiveModifiers);
+        long parallelism = parallelized
+                ? boundedLong(MachineModifier.apply(effectiveModifiers, ModifierTarget.PARALLELISM,
+                        snapshot.maxParallelism(), false), 1L, Long.MAX_VALUE)
+                : 1L;
+        int factoryThreads = boundedInt(MachineModifier.apply(effectiveModifiers, ModifierTarget.FACTORY_THREADS,
+                snapshot.factory().laneLimit(), false), 1, Integer.MAX_VALUE);
+        int recipeThreads = boundedInt(MachineModifier.apply(effectiveModifiers, ModifierTarget.RECIPE_THREADS,
+                Math.max(1, recipe.maxThreads()), false), 1, Integer.MAX_VALUE);
+
+        return new EffectiveRecipe(recipe, recipe.runtimeRequirements(recipeModifiers),
+                recipe.runtimeMachineOutputs(recipeModifiers), duration, parallelism, factoryThreads, recipeThreads,
+                parallelized, snapshot.structure().version(), snapshot.capabilityVersion(), snapshot.modifierVersion(),
+                snapshot.stateVersion());
+    }
+
+    private static boolean resolveParallelized(boolean recipeValue, List<MachineModifier> modifiers) {
+        boolean enabled = recipeValue;
+        for (MachineModifier modifier : modifiers) {
+            if (modifier instanceof MachineModifier.Parallelized parallelized) {
+                if (!parallelized.value()) return false;
+                enabled = true;
+            }
+        }
+        return enabled;
+    }
+
+    private static int boundedInt(double value, int minimum, int maximum) {
+        if (value <= minimum) return minimum;
+        if (value >= maximum) return maximum;
+        return (int) Math.round(value);
+    }
+
+    private static long boundedLong(double value, long minimum, long maximum) {
+        if (value <= minimum) return minimum;
+        if (value >= maximum) return maximum;
+        return Math.round(value);
+    }
+}

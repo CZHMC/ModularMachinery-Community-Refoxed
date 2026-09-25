@@ -9,7 +9,7 @@ import java.util.Objects;
  */
 public record MachineLevel(Identifier id, Identifier typeId, int priority,
                            BlockPredicate statePredicate, DisplayStack representative,
-                           LevelModifier modifier) {
+                            ModifierDefinition modifier) {
     public MachineLevel {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(typeId, "typeId");

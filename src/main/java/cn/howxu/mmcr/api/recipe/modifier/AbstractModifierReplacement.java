@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Collections;
@@ -12,15 +13,15 @@ public abstract class AbstractModifierReplacement {
     private static final AtomicInteger DEFAULT_NAME_COUNTER = new AtomicInteger(0);
 
     protected final String modifierName;
-    protected final List<RecipeModifier> modifiers;
+    protected final List<MachineModifier> modifiers;
     protected final List<String> description;
     protected final ItemStack descriptiveStack;
 
-    protected AbstractModifierReplacement(List<RecipeModifier> modifiers, String description, ItemStack descriptiveStack) {
+    protected AbstractModifierReplacement(List<MachineModifier> modifiers, String description, ItemStack descriptiveStack) {
         this(null, modifiers, description, descriptiveStack);
     }
 
-    protected AbstractModifierReplacement(String modifierName, List<RecipeModifier> modifiers, String description, ItemStack descriptiveStack) {
+    protected AbstractModifierReplacement(String modifierName, List<MachineModifier> modifiers, String description, ItemStack descriptiveStack) {
         this.modifierName = modifierName == null
                 ? "ReplacementModifier-" + DEFAULT_NAME_COUNTER.getAndIncrement()
                 : modifierName;
@@ -31,7 +32,7 @@ public abstract class AbstractModifierReplacement {
         this.descriptiveStack = descriptiveStack == null ? ItemStack.EMPTY : descriptiveStack;
     }
 
-    protected AbstractModifierReplacement(String modifierName, List<RecipeModifier> modifiers, List<String> description, ItemStack descriptiveStack) {
+    protected AbstractModifierReplacement(String modifierName, List<MachineModifier> modifiers, List<String> description, ItemStack descriptiveStack) {
         this.modifierName = modifierName;
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.description = description == null ? Collections.emptyList() : List.copyOf(description);
@@ -42,7 +43,7 @@ public abstract class AbstractModifierReplacement {
         return modifierName;
     }
 
-    public List<RecipeModifier> getModifiers() {
+    public List<MachineModifier> getModifiers() {
         return modifiers;
     }
 

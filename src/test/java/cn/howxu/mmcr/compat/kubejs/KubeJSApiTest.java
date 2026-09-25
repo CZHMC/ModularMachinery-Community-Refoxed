@@ -4,7 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
@@ -70,7 +71,7 @@ class KubeJSApiTest {
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("API Test")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
@@ -80,6 +81,15 @@ class KubeJSApiTest {
         assertThat(api.state("minecraft:oak_log[axis=x]")).isEqualTo(new BlockPredicate.OfBlockState(
                 Blocks.OAK_LOG.defaultBlockState().setValue(BlockStateProperties.AXIS,
                         Direction.Axis.X)));
+    }
+
+    @Test
+    void modifier_api_creates_unified_modifier_definitions() {
+        MachineModifier.Numeric modifier = api.modifier("duration", "input", 0.5D, "multiply", false);
+
+        assertThat(modifier.target().key()).isEqualTo("duration");
+        assertThat(api.modifierDefinition(List.of(modifier)).modifiers()).containsExactly(modifier);
+        assertThat(api.modifier("parallelized", "recipe", false).value()).isFalse();
     }
 
     @Test
@@ -254,7 +264,7 @@ class KubeJSApiTest {
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(otherType, Component.literal("Other")));
         TestBootstrap.registerLevel(new MachineLevel(MMCR.id("api_other_level"), otherType, 0,
-                new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
 
         assertThatThrownBy(() -> api.levelRequirement(TEST_LEVEL_TYPE.toString(), "mmcr:api_other_level"))
@@ -384,9 +394,8 @@ class KubeJSApiTest {
     }
 
     @Test
-    void modifier_definition_factory_wraps_recipe_modifiers() {
-        var modifier = new RecipeModifier("duration", RecipeModifier.IOType.INPUT, 0.5F,
-                RecipeModifier.Operation.MULTIPLY, false);
+    void modifier_definition_factory_wraps_machine_modifiers() {
+        var modifier = MachineModifier.numeric("duration", "input", 0.5D, "multiply", false);
 
         ModifierDefinition definition = api.modifierDefinition(List.of(modifier));
 

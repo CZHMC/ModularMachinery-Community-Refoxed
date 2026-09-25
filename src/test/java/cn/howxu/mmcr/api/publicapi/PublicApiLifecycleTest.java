@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.publicapi;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -27,12 +28,11 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
 import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
-import cn.howxu.mmcr.api.publicapi.machine.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineBuilder;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.machine.PatternBuilder;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.machine.LevelType;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeDefinition;
@@ -238,7 +238,7 @@ class PublicApiLifecycleTest {
         event.registerLevel(new cn.howxu.mmcr.api.machine.level.MachineLevel(levelId, typeId, 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock(Blocks.FURNACE),
                 ItemStack.EMPTY,
-                cn.howxu.mmcr.api.machine.level.LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         event.registerModifier(modifierId, new ModifierDefinition(List.of()));
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
@@ -295,13 +295,17 @@ class PublicApiLifecycleTest {
         event.registerLevel(new MachineLevel(levelId, typeId, 2,
                 BlockPredicate.block(Blocks.FURNACE),
                 DisplayStack.of(new ItemStack(Blocks.FURNACE)),
-                new LevelModifier(0.5D, 1D, 1D, 1, 2)));
+                new ModifierDefinition(List.of(
+                        MachineModifier.numeric("duration", "input", 0.5D, "multiply", false),
+                        MachineModifier.numeric("parallelism", "machine", 1D, "add", false),
+                        MachineModifier.numeric("factory_threads", "machine", 2D, "add", false)))));
 
         var snapshot = event.freeze();
 
         assertThat(snapshot.levelTypes().get(typeId)).isInstanceOf(cn.howxu.mmcr.api.machine.level.LevelType.class);
         assertThat(snapshot.levels().get(levelId).priority()).isEqualTo(2);
-        assertThat(snapshot.levels().get(levelId).modifier().parallelismBonus()).isEqualTo(1);
+        assertThat(snapshot.levels().get(levelId).modifier().modifiers()).contains(
+                MachineModifier.numeric("parallelism", "machine", 1D, "add", false));
     }
 
     @Test

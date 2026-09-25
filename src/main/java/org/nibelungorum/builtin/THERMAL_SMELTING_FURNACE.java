@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
 import cn.howxu.mmcr.api.publicapi.machine.*;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
@@ -20,6 +21,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.util.Map;
+import java.util.List;
 
 import static cn.howxu.mmcr.api.publicapi.ApiIds.id;
 import static cn.howxu.mmcr.api.publicapi.machine.BlockPredicate.any;
@@ -68,7 +70,9 @@ public class THERMAL_SMELTING_FURNACE {
                 1,
                 BlockPredicate.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
                 DisplayStack.of(new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY))),
-                new LevelModifier(0.9d, 1D, 1D, 0, 0))
+                new ModifierDefinition(List.of(
+                        MachineModifier.numeric(
+                                "duration", "input", 0.9D, "multiply", false))))
         );
 
         event.registerLevel(new MachineLevel(
@@ -77,7 +81,15 @@ public class THERMAL_SMELTING_FURNACE {
                 3,
                 BlockPredicate.blockState(Blocks.DIAMOND_BLOCK.defaultBlockState()),
                 DisplayStack.of(new ItemStack(Holder.direct(Blocks.DIAMOND_BLOCK.asItem(), DataComponentMap.EMPTY))),
-                new LevelModifier(0.7d, 0.8D, 1D, 4, 1))
+                new ModifierDefinition(List.of(
+                        MachineModifier.numeric(
+                                "duration", "input", 0.7D, "multiply", false),
+                        MachineModifier.numeric(
+                                "energy", "input", 0.8D, "multiply", false),
+                        MachineModifier.numeric(
+                                "parallelism", "machine", 4D, "add", false),
+                        MachineModifier.numeric(
+                                "factory_threads", "machine", 1D, "add", false))))
         );
 
         event.registerLevel(new MachineLevel(
@@ -86,7 +98,17 @@ public class THERMAL_SMELTING_FURNACE {
                 2,
                 BlockPredicate.blockState(Blocks.GOLD_BLOCK.defaultBlockState()),
                 DisplayStack.of(new ItemStack(Holder.direct(Blocks.GOLD_BLOCK.asItem(), DataComponentMap.EMPTY))),
-                new LevelModifier(0.6d, 0.7D, 2D, 6, 2))
+                new ModifierDefinition(List.of(
+                        MachineModifier.numeric(
+                                "duration", "input", 0.6D, "multiply", false),
+                        MachineModifier.numeric(
+                                "energy", "input", 0.7D, "multiply", false),
+                        MachineModifier.numeric(
+                                "output", "output", 2D, "multiply", false),
+                        MachineModifier.numeric(
+                                "parallelism", "machine", 6D, "add", false),
+                        cn.howxu.mmcr.api.machine.modifier.MachineModifier.numeric(
+                                "factory_threads", "machine", 2D, "add", false))))
         );
 
         if (!event.structures().containsKey(THERMAL_SMELTING_FURNACE)) {

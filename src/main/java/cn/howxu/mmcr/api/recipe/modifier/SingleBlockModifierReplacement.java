@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -23,7 +24,7 @@ public class SingleBlockModifierReplacement extends AbstractModifierReplacement 
     public SingleBlockModifierReplacement(
             String modifierName,
             BlockPredicate replacement,
-            List<RecipeModifier> modifiers,
+            List<MachineModifier> modifiers,
             ItemStack descriptiveStack) {
         super(modifierName, modifiers, List.of(), descriptiveStack);
         this.replacement = Objects.requireNonNull(replacement, "replacement");

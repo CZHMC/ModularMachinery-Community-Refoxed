@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -79,7 +79,7 @@ class RecipeCandidateIndexTest {
         TestBootstrap.registerType(new LevelType(LEVEL_TYPE, Component.literal("Recipe Search Level")));
         TestBootstrap.registerLevel(new MachineLevel(LEVEL, LEVEL_TYPE, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
     }
 
     @BeforeEach

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -235,7 +235,7 @@ class MachineRecipeTest {
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(kanthal, coilType, 1,
-                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         var recipe = RecipeTestSupport.create(
                 Identifier.parse("test:levelled"),
                 Identifier.parse("test:machine"),
@@ -264,9 +264,9 @@ class MachineRecipeTest {
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(coilType, Component.literal("Coils")));
         TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:kanthal"), coilType, 1,
-                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.registerLevel(new MachineLevel(Identifier.parse("test:nichrome"), coilType, 2,
-                new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
         assertThatThrownBy(() -> RecipeTestSupport.create(
                 Identifier.parse("test:duplicate_levels"), Identifier.parse("test:machine"), 20,

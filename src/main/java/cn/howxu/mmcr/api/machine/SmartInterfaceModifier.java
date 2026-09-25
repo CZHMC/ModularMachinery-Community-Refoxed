@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
 /**
@@ -8,29 +9,44 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record SmartInterfaceModifier(String interfaceType, String target, RecipeModifier.IOType io,
+public record SmartInterfaceModifier(String interfaceType, String target, String scope,
         boolean affectsChance, float minValue, float maxValue, float atMin, float atMax,
         RecipeModifier.Operation operation) {
     public SmartInterfaceModifier {
         if (interfaceType == null || interfaceType.isBlank()) throw new IllegalArgumentException("interfaceType blank");
         if (target == null || target.isBlank()) throw new IllegalArgumentException("target blank");
-        io = io == null ? RecipeModifier.IOType.INPUT : io;
+        if (scope == null || scope.isBlank()) throw new IllegalArgumentException("scope blank");
         operation = operation == null ? RecipeModifier.Operation.MULTIPLY : operation;
         if (!Float.isFinite(minValue) || !Float.isFinite(maxValue)
                 || !Float.isFinite(atMin) || !Float.isFinite(atMax)) {
             throw new IllegalArgumentException("smart interface modifier values must be finite");
         }
+        MachineModifier.numeric(normalizedTarget(target, scope), scope, atMin, operation.name(), affectsChance);
+        MachineModifier.numeric(normalizedTarget(target, scope), scope, atMax, operation.name(), affectsChance);
+    }
+
+    public SmartInterfaceModifier(String interfaceType, String target, RecipeModifier.IOType io,
+            boolean affectsChance, float minValue, float maxValue, float atMin, float atMax,
+            RecipeModifier.Operation operation) {
+        this(interfaceType, normalizedTarget(target, io == null ? "input" : io.getKey()),
+                io == null ? "input" : io.getKey(), affectsChance, minValue, maxValue, atMin, atMax, operation);
+    }
+
+    public static SmartInterfaceModifier numeric(String type, String target, String scope, float min, float max,
+            float atMin, float atMax, String operation, boolean affectsChance) {
+        return new SmartInterfaceModifier(type, normalizedTarget(target, scope), scope, affectsChance,
+                min, max, atMin, atMax, RecipeModifier.Operation.valueOf(operation.toUpperCase(java.util.Locale.ROOT)));
     }
 
     public static SmartInterfaceModifier duration(String type, float min, float max, float atMin, float atMax,
             RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_DURATION, RecipeModifier.IOType.INPUT,
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_DURATION, "input",
                 false, min, max, atMin, atMax, operation);
     }
 
     public static SmartInterfaceModifier energy(String type, float min, float max, float atMin, float atMax,
             RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_ENERGY, RecipeModifier.IOType.INPUT,
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_ENERGY, "input",
                 false, min, max, atMin, atMax, operation);
     }
 
@@ -46,8 +62,8 @@ public record SmartInterfaceModifier(String interfaceType, String target, Recipe
                 atMax, operation);
     }
 
-    public RecipeModifier toRecipeModifier(float value) {
-        return new RecipeModifier(target, io, mappedValue(value), operation, affectsChance);
+    public MachineModifier.Numeric toModifier(float value) {
+        return MachineModifier.numeric(target, scope, mappedValue(value), operation.name(), affectsChance);
     }
 
     public float mappedValue(float value) {
@@ -55,5 +71,15 @@ public record SmartInterfaceModifier(String interfaceType, String target, Recipe
         float t = (value - minValue) / (maxValue - minValue);
         t = Math.clamp(t, 0F, 1F);
         return atMin + (atMax - atMin) * t;
+    }
+
+    public RecipeModifier.IOType io() {
+        return "output".equals(scope) ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT;
+    }
+
+    private static String normalizedTarget(String target, String scope) {
+        if ((IntegrationTypeHelper.TARGET_ITEM.equals(target) || IntegrationTypeHelper.TARGET_FLUID.equals(target))
+                && "output".equalsIgnoreCase(scope)) return "output";
+        return target;
     }
 }

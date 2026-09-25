@@ -1,16 +1,16 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
-import java.util.Map;
+import java.util.Objects;
 
 /**
  * Startup-script builder for machine levels.
@@ -21,7 +21,7 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
     public transient Identifier typeId;
     public transient int priority;
     public transient BlockState state;
-    public transient LevelModifier modifier = LevelModifier.IDENTITY;
+    public transient ModifierDefinition modifier = ModifierDefinition.EMPTY;
 
     public MachineLevelBuilderJS(Identifier id) {
         super(id);
@@ -50,19 +50,8 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
         return this;
     }
 
-    public MachineLevelBuilderJS modifier(Map<String, Object> modifier) {
-        LevelModifier defaults = LevelModifier.IDENTITY;
-        double durationMultiplier = doubleValue(modifier, "durationMultiplier", defaults.durationMultiplier());
-        double energyMultiplier = doubleValue(modifier, "energyMultiplier", defaults.energyMultiplier());
-        double outputMultiplier = doubleValue(modifier, "outputMultiplier", defaults.outputMultiplier());
-        if (durationMultiplier <= 0D || energyMultiplier <= 0D || outputMultiplier <= 0D) {
-            throw new IllegalArgumentException("Machine level multiplier values must be positive: "
-                    + (durationMultiplier <= 0D ? "durationMultiplier"
-                    : energyMultiplier <= 0D ? "energyMultiplier" : "outputMultiplier"));
-        }
-        this.modifier = new LevelModifier(durationMultiplier, energyMultiplier, outputMultiplier,
-                intValue(modifier, "parallelismBonus", defaults.parallelismBonus()),
-                intValue(modifier, "factoryThreadBonus", defaults.factoryThreadBonus()));
+    public MachineLevelBuilderJS modifier(ModifierDefinition modifier) {
+        this.modifier = Objects.requireNonNull(modifier, "modifier");
         return this;
     }
 
@@ -80,15 +69,5 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
     public MachineLevelBuilderJS register() {
         registerObject();
         return this;
-    }
-
-    private static double doubleValue(Map<String, Object> modifier, String key, double defaultValue) {
-        Object value = modifier.get(key);
-        return value == null ? defaultValue : ((Number) value).doubleValue();
-    }
-
-    private static int intValue(Map<String, Object> modifier, String key, int defaultValue) {
-        Object value = modifier.get(key);
-        return value == null ? defaultValue : ((Number) value).intValue();
     }
 }

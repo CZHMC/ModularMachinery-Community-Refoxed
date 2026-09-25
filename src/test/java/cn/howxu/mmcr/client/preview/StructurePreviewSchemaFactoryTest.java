@@ -11,7 +11,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -84,7 +84,7 @@ class StructurePreviewSchemaFactoryTest {
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("Preview Test")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
@@ -383,7 +383,7 @@ class StructurePreviewSchemaFactoryTest {
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(levelType, Component.literal(levelType.toString())));
         TestBootstrap.registerLevel(new MachineLevel(MMCR.id("rotated_directional_level_0"), levelType, 0,
-                new BlockPredicate.OfBlockState(southState), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(southState), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
 
         BlockPos rawPosition = new BlockPos(1, 0, 0);
@@ -549,7 +549,7 @@ class StructurePreviewSchemaFactoryTest {
             for (int index = 0; index < entry.getValue().size(); index++) {
                 var block = entry.getValue().get(index);
                 TestBootstrap.registerLevel(new MachineLevel(MMCR.id(entry.getKey().getPath() + "_" + index), entry.getKey(), index,
-                        new BlockPredicate.OfBlockState(block.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                        new BlockPredicate.OfBlockState(block.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
             }
         }
         TestBootstrap.freezeRegistration();

@@ -18,8 +18,8 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.publicapi.machine.TickBehaviorContext;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
@@ -566,7 +566,7 @@ public final class MachineControllerRuntime {
     }
 
     void publishComponentState(List<ProcessingComponent> nextComponents,
-                               Map<String, List<RecipeModifier>> modifiers,
+                               Map<String, List<MachineModifier>> modifiers,
                                Map<Identifier, MachineLevel> levels,
                                Set<BlockPos> linkedPositions) {
         components.replaceComponents(nextComponents);

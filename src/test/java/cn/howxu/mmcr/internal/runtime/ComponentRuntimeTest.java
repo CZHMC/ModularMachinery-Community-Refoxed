@@ -18,10 +18,10 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
@@ -85,12 +85,11 @@ class ComponentRuntimeTest {
     void replacement_methods_report_only_effective_changes() {
         ComponentRuntime runtime = new ComponentRuntime();
         ProcessingComponent component = new ProcessingComponent(null, "input", BlockPos.ZERO);
-        Map<String, List<RecipeModifier>> modifiers = Map.of("modifier", List.of(
-                new RecipeModifier("modifier", RecipeModifier.IOType.INPUT, 1F,
-                        RecipeModifier.Operation.ADD, false)));
+        Map<String, List<MachineModifier>> modifiers = Map.of("modifier", List.of(
+                MachineModifier.numeric("duration", "input", 1D, "add", false)));
         Identifier levelId = Identifier.fromNamespaceAndPath("mmcr_test", "replacement_level");
         MachineLevel level = new MachineLevel(levelId, levelId, 1, new BlockPredicate.Any(),
-                ItemStack.EMPTY, LevelModifier.IDENTITY);
+                ItemStack.EMPTY, ModifierDefinition.EMPTY);
         ModuleConnectionStatus connection = ModuleConnectionStatus.connected(
                 Identifier.fromNamespaceAndPath("mmcr_test", "host"));
 
@@ -288,7 +287,8 @@ class ComponentRuntimeTest {
         ParallelControllerBlockEntity controller = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE,
                 new BlockPos(1, 0, 0), parallelBlock.defaultBlockState());
         MachineLevel level = new MachineLevel(levelId, levelId, 1, new BlockPredicate.Any(), ItemStack.EMPTY,
-                new LevelModifier(1D, 1D, 1D, -Integer.MAX_VALUE, 0));
+                new ModifierDefinition(List.of(MachineModifier.numeric(
+                        "parallelism", "machine", -Integer.MAX_VALUE, "add", false))));
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceComponents(List.of(component(controller, "controller")));
         runtime.replaceLevels(Map.of(levelId, level));
@@ -309,11 +309,9 @@ class ComponentRuntimeTest {
 
     @Test
     void modifier_version_changes_only_for_effective_modifier_changes_and_preserves_order() {
-        RecipeModifier first = new RecipeModifier("first", RecipeModifier.IOType.INPUT, 1F,
-                RecipeModifier.Operation.ADD, false);
-        RecipeModifier second = new RecipeModifier("second", RecipeModifier.IOType.OUTPUT, 2F,
-                RecipeModifier.Operation.MULTIPLY, false);
-        Map<String, List<RecipeModifier>> modifiers = new LinkedHashMap<>();
+        MachineModifier first = MachineModifier.numeric("duration", "input", 1D, "add", false);
+        MachineModifier second = MachineModifier.numeric("output", "output", 2D, "multiply", false);
+        Map<String, List<MachineModifier>> modifiers = new LinkedHashMap<>();
         modifiers.put("first", List.of(first));
         modifiers.put("second", List.of(second));
         ComponentRuntime runtime = new ComponentRuntime();
@@ -332,13 +330,12 @@ class ComponentRuntimeTest {
 
     @Test
     void modifier_list_reuses_immutable_content_until_modifiers_change() {
-        RecipeModifier modifier = new RecipeModifier("cached", RecipeModifier.IOType.INPUT, 1F,
-                RecipeModifier.Operation.ADD, false);
+        MachineModifier modifier = MachineModifier.numeric("duration", "input", 1D, "add", false);
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceModifiers(Map.of("cached", List.of(modifier)));
 
-        List<RecipeModifier> first = runtime.modifierList();
-        List<RecipeModifier> second = runtime.modifierList();
+        List<MachineModifier> first = runtime.modifierList();
+        List<MachineModifier> second = runtime.modifierList();
 
         assertThat(second).isSameAs(first);
         assertThat(first).containsExactly(modifier);
@@ -372,7 +369,7 @@ class ComponentRuntimeTest {
     void levels_links_and_module_state_are_published_in_immutable_component_views() {
         Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "level");
         MachineLevel level = new MachineLevel(id, id, 1, new BlockPredicate.Any(),
-                ItemStack.EMPTY, LevelModifier.IDENTITY);
+                ItemStack.EMPTY, ModifierDefinition.EMPTY);
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceLevels(Map.of(id, level));
         runtime.replaceLinkedPortPositions(Set.of(BlockPos.ZERO));
@@ -408,8 +405,7 @@ class ComponentRuntimeTest {
         differentSpeedup.set(DataComponents.MAX_STACK_SIZE, 16);
         ModifierRegistry.installSnapshot(Map.of(speedupId,
                         new ModifierDefinition(List.of(
-                                new RecipeModifier("item", RecipeModifier.IOType.INPUT, 1F,
-                                        RecipeModifier.Operation.ADD, false)))),
+                                MachineModifier.numeric("parallelism", "machine", 1D, "add", false)))),
                 Map.of(speedupId, List.of(speedup)));
 
         ComponentRuntime runtime = new ComponentRuntime();
@@ -422,8 +418,8 @@ class ComponentRuntimeTest {
         assertThat(runtime.upgradeItems()).allSatisfy(stack -> assertThat(stack).isNotSameAs(speedup)
                 .isNotSameAs(sameSpeedup).isNotSameAs(differentSpeedup));
         assertThat(runtime.upgradeModifierUnits().get(speedupId)).isEqualTo(5L);
-        assertThat(runtime.modifierList()).containsExactly(new RecipeModifier("item", RecipeModifier.IOType.INPUT,
-                5F, RecipeModifier.Operation.ADD, false));
+        assertThat(runtime.modifierList()).containsExactly(
+                MachineModifier.numeric("parallelism", "machine", 5D, "add", false));
     }
 
     @Test

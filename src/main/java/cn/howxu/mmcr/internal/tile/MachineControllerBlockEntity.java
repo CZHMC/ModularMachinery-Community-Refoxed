@@ -24,6 +24,8 @@ import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
@@ -635,6 +637,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     void onSmartInterfaceValueChanged() {
         if (level == null || level.isClientSide()) return;
+        refreshSmartInterfaceModifiers();
         CraftingRuntime craftingRuntime = runtime.craftingRuntime();
         craftingRuntime.invalidateForSmartInterfaceChange();
         runtime.factoryRuntime().invalidateForSmartInterfaceChange();
@@ -1305,14 +1308,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         if (machine == null || !machine.hasFactory()) return 1;
         int aggregatedThreads = factorySchedulerThreadCount();
-        int levelBonus = runtime.componentRuntime().foundLevels().entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
-                .map(Map.Entry::getValue)
-                .mapToInt(foundLevel -> foundLevel.modifier().factoryThreadBonus())
-                .sum();
         long extraThreads = Math.max(0L, (long) aggregatedThreads - 1L);
-        long effective = Math.max(1L, machine.factoryThreadLimit()) + extraThreads + levelBonus;
-        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, effective));
+        double effective = MachineModifier.apply(runtime.componentRuntime().modifierList(),
+                ModifierTarget.FACTORY_THREADS,
+                Math.max(1L, machine.factoryThreadLimit()) + extraThreads, false);
+        return (int) Math.max(1D, Math.min(Integer.MAX_VALUE, Math.round(effective)));
     }
 
     public FactoryRecipeScheduler factoryScheduler() {
@@ -2868,7 +2868,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             refreshModuleConnectionState();
             boolean modifiersAllowed = allowsModifiers(matchedMachine);
             runtime.setModifiersAllowed(modifiersAllowed);
-            Map<String, List<RecipeModifier>> foundModifiers = collectFoundModifiers(replacements);
+            Map<String, List<MachineModifier>> foundModifiers = collectFoundModifiers(replacements);
             runtime.publishComponentState(runtime.components(), foundModifiers, levels, previousLinkedPortPositions);
             refreshCriticalStructureChunks(rotatedPattern, compiledPattern, facing);
             if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
@@ -2933,16 +2933,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return claims;
     }
 
-    private Map<String, List<RecipeModifier>> collectFoundModifiers(
+    private Map<String, List<MachineModifier>> collectFoundModifiers(
             Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
-        Map<String, List<RecipeModifier>> nextModifiers = new LinkedHashMap<>();
+        Map<String, List<MachineModifier>> nextModifiers = new LinkedHashMap<>();
         if (level != null) {
             for (var entry : replacements.entrySet()) {
                 BlockState actual = level.getBlockState(getBlockPos().offset(entry.getKey()));
                 for (SingleBlockModifierReplacement replacement : entry.getValue()) {
                     boolean matched = replacement.getReplacement().matches(actual);
                     var registeredDefinition = ModifierRegistry.get(replacement.getModifierId());
-                    List<RecipeModifier> modifiers = replacement.getModifiers();
+                    List<MachineModifier> modifiers = replacement.getModifiers();
                     if (modifiers.isEmpty() && registeredDefinition != null) {
                         modifiers = registeredDefinition.modifiers();
                     }
@@ -2971,7 +2971,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void updateComponents(StructureSnapshot previousStructure, Machine matchedMachine,
                                   BlockArray matchedPattern, @Nullable CompiledMachinePattern compiledPattern,
                                   Direction facing, Set<BlockPos> previousLinkedPortPositions,
-                                  Map<String, List<RecipeModifier>> foundModifiers,
+                                   Map<String, List<MachineModifier>> foundModifiers,
                                   Map<Identifier, MachineLevel> foundLevels) {
         List<FactorySchedulerBlockEntity> previousFactories = factoryComponents();
         for (FactorySchedulerBlockEntity factory : previousFactories) factory.bindOwner(null);
@@ -3091,7 +3091,35 @@ public class MachineControllerBlockEntity extends BlockEntity {
             nextComponents.add(new ProcessingComponent(component, container, worldPos, relativePos, matchedPattern.tagsAt(relativePos)));
         }
         runtime.publishComponentState(nextComponents, foundModifiers, foundLevels, nextLinkedPortPositions);
+        refreshSmartInterfaceModifiers();
         invalidateFactoryCapacity();
+    }
+
+    private void refreshSmartInterfaceModifiers() {
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
+        Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        MachineRegistration registration = machine == null ? null
+                : MachineDefinitions.getRegistration(machine.registryName());
+        if (registration == null || registration.smartInterfaceModifiers().isEmpty()) {
+            runtime.componentRuntime().replaceSmartInterfaceModifiers(List.of());
+            return;
+        }
+        List<SmartInterfaceBlockEntity> interfaces = runtime.components().stream()
+                .map(ProcessingComponent::getContainer)
+                .filter(SmartInterfaceBlockEntity.class::isInstance)
+                .map(SmartInterfaceBlockEntity.class::cast)
+                .sorted(Comparator.comparing(SmartInterfaceBlockEntity::getBlockPos))
+                .toList();
+        List<MachineModifier> modifiers = new ArrayList<>();
+        for (SmartInterfaceBlockEntity smartInterface : interfaces) {
+            for (cn.howxu.mmcr.api.machine.SmartInterfaceModifier mapping
+                    : registration.smartInterfaceModifiers()) {
+                smartInterface.value(mapping.interfaceType())
+                        .map(mapping::toModifier)
+                        .ifPresent(modifiers::add);
+            }
+        }
+        runtime.componentRuntime().replaceSmartInterfaceModifiers(modifiers);
     }
 
     private List<UpgradeBusBlockEntity> upgradeBusComponents(BlockArray pattern) {
@@ -3713,7 +3741,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         try {
             result = new RecipeSearchTask(current, machineId, current.structure().version(),
                     maxParallelism, candidates, lockedRecipeId, componentRuntime().capabilities(),
-                    componentRuntime().modifierList()).compute();
+                    MachineModifier.recipeModifiers(componentRuntime().modifierList())).compute();
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
             clearPendingConflictStart();

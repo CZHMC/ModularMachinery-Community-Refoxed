@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
@@ -272,7 +272,7 @@ class FactoryControllerScreenTest {
     private static MachineLevel detailLevel(int index) {
         return new MachineLevel(DETAIL_LEVEL_IDS.get(index), DETAIL_LEVEL_TYPE_ID, index + 1,
                 new BlockPredicate.OfBlockState(detailBlock(index).defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY);
+                ItemStack.EMPTY, ModifierDefinition.EMPTY);
     }
 
     private static Block detailBlock(int index) {

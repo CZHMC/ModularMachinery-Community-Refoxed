@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
@@ -385,7 +385,7 @@ class AsyncFactoryExecutionTest {
         TestBootstrap.registerType(new LevelType(levelType, Component.literal("Factory Test Level")));
         TestBootstrap.registerLevel(new MachineLevel(requiredLevel, levelType, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         MachineRecipe specific = RecipeTestSupport.create(MMCR.id("level_blocked_specific"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(
                 new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),

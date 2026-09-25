@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.publicapi.ApiRegistrationException;
 import cn.howxu.mmcr.api.publicapi.recipe.FluidInput;
@@ -71,7 +72,7 @@ public final class MachineRecipeConverter {
             ModifierDefinition modifier = modifiers.get(id);
             if (modifier == null) throw new ApiRegistrationException("Recipe " + definition.id()
                     + " refers to unknown machine modifier " + id);
-            return modifier.modifiers();
+            return MachineModifier.recipeModifiers(modifier.modifiers());
         }).flatMap(List::stream).toList();
         requirements.stream().filter(LevelRequirement.class::isInstance).map(LevelRequirement.class::cast).forEach(level -> {
             if (!levels.containsKey(level.levelId())) throw new ApiRegistrationException("Recipe " + definition.id()

@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
@@ -172,7 +172,7 @@ class MenuScreenTest {
         LevelType levelType = new LevelType(levelTypeId, Component.literal("Menu Test Level"));
         MachineLevel level = new MachineLevel(levelId, levelTypeId, 1,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY);
+                ItemStack.EMPTY, ModifierDefinition.EMPTY);
         TestBootstrap.registerType(levelType);
         TestBootstrap.registerLevel(level);
 

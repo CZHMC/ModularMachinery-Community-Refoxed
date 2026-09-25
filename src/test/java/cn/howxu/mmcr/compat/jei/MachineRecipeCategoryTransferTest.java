@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
@@ -219,7 +219,7 @@ class MachineRecipeCategoryTransferTest {
     private static void registerLevel(Identifier id, Identifier typeId, int priority, Block block) {
         TestBootstrap.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
-                new ItemStack(block.asItem()), LevelModifier.IDENTITY));
+                new ItemStack(block.asItem()), ModifierDefinition.EMPTY));
     }
 
     @SuppressWarnings("unchecked")

@@ -13,7 +13,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -310,7 +310,7 @@ class MachineControllerLevelTest {
 
     private static MachineLevel level(String id, int priority, Block block) {
         return new MachineLevel(Identifier.parse(id), COIL_TYPE, priority,
-                new BlockPredicate.OfBlockState(block.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY);
+                new BlockPredicate.OfBlockState(block.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY);
     }
 
     private static void setField(Class<?> declaringClass, Object target, String name, Object value) throws ReflectiveOperationException {

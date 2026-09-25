@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
@@ -944,7 +945,7 @@ public final class FactoryRuntime {
             ordered = filterIndexedCandidates(ordered, catalog, inputItems, lockedRecipeIds);
         }
         return new FactorySearchContext(snapshot, ordered, controller.componentRuntime().capabilities(),
-                controller.componentRuntime().modifierList(), catalog.version(),
+                MachineModifier.recipeModifiers(controller.componentRuntime().modifierList()), catalog.version(),
                 controller.resourceAvailabilityEpoch(), maxParallelism, gameTime);
     }
 

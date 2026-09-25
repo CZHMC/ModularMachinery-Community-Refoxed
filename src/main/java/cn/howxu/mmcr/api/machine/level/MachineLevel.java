@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine.level;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -13,7 +14,7 @@ import java.util.Objects;
  */
 public record MachineLevel(Identifier id, Identifier typeId, int priority,
                            BlockPredicate statePredicate, ItemStack representative,
-                           LevelModifier modifier) {
+                            ModifierDefinition modifier) {
     public MachineLevel {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(typeId, "typeId");

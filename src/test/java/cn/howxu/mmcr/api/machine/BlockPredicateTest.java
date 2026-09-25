@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -118,9 +118,9 @@ class BlockPredicateTest {
         var typeId = MMCR.id("block_predicate_test");
         TestBootstrap.registerType(new LevelType(typeId, Component.literal("Test")));
         TestBootstrap.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_copper"), typeId, 1,
-                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.registerLevel(new MachineLevel(MMCR.id("block_predicate_test_iron"), typeId, 2,
-                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
         var predicate = new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),

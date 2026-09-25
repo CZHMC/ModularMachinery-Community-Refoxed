@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
@@ -43,8 +44,7 @@ class MachineControllerModifierTest {
     @Test
     void id_only_replacement_uses_the_registered_modifier_definition() throws Exception {
         var modifierId = MMCR.id("registered_structure_modifier");
-        var modifier = new RecipeModifier("item", RecipeModifier.IOType.INPUT, 2F,
-                RecipeModifier.Operation.MULTIPLY, false);
+        var modifier = MachineModifier.numeric("duration", "input", 2D, "multiply", false);
         ModifierRegistry.installSnapshot(Map.of(modifierId, new ModifierDefinition(List.of(modifier))));
 
         var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
@@ -52,7 +52,7 @@ class MachineControllerModifierTest {
         var replacement = new SingleBlockModifierReplacement(modifierId,
                 new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK));
 
-        Map<String, List<RecipeModifier>> found = collectFoundModifiers(controller,
+        Map<String, List<MachineModifier>> found = collectFoundModifiers(controller,
                 Map.of(BlockPos.ZERO, List.of(replacement)));
 
         assertThat(replacement.getModifiers()).isEmpty();
@@ -81,12 +81,12 @@ class MachineControllerModifierTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, List<RecipeModifier>> collectFoundModifiers(
+    private static Map<String, List<MachineModifier>> collectFoundModifiers(
             MachineControllerBlockEntity controller,
             Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) throws Exception {
         Method method = MachineControllerBlockEntity.class
                 .getDeclaredMethod("collectFoundModifiers", Map.class);
         method.setAccessible(true);
-        return (Map<String, List<RecipeModifier>>) method.invoke(controller, replacements);
+        return (Map<String, List<MachineModifier>>) method.invoke(controller, replacements);
     }
 }

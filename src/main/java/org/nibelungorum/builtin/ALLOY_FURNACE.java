@@ -62,7 +62,7 @@ public class ALLOY_FURNACE {
         event.registerModifier(
                 id("alloy_furnace_gold_doubling"),
                 ModifierDefinition.of(
-                        "item",
+                        "output",
                         "output",
                         2.0F,
                         "multiply",

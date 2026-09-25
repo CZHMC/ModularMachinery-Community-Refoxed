@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -1031,7 +1031,7 @@ class MachineRecipeDisplayTest {
                                       int priority, Block block) {
         TestBootstrap.registerLevel(new MachineLevel(id, typeId, priority,
                 new BlockPredicate.OfBlockState(block.defaultBlockState()),
-                new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)), LevelModifier.IDENTITY));
+                new ItemStack(Holder.direct(block.asItem(), DataComponentMap.EMPTY)), ModifierDefinition.EMPTY));
     }
 
     private static ItemStack namedSharpnessFourSword() {

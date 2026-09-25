@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailureReport;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -195,7 +196,8 @@ public final class RecipeSearchTask {
 
     private static List<RecipeModifier> flattenModifiers(ControllerRuntimeSnapshot snapshot) {
         return snapshot == null ? List.of()
-                : snapshot.foundModifiers().values().stream().flatMap(List::stream).toList();
+                : MachineModifier.recipeModifiers(snapshot.foundModifiers().values().stream()
+                        .flatMap(List::stream).toList());
     }
 
     private List<MachineRecipe> searchCandidates() {

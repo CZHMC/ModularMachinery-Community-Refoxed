@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -136,7 +137,8 @@ public final class MachineRecipeThread extends RecipeThread {
         AsyncRequirementPlanner.RecipeSearchRequest request;
         try {
             request = AsyncRequirementPlanner.captureRecipeSearch(snapshot, candidatesForMachine(candidates), availableParallelism,
-                    lockedRecipeId, controller.componentRuntime().capabilities(), controller.componentRuntime().modifierList());
+                    lockedRecipeId, controller.componentRuntime().capabilities(),
+                    MachineModifier.recipeModifiers(controller.componentRuntime().modifierList()));
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);

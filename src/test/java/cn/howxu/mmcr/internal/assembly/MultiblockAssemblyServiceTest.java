@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.assembly;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -84,9 +84,9 @@ class MultiblockAssemblyServiceTest {
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(MMCR.id("coil"), Component.literal("Coil")));
         TestBootstrap.registerLevel(new MachineLevel(MMCR.id("basic"), MMCR.id("coil"), 1,
-                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.registerLevel(new MachineLevel(MMCR.id("advanced"), MMCR.id("coil"), 2,
-                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, LevelModifier.IDENTITY));
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
         BlockPredicate predicate = new BlockPredicate.AnyOf(List.of(
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),

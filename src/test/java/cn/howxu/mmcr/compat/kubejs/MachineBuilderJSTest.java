@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.network.RequestBody;
 import cn.howxu.mmcr.api.publicapi.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
@@ -475,11 +476,10 @@ class MachineBuilderJSTest {
                 .createObject();
 
         assertThat(registration.smartInterfaceModifiers()).hasSize(2);
-        assertThat(registration.smartInterfaceModifiers().get(0).toRecipeModifier(100F).getTarget())
-                .isEqualTo(IntegrationTypeHelper.TARGET_DURATION);
-        assertThat(registration.smartInterfaceModifiers().get(1).toRecipeModifier(100F)).isEqualTo(new RecipeModifier(
-                IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT, 1F,
-                RecipeModifier.Operation.ADD, true));
+        assertThat(registration.smartInterfaceModifiers().get(0).toModifier(100F)).isEqualTo(
+                MachineModifier.numeric("duration", "input", 0.5D, "multiply", false));
+        assertThat(registration.smartInterfaceModifiers().get(1).toModifier(100F)).isEqualTo(
+                MachineModifier.numeric("output", "output", 1D, "add", true));
     }
 
     @Test

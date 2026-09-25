@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -57,7 +57,7 @@ class MachineRecipeSyncCodecTest {
         TestBootstrap.registerType(new LevelType(SYNC_LEVEL_TYPE, Component.literal("Sync Level")));
         TestBootstrap.registerLevel(new MachineLevel(SYNC_LEVEL, SYNC_LEVEL_TYPE, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY));
+                ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
     }
 

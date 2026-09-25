@@ -12,7 +12,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
@@ -131,7 +131,7 @@ class MachineStructureBuilderJSTest {
         TestBootstrap.registerLevel(new MachineLevel(
                 Identifier.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY));
+                ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
         var declaration = new MachineStructureStageBuilderJS("test:stage_level")
                 .pattern("L")
@@ -177,7 +177,7 @@ class MachineStructureBuilderJSTest {
         TestBootstrap.registerLevel(new MachineLevel(
                 Identifier.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY));
+                ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
         var definition = new MachineStructureBuilderJS("test:furnace")
                 .pattern("C")
@@ -260,7 +260,7 @@ class MachineStructureBuilderJSTest {
         TestBootstrap.registerLevel(new MachineLevel(
                 Identifier.parse("test:copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY));
+                ItemStack.EMPTY, ModifierDefinition.EMPTY));
 
         var definition = new MachineStructureBuilderJS("test:repeated_levels")
                 .pattern("LL")
@@ -422,7 +422,7 @@ class MachineStructureBuilderJSTest {
         TestBootstrap.registerLevel(new MachineLevel(
                 Identifier.parse("test:callback_copper_coil"), coilType, 1,
                 new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY));
+                ItemStack.EMPTY, ModifierDefinition.EMPTY));
         PortRequirementSpec ports = PortRequirementSpec.builder().min("item_input_bus", 1).build();
         PortTierRequirementSpec tiers = PortTierRequirementSpec.builder().anyItemInput().build();
         DynamicPatternSpec dynamic = new DynamicPatternSpec("callback_length", new BlockArray(Map.of()), null,

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -297,11 +298,18 @@ public final class KubeJSApi {
         return RecipeApi.custom(Identifier.parse(typeId), io, payload);
     }
 
-    public RecipeModifier modifier(String target, String io, float value, String operation, boolean chance) {
-        return new RecipeModifier(target, ioType(io), value, operation(operation), chance);
+    public MachineModifier.Numeric modifier(String target, String scope, double value, String operation, boolean chance) {
+        return MachineModifier.numeric(target, scope, value, operation, chance);
     }
 
-    public ModifierDefinition modifierDefinition(List<RecipeModifier> modifiers) {
+    public MachineModifier.Parallelized modifier(String target, String scope, boolean value) {
+        if (!"parallelized".equalsIgnoreCase(target) || !"recipe".equalsIgnoreCase(scope)) {
+            throw new IllegalArgumentException("Boolean machine modifiers require target 'parallelized' and scope 'recipe'");
+        }
+        return MachineModifier.parallelized(value);
+    }
+
+    public ModifierDefinition modifierDefinition(List<MachineModifier> modifiers) {
         return new ModifierDefinition(modifiers);
     }
 

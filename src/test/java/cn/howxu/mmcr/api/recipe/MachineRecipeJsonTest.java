@@ -8,7 +8,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -54,7 +54,7 @@ class MachineRecipeJsonTest {
         TestBootstrap.registerType(new LevelType(id("test_level_type"), Component.literal("Test Level")));
         TestBootstrap.registerLevel(new MachineLevel(id("test_level"), id("test_level_type"), 0,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                ItemStack.EMPTY, LevelModifier.IDENTITY));
+                ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
         registries = VanillaRegistries.createLookup();
     }

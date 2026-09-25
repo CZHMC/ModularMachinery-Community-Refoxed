@@ -12,7 +12,8 @@ import cn.howxu.mmcr.api.publicapi.recipe.StageRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.publicapi.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
@@ -98,7 +99,7 @@ class PublicRecipeBuilderTest {
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("Test Recipe Level")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         MachineLevelRegistry.installSnapshot(event.levelTypes().values(), event.levels().values());
     }
 
@@ -258,9 +259,8 @@ class PublicRecipeBuilderTest {
                 Map.of(),
                 Map.of(),
                  Map.of(TEST_LEVEL, MachineLevelRegistry.getLevel(TEST_LEVEL)),
-                Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(new RecipeModifier(
-                        "item", RecipeModifier.IOType.OUTPUT, 2F,
-                        RecipeModifier.Operation.MULTIPLY, true))))));
+                Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(
+                        MachineModifier.numeric("output", "output", 2D, "multiply", true))))));
 
         assertThat(recipe.requirements()).hasSize(7);
         assertThat(recipe.requirements()).anySatisfy(requirement -> {
@@ -286,7 +286,7 @@ class PublicRecipeBuilderTest {
         assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement.type())
                 .isEqualTo(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.TYPE));
         assertThat(recipe.modifiers()).singleElement().satisfies(modifier -> {
-            assertThat(modifier.getTarget()).isEqualTo("item");
+            assertThat(modifier.getTarget()).isEmpty();
             assertThat(modifier.getIOTarget()).isEqualTo(RecipeModifier.IOType.OUTPUT);
             assertThat(modifier.getModifier()).isEqualTo(2F);
             assertThat(modifier.getOperation()).isEqualTo(RecipeModifier.Operation.MULTIPLY);

@@ -2,7 +2,7 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.LevelType;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -39,15 +39,15 @@ class TerminalScreenTest {
                 List.of(new MachineLevel(LEVEL_A, TYPE_A, 1,
                                 new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
                                 new ItemStack(Items.IRON_INGOT),
-                                LevelModifier.IDENTITY),
+                                ModifierDefinition.EMPTY),
                         new MachineLevel(LEVEL_B, TYPE_B, 1,
                                 new BlockPredicate.OfBlockState(Blocks.GOLD_BLOCK.defaultBlockState()),
                                 new ItemStack(Items.GOLD_INGOT),
-                                LevelModifier.IDENTITY),
+                                ModifierDefinition.EMPTY),
                         new MachineLevel(LEVEL_B_ALT, TYPE_B, 2,
                                 new BlockPredicate.OfBlockState(Blocks.DIAMOND_BLOCK.defaultBlockState()),
                                 new ItemStack(Items.DIAMOND),
-                                LevelModifier.IDENTITY)));
+                                ModifierDefinition.EMPTY)));
     }
 
     @Test

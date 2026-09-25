@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
@@ -227,8 +228,7 @@ class PatternStartReservationTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         formForPattern(controller, true);
         controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
-                new RecipeModifier(IntegrationTypeHelper.TARGET_ITEM, RecipeModifier.IOType.OUTPUT,
-                        2F, RecipeModifier.Operation.MULTIPLY, false))));
+                MachineModifier.numeric("output", "output", 2D, "multiply", false))));
         MachineRecipe recipe = recipeWithOutputs("reservation_output_context",
                 List.of(new MachineOutput.ItemOutput(stack(Items.IRON_NUGGET, 1), 1F)));
         RecipeRegistry.registerStatic(recipe);

@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
@@ -1625,7 +1626,8 @@ class FactoryRuntimeTest {
         ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, contextStateVersion);
         FactorySearchContext context = new FactorySearchContext(contextSnapshot,
                 List.of(inputRecipe("factory_context_retry_key")), controller.componentRuntime().capabilities(),
-                controller.componentRuntime().modifierList(), contextCatalogVersion, contextResourceEpoch, 1, 0L);
+                MachineModifier.recipeModifiers(controller.componentRuntime().modifierList()),
+                contextCatalogVersion, contextResourceEpoch, 1, 0L);
 
         assertThat(thread.searchAndStartRecipe(context, contextSnapshot.structure().version(), null)).isFalse();
 
@@ -1647,7 +1649,8 @@ class FactoryRuntimeTest {
         ControllerRuntimeSnapshot live = controller.runtimeSnapshot();
         ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, live.stateVersion() + 1L);
         FactorySearchContext context = new FactorySearchContext(contextSnapshot, List.of(candidate),
-                controller.componentRuntime().capabilities(), controller.componentRuntime().modifierList(),
+                controller.componentRuntime().capabilities(),
+                MachineModifier.recipeModifiers(controller.componentRuntime().modifierList()),
                 RecipeRegistry.catalogForMachine(machineId).version(),
                 controller.resourceAvailabilityEpoch(), 1, 0L);
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);

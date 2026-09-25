@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
-import cn.howxu.mmcr.api.machine.level.LevelModifier;
+import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -83,7 +83,7 @@ class ContentRegistrationCoordinatorTest {
         structures.registerLevel(new MachineLevel(levelId, typeId, 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
                 ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         structures.registerModifier(modifierId, new ModifierDefinition(List.of()));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
@@ -213,12 +213,12 @@ class ContentRegistrationCoordinatorTest {
                 id("invalid_level"), id("invalid_type"), 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
                 ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         structures.registerLevel(new MachineLevel(
                 id("duplicate_priority"), id("invalid_type"), 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.STONE.defaultBlockState()),
                 ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         structures.freeze();
 
         ContentRegistrationCoordinator.beginStartup();
@@ -368,7 +368,7 @@ class ContentRegistrationCoordinatorTest {
         MMCRMachineStructuresEvent.current().registerLevel(new MachineLevel(levelId, typeId, 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
                 ItemStack.EMPTY,
-                LevelModifier.IDENTITY));
+                ModifierDefinition.EMPTY));
         StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS);
 
         assertThat(MachineLevelRegistry.getType(typeId)).isNotNull();

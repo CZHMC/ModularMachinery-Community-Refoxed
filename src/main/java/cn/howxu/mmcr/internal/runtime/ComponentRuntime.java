@@ -18,12 +18,13 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
 import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -70,8 +71,8 @@ public final class ComponentRuntime {
     private List<ControllerRuntimeSnapshot.ComponentPresentation> cachedComponentPresentations = List.of();
     private long cachedCapabilityPresentationEpoch = Long.MIN_VALUE;
     private List<ControllerRuntimeSnapshot.CapabilityPresentation> cachedCapabilityPresentations = List.of();
-    private Map<String, List<RecipeModifier>> foundModifiers = Map.of();
-    private List<RecipeModifier> flattenedModifiers = List.of();
+    private Map<String, List<MachineModifier>> foundModifiers = Map.of();
+    private List<MachineModifier> flattenedModifiers = List.of();
     private Map<Identifier, MachineLevel> foundLevels = Map.of();
     private Set<BlockPos> linkedPortPositions = Set.of();
     private ModuleConnectionStatus moduleConnectionStatus = ModuleConnectionStatus.disconnected();
@@ -79,7 +80,8 @@ public final class ComponentRuntime {
     private List<UpgradeBusSnapshot> upgradeBuses = List.of();
     private List<ItemStack> upgradeItems = List.of();
     private Map<Identifier, Long> upgradeModifierUnits = Map.of();
-    private List<RecipeModifier> upgradeModifiers = List.of();
+    private List<MachineModifier> upgradeModifiers = List.of();
+    private List<MachineModifier> smartInterfaceModifiers = List.of();
     private long upgradeContentRevision;
     private boolean modifiersAllowed = true;
 
@@ -208,8 +210,8 @@ public final class ComponentRuntime {
         return capabilityPresentationEpoch;
     }
 
-    public boolean replaceModifiers(Map<String, List<RecipeModifier>> modifiers) {
-        Map<String, List<RecipeModifier>> next = new LinkedHashMap<>();
+    public boolean replaceModifiers(Map<String, List<MachineModifier>> modifiers) {
+        Map<String, List<MachineModifier>> next = new LinkedHashMap<>();
         if (modifiers != null) {
             modifiers.forEach((key, value) -> next.put(key, List.copyOf(value == null ? List.of() : value)));
         }
@@ -232,11 +234,11 @@ public final class ComponentRuntime {
         return true;
     }
 
-    public Map<String, List<RecipeModifier>> foundModifiers() {
+    public Map<String, List<MachineModifier>> foundModifiers() {
         return foundModifiers;
     }
 
-    public List<RecipeModifier> modifierList() {
+    public List<MachineModifier> modifierList() {
         return flattenedModifiers;
     }
 
@@ -268,6 +270,16 @@ public final class ComponentRuntime {
         return upgradeContentRevision;
     }
 
+    public boolean replaceSmartInterfaceModifiers(List<MachineModifier> modifiers) {
+        List<MachineModifier> next = List.copyOf(modifiers == null ? List.of() : modifiers);
+        if (smartInterfaceModifiers.equals(next)) return false;
+        smartInterfaceModifiers = next;
+        rebuildModifierList();
+        modifierVersion++;
+        stateVersion++;
+        return true;
+    }
+
     public void setModifiersAllowed(boolean allowed) {
         if (modifiersAllowed == allowed) return;
         modifiersAllowed = allowed;
@@ -280,6 +292,8 @@ public final class ComponentRuntime {
         Map<Identifier, MachineLevel> next = new LinkedHashMap<>(levels == null ? Map.of() : levels);
         if (foundLevels.equals(next)) return false;
         foundLevels = immutableMap(next);
+        rebuildModifierList();
+        modifierVersion++;
         levelVersion++;
         stateVersion++;
         return true;
@@ -342,12 +356,8 @@ public final class ComponentRuntime {
                 .map(component -> (ParallelControllerBlockEntity) component.getContainer())
                 .mapToLong(ParallelControllerBlockEntity::currentParallelism)
                 .reduce(0L, ComponentRuntime::saturatingAdd);
-        long levelBonus = foundLevels.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
-                .map(Map.Entry::getValue)
-                .mapToLong(foundLevel -> foundLevel.modifier().parallelismBonus())
-                .reduce(0L, ComponentRuntime::saturatingAdd);
-        long effective = saturatingAdd(Math.max(1L, max), levelBonus);
+        long effective = boundedLong(MachineModifier.apply(flattenedModifiers, ModifierTarget.PARALLELISM,
+                Math.max(1L, max), false), 1L, Long.MAX_VALUE);
         return Math.min(Math.max(1L, machine.maxParallelism()), Math.max(1L, effective));
     }
 
@@ -361,6 +371,7 @@ public final class ComponentRuntime {
         replaceComponents(List.of());
         replaceModifiers(Map.of());
         replaceLevels(Map.of());
+        replaceSmartInterfaceModifiers(List.of());
         replaceLinkedPortPositions(Set.of());
         replaceModuleConnectionState(ModuleConnectionStatus.disconnected(), 0);
         replaceUpgradeBuses(List.of());
@@ -420,12 +431,12 @@ public final class ComponentRuntime {
         return true;
     }
 
-    private List<RecipeModifier> upgradeModifiers(Map<Identifier, Long> units) {
-        List<RecipeModifier> result = new ArrayList<>();
+    private List<MachineModifier> upgradeModifiers(Map<Identifier, Long> units) {
+        List<MachineModifier> result = new ArrayList<>();
         for (Map.Entry<Identifier, Long> entry : units.entrySet()) {
             ModifierDefinition definition = ModifierRegistry.get(entry.getKey());
             if (definition == null) continue;
-            for (RecipeModifier modifier : definition.modifiers()) {
+            for (MachineModifier modifier : definition.modifiers()) {
                 result.add(withUnitCount(modifier, entry.getValue()));
             }
         }
@@ -433,36 +444,51 @@ public final class ComponentRuntime {
     }
 
     private void rebuildModifierList() {
-        if (!modifiersAllowed) {
-            flattenedModifiers = List.of();
-            return;
+        List<MachineModifier> modifiers = new ArrayList<>();
+        foundLevels.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
+                .map(Map.Entry::getValue)
+                .map(MachineLevel::modifier)
+                .forEach(definition -> modifiers.addAll(definition.modifiers()));
+        if (modifiersAllowed) {
+            foundModifiers.values().forEach(modifiers::addAll);
+            modifiers.addAll(upgradeModifiers);
         }
-        List<RecipeModifier> modifiers = new ArrayList<>();
-        foundModifiers.values().forEach(modifiers::addAll);
-        modifiers.addAll(upgradeModifiers);
+        modifiers.addAll(smartInterfaceModifiers);
         flattenedModifiers = List.copyOf(modifiers);
     }
 
-    private static RecipeModifier withUnitCount(RecipeModifier modifier, long count) {
-        if (count <= 1L) return modifier;
-        float value = switch (modifier.getOperation()) {
-            case ADD, SUBTRACT -> (float) ((double) modifier.getModifier() * count);
-            case MULTIPLY, DIVIDE -> power(modifier.getModifier(), count);
+    private static MachineModifier withUnitCount(MachineModifier modifier, long count) {
+        if (count <= 1L || !(modifier instanceof MachineModifier.Numeric numeric)) return modifier;
+        double value = switch (numeric.operation()) {
+            case ADD, SUBTRACT -> saturatingMultiply(numeric.value(), count);
+            case MULTIPLY, DIVIDE -> power(numeric.value(), count);
         };
-        return new RecipeModifier(modifier.getTarget(), modifier.getIOTarget(), value,
-                modifier.getOperation(), modifier.affectsChance());
+        return new MachineModifier.Numeric(numeric.target(), value, numeric.operation(), numeric.affectsChance());
     }
 
-    private static float power(float base, long exponent) {
-        float result = 1F;
-        float factor = base;
+    private static double power(double base, long exponent) {
+        double result = 1D;
+        double factor = base;
         long remaining = exponent;
         while (remaining > 0L) {
-            if ((remaining & 1L) != 0L) result *= factor;
+            if ((remaining & 1L) != 0L) result = saturatingMultiply(result, factor);
             remaining >>>= 1;
-            if (remaining > 0L) factor *= factor;
+            if (remaining > 0L) factor = saturatingMultiply(factor, factor);
         }
         return result;
+    }
+
+    private static double saturatingMultiply(double first, double second) {
+        double result = first * second;
+        if (Double.isFinite(result)) return result;
+        return Math.copySign(Double.MAX_VALUE, first * Math.signum(second));
+    }
+
+    private static long boundedLong(double value, long minimum, long maximum) {
+        if (value <= minimum) return minimum;
+        if (value >= maximum) return maximum;
+        return Math.round(value);
     }
 
     private static int comparePositions(BlockPos first, BlockPos second) {

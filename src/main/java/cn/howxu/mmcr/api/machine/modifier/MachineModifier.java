@@ -4,6 +4,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Collection;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Validated declaration that changes machine scheduling or recipe execution properties.
  * @author howxu <dev@howxu.cn>
@@ -19,6 +22,75 @@ public sealed interface MachineModifier permits MachineModifier.Numeric, Machine
 
     static Parallelized parallelized(boolean value) {
         return new Parallelized(value);
+    }
+
+    static double apply(Collection<MachineModifier> modifiers, ModifierTarget target, double value,
+                        boolean affectsChance) {
+        double add = 0D;
+        double multiply = 1D;
+        if (modifiers == null) return value;
+        for (MachineModifier modifier : modifiers) {
+            if (!(modifier instanceof Numeric numeric) || numeric.target() != target
+                    || numeric.affectsChance() != affectsChance) continue;
+            switch (numeric.operation()) {
+                case ADD -> add = saturatingAdd(add, numeric.value());
+                case SUBTRACT -> add = saturatingAdd(add, -numeric.value());
+                case MULTIPLY -> multiply = saturatingMultiply(multiply, numeric.value());
+                case DIVIDE -> {
+                    if (numeric.value() != 0D) multiply = saturatingMultiply(multiply, 1D / numeric.value());
+                }
+            }
+        }
+        return saturatingMultiply(saturatingAdd(value, add), multiply);
+    }
+
+    static List<RecipeModifier> recipeModifiers(Collection<MachineModifier> modifiers) {
+        if (modifiers == null || modifiers.isEmpty()) return List.of();
+        List<RecipeModifier> result = new ArrayList<>();
+        for (MachineModifier modifier : modifiers) {
+            if (!(modifier instanceof Numeric numeric)) continue;
+            RecipeModifier.IOType io;
+            String target;
+            switch (numeric.target()) {
+                case DURATION -> {
+                    io = RecipeModifier.IOType.INPUT;
+                    target = "duration";
+                }
+                case ENERGY -> {
+                    io = RecipeModifier.IOType.INPUT;
+                    target = "energy";
+                }
+                case OUTPUT -> {
+                    io = RecipeModifier.IOType.OUTPUT;
+                    target = "";
+                }
+                default -> {
+                    continue;
+                }
+            }
+            result.add(new RecipeModifier(target, io, finiteFloat(numeric.value()), numeric.operation(),
+                    numeric.affectsChance()));
+        }
+        return List.copyOf(result);
+    }
+
+    private static float finiteFloat(double value) {
+        if (value >= Float.MAX_VALUE) return Float.MAX_VALUE;
+        if (value <= -Float.MAX_VALUE) return -Float.MAX_VALUE;
+        return (float) value;
+    }
+
+    private static double saturatingAdd(double first, double second) {
+        double result = first + second;
+        if (Double.isFinite(result)) return result;
+        return result < 0D ? -Double.MAX_VALUE : Double.MAX_VALUE;
+    }
+
+    private static double saturatingMultiply(double first, double second) {
+        double result = first * second;
+        if (Double.isFinite(result)) return result;
+        if (Double.isNaN(result)) return 0D;
+        return Math.copySign(Double.MAX_VALUE, first * Math.signum(second));
     }
 
     private static RecipeModifier.Operation parseOperation(String operation) {

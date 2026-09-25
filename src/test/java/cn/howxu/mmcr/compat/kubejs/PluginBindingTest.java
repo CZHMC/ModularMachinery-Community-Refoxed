@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
@@ -937,8 +938,7 @@ class PluginBindingTest {
                 .build();
         MachineStructureRequirements requirements = MachineStructureRequirements.builder()
                 .modifier('M', new SingleBlockModifierReplacement(MMCR.id("speed").toString(), new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
-                        List.of(new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F,
-                                RecipeModifier.Operation.MULTIPLY, false)),
+                        List.of(MachineModifier.numeric("output", "output", 2D, "multiply", false)),
                         new ItemStack(Blocks.GOLD_BLOCK)))
                 .build(pattern);
         return new MachineStructureDefinition(id, pattern, PortRequirementSpec.none(), List.of(), requirements);

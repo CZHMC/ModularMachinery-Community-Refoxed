@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
@@ -23,8 +24,7 @@ class SingleBlockModifierReplacementTest {
 
     @Test
     void stores_predicate_name_modifiers_and_descriptive_stack() {
-        RecipeModifier modifier = new RecipeModifier("item", RecipeModifier.IOType.INPUT, 2F,
-                RecipeModifier.Operation.ADD, false);
+        MachineModifier modifier = MachineModifier.numeric("duration", "input", 2D, "add", false);
         ItemStack stack = new ItemStack(Blocks.GOLD_BLOCK);
         var replacement = new SingleBlockModifierReplacement(
                 "speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(modifier), stack);
@@ -47,11 +47,10 @@ class SingleBlockModifierReplacementTest {
 
     @Test
     void modifier_list_is_not_mutable_through_constructor_input() {
-        List<RecipeModifier> modifiers = new ArrayList<>();
+        List<MachineModifier> modifiers = new ArrayList<>();
         var replacement = new SingleBlockModifierReplacement(
                 "speed", new BlockPredicate.Any(), modifiers, ItemStack.EMPTY);
-        modifiers.add(new RecipeModifier("item", RecipeModifier.IOType.INPUT, 1F,
-                RecipeModifier.Operation.ADD, false));
+        modifiers.add(MachineModifier.numeric("duration", "input", 1D, "add", false));
 
         assertThat(replacement.getModifiers()).isEmpty();
         assertThatThrownBy(() -> replacement.getModifiers().add(null))
@@ -60,8 +59,7 @@ class SingleBlockModifierReplacementTest {
 
     @Test
     void replacements_with_same_values_compare_equal() {
-        RecipeModifier modifier = new RecipeModifier("item", RecipeModifier.IOType.OUTPUT, 2F,
-                RecipeModifier.Operation.MULTIPLY, false);
+        MachineModifier modifier = MachineModifier.numeric("output", "output", 2D, "multiply", false);
         var first = new SingleBlockModifierReplacement(
                 "speed", new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK), List.of(modifier), new ItemStack(Blocks.GOLD_BLOCK));
         var second = new SingleBlockModifierReplacement(
