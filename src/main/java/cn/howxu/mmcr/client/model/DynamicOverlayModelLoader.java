@@ -43,6 +43,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/basic_casing"));
     static final float OVERLAY_GROW = 0.002f;
+    private static final float STATE_OVERLAY_GROW = OVERLAY_GROW * 2.0f;
     private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;
@@ -65,10 +66,17 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         Material.Baked overlay = material(textures.overlay());
         Direction overlayFace = overlayFace(state);
         Direction rollFacing = rollFacing(state);
+        Material.Baked stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
+                ? material(DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, level.getModelData(pos)),
+                        state.getValue(MachineControllerBlock.ACTIVE)))
+                : null;
         for (Direction direction : Direction.values()) {
             addFace(quads, direction, baseMaterial(textures.base().forFace(direction)), 0.0f, true);
             if (direction == overlayFace || overlayFace == null) {
                 addFace(quads, direction, rollFacing, overlay, OVERLAY_GROW, false);
+                if (stateOverlay != null) {
+                    addFace(quads, direction, rollFacing, stateOverlay, STATE_OVERLAY_GROW, false);
+                }
             }
         }
 

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -65,7 +66,9 @@ class MachineAppearanceCacheTest {
         MachineAppearanceSpec spec = new MachineAppearanceSpec(
                 Identifier.parse("kubejs:steel_casing"),
                 Identifier.parse("kubejs:block/controller_casing"),
-                Identifier.parse("kubejs:block/formed_casing"));
+                Identifier.parse("kubejs:block/formed_casing"),
+                Identifier.parse("kubejs:block/idle_controller"),
+                Identifier.parse("kubejs:block/active_controller"));
         Path file = tempDir.resolve("machine-appearance.properties");
 
         MachineAppearanceCache.replaceSnapshot(Map.of(id, spec));
@@ -75,5 +78,19 @@ class MachineAppearanceCacheTest {
         MachineAppearanceCache.loadPersistedSnapshot(file);
 
         assertThat(MachineAppearanceCache.specFor(id)).isEqualTo(spec);
+    }
+
+    @Test
+    void legacy_persisted_snapshot_uses_default_controller_state_overlays() throws Exception {
+        Identifier id = MMCR.id("press");
+        Path file = tempDir.resolve("machine-appearance.properties");
+        Files.writeString(file, "mmcr\\:press=kubejs:steel_casing,kubejs:block/controller_casing,kubejs:block/formed_casing\n");
+
+        MachineAppearanceCache.loadPersistedSnapshot(file);
+
+        assertThat(MachineAppearanceCache.specFor(id).controllerIdleOverlayTexture())
+                .isEqualTo(MMCR.id("block/overlay_basic_idle"));
+        assertThat(MachineAppearanceCache.specFor(id).controllerActiveOverlayTexture())
+                .isEqualTo(MMCR.id("block/overlay_basic_active"));
     }
 }

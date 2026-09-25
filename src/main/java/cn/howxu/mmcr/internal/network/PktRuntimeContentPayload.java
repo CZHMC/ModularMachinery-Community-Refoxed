@@ -34,7 +34,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
     private static final int MAX_RECIPES = 16384;
     private static final int MAX_SPECS = 4096;
     private static final int MAX_TOOLTIP_LINES = 1024;
-    private static final int FORMAT_VERSION = 2;
+    private static final int FORMAT_VERSION = 3;
 
     private static final StreamCodec<RegistryFriendlyByteBuf, List<String>> TOOLTIP_CODEC = StreamCodec.of(
             PktRuntimeContentPayload::writeTooltip,
@@ -55,8 +55,10 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
             Identifier.STREAM_CODEC, MachineAppearanceSpec::machineBasicBlock,
             ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.controllerBaseTexture()),
             ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.formedPortBaseTexture()),
-            (blockId, controllerTexture, portTexture) -> new MachineAppearanceSpec(blockId,
-                    controllerTexture.orElse(null), portTexture.orElse(null)));
+            Identifier.STREAM_CODEC, MachineAppearanceSpec::controllerIdleOverlayTexture,
+            Identifier.STREAM_CODEC, MachineAppearanceSpec::controllerActiveOverlayTexture,
+            (blockId, controllerTexture, portTexture, idleOverlay, activeOverlay) -> new MachineAppearanceSpec(blockId,
+                    controllerTexture.orElse(null), portTexture.orElse(null), idleOverlay, activeOverlay));
 
     public static final Type<PktRuntimeContentPayload> TYPE = new Type<>(MMCR.id("runtime_content"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktRuntimeContentPayload> STREAM_CODEC = StreamCodec.of(

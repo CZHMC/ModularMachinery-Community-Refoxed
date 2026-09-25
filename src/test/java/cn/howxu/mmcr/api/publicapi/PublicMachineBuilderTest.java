@@ -169,6 +169,18 @@ class PublicMachineBuilderTest {
     }
 
     @Test
+    void appearance_builder_overrides_controller_state_overlays() {
+        var definition = MachineBuilder.machine(MMCR.id("arc_furnace"))
+                .appearance(appearance -> appearance
+                        .controllerIdleOverlayTexture(MMCR.id("block/arc_idle"))
+                        .controllerActiveOverlayTexture(MMCR.id("block/arc_active")))
+                .build();
+
+        assertThat(definition.appearance().controllerIdleOverlayTexture()).isEqualTo(MMCR.id("block/arc_idle"));
+        assertThat(definition.appearance().controllerActiveOverlayTexture()).isEqualTo(MMCR.id("block/arc_active"));
+    }
+
+    @Test
     void machine_definition_builder_enforces_role_and_factory_values() {
         var moduleId = MMCR.id("processing_module");
 

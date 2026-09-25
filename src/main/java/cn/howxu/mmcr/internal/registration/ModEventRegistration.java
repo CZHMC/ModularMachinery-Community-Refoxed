@@ -72,6 +72,8 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class ModEventRegistration {
+    static final String PAYLOAD_PROTOCOL_VERSION = "6";
+
     private ModEventRegistration() {
     }
 
@@ -222,7 +224,7 @@ public final class ModEventRegistration {
         static EventHandlers production() {
             return new EventHandlers(
                     ModCapabilities::register,
-                    event -> registerPayloads(event.registrar("5")),
+                    event -> registerPayloads(event.registrar(PAYLOAD_PROTOCOL_VERSION)),
                     GameTestRegistration::registerTests,
                     StructureDirtyEvents::onBlockPlaced,
                     StructureDirtyEvents::onBlocksPlaced,

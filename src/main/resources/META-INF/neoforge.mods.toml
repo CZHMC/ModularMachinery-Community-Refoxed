@@ -7,9 +7,13 @@ version="${mod_version}"
 displayName="${mod_name}"
 logoFile="mmcr.png"
 authors="howxu"
-credits="Based on HellFirePvP code, wiiv most the textures :3, KasumiNova improvements, more MMCE contributors and MMCR contributors!"
+credits="Based on HellFirePvP code, wiiv most the textures :3, KasumiNova improvements, more MMCE contributors!"
 description='''
-Modular Machinery Community Edition on newer Minecraft! Enjoy brand-new features and extreme performance improvements — unleash your creativity to build multiblock machines and all kinds of recipes!
+Modular Machinery Community Edition on newer Minecraft! Enjoy brand-new features and extreme performance improvements!
+
+Special thanks:
+- CZHMC: AE2 relative textures!
+- shifen0520: Some MMCR textures!
 '''
 
 [[mixins]]

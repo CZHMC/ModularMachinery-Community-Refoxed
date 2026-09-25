@@ -234,7 +234,8 @@ class RuntimeContentSnapshotTest {
                 Map.of(machineId, structureWithLevelAndModifier(machineId)),
                 Map.of(MMCR.id("sync_recipe"), recipe(MMCR.id("sync_recipe"), machineId)),
                 Map.of(machineId, MachineControllerSpec.defaultsFor(machineId)),
-                Map.of(machineId, MachineAppearanceSpec.defaults()),
+                Map.of(machineId, new MachineAppearanceSpec(MMCR.id("basic_casing"), null, null,
+                        MMCR.id("block/custom_idle"), MMCR.id("block/custom_active"))),
                 Map.of(machineId, machineId),
                 11L);
         PktRuntimeContentPayload payload = new PktRuntimeContentPayload(snapshot);
@@ -247,6 +248,10 @@ class RuntimeContentSnapshotTest {
         assertThat(decoded.snapshot().recipes()).containsOnlyKeys(MMCR.id("sync_recipe"));
         assertThat(decoded.snapshot().machineRecipePools()).containsEntry(machineId, machineId);
         assertThat(decoded.snapshot().contentVersion()).isEqualTo(11L);
+        assertThat(decoded.snapshot().appearances().get(machineId).controllerIdleOverlayTexture())
+                .isEqualTo(MMCR.id("block/custom_idle"));
+        assertThat(decoded.snapshot().appearances().get(machineId).controllerActiveOverlayTexture())
+                .isEqualTo(MMCR.id("block/custom_active"));
         MachineStructureDefinition decodedStructure = decoded.snapshot().structures().get(machineId);
         assertThat(decodedStructure.requirements().levelSlots()).containsEntry('L', MMCR.id("coil"));
         assertThat(decodedStructure.requirements().modifierReplacements()).containsKey('M');
@@ -256,7 +261,7 @@ class RuntimeContentSnapshotTest {
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
         Identifier machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(2);
+        buf.writeVarInt(3);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buf, machineId);
@@ -274,7 +279,7 @@ class RuntimeContentSnapshotTest {
         Identifier key = MMCR.id("runtime_test_machine");
         Identifier structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(2);
+        buf.writeVarInt(3);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buf, key);
@@ -293,7 +298,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void runtimeContentPayloadRejectsUnknownPayloadVersion() {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(3);
+        buf.writeVarInt(4);
 
         assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
                 .isInstanceOf(IllegalArgumentException.class)

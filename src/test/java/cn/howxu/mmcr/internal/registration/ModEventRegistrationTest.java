@@ -169,6 +169,11 @@ class ModEventRegistrationTest {
     }
 
     @Test
+    void production_payload_protocol_version_tracks_the_current_packet_layout() {
+        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("6");
+    }
+
+    @Test
     void registers_all_mmcr_commands_on_the_commands_event() {
         CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
 

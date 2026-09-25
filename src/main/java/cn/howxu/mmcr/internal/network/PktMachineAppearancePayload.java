@@ -24,8 +24,10 @@ public record PktMachineAppearancePayload(Map<Identifier, MachineAppearanceSpec>
             Identifier.STREAM_CODEC, MachineAppearanceSpec::machineBasicBlock,
             ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.controllerBaseTexture()),
             ByteBufCodecs.optional(Identifier.STREAM_CODEC), spec -> Optional.ofNullable(spec.formedPortBaseTexture()),
-            (blockId, controllerTexture, portTexture) -> new MachineAppearanceSpec(blockId,
-                    controllerTexture.orElse(null), portTexture.orElse(null)));
+            Identifier.STREAM_CODEC, MachineAppearanceSpec::controllerIdleOverlayTexture,
+            Identifier.STREAM_CODEC, MachineAppearanceSpec::controllerActiveOverlayTexture,
+            (blockId, controllerTexture, portTexture, idleOverlay, activeOverlay) -> new MachineAppearanceSpec(blockId,
+                    controllerTexture.orElse(null), portTexture.orElse(null), idleOverlay, activeOverlay));
 
     public static final Type<PktMachineAppearancePayload> TYPE = new Type<>(MMCR.id("machine_appearance"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktMachineAppearancePayload> STREAM_CODEC =

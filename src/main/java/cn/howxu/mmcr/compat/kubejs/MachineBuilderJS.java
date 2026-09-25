@@ -52,6 +52,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient Identifier machineBasicBlock;
     public transient Identifier controllerBaseTexture;
     public transient Identifier formedPortBaseTexture;
+    public transient Identifier controllerIdleOverlayTexture;
+    public transient Identifier controllerActiveOverlayTexture;
     public transient Identifier runningSoundId;
     public transient Identifier finishSoundId;
     private Identifier recipePoolId;
@@ -370,6 +372,26 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
+    public MachineBuilderJS controllerIdleOverlayTexture(String texture) {
+        return controllerIdleOverlayTexture(Identifier.parse(texture));
+    }
+
+    @HideFromJS
+    public MachineBuilderJS controllerIdleOverlayTexture(Identifier texture) {
+        this.controllerIdleOverlayTexture = texture;
+        return this;
+    }
+
+    public MachineBuilderJS controllerActiveOverlayTexture(String texture) {
+        return controllerActiveOverlayTexture(Identifier.parse(texture));
+    }
+
+    @HideFromJS
+    public MachineBuilderJS controllerActiveOverlayTexture(Identifier texture) {
+        this.controllerActiveOverlayTexture = texture;
+        return this;
+    }
+
     public MachineBuilderJS allowVerticalFacing() {
         return allowVerticalFacing(true);
     }
@@ -626,6 +648,8 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                     if (registration.appearance().formedPortBaseTexture() != null) {
                         appearance.formedPortBaseTexture(registration.appearance().formedPortBaseTexture());
                     }
+                    appearance.controllerIdleOverlayTexture(registration.appearance().controllerIdleOverlayTexture());
+                    appearance.controllerActiveOverlayTexture(registration.appearance().controllerActiveOverlayTexture());
                     return appearance;
                 })
                 .factory(factory -> factory
@@ -691,7 +715,9 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return new MachineAppearanceSpec(
                 machineBasicBlock != null ? machineBasicBlock : base.machineBasicBlock(),
                 controllerBaseTexture,
-                formedPortBaseTexture);
+                formedPortBaseTexture,
+                controllerIdleOverlayTexture,
+                controllerActiveOverlayTexture);
     }
 
     private static cn.howxu.mmcr.api.publicapi.machine.SmartInterfaceType toPublicSmartInterfaceType(

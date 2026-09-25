@@ -12,7 +12,13 @@ import java.util.Objects;
 public record AppearanceSpec(
         Identifier machineBasicBlock,
         Identifier controllerBaseTexture,
-        Identifier formedPortBaseTexture) {
+        Identifier formedPortBaseTexture,
+        Identifier controllerIdleOverlayTexture,
+        Identifier controllerActiveOverlayTexture) {
+
+    public AppearanceSpec(Identifier machineBasicBlock, Identifier controllerBaseTexture, Identifier formedPortBaseTexture) {
+        this(machineBasicBlock, controllerBaseTexture, formedPortBaseTexture, null, null);
+    }
 
     public static Builder builder() {
         return new Builder();
@@ -27,6 +33,8 @@ public record AppearanceSpec(
         private Identifier machineBasicBlock;
         private Identifier controllerBaseTexture;
         private Identifier formedPortBaseTexture;
+        private Identifier controllerIdleOverlayTexture;
+        private Identifier controllerActiveOverlayTexture;
 
         public Builder appearance(Identifier machineBasicBlock) {
             return machineBasicBlock(machineBasicBlock);
@@ -55,8 +63,19 @@ public record AppearanceSpec(
             return this;
         }
 
+        public Builder controllerIdleOverlayTexture(Identifier controllerIdleOverlayTexture) {
+            this.controllerIdleOverlayTexture = Objects.requireNonNull(controllerIdleOverlayTexture, "controllerIdleOverlayTexture");
+            return this;
+        }
+
+        public Builder controllerActiveOverlayTexture(Identifier controllerActiveOverlayTexture) {
+            this.controllerActiveOverlayTexture = Objects.requireNonNull(controllerActiveOverlayTexture, "controllerActiveOverlayTexture");
+            return this;
+        }
+
         public AppearanceSpec build() {
-            return new AppearanceSpec(machineBasicBlock, controllerBaseTexture, formedPortBaseTexture);
+            return new AppearanceSpec(machineBasicBlock, controllerBaseTexture, formedPortBaseTexture,
+                    controllerIdleOverlayTexture, controllerActiveOverlayTexture);
         }
     }
 }

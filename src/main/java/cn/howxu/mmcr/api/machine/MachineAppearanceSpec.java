@@ -12,10 +12,25 @@ import org.jetbrains.annotations.Nullable;
 public record MachineAppearanceSpec(
         Identifier machineBasicBlock,
         @Nullable Identifier controllerBaseTexture,
-        @Nullable Identifier formedPortBaseTexture
+        @Nullable Identifier formedPortBaseTexture,
+        Identifier controllerIdleOverlayTexture,
+        Identifier controllerActiveOverlayTexture
 ) {
+    private static final Identifier DEFAULT_IDLE_OVERLAY_TEXTURE = MMCR.id("block/overlay_basic_idle");
+    private static final Identifier DEFAULT_ACTIVE_OVERLAY_TEXTURE = MMCR.id("block/overlay_basic_active");
+
+    public MachineAppearanceSpec(Identifier machineBasicBlock, @Nullable Identifier controllerBaseTexture,
+                                 @Nullable Identifier formedPortBaseTexture) {
+        this(machineBasicBlock, controllerBaseTexture, formedPortBaseTexture,
+                DEFAULT_IDLE_OVERLAY_TEXTURE, DEFAULT_ACTIVE_OVERLAY_TEXTURE);
+    }
+
     public MachineAppearanceSpec {
         if (machineBasicBlock == null) throw new IllegalArgumentException("machineBasicBlock null");
+        controllerIdleOverlayTexture = controllerIdleOverlayTexture == null
+                ? DEFAULT_IDLE_OVERLAY_TEXTURE : controllerIdleOverlayTexture;
+        controllerActiveOverlayTexture = controllerActiveOverlayTexture == null
+                ? DEFAULT_ACTIVE_OVERLAY_TEXTURE : controllerActiveOverlayTexture;
     }
 
     public static MachineAppearanceSpec defaults() {
