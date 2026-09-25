@@ -101,7 +101,7 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
     }
 
     private static boolean isSupportedDisplay(String label) {
-        return label.equals("item") || label.equals("fluid") || label.equals("energy");
+        return label.equals("item") || label.equals("fluid");// || label.equals("energy");
     }
 
     private static int state(IGridNode node) {
