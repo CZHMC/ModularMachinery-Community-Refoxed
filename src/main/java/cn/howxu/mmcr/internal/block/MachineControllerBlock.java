@@ -20,6 +20,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.BlockAndLightGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SoundType;
@@ -66,6 +67,15 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     public Identifier machineId() {
         return machineId;
+    }
+
+    @Override
+    public BlockState getAppearance(BlockState state, BlockAndLightGetter level, BlockPos pos, Direction side,
+                                    @Nullable BlockState sourceState, @Nullable BlockPos sourcePos) {
+        if (!state.getValue(FORMED)) return state;
+        MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(machineId);
+        return registration == null ? state : AppearanceStateResolver.resolve(state, level, pos,
+                registration.appearance().controllerTextureSource());
     }
 
     @Override

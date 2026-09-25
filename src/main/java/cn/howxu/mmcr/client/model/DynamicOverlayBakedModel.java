@@ -7,10 +7,13 @@ import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.block.Block;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -135,6 +138,7 @@ public final class DynamicOverlayBakedModel {
 
     public static void clearCache() {
         BASE_TEXTURES.clear();
+        DynamicOverlayModelLoader.clearMissingBaseTextureWarnings();
     }
 
     static FaceTextures resolveBase(MachineAppearanceSpec.TextureSource source) {
@@ -158,6 +162,10 @@ public final class DynamicOverlayBakedModel {
             MMCR.LOG.warn("Missing appearance source block {}", source.blockId());
             return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
         }
+        if (!Block.isShapeFullBlock(block.defaultBlockState().getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO))) {
+            MMCR.LOG.warn("Appearance source block {} is not a full cube; using fallback", source.blockId());
+            return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
+        }
 
         List<BlockStateModelPart> parts = new ArrayList<>();
         minecraft.getModelManager().getBlockStateModelSet().get(block.defaultBlockState())
@@ -167,9 +175,16 @@ public final class DynamicOverlayBakedModel {
             Identifier texture = textureForFace(parts, direction);
             if (texture == null) {
                 MMCR.LOG.warn("Appearance source block {} has no {} face texture; using fallback", source.blockId(), direction);
-                texture = FALLBACK_BASE_TEXTURE;
+                return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
             }
             textures.put(direction, texture);
+        }
+        return completeOrFallback(textures);
+    }
+
+    static FaceTextures completeOrFallback(Map<Direction, Identifier> textures) {
+        if (textures.size() != Direction.values().length || textures.values().stream().anyMatch(texture -> texture == null)) {
+            return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
         }
         return new FaceTextures(textures.get(Direction.DOWN), textures.get(Direction.UP), textures.get(Direction.NORTH),
                 textures.get(Direction.SOUTH), textures.get(Direction.WEST), textures.get(Direction.EAST));
@@ -185,11 +200,6 @@ public final class DynamicOverlayBakedModel {
                 if (quad.direction() == direction) {
                     return quad.materialInfo().sprite().contents().name();
                 }
-            }
-        }
-        for (BlockStateModelPart part : parts) {
-            if (part.particleMaterial() != null) {
-                return part.particleMaterial().sprite().contents().name();
             }
         }
         return null;

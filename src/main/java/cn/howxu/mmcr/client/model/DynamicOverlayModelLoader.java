@@ -6,6 +6,7 @@ import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.resources.model.ModelBaker;
 import net.minecraft.client.resources.model.ModelDebugName;
 import net.minecraft.client.resources.model.SimpleModelWrapper;
@@ -26,6 +27,8 @@ import net.neoforged.neoforge.model.data.ModelData;
 import org.joml.Vector3f;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Dynamic block-state model for shared machine controller and I/O port overlays.
@@ -40,6 +43,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/basic_casing"));
     static final float OVERLAY_GROW = 0.002f;
+    private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;
     private final MaterialBaker materials;
@@ -62,7 +66,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         Direction overlayFace = overlayFace(state);
         Direction rollFacing = rollFacing(state);
         for (Direction direction : Direction.values()) {
-            addFace(quads, direction, material(textures.base().forFace(direction)), 0.0f, true);
+            addFace(quads, direction, baseMaterial(textures.base().forFace(direction)), 0.0f, true);
             if (direction == overlayFace || overlayFace == null) {
                 addFace(quads, direction, rollFacing, overlay, OVERLAY_GROW, false);
             }
@@ -124,6 +128,23 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     private Material.Baked material(Identifier texture) {
         return materials.get(new Material(texture), debugName);
+    }
+
+    private Material.Baked baseMaterial(Identifier texture) {
+        Material.Baked baked = material(texture);
+        try (var sprite = baked.sprite()) {
+            if (!sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+                return baked;
+            }
+        }
+        if (MISSING_BASE_TEXTURES.add(texture)) {
+            MMCR.LOG.warn("Missing dynamic base texture {}; using fallback", texture);
+        }
+        return materials.get(FALLBACK_PARTICLE, debugName);
+    }
+
+    static void clearMissingBaseTextureWarnings() {
+        MISSING_BASE_TEXTURES.clear();
     }
 
     static void addFace(QuadCollection.Builder quads, Direction direction, Material.Baked material,
