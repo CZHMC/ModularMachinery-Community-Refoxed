@@ -32,7 +32,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.Pack;
+import net.minecraft.server.packs.repository.PackSource;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -170,6 +173,14 @@ public class Client {
     private static void registerRuntimeResourcePack(AddPackFindersEvent event) {
         if (event.getPackType() == PackType.CLIENT_RESOURCES) {
             event.addRepositorySource(RuntimeMachineResourcePack.source());
+            event.addPackFinders(
+                    MMCR.id("mmcr_arrow_interfaces"),
+                    PackType.CLIENT_RESOURCES,
+                    Component.literal("MMCR 箭头版接口"),
+                    PackSource.BUILT_IN,
+                    false,
+                    Pack.Position.TOP
+            );
         }
     }
 
