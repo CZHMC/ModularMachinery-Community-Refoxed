@@ -223,7 +223,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private Button createAutoIOPageButton(int x, int y, Identifier capabilityId) {
-        return addRenderableWidget(Button.builder(Component.translatable("mmcr.auto_io.page"), button -> {
+        return addRenderableWidget(new StyledButton(x, y, 12, 12, Component.translatable("mmcr.auto_io.page"), button -> {
             if (autoIOPage) {
                 autoIOPage = false;
             } else {
@@ -233,7 +233,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             resetTextScrollOffset();
             updateAutoIOWidgets();
             button.setFocused(false);
-        }).bounds(x, y, 12, 12).build());
+        }));
     }
 
     private void updateAutoIOWidgets() {
@@ -429,16 +429,9 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private record TooltipEntry(int x, int y, int width, int height, List<Component> lines) {
     }
 
-    abstract static class AutoIOStyledButton extends Button {
+    abstract static class AutoIOStyledButton extends StyledButton {
         AutoIOStyledButton(int x, int y, int width, int height, Component message, OnPress onPress) {
-            super(x, y, width, height, message, onPress, Button.DEFAULT_NARRATION);
-        }
-
-        protected void drawAutoIOBackground(GuiGraphicsExtractor graphics) {
-            int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
-            int hoverColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
-            graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), hoverColor);
-            graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
+            super(x, y, width, height, message, onPress);
         }
     }
 
@@ -459,7 +452,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
         @Override
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            drawAutoIOBackground(graphics);
+            drawBackground(graphics);
             Font font = Minecraft.getInstance().font;
             graphics.pose().pushMatrix();
             graphics.pose().scale(AUTO_IO_TOGGLE_TEXT_SCALE, AUTO_IO_TOGGLE_TEXT_SCALE);
@@ -481,7 +474,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
         @Override
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            drawAutoIOBackground(graphics);
+            drawBackground(graphics);
             Font font = Minecraft.getInstance().font;
             graphics.text(font, getMessage(), getX() + (getWidth() - font.width(getMessage())) / 2, getY() + 6, 0xFFFFFFFF, false);
         }
@@ -501,7 +494,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
         @Override
         protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            drawAutoIOBackground(graphics);
+            drawBackground(graphics);
             if (selected.getAsBoolean()) {
                 graphics.fill(getX() + 3, getY() + 3, getX() + getWidth() - 3, getY() + getHeight() - 3, 0xFF2E7D32);
                 graphics.fill(getX() + 2, getY() + 2, getX() + getWidth() - 2, getY() + 3, 0xFF66BB6A);

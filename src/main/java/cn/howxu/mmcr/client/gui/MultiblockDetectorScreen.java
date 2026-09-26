@@ -98,32 +98,36 @@ public final class MultiblockDetectorScreen extends Screen {
         }
 
         int footerX = panelLeft() + (PANEL_WIDTH - 4 * FOOTER_BUTTON_WIDTH - 3 * FOOTER_BUTTON_GAP) / 2;
-        javaExportButton = addRenderableWidget(Button.builder(
+        javaExportButton = addRenderableWidget(new StyledButton(footerX, panelTop() + FOOTER_ROW,
+                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT,
                 Component.translatable("gui.mmcr.multiblock_detector.export.java"), button -> {
                     ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(false));
                     setFocused(null);
-                }).bounds(footerX, panelTop() + FOOTER_ROW, FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
-        kubeJsExportButton = addRenderableWidget(Button.builder(
+                }));
+        kubeJsExportButton = addRenderableWidget(new StyledButton(
+                footerX + FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP, panelTop() + FOOTER_ROW,
+                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT,
                 Component.translatable("gui.mmcr.multiblock_detector.export.kubejs"), button -> {
                     ClientPacketDistributor.sendToServer(new PktMultiblockDetectorExportPayload(true));
                     setFocused(null);
-                }).bounds(footerX + FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP, panelTop() + FOOTER_ROW,
-                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
-        maskButton = addRenderableWidget(Button.builder(maskLabel(), button -> {
+                }));
+        maskButton = addRenderableWidget(new StyledButton(
+                footerX + 2 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
+                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT, maskLabel(), button -> {
             maskEnabled = !maskEnabled;
             button.setMessage(maskLabel());
             writeLocalStateAndSync();
             setFocused(null);
-        }).bounds(footerX + 2 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
-                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
-        addRenderableWidget(Button.builder(
+        }));
+        addRenderableWidget(new StyledButton(
+                footerX + 3 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
+                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT,
                 Component.translatable("gui.mmcr.multiblock_detector.clear_selection").withStyle(ChatFormatting.RED), button -> {
                     selection = MultiblockDetectorSelection.EMPTY;
                     updateWidgets();
                     writeLocalStateAndSync();
                     setFocused(null);
-                }).bounds(footerX + 3 * (FOOTER_BUTTON_WIDTH + FOOTER_BUTTON_GAP), panelTop() + FOOTER_ROW,
-                FOOTER_BUTTON_WIDTH, FOOTER_BUTTON_HEIGHT).build());
+                }));
         updateWidgets();
     }
 
@@ -202,10 +206,11 @@ public final class MultiblockDetectorScreen extends Screen {
     }
 
     private Button axisButton(Point point, Axis axis, int delta, int x, int y) {
-        return Button.builder(Component.literal(delta < 0 ? "-" : "+"), button -> {
+        return new StyledButton(x, y, ADJUST_BUTTON_WIDTH, ADJUST_BUTTON_HEIGHT,
+                Component.literal(delta < 0 ? "-" : "+"), button -> {
             adjust(point, axis, delta);
             setFocused(null);
-        }).bounds(x, y, ADJUST_BUTTON_WIDTH, ADJUST_BUTTON_HEIGHT).build();
+        });
     }
 
     private void adjust(Point point, Axis axis, int delta) {

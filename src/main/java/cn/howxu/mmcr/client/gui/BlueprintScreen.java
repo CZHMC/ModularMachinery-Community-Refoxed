@@ -369,15 +369,15 @@ public final class BlueprintScreen extends Screen {
     }
 
     private Button symbolButton(String symbol, BlueprintRect rect, String tooltipKey, Runnable action) {
-        Button button = Button.builder(Component.literal(symbol), clicked -> action.run())
-                .bounds(rect.x(), rect.y(), rect.width(), rect.height()).build();
+        Button button = new StyledButton(rect.x(), rect.y(), rect.width(), rect.height(),
+                Component.literal(symbol), clicked -> action.run());
         button.setTooltip(Tooltip.create(Component.translatable(tooltipKey)));
         return button;
     }
 
     private Button textButton(String key, BlueprintRect rect, String tooltipKey, Runnable action) {
-        Button button = Button.builder(Component.translatable(key), clicked -> action.run())
-                .bounds(rect.x(), rect.y(), rect.width(), rect.height()).build();
+        Button button = new StyledButton(rect.x(), rect.y(), rect.width(), rect.height(),
+                Component.translatable(key), clicked -> action.run());
         button.setTooltip(Tooltip.create(Component.translatable(tooltipKey)));
         return button;
     }

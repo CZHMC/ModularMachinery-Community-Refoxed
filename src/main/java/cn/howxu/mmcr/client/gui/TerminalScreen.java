@@ -89,15 +89,12 @@ public final class TerminalScreen extends Screen {
                 }));
         stageButton = addRenderableWidget(button("gui.mmcr.terminal.stage", x, top() + 74, 92, button ->
                 send(TerminalAction.SET_STAGE, nextStage(), null, null)));
-        plusButton = addRenderableWidget(Button.builder(Component.literal("+"), button ->
-                sendPreviewLayer(nextLayer(data.previewLayer(), previewLayers), false))
-                .bounds(x, top() + 94, 18, 18).build());
-        minusButton = addRenderableWidget(Button.builder(Component.literal("-"), button ->
-                sendPreviewLayer(previousLayer(data.previewLayer(), previewLayers), false))
-                .bounds(x + 20, top() + 94, 18, 18).build());
-        resetButton = addRenderableWidget(Button.builder(Component.literal("R"), button ->
-                sendPreviewLayer(resetLayer(), true))
-                .bounds(x + 40, top() + 94, 18, 18).build());
+        plusButton = addRenderableWidget(new StyledButton(x, top() + 94, 18, 18, Component.literal("+"), button ->
+                sendPreviewLayer(nextLayer(data.previewLayer(), previewLayers), false)));
+        minusButton = addRenderableWidget(new StyledButton(x + 20, top() + 94, 18, 18, Component.literal("-"), button ->
+                sendPreviewLayer(previousLayer(data.previewLayer(), previewLayers), false)));
+        resetButton = addRenderableWidget(new StyledButton(x + 40, top() + 94, 18, 18, Component.literal("R"), button ->
+                sendPreviewLayer(resetLayer(), true)));
         int footer = left() + 8;
         previewButton = addRenderableWidget(actionButton("gui.mmcr.terminal.preview", footer,
                 TerminalAction.SET_PREVIEW_ENABLED));
@@ -202,7 +199,7 @@ public final class TerminalScreen extends Screen {
     }
 
     private Button button(String key, int x, int y, int width, Button.OnPress onPress) {
-        return Button.builder(Component.translatable(key), onPress).bounds(x, y, width, 18).build();
+        return new StyledButton(x, y, width, 18, Component.translatable(key), onPress);
     }
 
     private Button actionButton(String key, int x, TerminalAction action) {
@@ -212,9 +209,8 @@ public final class TerminalScreen extends Screen {
         } else if (action == TerminalAction.DEMOLISH) {
             label = label.withStyle(ChatFormatting.RED);
         }
-        return Button.builder(label, button -> send(action,
-                action == TerminalAction.SET_PREVIEW_ENABLED && !data.previewEnabled() ? 1 : 0, null, null))
-                .bounds(x, top() + 128, 70, 20).build();
+        return new StyledButton(x, top() + 128, 70, 20, label, button -> send(action,
+                action == TerminalAction.SET_PREVIEW_ENABLED && !data.previewEnabled() ? 1 : 0, null, null));
     }
 
     private void send(TerminalAction action, int value, Identifier firstId, Identifier secondId) {
