@@ -1,6 +1,10 @@
 name: CI/CD
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - 'neo/**'
+  pull_request:
 
 jobs:
   ci:
@@ -12,10 +16,24 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup JDK 25
+      - name: Resolve build properties
+        id: properties
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          java_version="$(awk -F= '$1 == "java_version" { print $2; exit }' gradle.properties)"
+          if [ -z "$java_version" ]; then
+            echo "java_version is missing from gradle.properties" >&2
+            exit 1
+          fi
+
+          echo "java_version=${java_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup JDK ${{ steps.properties.outputs.java_version }}
         uses: actions/setup-java@v4
         with:
-          java-version: '25'
+          java-version: ${{ steps.properties.outputs.java_version }}
           distribution: 'temurin'
 
       - name: Setup Gradle

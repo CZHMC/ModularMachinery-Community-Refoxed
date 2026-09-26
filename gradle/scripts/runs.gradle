@@ -16,6 +16,8 @@ runs {
             runtime("curse.maven:${sodium_id}:${sodium_version}")
             // athena for ctm
             // runtime("curse.maven:${athena_id}:${athena_version}")
+            // lithium
+            runtime("maven.modrinth:${lithium_id}:${lithium_version}")
         }
     }
 

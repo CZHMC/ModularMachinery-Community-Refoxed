@@ -11,12 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      mod-version: ${{ steps.version.outputs.mod-version }}
+      minecraft-version: ${{ steps.version.outputs.minecraft-version }}
+      java-version: ${{ steps.version.outputs.java-version }}
+      base-tag: ${{ steps.version.outputs.base-tag }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Resolve dev version
         id: version
@@ -24,14 +29,39 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [ "$GITHUB_REF_TYPE" != "branch" ] || [[ "$GITHUB_REF_NAME" != neo/* ]]; then
+            echo "Nightly releases must run from a neo/** branch" >&2
+            exit 1
+          fi
+
+          minecraft_version="$(awk -F= '$1 == "minecraft_version" { print $2; exit }' gradle.properties)"
+          java_version="$(awk -F= '$1 == "java_version" { print $2; exit }' gradle.properties)"
+          if [ -z "$minecraft_version" ] || [ -z "$java_version" ]; then
+            echo "minecraft_version and java_version are required in gradle.properties" >&2
+            exit 1
+          fi
+
           hash="$(git rev-parse --short HEAD)"
-          base="$(git tag --merged HEAD --sort=-v:refname | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }')"
-          if [ -z "$base" ]; then
+          base_tag="$(git describe --tags --abbrev=0 --first-parent \
+            --match "${minecraft_version}-[0-9]*.[0-9]*.[0-9]*" \
+            --exclude '*+dev-*' HEAD 2>/dev/null || true)"
+          if [ -n "$base_tag" ]; then
+            base="${base_tag#"${minecraft_version}-"}"
+            if [[ ! "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Nearest release tag ${base_tag} does not use the expected format" >&2
+              exit 1
+            fi
+          else
             base="0.0.0"
           fi
 
-          version="${base}+dev-${hash}"
+          mod_version="${base}+dev-${hash}"
+          version="${minecraft_version}-${mod_version}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "mod-version=${mod_version}" >> "$GITHUB_OUTPUT"
+          echo "minecraft-version=${minecraft_version}" >> "$GITHUB_OUTPUT"
+          echo "java-version=${java_version}" >> "$GITHUB_OUTPUT"
+          echo "base-tag=${base_tag}" >> "$GITHUB_OUTPUT"
 
   release:
     name: Nightly Dev Release ${{ needs.resolve-version.outputs.version }}
@@ -42,13 +72,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          fetch-tags: true
 
-      - name: Set up Java
+      - name: Set up Java ${{ needs.resolve-version.outputs.java-version }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "25"
+          java-version: ${{ needs.resolve-version.outputs.java-version }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -57,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          perl -0pi -e 's/^mod_version=.*/mod_version=${{ needs.resolve-version.outputs.version }}/m' gradle.properties
+          perl -0pi -e 's/^mod_version=.*/mod_version=${{ needs.resolve-version.outputs.mod-version }}/m' gradle.properties
 
       - name: Run Client Data
         run: gradle runClientData
@@ -87,18 +119,13 @@ jobs:
         id: notes
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           DEEPSEEK_TOKEN: ${{ secrets.DEEPSEEK_TOKEN }}
         run: |
           set -euo pipefail
 
           current_version="${{ needs.resolve-version.outputs.version }}"
 
-          previous_tag="$(
-            gh release list --limit 50 --json tagName --jq '.[].tagName' \
-              | grep -vFx "$current_version" \
-              | head -n1
-          )"
+          previous_tag="${{ needs.resolve-version.outputs.base-tag }}"
           if [ -n "$previous_tag" ]; then
             range="${previous_tag}..HEAD"
           else
@@ -116,7 +143,7 @@ jobs:
 
           prompt_template="$(cat .github/prompts/release-notes.md)"
           prompt="$(printf '%s\n\nRelease version: %s\nCommit range: %s\n\nCommits:\n%s' \
-            "$prompt_template" "${{ steps.version.outputs.version }}" "$range" "$changelog")"
+            "$prompt_template" "$current_version" "$range" "$changelog")"
           generated=""
           if [ -n "${DEEPSEEK_TOKEN:-}" ]; then
             request="$(jq -n --arg model 'deepseek-v4-flash' --arg prompt "$prompt" \
@@ -155,6 +182,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-tag: ${{ needs.resolve-version.outputs.version }}
+          github-commitish: ${{ github.sha }}
           name: ${{ needs.resolve-version.outputs.version }}
           version: ${{ needs.resolve-version.outputs.version }}
           version-type: beta
@@ -164,8 +192,8 @@ jobs:
           files: build/libs/!(*-@(dev|sources|javadoc|api)).jar
           loaders: neoforge
           environment: client | server
-          game-versions: 26.1.2
-          java: 25
+          game-versions: ${{ needs.resolve-version.outputs.minecraft-version }}
+          java: ${{ needs.resolve-version.outputs.java-version }}
           modrinth-id: bUctkb7B
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           curseforge-id: 1654570
