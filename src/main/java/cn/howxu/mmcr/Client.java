@@ -175,7 +175,7 @@ public class Client {
             event.addRepositorySource(RuntimeMachineResourcePack.source());
             // ae2 arrow resources
             event.addPackFinders(
-                    MMCR.id("arrow_interfaces"),
+                    MMCR.id("optional/arrow_interfaces"),
                     PackType.CLIENT_RESOURCES,
                     Component.translatable("pack.mmcr.arrow_interfaces_resource"),
                     PackSource.BUILT_IN,
