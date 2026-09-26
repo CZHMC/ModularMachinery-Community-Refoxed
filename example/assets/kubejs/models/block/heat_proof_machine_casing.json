@@ -1,0 +1,6 @@
+{
+    "parent": "minecraft:block/cube_all",
+    "textures": {
+        "all": "kubejs:block/heat_proof_machine_casing/particle"
+    }
+}

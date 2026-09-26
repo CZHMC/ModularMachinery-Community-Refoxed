@@ -1,0 +1,15 @@
+{
+    "variants": {
+        "": {
+            "model": "kubejs:block/heat_proof_machine_casing"
+        }
+    },
+    "athena:loader": "athena:ctm",
+    "ctm_textures": {
+        "center": "kubejs:block/heat_proof_machine_casing/center",
+        "empty": "kubejs:block/heat_proof_machine_casing/empty",
+        "horizontal": "kubejs:block/heat_proof_machine_casing/horizontal",
+        "particle": "kubejs:block/heat_proof_machine_casing/particle",
+        "vertical": "kubejs:block/heat_proof_machine_casing/vertical"
+    }
+}

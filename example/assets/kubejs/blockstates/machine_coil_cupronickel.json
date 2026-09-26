@@ -1,0 +1,15 @@
+{
+    "variants": {
+        "": {
+            "model": "kubejs:block/machine_coil_cupronickel"
+        }
+    },
+    "athena:loader": "athena:ctm",
+    "ctm_textures": {
+        "center": "kubejs:block/machine_coil_cupronickel/center",
+        "empty": "kubejs:block/machine_coil_cupronickel/empty",
+        "horizontal": "kubejs:block/machine_coil_cupronickel/horizontal",
+        "particle": "kubejs:block/machine_coil_cupronickel/particle",
+        "vertical": "kubejs:block/machine_coil_cupronickel/vertical"
+    }
+}

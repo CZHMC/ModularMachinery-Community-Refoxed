@@ -33,6 +33,9 @@ dependencies {
     // AppliedFlux 26.1-1.0.1-neoforge
     implementation "curse.maven:${aeflux_id}:${aeflux_version}"
 
+    // athena 4.7.3
+    compileOnly "curse.maven:${athena_id}:${athena_version}"
+
     // junit
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

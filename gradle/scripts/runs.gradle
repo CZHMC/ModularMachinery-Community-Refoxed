@@ -14,8 +14,8 @@ runs {
             runtime("curse.maven:${spark_id}:${spark_version}")
             // sodium
             runtime("curse.maven:${sodium_id}:${sodium_version}")
-            // fusion for ctm
-            runtime("maven.modrinth:${fusion_id}:${fusion_version}")
+            // athena for ctm
+            runtime("curse.maven:${athena_id}:${athena_version}")
         }
     }
 
