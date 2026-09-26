@@ -97,3 +97,10 @@ type="optional"
 versionRange="[10.8.0,)"
 ordering="AFTER"
 side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="athena"
+type="optional"
+versionRange="[4.7.3,)"
+ordering="AFTER"
+side="BOTH"

@@ -13,12 +13,15 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -98,6 +101,31 @@ public final class DynamicOverlayBakedModel {
                 ? MachineAppearanceSpec.defaults()
                 : MachineAppearanceCache.specFor(machineId);
         return active ? appearance.controllerActiveOverlayTexture() : appearance.controllerIdleOverlayTexture();
+    }
+
+    static boolean controllerCtmEligible(Identifier machineId, MachineAppearanceSpec appearance,
+                                         MachineControllerSpec controller) {
+        if (appearance.controllerTextureSource().overrideTexture() != null) {
+            return false;
+        }
+        MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
+        return controller.frontTexture().equals(defaults.frontTexture())
+                && controller.sideTexture().equals(defaults.sideTexture())
+                && controller.topTexture().equals(defaults.topTexture())
+                && controller.bottomTexture().equals(defaults.bottomTexture());
+    }
+
+    static Optional<BlockState> sourceState(MachineAppearanceSpec.TextureSource source, BlockGetter level,
+                                            BlockPos pos) {
+        if (source == null || source.overrideTexture() != null) {
+            return Optional.empty();
+        }
+        Block block = BuiltInRegistries.BLOCK.getValue(source.blockId());
+        if (block == null) {
+            return Optional.empty();
+        }
+        BlockState state = block.defaultBlockState();
+        return Block.isShapeFullBlock(state.getShape(level, pos)) ? Optional.of(state) : Optional.empty();
     }
 
     public static TextureSet portTextures(Identifier machineId, MachineAppearanceSpec.TextureSource explicitSource,

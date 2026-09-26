@@ -148,6 +148,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
         return ModelData.builder()
                 .with(MachineModelDataKeys.PORT_BASE_TEXTURE, appearanceSource.overrideTexture())
                 .with(MachineModelDataKeys.PORT_TEXTURE_SOURCE, appearanceSource)
+                .with(MachineModelDataKeys.PORT_LINKED, !linkedControllers.isEmpty())
                 .build();
     }
 
@@ -202,9 +203,15 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     }
 
     private void refreshLinkedAppearance() {
-        setAppearanceSource(linkedControllers.isEmpty()
+        MachineAppearanceSpec.TextureSource resolved = linkedControllers.isEmpty()
                 ? DEFAULT_APPEARANCE_SOURCE
-                : resolveLinkedAppearance(linkedControllers));
+                : resolveLinkedAppearance(linkedControllers);
+        boolean appearanceChanged = !resolved.equals(appearanceSource);
+        setAppearanceSource(resolved);
+        if (!appearanceChanged && level != null) {
+            requestModelDataUpdate();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 11);
+        }
         setChanged();
     }
 }

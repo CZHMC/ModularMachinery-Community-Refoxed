@@ -2,9 +2,13 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,5 +51,27 @@ class DynamicOverlayBakedModelTest {
 
         assertThat(DynamicOverlayBakedModel.controllerStateOverlay(machineId, false))
                 .isEqualTo(MMCR.id("block/custom_idle"));
+    }
+
+    @Test
+    void controller_ctm_requires_appearance_only_base_and_default_face_textures() {
+        var machineId = MMCR.id("athena_controller");
+        MachineControllerSpec defaults = MachineControllerSpec.defaultsFor(machineId);
+        MachineAppearanceSpec appearance = new MachineAppearanceSpec(
+                MMCR.id("athena_casing"), null, null,
+                MMCR.id("block/custom_idle"), MMCR.id("block/custom_active"));
+
+        assertThat(DynamicOverlayBakedModel.controllerCtmEligible(machineId, appearance, defaults)).isTrue();
+        assertThat(DynamicOverlayBakedModel.controllerCtmEligible(machineId,
+                new MachineAppearanceSpec(appearance.machineBasicBlock(), MMCR.id("block/base"), null), defaults)).isFalse();
+
+        for (int face = 0; face < 4; face++) {
+            List<Identifier> textures = new ArrayList<>(List.of(
+                    defaults.frontTexture(), defaults.sideTexture(), defaults.topTexture(), defaults.bottomTexture()));
+            textures.set(face, MMCR.id("block/custom_" + face));
+            var customized = new MachineControllerSpec(defaults.id(), textures.get(0), textures.get(1),
+                    textures.get(2), textures.get(3), false);
+            assertThat(DynamicOverlayBakedModel.controllerCtmEligible(machineId, appearance, customized)).isFalse();
+        }
     }
 }

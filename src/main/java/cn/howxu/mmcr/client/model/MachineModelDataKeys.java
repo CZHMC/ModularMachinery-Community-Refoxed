@@ -13,6 +13,7 @@ public final class MachineModelDataKeys {
     public static final ModelProperty<Identifier> MACHINE_ID = new ModelProperty<>();
     public static final ModelProperty<Identifier> PORT_BASE_TEXTURE = new ModelProperty<>();
     public static final ModelProperty<MachineAppearanceSpec.TextureSource> PORT_TEXTURE_SOURCE = new ModelProperty<>();
+    public static final ModelProperty<Boolean> PORT_LINKED = new ModelProperty<>();
 
     private MachineModelDataKeys() {
     }

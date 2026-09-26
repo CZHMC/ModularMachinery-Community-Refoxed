@@ -64,6 +64,21 @@ class AppearanceStateResolverTest {
     }
 
     @Test
+    void exposes_resolved_source_for_component_with_multiple_links() {
+        IOPortBlockEntity port = (IOPortBlockEntity) ModBlockEntities.BES.get("item_input_bus").get().create(
+                POS, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        port.linkControllerAppearanceSource(new BlockPos(1, 0, 0),
+                new MachineAppearanceSpec.TextureSource(BuiltInRegistries.BLOCK.getKey(Blocks.STONE), null));
+        port.linkControllerAppearanceSource(new BlockPos(2, 0, 0),
+                new MachineAppearanceSpec.TextureSource(BuiltInRegistries.BLOCK.getKey(Blocks.IRON_BLOCK), null));
+        Level level = LevelStub.create(java.util.Map.of(POS, port.getBlockState().getBlock()), List.of(port));
+        port.setLevel(level);
+
+        assertThat(AppearanceStateResolver.resolveLinked(port.getBlockState(), level, POS))
+                .isEqualTo(Blocks.STONE.defaultBlockState());
+    }
+
+    @Test
     void linked_io_port_reports_appearance_source_to_vanilla_rendering() {
         IOPortBlockEntity port = (IOPortBlockEntity) ModBlockEntities.BES.get("item_input_bus").get().create(
                 POS, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());

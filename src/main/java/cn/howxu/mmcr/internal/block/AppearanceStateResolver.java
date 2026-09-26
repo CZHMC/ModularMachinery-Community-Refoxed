@@ -33,7 +33,7 @@ final class AppearanceStateResolver {
 
     static BlockState resolveLinked(BlockState self, BlockGetter level, BlockPos pos) {
         if (!(level.getBlockEntity(pos) instanceof LinkedAppearanceBlockEntity component)
-                || component.linkedControllerPositions().size() != 1) {
+                || component.linkedControllerPositions().isEmpty()) {
             return self;
         }
         return resolve(self, level, pos, component.appearanceSource());

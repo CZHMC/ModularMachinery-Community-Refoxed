@@ -177,6 +177,28 @@ class MachinePortAppearanceTest {
         assertThat(data.get(MachineModelDataKeys.PORT_BASE_TEXTURE)).isEqualTo(texture);
     }
 
+    @Test
+    void model_data_reports_whether_a_controller_is_linked() {
+        IOPortBlockEntity port = itemInputBus();
+
+        assertThat(port.getModelData().get(MachineModelDataKeys.PORT_LINKED)).isFalse();
+
+        port.linkControllerAppearance(new BlockPos(1, 0, 0), null);
+
+        assertThat(port.getModelData().get(MachineModelDataKeys.PORT_LINKED)).isTrue();
+    }
+
+    @Test
+    void linking_default_appearance_still_requests_a_model_data_update() {
+        TrackingAppearanceBlockEntity component = new TrackingAppearanceBlockEntity();
+        Level level = LevelStub.create(Map.of(BlockPos.ZERO, component.getBlockState().getBlock()), List.of(component));
+        component.setLevel(level);
+
+        component.linkControllerAppearanceSource(new BlockPos(1, 0, 0), null);
+
+        assertThat(component.modelDataUpdates).isEqualTo(1);
+    }
+
     private static IOPortBlockEntity itemInputBus() {
         return (IOPortBlockEntity) ModBlockEntities.BES.get("item_input_bus").get().create(
                 BlockPos.ZERO,
@@ -189,6 +211,20 @@ class MachinePortAppearanceTest {
                 BlockPos.ZERO,
                 ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState()) {
         };
+    }
+
+    private static final class TrackingAppearanceBlockEntity extends LinkedAppearanceBlockEntity {
+        private int modelDataUpdates;
+
+        private TrackingAppearanceBlockEntity() {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
+                    ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        }
+
+        @Override
+        public void requestModelDataUpdate() {
+            modelDataUpdates++;
+        }
     }
 
     private static MachineControllerBlockEntity controller(BlockPos pos, boolean formed, Set<BlockPos> linkedPorts) throws Exception {
