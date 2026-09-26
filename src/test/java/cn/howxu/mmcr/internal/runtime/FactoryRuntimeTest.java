@@ -149,6 +149,31 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void full_active_factory_skips_async_recipe_search_scan() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = asyncFactoryController(input);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        MachineRecipe recipe = recipe("factory_full_active_search_skip", 20);
+
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        runtime.tick(List.of(recipe), 0, level.getGameTime());
+        assertThat(runtime.asyncSearchScansForTesting()).isEqualTo(1L);
+
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        runtime.tick(List.of(recipe), 1, 0L);
+        assertThat(runtime.activeLaneCount()).isEqualTo(1);
+
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        long searchScans = runtime.asyncSearchScansForTesting();
+        runtime.tick(List.of(recipe), 1, level.getGameTime());
+
+        assertThat(runtime.asyncSearchScansForTesting()).isEqualTo(searchScans);
+    }
+
+    @Test
     void searchContextUsesTheConfiguredMachineRecipePoolCatalog() {
         Identifier machineId = MMCR.id("factory_shared_pool_machine");
         Identifier recipePoolId = MMCR.id("factory_shared_pool");

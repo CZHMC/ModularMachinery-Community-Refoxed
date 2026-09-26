@@ -399,13 +399,42 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void factory_lane_sync_marks_the_controller_dirty() throws Exception {
+    void factory_lane_sync_marks_persistence_without_notifying_comparators() throws Exception {
         ChangeCountingController controller = changeCountingFactoryController(MMCR.id("factory_lane_sync_dirty"));
         controller.changedCalls = 0;
+        controller.persistenceChangedCalls = 0;
 
         invokeTickFactoryRecipes(controller);
 
-        assertThat(controller.changedCalls).isPositive();
+        assertThat(controller.persistenceChangedCalls).isPositive();
+        assertThat(controller.changedCalls).isZero();
+    }
+
+    @Test
+    void recipe_runtime_progress_marks_persistence_without_notifying_comparators() throws Exception {
+        ChangeCountingController controller = changeCountingFactoryController(MMCR.id("recipe_runtime_dirty"));
+        controller.changedCalls = 0;
+        controller.persistenceChangedCalls = 0;
+
+        controller.syncRecipeRuntimeFailure(runtimeOf(controller).craftingRuntime());
+
+        assertThat(controller.persistenceChangedCalls).isEqualTo(1);
+        assertThat(controller.changedCalls).isZero();
+    }
+
+    @Test
+    void runtime_update_batch_coalesces_persistence_changes() throws Exception {
+        ChangeCountingController controller = changeCountingFactoryController(MMCR.id("runtime_dirty_batch"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        controller.persistenceChangedCalls = 0;
+
+        runtime.beginUpdateBatch();
+        controller.syncRecipeRuntimeFailure(runtime.craftingRuntime());
+        controller.syncRecipeRuntimeFailure(runtime.craftingRuntime());
+
+        assertThat(controller.persistenceChangedCalls).isZero();
+        runtime.endUpdateBatch();
+        assertThat(controller.persistenceChangedCalls).isEqualTo(1);
     }
 
     @Test
@@ -1986,6 +2015,7 @@ class MachineControllerBlockEntityTest {
 
     private static final class ChangeCountingController extends MachineControllerBlockEntity {
         private int changedCalls;
+        private int persistenceChangedCalls;
 
         private ChangeCountingController(BlockPos pos, BlockState state) {
             super(pos, state);
@@ -1995,6 +2025,12 @@ class MachineControllerBlockEntityTest {
         public void setChanged() {
             changedCalls++;
             super.setChanged();
+        }
+
+        @Override
+        protected void persistRuntimeChanges() {
+            persistenceChangedCalls++;
+            super.persistRuntimeChanges();
         }
     }
 

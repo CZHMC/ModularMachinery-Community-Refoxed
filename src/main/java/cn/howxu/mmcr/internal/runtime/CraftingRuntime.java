@@ -604,7 +604,6 @@ public final class CraftingRuntime {
             status = active() ? CraftingStatus.working() : CraftingStatus.IDLE;
         }
         if (result.failure() != null || result.stateChanged()) controller.syncRecipeRuntimeFailure(this);
-        if (result.stateChanged()) controller.setChanged();
         return result;
     }
 

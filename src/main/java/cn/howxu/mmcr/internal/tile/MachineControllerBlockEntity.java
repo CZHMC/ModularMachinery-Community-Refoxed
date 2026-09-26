@@ -193,6 +193,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable Identifier pendingControllerLockId;
     private boolean redstonePaused;
+    private boolean runtimePersistenceChanged;
     private @Nullable MachineWorkMode activeWorkMode;
     private @Nullable MachineAsyncCoordinator.TaskKey pendingStructureScanTask;
     private long lifecycleEpoch;
@@ -609,7 +610,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (recipeRuntime == runtime.craftingRuntime()) {
             syncCraftingFailure();
             syncRuntimeStateIfChanged();
-            setChanged();
+            markRuntimePersistenceChanged();
             return;
         }
         if (!runtime.factoryRuntime().contains(recipeRuntime)) return;
@@ -619,9 +620,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return;
         }
         runtime.factoryRuntime().recomputeFailure();
-        runtime.publishSnapshot();
         syncRuntimeStateIfChanged();
-        setChanged();
+        markRuntimePersistenceChanged();
     }
 
     public static void flushQueuedAsyncRuntimeState(ServerLevel level) {
@@ -629,10 +629,27 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (controllers == null) return;
         for (MachineControllerBlockEntity controller : controllers) {
             controller.runtime.factoryRuntime().recomputeFailure();
-            controller.runtime.publishSnapshot();
             controller.syncRuntimeStateIfChanged();
-            controller.setChanged();
+            controller.markRuntimePersistenceChanged();
         }
+    }
+
+    private void markRuntimePersistenceChanged() {
+        if (runtime.updateBatchActive()) {
+            runtimePersistenceChanged = true;
+            return;
+        }
+        persistRuntimeChanges();
+    }
+
+    void flushRuntimePersistenceChanges() {
+        if (!runtimePersistenceChanged) return;
+        runtimePersistenceChanged = false;
+        persistRuntimeChanges();
+    }
+
+    protected void persistRuntimeChanges() {
+        if (level != null) level.blockEntityChanged(worldPosition);
     }
 
     void onSmartInterfaceValueChanged() {
@@ -1783,7 +1800,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean coreLanesChanged = factory.syncCoreLanesIfNeeded(this, structure.machine(), candidates);
         FactoryTickResult result = factory.tick(current, candidates, maxParallelism, level.getGameTime(),
                 this::playFinishSound);
-        if (baseLaneChanged || coreLanesChanged || result.snapshotChanged() || result.laneStateChanged()) setChanged();
+        if (baseLaneChanged || coreLanesChanged || result.snapshotChanged() || result.laneStateChanged()) {
+            markRuntimePersistenceChanged();
+        }
         boolean active = result.activeLaneCount() > 0;
         setActiveState(active);
         if (active) {

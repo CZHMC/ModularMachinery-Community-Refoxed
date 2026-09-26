@@ -264,8 +264,12 @@ public final class MachineControllerRuntime {
     public void endUpdateBatch() {
         if (snapshotBatchDepth <= 0) throw new IllegalStateException("No controller runtime update batch is active");
         if (--snapshotBatchDepth == 0) {
-            publishSnapshot();
-            controller.publishRuntimeStateAfterSnapshotBatch();
+            try {
+                publishSnapshot();
+                controller.publishRuntimeStateAfterSnapshotBatch();
+            } finally {
+                controller.flushRuntimePersistenceChanges();
+            }
         }
     }
 
