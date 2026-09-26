@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.datagen;
 
-import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -15,8 +14,6 @@ import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import mekanism.common.Mekanism;
-import mekanism.common.registries.MekanismItems;
-import mekanism.common.tags.MekanismTags;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;

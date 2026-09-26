@@ -115,28 +115,28 @@ public final class ModBlocks {
 
     private static void registerSmartInterface() {
         String name = "smart_interface";
-        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.SMART_INTERFACE.get();
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.SMART_INTERFACE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new SmartInterfaceBlock(beTypeSupplier, properties)));
     }
 
     private static void registerDataStorage() {
         String name = "data_storage";
-        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.DATA_STORAGE.get();
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.DATA_STORAGE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new DataStorageBlock(beTypeSupplier, properties)));
     }
 
     private static void registerNetworkInterface() {
         String name = "network_interface";
-        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.NETWORK_INTERFACE.get();
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.NETWORK_INTERFACE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new NetworkInterfaceBlock(beTypeSupplier, properties)));
     }
 
     private static void registerModuleCoupler() {
         String name = "module_bridge";
-        Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.MODULE_BRIDGE.get();
+        Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.MODULE_BRIDGE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
                 properties -> new ModuleCouplerBlock(beTypeSupplier, properties)));
     }
