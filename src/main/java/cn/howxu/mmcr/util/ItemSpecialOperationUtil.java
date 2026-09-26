@@ -9,9 +9,7 @@ import net.minecraft.world.entity.player.Player;
  */
 public class ItemSpecialOperationUtil {
 
-    // server detect
     public static boolean isSpecialOperated(Player player) {
-        // Now shift and crouching all invoke special action
         return player.isCrouching() || player.isShiftKeyDown();
     }
 }
