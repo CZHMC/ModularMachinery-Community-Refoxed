@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
@@ -20,18 +21,21 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.List;
 
-/** Client input bridge and server-state receiver for the terminal screen.
+/**
+ * Client input bridge and server-state receiver for the terminal screen.
+ *
  * @author howxu <dev@howxu.cn>
  */
 @EventBusSubscriber(modid = MMCR.MODID, value = Dist.CLIENT)
 public final class TerminalClientHandler {
-    private TerminalClientHandler() {}
+    private TerminalClientHandler() {
+    }
 
     @SubscribeEvent
     public static void onInteractionKey(InputEvent.InteractionKeyMappingTriggered event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
-        if (!shouldOpenScreen(event.isUseItem(), event.getHand(), minecraft.player.isCrouching(), minecraft.screen != null,
+        if (!shouldOpenScreen(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player, minecraft), minecraft.screen != null,
                 isTerminalScreenTarget(minecraft),
                 minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get()))) return;
         TerminalData data = TerminalData.from(minecraft.player.getMainHandItem());
@@ -42,13 +46,13 @@ public final class TerminalClientHandler {
     }
 
     public static void applyState(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
-            List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
+                                  List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
         applyState(data, controllerAvailable, storageAvailable, true, stages, machineName, previewLayers, statusKey);
     }
 
     public static void applyState(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
-            boolean ae2Available, List<Integer> stages, Component machineName, List<Integer> previewLayers,
-            String statusKey) {
+                                  boolean ae2Available, List<Integer> stages, Component machineName, List<Integer> previewLayers,
+                                  String statusKey) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof TerminalScreen screen) {
             screen.applyState(data, controllerAvailable, storageAvailable, ae2Available, stages, machineName,
@@ -73,7 +77,7 @@ public final class TerminalClientHandler {
     }
 
     static boolean shouldOpenScreen(boolean useItem, InteractionHand hand, boolean crouching,
-            boolean hasScreen, boolean targetAllowed, boolean terminalHeld) {
+                                    boolean hasScreen, boolean targetAllowed, boolean terminalHeld) {
         return useItem && hand == InteractionHand.MAIN_HAND && !crouching && !hasScreen && targetAllowed && terminalHeld;
     }
 }

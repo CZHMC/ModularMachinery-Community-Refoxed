@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.event;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -38,7 +39,7 @@ public final class WrenchDismantleHandler {
 
         Player player = event.getEntity();
         if (!(player instanceof ServerPlayer serverPlayer) || player.isSpectator()
-                || !player.isCrouching()
+                || !ItemSpecialOperationUtil.isSpecialOperated(player)
                 || !player.getMainHandItem().is(Tags.Items.TOOLS_WRENCH)) return;
 
         Block block = event.getLevel().getBlockState(event.getPos()).getBlock();

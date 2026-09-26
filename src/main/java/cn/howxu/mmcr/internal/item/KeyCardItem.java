@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModDataComponents;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -52,7 +53,7 @@ public class KeyCardItem extends Item {
         if (level.isClientSide()) return InteractionResult.SUCCESS;
 
         ItemStack stack = context.getItemInHand();
-        if (player.isCrouching()) {
+        if (ItemSpecialOperationUtil.isSpecialOperated(player)) {
             select(level, player, stack, target, context.getClickedPos());
             return InteractionResult.SUCCESS;
         }
@@ -63,7 +64,7 @@ public class KeyCardItem extends Item {
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
-        if (!player.isCrouching()) return InteractionResult.PASS;
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResult.PASS;
         if (!level.isClientSide()) {
             player.getItemInHand(hand).remove(ModDataComponents.KEY_CARD_BINDING.get());
             player.sendSystemMessage(Component.translatable("message.mmcr.key_card.cleared"));

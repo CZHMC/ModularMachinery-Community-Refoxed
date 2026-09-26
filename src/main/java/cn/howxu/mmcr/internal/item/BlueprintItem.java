@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModDataComponents;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -49,7 +50,7 @@ public class BlueprintItem extends Item {
     public InteractionResult useOn(UseOnContext context) {
         Level level = context.getLevel();
         Player player = context.getPlayer();
-        if (player == null || !player.isCrouching()
+        if (player == null || !ItemSpecialOperationUtil.isSpecialOperated(player)
                 || !(level.getBlockEntity(context.getClickedPos()) instanceof MachineControllerBlockEntity controller)) {
             return InteractionResult.PASS;
         }

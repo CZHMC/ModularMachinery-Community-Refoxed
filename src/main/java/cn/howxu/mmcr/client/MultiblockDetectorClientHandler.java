@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.gui.MultiblockDetectorScreen;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
@@ -24,14 +25,15 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 @EventBusSubscriber(modid = MMCR.MODID, value = Dist.CLIENT)
 public final class MultiblockDetectorClientHandler {
 
-    private MultiblockDetectorClientHandler() {}
+    private MultiblockDetectorClientHandler() {
+    }
 
     @SubscribeEvent
     public static void onInteractionKey(InputEvent.InteractionKeyMappingTriggered event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
 
-        if (shouldOpenScreen(event.isUseItem(), event.getHand(), minecraft.player.isCrouching(), minecraft.screen != null,
+        if (shouldOpenScreen(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player, minecraft), minecraft.screen != null,
                 minecraft.hitResult != null && minecraft.hitResult.getType() == HitResult.Type.MISS,
                 minecraft.player.getMainHandItem().is(ModItems.MULTIBLOCK_DETECTOR.get()))) {
             minecraft.setScreen(new MultiblockDetectorScreen(
@@ -59,7 +61,7 @@ public final class MultiblockDetectorClientHandler {
     }
 
     static boolean shouldOpenScreen(boolean useItem, InteractionHand hand, boolean crouching,
-            boolean hasScreen, boolean miss, boolean mainHandDetector) {
+                                    boolean hasScreen, boolean miss, boolean mainHandDetector) {
         return useItem && hand == InteractionHand.MAIN_HAND && !crouching && !hasScreen && miss && mainHandDetector;
     }
 }

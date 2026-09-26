@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -196,7 +197,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                 Player player, BlockHitResult hit) {
         if (!level.isClientSide()
-                && player.isCrouching()
+                && ItemSpecialOperationUtil.isSpecialOperated(player)
                 && player.getMainHandItem().isEmpty()
                 && player.getOffhandItem().isEmpty()
                 && level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller

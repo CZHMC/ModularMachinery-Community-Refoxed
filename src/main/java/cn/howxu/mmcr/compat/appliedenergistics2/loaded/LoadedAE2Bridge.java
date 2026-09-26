@@ -31,6 +31,7 @@ import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.component.DataComponentMap;
@@ -132,7 +133,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 || !(level.getBlockEntity(pos) instanceof MemoryCardHost memoryCardHost)) {
             return false;
         }
-        if (player.isCrouching()) {
+        if (ItemSpecialOperationUtil.isSpecialOperated(player)) {
             DataComponentMap.Builder builder = DataComponentMap.builder();
             memoryCardHost.exportMemoryCardSettings(builder, player);
             builder.set(AEComponents.EXPORTED_SETTINGS_SOURCE, memoryCardHost.memoryCardSettingsSource());

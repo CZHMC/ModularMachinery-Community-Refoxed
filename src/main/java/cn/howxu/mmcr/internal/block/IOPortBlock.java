@@ -20,6 +20,7 @@ import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -98,7 +99,7 @@ public class IOPortBlock extends Block implements EntityBlock {
         if (AE2Bridge.get().useMemoryCard(stack, level, pos, player)) {
             return InteractionResult.SUCCESS;
         }
-        if (!player.isCrouching() && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player) && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
             if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection(), null)) {
                 return InteractionResult.SUCCESS;

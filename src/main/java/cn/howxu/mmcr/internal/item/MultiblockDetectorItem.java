@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.item;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.registry.ModDataComponents;
+import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -43,7 +44,7 @@ public class MultiblockDetectorItem extends Item {
             ItemStack stack = context.getItemInHand();
             BlockPos pos = context.getClickedPos();
             MultiblockDetectorSelection selection = selection(stack);
-            if (player.isCrouching()) {
+            if (ItemSpecialOperationUtil.isSpecialOperated(player)) {
                 stack.set(ModDataComponents.MULTIBLOCK_DETECTOR_SELECTION.get(), selection.withSecond(pos));
                 player.sendSystemMessage(Component.translatable("message.mmcr.multiblock_detector.second_set", pos.toShortString()));
             } else {
@@ -56,7 +57,7 @@ public class MultiblockDetectorItem extends Item {
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
-        if (!player.isCrouching()) return InteractionResult.PASS;
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player)) return InteractionResult.PASS;
 
         if (!level.isClientSide()) {
             ItemStack stack = player.getItemInHand(hand);
