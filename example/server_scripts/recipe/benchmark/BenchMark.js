@@ -4,6 +4,7 @@ ServerEvents.recipes(event => {
         recipe_pool: 'mmcr_kubejs:bench_1',
         tick_time: 600,
         max_threads: 8,
+        parallelized: true,
         requirements: [
             {
                 type: 'minecraft:item',
