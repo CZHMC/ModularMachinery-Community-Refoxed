@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.event;
 
-import appeng.core.ConventionTags;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -19,6 +18,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.CommonHooks;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 
 import java.util.List;
@@ -39,7 +39,7 @@ public final class WrenchDismantleHandler {
         Player player = event.getEntity();
         if (!(player instanceof ServerPlayer serverPlayer) || player.isSpectator()
                 || !player.isCrouching()
-                || !player.getMainHandItem().is(ConventionTags.WRENCH)) return;
+                || !player.getMainHandItem().is(Tags.Items.TOOLS_WRENCH)) return;
 
         Block block = event.getLevel().getBlockState(event.getPos()).getBlock();
         if (!ModBlocks.BLOCKS.values().stream().anyMatch(holder -> holder.isBound() && holder.get() == block)) return;

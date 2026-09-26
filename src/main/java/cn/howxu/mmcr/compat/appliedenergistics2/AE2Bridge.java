@@ -9,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import org.jetbrains.annotations.Nullable;
@@ -30,6 +32,10 @@ public interface AE2Bridge {
     boolean isPort(String id);
 
     boolean openMenu(ServerPlayer player, Level level, BlockPos pos);
+
+    default boolean useMemoryCard(ItemStack stack, Level level, BlockPos pos, Player player) {
+        return false;
+    }
 
     default boolean isWirelessAccessPoint(ServerPlayer player, GlobalPos accessPoint) {
         return false;

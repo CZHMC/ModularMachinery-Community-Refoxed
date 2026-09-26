@@ -1,9 +1,13 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
 import appeng.api.AECapabilities;
+import appeng.api.ids.AEComponents;
+import appeng.api.implementations.items.IMemoryCard;
+import appeng.api.implementations.items.MemoryCardMessages;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.blockentity.networking.WirelessAccessPointBlockEntity;
+import appeng.items.tools.MemoryCardItem;
 import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.implementations.PatternProviderMenu;
@@ -19,6 +23,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.MemoryCardHost;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
@@ -28,9 +33,13 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -115,6 +124,34 @@ public final class LoadedAE2Bridge implements AE2Bridge {
             return MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(host));
         }
         return false;
+    }
+
+    @Override
+    public boolean useMemoryCard(ItemStack stack, Level level, BlockPos pos, Player player) {
+        if (!(stack.getItem() instanceof IMemoryCard memoryCard)
+                || !(level.getBlockEntity(pos) instanceof MemoryCardHost memoryCardHost)) {
+            return false;
+        }
+        if (player.isCrouching()) {
+            DataComponentMap.Builder builder = DataComponentMap.builder();
+            memoryCardHost.exportMemoryCardSettings(builder, player);
+            builder.set(AEComponents.EXPORTED_SETTINGS_SOURCE, memoryCardHost.memoryCardSettingsSource());
+            DataComponentMap settings = builder.build();
+            if (!settings.isEmpty()) {
+                MemoryCardItem.clearCard(stack);
+                stack.applyComponents(settings);
+                memoryCard.notifyUser(player, MemoryCardMessages.SETTINGS_SAVED);
+            }
+        } else {
+            Component savedSource = stack.get(AEComponents.EXPORTED_SETTINGS_SOURCE);
+            if (memoryCardHost.memoryCardSettingsSource().equals(savedSource)) {
+                memoryCardHost.importMemoryCardSettings(stack.getComponents(), player);
+                memoryCard.notifyUser(player, MemoryCardMessages.SETTINGS_LOADED);
+            } else {
+                MemoryCardItem.importGenericSettingsAndNotify(memoryCardHost, stack.getComponents(), player);
+            }
+        }
+        return true;
     }
 
     @Override
