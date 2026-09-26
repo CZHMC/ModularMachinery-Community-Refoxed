@@ -73,5 +73,10 @@
     "recipe_pool.mmcr.space_elevator": "太空电梯",
     "recipe_pool.mmcr.space_reassembler": "太空重组器",
     "recipe_pool.mmcr.monster_farm": "怪物农场",
-    "recipe_pool.mmcr.recipe_ticker": "配方Tick测试"
+    "recipe_pool.mmcr.recipe_ticker": "配方Tick测试",
+
+    "jei.mmcr_test.blast_furnace.info_1": "配方池示例信息1",
+    "jei.mmcr_test.blast_furnace.info_2": "配方池示例信息2: %s",
+    "jei.mmcr_test.blast_furnace.info_3": "单独配方示例信息3",
+    "jei.mmcr_test.blast_furnace.info_4": "单独配方示例信息4: %s"
 }

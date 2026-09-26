@@ -266,6 +266,7 @@ class MachineRecipeLayoutTest {
         assertThat(layout.levelRequirementSlotY(display, 1)).isEqualTo(layout.levelRequirementSlotY(display, 0) + 18);
         assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.levelRequirementSlotY(display, 1) + 18 + 10);
         assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.levelRequirementSlotY(display, 1));
+        assertThat(layout.informationTextY(display)).isEqualTo(layout.levelRequirementSlotY(display, 1) + 18 + 10);
     }
 
     @Test
@@ -290,6 +291,9 @@ class MachineRecipeLayoutTest {
                 .isEqualTo(layout.levelRequirementSlotY(display, 0) + 18 + 10);
         assertThat(layout.smartInterfaceTextY(display)).isEqualTo(layout.stageRequirementTextY(display) + 10);
         assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.smartInterfaceTextY(display));
+        assertThat(layout.informationTextY(display)).isEqualTo(layout.smartInterfaceTextY(display) + 10);
+        assertThat(layout.informationLineCapacity(display, layout.informationTextY(display) + 9)).isZero();
+        assertThat(layout.informationLineCapacity(display, layout.informationTextY(display) + 20)).isEqualTo(2);
     }
 
     @Test

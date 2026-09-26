@@ -86,5 +86,10 @@
     "recipe_pool.mmcr_kubejs.kubejs_data_storage_machine": "Data Storage测试",
     "recipe_pool.mmcr_kubejs.kubejs_network_producer_machine": "算力生产者",
     "recipe_pool.mmcr_kubejs.kubejs_network_center_machine": "算力中心",
-    "recipe_pool.mmcr_kubejs.kubejs_sps": "SPS"
+    "recipe_pool.mmcr_kubejs.kubejs_sps": "SPS",
+
+    "jei.kubejs.blast_furnace.info_1": "配方池示例信息1",
+    "jei.kubejs.blast_furnace.info_2": "配方池示例信息2: %s",
+    "jei.kubejs.blast_furnace.info_3": "单独配方示例信息3",
+    "jei.kubejs.blast_furnace.info_4": "单独配方示例信息4: %s"
 }

@@ -13,6 +13,7 @@ import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.jei.MachineRecipeLayout.OverflowSlotPlan;
+import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.ReadableNumber;
 import cn.howxu.mmcr.util.SaturatingLong;
@@ -215,6 +216,31 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
         drawOverflowSlot(layout.inputs().overflowSlot(), guiGraphics, slotBackground);
         drawOverflowSlot(layout.outputs().overflowSlot(), guiGraphics, slotBackground);
+        drawRecipeInformation(recipe, layout, guiGraphics);
+    }
+
+    private void drawRecipeInformation(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+                                       GuiGraphicsExtractor guiGraphics) {
+        List<Component> information = RecipeInformationRegistry.componentsFor(
+                recipe.recipePoolId(), recipe.recipeId());
+        int lineCount = Math.min(information.size(), layout.informationLineCapacity(recipe, getHeight()));
+        if (lineCount == 0) return;
+
+        var font = Minecraft.getInstance().font;
+        int margin = layout.durationTextX();
+        int maxTextWidth = (int) ((getWidth() - margin * 2) / TEXT_SCALE);
+        int textX = (int) (margin / TEXT_SCALE);
+        int y = layout.informationTextY(recipe);
+        guiGraphics.pose().pushMatrix();
+        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE);
+        for (int index = 0; index < lineCount; index++) {
+            var lines = font.split(information.get(index), maxTextWidth);
+            if (!lines.isEmpty()) {
+                guiGraphics.text(font, lines.getFirst(), textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
+            }
+            y += TEXT_LINE_SPACING;
+        }
+        guiGraphics.pose().popMatrix();
     }
 
     @Override

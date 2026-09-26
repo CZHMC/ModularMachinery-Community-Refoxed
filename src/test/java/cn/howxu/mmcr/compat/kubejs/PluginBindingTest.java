@@ -572,9 +572,10 @@ class PluginBindingTest {
     }
 
     @Test
-    void plugin_exposes_strict_mmcr_startup_and_server_events() {
+    void plugin_exposes_strict_mmcr_lifecycle_events() {
         assertThat(Plugin.events()).containsEntry("mmcr.startup", "mmcr.startup");
         assertThat(Plugin.events()).containsEntry("mmcr.server", "mmcr.server");
+        assertThat(Plugin.events()).containsEntry("mmcr.client", "mmcr.client");
         assertThat(Plugin.events()).containsEntry("mmcr.smart_interface.updated", "mmcr.smart_interface.updated");
     }
 

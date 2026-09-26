@@ -3,7 +3,9 @@ package cn.howxu.mmcr.compat.jei;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.publicapi.event.MMCRJeiRecipeInformationEvent;
 import cn.howxu.mmcr.client.gui.BlueprintScreen;
+import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import java.util.LinkedHashSet;
 import mezz.jei.api.IModPlugin;
@@ -16,6 +18,7 @@ import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.common.NeoForge;
 
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -38,6 +41,10 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
+        MMCRJeiRecipeInformationEvent event = new MMCRJeiRecipeInformationEvent();
+        NeoForge.EVENT_BUS.post(event);
+        event.freeze();
+        RecipeInformationRegistry.replacePublic(event.entries());
         JeiIngredientAdapterRegistry.registerBuiltIns();
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
         registration.addRecipeCategories(new MachineStructureCategory(guiHelper));

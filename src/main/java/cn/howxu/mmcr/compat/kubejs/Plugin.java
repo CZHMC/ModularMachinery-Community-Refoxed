@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.network.RuntimeContentSync;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
+import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.api.publicapi.machine.MachineDefinition;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
@@ -19,16 +20,19 @@ import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
 import net.minecraft.server.MinecraftServer;
+import net.neoforged.fml.ModList;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 
 public class Plugin implements KubeJSPlugin {
     private static boolean startupScriptsLoaded;
     private static final Map<Object, ServerReload> SERVER_RELOADS = new IdentityHashMap<>();
+    private static final Map<Object, Integer> CLIENT_RELOADS = new IdentityHashMap<>();
     private static Consumer<RuntimeContentSnapshot> currentServerSync =
             RuntimeContentServerBridge::sendToCurrentServer;
 
@@ -36,6 +40,9 @@ public class Plugin implements KubeJSPlugin {
     public void beforeScriptsLoaded(ScriptManager manager) {
         if (manager.scriptType == ScriptType.SERVER) {
             beginServerReload(manager, manager.scriptType.console.errors.size());
+        }
+        if (manager.scriptType == ScriptType.CLIENT) {
+            beginClientReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
             StartupContentRegistration.bindItemComponentsForEarlyRegistration();
@@ -54,6 +61,10 @@ public class Plugin implements KubeJSPlugin {
             MMCREvents.postStartup();
             startupScriptsLoaded = true;
             StartupContentRegistration.completeKubeJSStartupIfReady();
+        }
+        if (manager.scriptType == ScriptType.CLIENT) {
+            completeClientReload(manager, isJeiLoaded(), MMCREvents::postClient,
+                    () -> manager.scriptType.console.errors.size());
         }
     }
 
@@ -131,6 +142,32 @@ public class Plugin implements KubeJSPlugin {
     static void abortServerReload(Object manager) {
         SERVER_RELOADS.remove(manager);
         KubeJSContentReloadTransaction.deactivate();
+    }
+
+    static void beginClientReload(Object manager, int errorCount) {
+        CLIENT_RELOADS.put(manager, errorCount);
+    }
+
+    static void completeClientReloadForTesting(Object manager, boolean jeiAvailable,
+                                               Consumer<RecipeInformationEventJS> publisher,
+                                               IntSupplier errorCount) {
+        completeClientReload(manager, jeiAvailable, publisher, errorCount);
+    }
+
+    private static void completeClientReload(Object manager, boolean jeiAvailable,
+                                             Consumer<RecipeInformationEventJS> publisher,
+                                             IntSupplier errorCount) {
+        Integer initialErrors = CLIENT_RELOADS.remove(manager);
+        if (initialErrors == null) return;
+        RecipeInformationEventJS event = new RecipeInformationEventJS(jeiAvailable);
+        publisher.accept(event);
+        if (jeiAvailable && errorCount.getAsInt() == initialErrors) {
+            RecipeInformationRegistry.replaceKubeJS(event.entries());
+        }
+    }
+
+    private static boolean isJeiLoaded() {
+        return ModList.get().isLoaded("jei");
     }
 
     static void setCurrentServerForTesting(MinecraftServer server) {

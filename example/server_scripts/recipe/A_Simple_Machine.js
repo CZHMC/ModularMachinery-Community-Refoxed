@@ -32,5 +32,32 @@ ServerEvents.recipes( event => {
         ]
     }).id('mmcr_kubejs:blast_furnace_1') // Optional recipe ID provided by KubeJS.
 
+    event.custom({
+        type: 'mmcr:machine_recipe',
+        recipe_pool: 'mmcr_kubejs:kubejs_blast_furnace',
+        tick_time: 100,
+        requirements: [
+            {
+                type: 'minecraft:item',
+                io: 'input',
+                item: 'minecraft:gold_ingot',
+                count: 1
+            },
+            {
+                type: 'minecraft:item',
+                io: 'output',
+                stack: {
+                    id: 'minecraft:gold_nugget',
+                    count: 10
+                }
+            },
+            {
+                type: 'neoforge:energy',
+                io: 'input',
+                fe_per_tick: 1
+            }
+        ]
+    })
+
     // The first machine recipe is complete.
 })

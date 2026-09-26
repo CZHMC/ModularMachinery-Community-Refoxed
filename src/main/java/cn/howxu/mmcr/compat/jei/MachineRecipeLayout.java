@@ -222,6 +222,16 @@ public record MachineRecipeLayout(
                 + (display.requiredHostIds().isEmpty() ? 0 : 1));
     }
 
+    public int informationTextY(MachineRecipeDisplay display) {
+        int smartInterfaceCount = display.smartInterfaceInputs().size() + display.smartInterfaceOutputs().size();
+        return smartInterfaceTextY(display) + TEXT_LINE_SPACING * smartInterfaceCount;
+    }
+
+    public int informationLineCapacity(MachineRecipeDisplay display, int categoryHeight) {
+        int availableHeight = categoryHeight - informationTextY(display);
+        return Math.max(0, availableHeight / TEXT_LINE_SPACING);
+    }
+
     private static int metadataLineCount(MachineRecipeDisplay display) {
         return 1 + display.energyInputs().size() + display.energyOutputs().size()
                 + (display.minimumTemperature().isPresent() ? 1 : 0)

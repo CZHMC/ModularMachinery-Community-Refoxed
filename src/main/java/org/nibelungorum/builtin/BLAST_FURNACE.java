@@ -92,5 +92,15 @@ public class BLAST_FURNACE {
                 .build();
         event.registerRecipe(recipe);
 
+        recipe = MachineRecipeBuilder
+                .recipe(BLAST_FURNACE.withSuffix("_recipe_2"))
+                .recipePool(BLAST_FURNACE)
+                .inputItem(Ingredient.of(Items.GOLD_INGOT),9)
+                .outputItem(Items.GOLD_NUGGET,10)
+                .inputEnergy(20)
+                .duration(240)
+                .build();
+        event.registerRecipe(recipe);
+
     }
 }

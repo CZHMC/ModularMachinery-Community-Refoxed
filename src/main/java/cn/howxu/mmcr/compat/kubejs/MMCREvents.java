@@ -8,14 +8,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * KubeJS event group for MMCR declaration scripts. Use {@code mmcr.startup} for startup declarations
- * and {@code mmcr.server} for server-resource-reload declarations; both payloads expose {@code getAPI()}.
+ * KubeJS event group for MMCR declaration scripts and client recipe information.
  *
  * @author howxu <dev@howxu.cn>
  */
 public interface MMCREvents {
     String STARTUP_ID = "mmcr.startup";
     String SERVER_ID = "mmcr.server";
+    String CLIENT_ID = "mmcr.client";
     EventGroup GROUP = EventGroup.of("mmcr");
 
     static EventGroup group() {
@@ -31,10 +31,15 @@ public interface MMCREvents {
         Holder.SERVER.post(ScriptType.SERVER, new MMCRServerEventJS());
     }
 
+    static void postClient(RecipeInformationEventJS event) {
+        Holder.CLIENT.post(ScriptType.CLIENT, event);
+    }
+
     static Map<String, String> events() {
         Map<String, String> events = new LinkedHashMap<>();
         events.put(STARTUP_ID, STARTUP_ID);
         events.put(SERVER_ID, SERVER_ID);
+        events.put(CLIENT_ID, CLIENT_ID);
         return events;
     }
 
@@ -43,6 +48,8 @@ public interface MMCREvents {
                 () -> MMCRStartupEventJS.class);
         private static final EventHandler SERVER = MMCREvents.GROUP.server("server",
                 () -> MMCRServerEventJS.class);
+        private static final EventHandler CLIENT = MMCREvents.GROUP.client("client",
+                () -> RecipeInformationEventJS.class);
 
         private static void init() {
         }

@@ -73,5 +73,10 @@
     "recipe_pool.mmcr.space_elevator": "Space Elevator",
     "recipe_pool.mmcr.space_reassembler": "Space Reassembler",
     "recipe_pool.mmcr.monster_farm": "Monster Farm",
-    "recipe_pool.mmcr.recipe_ticker": "Recipe Ticker"
+    "recipe_pool.mmcr.recipe_ticker": "Recipe Ticker",
+
+    "jei.mmcr_test.blast_furnace.info_1": "Recipe Pool Information 1",
+    "jei.mmcr_test.blast_furnace.info_2": "Recipe Pool Information 2: %s",
+    "jei.mmcr_test.blast_furnace.info_3": "Single Recipe Information 3",
+    "jei.mmcr_test.blast_furnace.info_4": "Single Recipe Information 4: %s"
 }
