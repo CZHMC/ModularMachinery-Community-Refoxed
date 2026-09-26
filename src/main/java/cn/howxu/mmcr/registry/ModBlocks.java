@@ -51,6 +51,7 @@ public final class ModBlocks {
     public static final DeferredHolder<Block, Block> DATA_STORAGE = BLOCKS.get("data_storage");
     public static final DeferredHolder<Block, Block> NETWORK_INTERFACE = BLOCKS.get("network_interface");
     public static final DeferredHolder<Block, Block> MODULE_BRIDGE = BLOCKS.get("module_bridge");
+    public static final DeferredHolder<Block, Block> FACTORY_CONTROLLER = BLOCKS.get("factory_controller");
 
     /** Compatibility alias for {@link #BASIC_CASING}; the block id was renamed from {@code casing} to {@code basic_casing}. */
     public static final DeferredHolder<Block, Block> CASING = BASIC_CASING;

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.datagen;
 
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -12,6 +14,9 @@ import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import mekanism.common.Mekanism;
+import mekanism.common.registries.MekanismItems;
+import mekanism.common.tags.MekanismTags;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -211,6 +216,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         generatedPortRecipes();
         ae2InterfaceRecipes();
         appliedFluxInterfaceRecipes();
+        mekanismPortsRecipes();
 
         shaped(ModBlocks.SMART_INTERFACE.get(), 1)
                 .pattern("DBD")
@@ -244,7 +250,7 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('E', Items.ENDER_PEARL)
                 .save(output);
 
-        shaped(ModItems.ITEMS.get("factory_controller").get(), 1)
+        shaped(ModBlocks.FACTORY_CONTROLLER.get(), 1)
                 .pattern("ABA")
                 .pattern("CDC")
                 .pattern("EFE")
@@ -338,53 +344,107 @@ public final class ModRecipeProvider extends RecipeProvider {
         ItemLike previous = ModItems.ITEMS.get(itemInputBusId(ItemBusSize.LUDICROUS)).get();
         for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
             ItemLike result = ModItems.ITEMS.get("extended_item_input_bus_" + size.id()).get();
-            upgradeRecipe(result, previous);
+            // upgradeRecipe(result, previous);
+            shaped(result, 1)
+                    .pattern(" A ")
+                    .pattern("BCB")
+                    .pattern("DBD")
+                    .define('A', Items.ANVIL)
+                    .define('B', ModBlocks.BASIC_CASING.get())
+                    .define('C', previous)
+                    .define('D', Tags.Items.CHESTS)
+                    .save(output);
             previous = result;
         }
 
         previous = ModItems.ITEMS.get(itemOutputBusId(ItemBusSize.LUDICROUS)).get();
         for (ExtendedItemBusSize size : ExtendedItemBusSize.values()) {
             ItemLike result = ModItems.ITEMS.get("extended_item_output_bus_" + size.id()).get();
-            upgradeRecipe(result, previous);
+            // upgradeRecipe(result, previous);
+            shaped(result, 1)
+                    .pattern("ABA")
+                    .pattern("BCB")
+                    .pattern(" D ")
+                    .define('A', Tags.Items.CHESTS)
+                    .define('B', ModBlocks.BASIC_CASING.get())
+                    .define('C', previous)
+                    .define('D', Items.ANVIL)
+                    .save(output);
             previous = result;
         }
 
         previous = ModItems.ITEMS.get(fluidInputHatchId(FluidHatchSize.VACUUM)).get();
         for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
             ItemLike result = ModItems.ITEMS.get("extended_fluid_input_hatch_" + size.id()).get();
-            upgradeRecipe(result, previous);
+            // upgradeRecipe(result, previous);
+            shaped(result, 1)
+                    .pattern(" A ")
+                    .pattern("BCB")
+                    .pattern("DBD")
+                    .define('A', Items.CAULDRON)
+                    .define('B', ModBlocks.BASIC_CASING.get())
+                    .define('C', previous)
+                    .define('D', Items.BUCKET)
+                    .save(output);
             previous = result;
         }
 
         previous = ModItems.ITEMS.get(fluidOutputHatchId(FluidHatchSize.VACUUM)).get();
         for (ExtendedFluidHatchSize size : ExtendedFluidHatchSize.values()) {
             ItemLike result = ModItems.ITEMS.get("extended_fluid_output_hatch_" + size.id()).get();
-            upgradeRecipe(result, previous);
+            // upgradeRecipe(result, previous);
+            shaped(result, 1)
+                    .pattern("DBD")
+                    .pattern("BCB")
+                    .pattern(" A ")
+                    .define('A', Items.CAULDRON)
+                    .define('B', ModBlocks.BASIC_CASING.get())
+                    .define('C', previous)
+                    .define('D', Items.BUCKET)
+                    .save(output);
             previous = result;
         }
 
         previous = ModItems.ITEMS.get(energyInputHatchId(EnergyHatchSize.ULTIMATE)).get();
         for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
             ItemLike result = ModItems.ITEMS.get("extended_energy_input_hatch_" + size.id()).get();
-            upgradeRecipe(result, previous);
+            // upgradeRecipe(result, previous);
+            shaped(result, 1)
+                    .pattern("ABA")
+                    .pattern("CDC")
+                    .pattern("ACA")
+                    .define('A', Tags.Items.DUSTS_REDSTONE)
+                    .define('B', Items.REPEATER)
+                    .define('C', Tags.Items.STORAGE_BLOCKS_REDSTONE)
+                    .define('D', previous)
+                    .save(output);
             previous = result;
         }
 
         previous = ModItems.ITEMS.get(energyOutputHatchId(EnergyHatchSize.ULTIMATE)).get();
         for (ExtendedEnergyHatchSize size : ExtendedEnergyHatchSize.values()) {
             ItemLike result = ModItems.ITEMS.get("extended_energy_output_hatch_" + size.id()).get();
-            upgradeRecipe(result, previous);
+            // upgradeRecipe(result, previous);
+            shaped(result, 1)
+                    .pattern("ACA")
+                    .pattern("CDC")
+                    .pattern("ABA")
+                    .define('A', Tags.Items.DUSTS_REDSTONE)
+                    .define('B', Items.REPEATER)
+                    .define('C', Tags.Items.STORAGE_BLOCKS_REDSTONE)
+                    .define('D', previous)
+                    .save(output);
             previous = result;
         }
 
-        previous = combinedRecipe("combined_input_basic", "item_input_bus", "fluid_input_hatch");
+        previous = combinedRecipe("combined_input_basic", "item_input_bus_huge", "fluid_input_hatch_ludicrous");
         for (int index = 1; index < CombinedPortSize.values().length; index++) {
             ItemLike result = ModItems.ITEMS.get("combined_input_" + CombinedPortSize.values()[index].id()).get();
             upgradeRecipe(result, previous);
             previous = result;
         }
 
-        previous = combinedRecipe("combined_output_basic", "item_output_bus", "fluid_output_hatch");
+        previous = combinedRecipe("combined_output_basic", "item_output_bus_huge", "fluid_output_hatch_ludicrous");
         for (int index = 1; index < CombinedPortSize.values().length; index++) {
             ItemLike result = ModItems.ITEMS.get("combined_output_" + CombinedPortSize.values()[index].id()).get();
             upgradeRecipe(result, previous);
@@ -463,6 +523,80 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .save(whenLoaded("ae2", "extendedae"));
     }
 
+    private void mekanismPortsRecipes() {
+        for (MekanismPortSizes.ChemicalTier size : MekanismPortSizes.ChemicalTier.values()) {
+            ItemLike chemical_tank = BuiltInRegistries.ITEM.get(Mekanism.rl(size.id() + "_chemical_tank")).orElseThrow().value();
+            ItemLike result = ModBlocks.BLOCKS.get("chemical_input_hatch_" + size.id()).get();
+            shaped(result, 1)
+                    .pattern(" A ")
+                    .pattern("BCB")
+                    .pattern("ABA")
+                    .define('A', itemTag("ingots/osmium"))
+                    .define('B', ModBlocks.BASIC_CASING.get())
+                    .define('C', chemical_tank)
+                    .save(whenLoaded("mekanism"));
+        }
+
+        for (MekanismPortSizes.ChemicalTier size : MekanismPortSizes.ChemicalTier.values()) {
+            ItemLike chemical_tank = BuiltInRegistries.ITEM.get(Mekanism.rl(size.id() + "_chemical_tank")).orElseThrow().value();
+            ItemLike result = ModBlocks.BLOCKS.get("chemical_output_hatch_" + size.id()).get();
+            shaped(result, 1)
+                    .pattern("ABA")
+                    .pattern("BCB")
+                    .pattern(" A ")
+                    .define('A', itemTag("ingots/osmium"))
+                    .define('B', ModBlocks.BASIC_CASING.get())
+                    .define('C', chemical_tank)
+                    .save(whenLoaded("mekanism"));
+        }
+
+        ItemLike result = ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get();
+        ItemLike input = BuiltInRegistries.ITEM.get(Mekanism.rl("radioactive_waste_barrel")).orElseThrow().value();
+
+        shaped(result, 1)
+                .pattern(" A ")
+                .pattern("BCB")
+                .pattern("ABA")
+                .define('A', itemTag("ingots/lead"))
+                .define('B', ModBlocks.BASIC_CASING.get())
+                .define('C', input)
+                .save(whenLoaded("mekanism"));
+
+        result = ModBlocks.BLOCKS.get("radioactive_chemical_output_hatch").get();
+
+        shaped(result, 1)
+                .pattern("ABA")
+                .pattern("BCB")
+                .pattern(" A ")
+                .define('A', itemTag("ingots/lead"))
+                .define('B', ModBlocks.BASIC_CASING.get())
+                .define('C', input)
+                .save(whenLoaded("mekanism"));
+
+        result = ModBlocks.BLOCKS.get("heat_input_hatch").get();
+        input = BuiltInRegistries.ITEM.get(Mekanism.rl("superheating_element")).orElseThrow().value();
+
+        shaped(result, 1)
+                .pattern(" A ")
+                .pattern("BCB")
+                .pattern("ABA")
+                .define('A', itemTag("ingots/copper"))
+                .define('B', ModBlocks.BASIC_CASING.get())
+                .define('C', input)
+                .save(whenLoaded("mekanism"));
+
+        result = ModBlocks.BLOCKS.get("heat_output_hatch").get();
+
+        shaped(result, 1)
+                .pattern("ABA")
+                .pattern("BCB")
+                .pattern(" A ")
+                .define('A', itemTag("ingots/copper"))
+                .define('B', ModBlocks.BASIC_CASING.get())
+                .define('C', input)
+                .save(whenLoaded("mekanism"));
+    }
+
     private void appliedFluxInterfaceRecipes() {
         if (!ModItems.ITEMS.containsKey("appflux_me_flux_input_interface")) return;
         if (!ModItems.ITEMS.containsKey("appflux_me_flux_output_interface")) return;
@@ -490,7 +624,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         shapeless(result, 1)
                 .requires(ModItems.ITEMS.get(itemId).get())
                 .requires(ModItems.ITEMS.get(fluidId).get())
-                .requires(ModItems.MODULARIUM.get())
+                .requires(ModBlocks.BASIC_CASING.get())
                 .save(output);
         return result;
     }
@@ -499,6 +633,7 @@ public final class ModRecipeProvider extends RecipeProvider {
         shapeless(result, 1)
                 .requires(previous)
                 .requires(ModItems.MODULARIUM.get())
+                .requires(Tags.Items.NETHER_STARS)
                 .save(output);
     }
 
