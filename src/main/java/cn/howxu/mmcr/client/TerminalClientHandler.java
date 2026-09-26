@@ -35,7 +35,7 @@ public final class TerminalClientHandler {
     public static void onInteractionKey(InputEvent.InteractionKeyMappingTriggered event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
-        if (!shouldOpenScreen(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player, minecraft), minecraft.screen != null,
+        if (!shouldOpenScreen(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player), minecraft.screen != null,
                 isTerminalScreenTarget(minecraft),
                 minecraft.player.getMainHandItem().is(ModItems.TERMINAL.get()))) return;
         TerminalData data = TerminalData.from(minecraft.player.getMainHandItem());

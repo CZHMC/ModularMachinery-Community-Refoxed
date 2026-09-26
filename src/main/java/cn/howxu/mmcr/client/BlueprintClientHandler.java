@@ -36,7 +36,7 @@ public final class BlueprintClientHandler {
 
         boolean miss = minecraft.hitResult != null
                 && minecraft.hitResult.getType() == HitResult.Type.MISS;
-        if (!shouldHandle(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player, minecraft), minecraft.screen != null,
+        if (!shouldHandle(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player), minecraft.screen != null,
                 miss, minecraft.player.getMainHandItem().is(ModItems.BLUEPRINT.get()))) return;
 
         ItemStack stack = minecraft.player.getMainHandItem();

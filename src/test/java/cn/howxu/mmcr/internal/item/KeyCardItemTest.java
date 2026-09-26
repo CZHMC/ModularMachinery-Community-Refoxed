@@ -82,16 +82,18 @@ class KeyCardItemTest {
     }
 
     @Test
-    void crouch_right_click_stores_and_replaces_the_interface_and_machine_reference() throws Exception {
+    void shift_or_crouch_right_click_stores_and_replaces_the_interface_and_machine_reference() throws Exception {
         Fixture fixture = fixture(true, true);
         ItemStack stack = stack();
         TestPlayer player = player();
-        player.setCrouching(true);
+        player.setShiftKeyDown(true);
 
         assertThat(useOn(fixture, player, stack, fixture.sourceEndpoint)).isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get()))
                 .isEqualTo(new KeyCardBinding(fixture.sourceEndpoint, fixture.sourceMachine));
 
+        player.setShiftKeyDown(false);
+        player.setCrouching(true);
         assertThat(useOn(fixture, player, stack, fixture.targetEndpoint)).isEqualTo(InteractionResult.SUCCESS);
         assertThat(stack.get(ModDataComponents.KEY_CARD_BINDING.get()))
                 .isEqualTo(new KeyCardBinding(fixture.targetEndpoint, fixture.targetMachine));
@@ -398,6 +400,7 @@ class KeyCardItemTest {
         private ItemStack held;
         private ArrayList<Component> messages;
         private boolean crouching;
+        private boolean shiftDown;
 
         private TestPlayer(Level level) {
             super(level, new GameProfile(UUID.randomUUID(), "key-card-test"));
@@ -408,7 +411,9 @@ class KeyCardItemTest {
             if (messages == null) messages = new ArrayList<>();
         }
         private void setCrouching(boolean crouching) { this.crouching = crouching; }
+        @Override public void setShiftKeyDown(boolean shiftDown) { this.shiftDown = shiftDown; }
         @Override public boolean isCrouching() { return crouching; }
+        @Override public boolean isShiftKeyDown() { return shiftDown; }
         @Override public ItemStack getItemInHand(InteractionHand hand) { return held; }
         @Override public void sendSystemMessage(Component message) {
             if (messages == null) messages = new ArrayList<>();

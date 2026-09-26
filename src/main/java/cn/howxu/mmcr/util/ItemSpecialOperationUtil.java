@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.util;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 
 /**
@@ -10,14 +9,9 @@ import net.minecraft.world.entity.player.Player;
  */
 public class ItemSpecialOperationUtil {
 
-    public static boolean isSpecialOperated(Player player){
+    // server detect
+    public static boolean isSpecialOperated(Player player) {
         // Now shift and crouching all invoke special action
-        return player.isCrouching() || Minecraft.getInstance().hasShiftDown();
+        return player.isCrouching() || player.isShiftKeyDown();
     }
-
-    public static boolean isSpecialOperated(Player player,Minecraft minecraft){
-        // Now shift and crouching all invoke special action
-        return player.isCrouching() || minecraft.hasShiftDown();
-    }
-
 }

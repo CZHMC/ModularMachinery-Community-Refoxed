@@ -33,7 +33,7 @@ public final class MultiblockDetectorClientHandler {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
 
-        if (shouldOpenScreen(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player, minecraft), minecraft.screen != null,
+        if (shouldOpenScreen(event.isUseItem(), event.getHand(), ItemSpecialOperationUtil.isSpecialOperated(minecraft.player), minecraft.screen != null,
                 minecraft.hitResult != null && minecraft.hitResult.getType() == HitResult.Type.MISS,
                 minecraft.player.getMainHandItem().is(ModItems.MULTIBLOCK_DETECTOR.get()))) {
             minecraft.setScreen(new MultiblockDetectorScreen(
