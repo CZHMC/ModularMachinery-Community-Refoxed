@@ -209,7 +209,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
                 case EAST -> new float[]{1.0f - vertex.z(), vertex.x()};
                 case SOUTH -> new float[]{vertex.x(), vertex.z()};
                 case WEST -> new float[]{vertex.z(), 1.0f - vertex.x()};
-                default -> new float[]{1.0f - vertex.x(), 1.0f - vertex.z()};
+                default -> new float[]{vertex.x(), vertex.z()};
             };
         }
         return new float[]{u(direction, vertex), v(direction, vertex)};
