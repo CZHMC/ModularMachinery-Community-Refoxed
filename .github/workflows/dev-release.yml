@@ -2,9 +2,14 @@ name: Nightly Dev Release
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Mod version
+        required: true
 
 permissions:
-  contents: write
+  actions: read
+  contents: read
 
 jobs:
   resolve-version:
@@ -14,18 +19,18 @@ jobs:
       mod-version: ${{ steps.version.outputs.mod-version }}
       minecraft-version: ${{ steps.version.outputs.minecraft-version }}
       java-version: ${{ steps.version.outputs.java-version }}
-      base-tag: ${{ steps.version.outputs.base-tag }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Resolve dev version
         id: version
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
 
@@ -41,27 +46,19 @@ jobs:
             exit 1
           fi
 
-          hash="$(git rev-parse --short HEAD)"
-          base_tag="$(git describe --tags --abbrev=0 --first-parent \
-            --match "${minecraft_version}-[0-9]*.[0-9]*.[0-9]*" \
-            --exclude '*+dev-*' HEAD 2>/dev/null || true)"
-          if [ -n "$base_tag" ]; then
-            base="${base_tag#"${minecraft_version}-"}"
-            if [[ ! "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "Nearest release tag ${base_tag} does not use the expected format" >&2
-              exit 1
-            fi
-          else
-            base="0.0.0"
+          base="$RELEASE_VERSION"
+          if [[ ! "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must use the X.Y.Z format" >&2
+            exit 1
           fi
 
+          hash="$(git rev-parse --short HEAD)"
           mod_version="${base}+dev-${hash}"
           version="${minecraft_version}-${mod_version}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "mod-version=${mod_version}" >> "$GITHUB_OUTPUT"
           echo "minecraft-version=${minecraft_version}" >> "$GITHUB_OUTPUT"
           echo "java-version=${java_version}" >> "$GITHUB_OUTPUT"
-          echo "base-tag=${base_tag}" >> "$GITHUB_OUTPUT"
 
   release:
     name: Nightly Dev Release ${{ needs.resolve-version.outputs.version }}
@@ -74,7 +71,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Set up Java ${{ needs.resolve-version.outputs.java-version }}
         uses: actions/setup-java@v4
@@ -119,20 +115,23 @@ jobs:
         id: notes
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           DEEPSEEK_TOKEN: ${{ secrets.DEEPSEEK_TOKEN }}
         run: |
           set -euo pipefail
 
           current_version="${{ needs.resolve-version.outputs.version }}"
 
-          previous_tag="${{ needs.resolve-version.outputs.base-tag }}"
-          if [ -n "$previous_tag" ]; then
-            range="${previous_tag}..HEAD"
+          previous_sha="$(gh run list --workflow dev-release.yml --branch "$GITHUB_REF_NAME" \
+            --status success --limit 1 --json headSha --jq '.[0].headSha // empty')"
+          if [ -n "$previous_sha" ] && git merge-base --is-ancestor "$previous_sha" HEAD; then
+            range="${previous_sha}..HEAD"
+            commit_data="$(git log "$range" --pretty=format:'%h %s' --no-merges)"
           else
             range="HEAD"
+            commit_data="$(git log -1 HEAD --pretty=format:'%h %s' --no-merges)"
           fi
 
-          commit_data="$(git log "$range" --pretty=format:'%h %s' --no-merges)"
           fallback="$(bash .github/scripts/format-release-notes.sh \
             "${{ needs.resolve-version.outputs.version }}" <<< "$commit_data")"
           full_list="$(bash .github/scripts/format-release-notes.sh --full <<< "$commit_data")"
@@ -180,13 +179,9 @@ jobs:
       - name: Publish release artifacts
         uses: Kira-NT/mc-publish@v3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-tag: ${{ needs.resolve-version.outputs.version }}
-          github-commitish: ${{ github.sha }}
           name: ${{ needs.resolve-version.outputs.version }}
           version: ${{ needs.resolve-version.outputs.version }}
           version-type: beta
-          github-changelog: ${{ steps.notes.outputs.body }}
           modrinth-changelog: ${{ steps.notes.outputs.summary }}
           curseforge-changelog: ${{ steps.notes.outputs.summary }}
           files: build/libs/!(*-@(dev|sources|javadoc|api)).jar
