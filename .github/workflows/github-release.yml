@@ -1,0 +1,88 @@
+name: GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Build and publish release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_TOKEN: ${{ secrets.DEEPSEEK_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          tag="$RELEASE_TAG"
+          if ! git check-ref-format "refs/tags/${tag}" >/dev/null; then
+            echo "Invalid tag name: ${tag}" >&2
+            exit 1
+          fi
+          if ! git rev-parse --verify --quiet "refs/tags/${tag}^{commit}" >/dev/null; then
+            echo "Tag does not exist: ${tag}" >&2
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release already exists for tag: ${tag}" >&2
+            exit 1
+          fi
+
+          previous_tag="$(git describe --tags --abbrev=0 --first-parent "${tag}^" 2>/dev/null || true)"
+          if [ -n "$previous_tag" ]; then
+            range="${previous_tag}..${tag}"
+            commit_data="$(git log "$range" --pretty=format:'%h %s' --no-merges)"
+          else
+            range="$tag"
+            commit_data="$(git log -1 "$tag" --pretty=format:'%h %s' --no-merges)"
+          fi
+
+          fallback="$(bash .github/scripts/format-release-notes.sh "$tag" <<< "$commit_data")"
+          full_list="$(bash .github/scripts/format-release-notes.sh --full <<< "$commit_data")"
+          if [ -z "$full_list" ]; then
+            full_list="- No changes found."
+          fi
+          changelog="${commit_data:-No changes found.}"
+
+          prompt_template="$(cat .github/prompts/release-notes.md)"
+          prompt="$(printf '%s\n\nRelease version: %s\nCommit range: %s\n\nCommits:\n%s' \
+            "$prompt_template" "$tag" "$range" "$changelog")"
+          generated=""
+          if [ -n "${DEEPSEEK_TOKEN:-}" ]; then
+            request="$(jq -n --arg model 'deepseek-v4-flash' --arg prompt "$prompt" \
+              '{model: $model, messages: [{role: "user", content: $prompt}], temperature: 0.2}')"
+            if response="$(curl --fail --silent --show-error --max-time 120 \
+              -X POST 'https://api.deepseek.com/chat/completions' \
+              -H 'Content-Type: application/json' \
+              -H "Authorization: Bearer ${DEEPSEEK_TOKEN}" \
+              --data "$request")"; then
+              generated="$(jq -er '.choices[0].message.content' <<< "$response" 2>/dev/null || true)"
+            fi
+          fi
+
+          if [ -z "$generated" ]; then
+            generated="$fallback"
+          else
+            generated="$(printf '# Release %s\n\n%s\n\n<details>\n<summary>Full commit list</summary>\n\n%s\n\n</details>\n' \
+              "$tag" "$generated" "$full_list")"
+          fi
+
+          notes_file="$RUNNER_TEMP/github-release-notes.md"
+          printf '%s\n' "$generated" > "$notes_file"
+          gh release create "$tag" --verify-tag --title "$tag" --notes-file "$notes_file" --latest

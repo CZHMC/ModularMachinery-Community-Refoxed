@@ -8,7 +8,8 @@ on:
         required: true
 
 permissions:
-  contents: write
+  actions: read
+  contents: read
 
 jobs:
   release:
@@ -20,7 +21,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Resolve release version
         id: version
@@ -49,12 +49,7 @@ jobs:
           fi
 
           version="${minecraft_version}-${mod_version}"
-          if git rev-parse --verify --quiet "refs/tags/${version}" >/dev/null; then
-            echo "Tag ${version} already exists" >&2
-            exit 1
-          fi
 
-          echo "tag=${version}" >> "$GITHUB_OUTPUT"
           echo "mod-version=${mod_version}" >> "$GITHUB_OUTPUT"
           echo "minecraft-version=${minecraft_version}" >> "$GITHUB_OUTPUT"
           echo "java-version=${java_version}" >> "$GITHUB_OUTPUT"
@@ -103,27 +98,21 @@ jobs:
         id: notes
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           DEEPSEEK_TOKEN: ${{ secrets.DEEPSEEK_TOKEN }}
         run: |
           set -euo pipefail
 
-          previous_tag="$(git describe --tags --abbrev=0 --first-parent \
-            --match "${{ steps.version.outputs.minecraft-version }}-[0-9]*.[0-9]*.[0-9]*" \
-            --exclude '*+dev-*' HEAD 2>/dev/null || true)"
-          if [ -n "$previous_tag" ]; then
-            previous_version="${previous_tag#"${{ steps.version.outputs.minecraft-version }}-"}"
-            if [[ ! "$previous_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "Nearest release tag ${previous_tag} does not use the expected format" >&2
-              exit 1
-            fi
-          fi
-          if [ -n "$previous_tag" ]; then
-            range="${previous_tag}..HEAD"
+          previous_sha="$(gh run list --workflow standard-release.yml --branch "$GITHUB_REF_NAME" \
+            --status success --limit 1 --json headSha --jq '.[0].headSha // empty')"
+          if [ -n "$previous_sha" ] && git merge-base --is-ancestor "$previous_sha" HEAD; then
+            range="${previous_sha}..HEAD"
+            commit_data="$(git log "$range" --pretty=format:'%h %s' --no-merges)"
           else
             range="HEAD"
+            commit_data="$(git log -1 HEAD --pretty=format:'%h %s' --no-merges)"
           fi
 
-          commit_data="$(git log "$range" --pretty=format:'%h %s' --no-merges)"
           fallback="$(bash .github/scripts/format-release-notes.sh \
             "${{ steps.version.outputs.version }}" <<< "$commit_data")"
           full_list="$(bash .github/scripts/format-release-notes.sh --full <<< "$commit_data")"
@@ -171,13 +160,9 @@ jobs:
       - name: Publish release artifacts
         uses: Kira-NT/mc-publish@v3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-tag: ${{ steps.version.outputs.tag }}
-          github-commitish: ${{ github.sha }}
           name: ${{ steps.version.outputs.version }}
           version: ${{ steps.version.outputs.version }}
           version-type: release
-          github-changelog: ${{ steps.notes.outputs.body }}
           modrinth-changelog: ${{ steps.notes.outputs.summary }}
           curseforge-changelog: ${{ steps.notes.outputs.summary }}
           files: build/libs/!(*-@(dev|sources|javadoc|api)).jar
