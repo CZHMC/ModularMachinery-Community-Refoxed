@@ -67,12 +67,19 @@ class PreviewLevelStateTest {
     void clip_hits_visible_schema_block_and_ignores_hidden_layer() {
         PreviewLevel level = level(
                 schema(Map.of(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState())), PreviewVisibility.ALL);
-        ClipContext context = new ClipContext(new Vec3(-1.0, 0.5, 0.5), new Vec3(2.0, 0.5, 0.5),
+        ClipContext context = new ClipContext(new Vec3(-64.0, 0.5, 0.5), new Vec3(64.0, 0.5, 0.5),
                 ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, CollisionContext.empty());
 
+        assertThat(level.getChunkSource().getChunk(-4, 0, true)).isNull();
         assertThat(level.clip(context).getType()).isEqualTo(HitResult.Type.BLOCK);
         level.updateVisibility(PreviewVisibility.singleLayer(1));
         assertThat(level.clip(context).getType()).isNotEqualTo(HitResult.Type.BLOCK);
+    }
+
+    @Test
+    void level_owns_clipping_instead_of_delegating_to_chunk_optimized_interface_mixins() throws Exception {
+        assertThat(PreviewLevel.class.getMethod("clip", ClipContext.class).getDeclaringClass())
+                .isEqualTo(PreviewLevel.class);
     }
 
     @Test

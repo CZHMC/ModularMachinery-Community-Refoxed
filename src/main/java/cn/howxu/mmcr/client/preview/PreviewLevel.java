@@ -21,6 +21,8 @@ import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.alchemy.PotionBrewing;
 import net.minecraft.world.item.crafting.RecipeAccess;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
@@ -67,6 +69,8 @@ import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.ticks.BlackholeTickAccess;
 import net.minecraft.world.ticks.LevelTickAccess;
 
@@ -135,6 +139,29 @@ public final class PreviewLevel extends Level {
     @Override
     public FluidState getFluidState(BlockPos position) {
         return getBlockState(position).getFluidState();
+    }
+
+    @Override
+    public BlockHitResult clip(ClipContext context) {
+        return BlockGetter.traverseBlocks(context.getFrom(), context.getTo(), context, (clipContext, position) -> {
+            BlockState blockState = getBlockState(position);
+            FluidState fluidState = getFluidState(position);
+            Vec3 from = clipContext.getFrom();
+            Vec3 to = clipContext.getTo();
+            VoxelShape blockShape = clipContext.getBlockShape(blockState, this, position);
+            BlockHitResult blockResult = clipWithInteractionOverride(from, to, position, blockShape, blockState);
+            VoxelShape fluidShape = clipContext.getFluidShape(fluidState, this, position);
+            BlockHitResult fluidResult = fluidShape.clip(from, to, position);
+            double blockDistance = blockResult == null ? Double.MAX_VALUE
+                    : from.distanceToSqr(blockResult.getLocation());
+            double fluidDistance = fluidResult == null ? Double.MAX_VALUE
+                    : from.distanceToSqr(fluidResult.getLocation());
+            return blockDistance <= fluidDistance ? blockResult : fluidResult;
+        }, clipContext -> {
+            Vec3 delta = clipContext.getFrom().subtract(clipContext.getTo());
+            return BlockHitResult.miss(clipContext.getTo(),
+                    Direction.getApproximateNearest(delta.x, delta.y, delta.z), BlockPos.containing(clipContext.getTo()));
+        });
     }
 
     public float getShade(Direction direction, boolean shade) {

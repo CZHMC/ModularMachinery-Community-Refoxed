@@ -521,6 +521,9 @@ public final class ModRecipeProvider extends RecipeProvider {
     }
 
     private void mekanismPortsRecipes() {
+        if (externalItem("mekanism", MekanismPortSizes.ChemicalTier.BASIC.id() + "_chemical_tank") == Items.AIR) {
+            return;
+        }
         for (MekanismPortSizes.ChemicalTier size : MekanismPortSizes.ChemicalTier.values()) {
             ItemLike chemical_tank = BuiltInRegistries.ITEM.get(Mekanism.rl(size.id() + "_chemical_tank")).orElseThrow().value();
             ItemLike result = ModBlocks.BLOCKS.get("chemical_input_hatch_" + size.id()).get();

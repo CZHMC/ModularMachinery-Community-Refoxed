@@ -282,6 +282,7 @@ class PublicMachineBuilderTest {
         tags.put(Tags.Items.GEMS_AMETHYST, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.AMETHYST_SHARD)));
         tags.put(Tags.Items.INGOTS_GOLD, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.GOLD_INGOT)));
         tags.put(Tags.Items.INGOTS_NETHERITE, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.NETHERITE_INGOT)));
+        tags.put(Tags.Items.NETHER_STARS, List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.NETHER_STAR)));
         tags.put(ItemTags.create(Identifier.withDefaultNamespace("bookshelf_books")),
                 List.of(BuiltInRegistries.ITEM.wrapAsHolder(Items.BOOK)));
         BuiltInRegistries.ITEM.prepareTagReload(new TagLoader.LoadResult<>(Registries.ITEM, tags)).apply();
