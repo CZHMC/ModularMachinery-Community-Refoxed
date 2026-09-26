@@ -70,19 +70,19 @@ jobs:
           set -euo pipefail
           perl -0pi -e 's/^mod_version=.*/mod_version=${{ steps.version.outputs.mod-version }}/m' gradle.properties
 
+      - name: Compile
+        run: gradle compileJava
+
       - name: Run Client Data
         run: gradle runClientData
 
       - name: Run Server Data
         run: gradle runServerData
 
-      - name: Compile Test
-        run: gradle compileJava
-
-      - name: Unit Test and GameTest
+      - name: Unit Test
         run: gradle test
 
-      - name: Gametest Server
+      - name: GameTest
         run: gradle runGameTestServer
 
       - name: Build
