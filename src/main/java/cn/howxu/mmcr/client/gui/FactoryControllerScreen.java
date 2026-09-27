@@ -50,12 +50,12 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int ELEMENT_TEXTURE_HEIGHT = 256;
     private static final int THREAD_ELEMENT_Y_OFFSET = 0;
     static final int PROGRESS_THREAD_OVERLAY = 0x6600AA55;
-    static final int SELECTED_THREAD_OVERLAY = 0x66A8D8FF;
     private static final int DETAIL_LINE_SPACING = 10;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
+    private static final Identifier SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
     private static final Identifier SCROLLER = MMCR.id("textures/gui/scroller.png");
     private int scrollOffset;
     private boolean draggingScrollbar;
@@ -206,12 +206,6 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
     static int elementTextureHeight() { return ELEMENT_TEXTURE_HEIGHT; }
     static int threadElementY(int y) { return y + THREAD_ELEMENT_Y_OFFSET; }
-    static int selectedOverlayX(int x) { return x; }
-    static int selectedOverlayY(int y) { return threadElementY(y); }
-    static int selectedOverlayWidth() { return THREAD_ROW_WIDTH; }
-    static int selectedOverlayHeight() { return THREAD_ROW_HEIGHT; }
-    static int selectedOverlayRight(int x) { return selectedOverlayX(x) + selectedOverlayWidth() - 1; }
-    static int selectedOverlayBottom(int y) { return selectedOverlayY(y) + selectedOverlayHeight() - 1; }
     static int progressOverlayX(int x) { return x; }
     static int progressOverlayY(int y) { return threadElementY(y); }
     static int progressOverlayHeight() { return THREAD_ROW_HEIGHT - 1; }
@@ -263,19 +257,14 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             FactoryRuntime.ThreadSnapshot thread = menu.threads().get(index);
             int y = topPos + THREAD_ROW_Y + row * (THREAD_ROW_HEIGHT + THREAD_ROW_GAP);
             int elementX = leftPos + THREAD_ROW_X;
-            int selectedOverlayX = selectedOverlayX(elementX);
-            int selectedOverlayY = selectedOverlayY(y);
             int progressOverlayX = progressOverlayX(elementX);
             int progressOverlayY = progressOverlayY(y);
-            graphics.blit(RenderPipelines.GUI_TEXTURED, ELEMENTS, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
+            Identifier elements = thread.index() == menu.selectedThread().index() ? SELECTED_ELEMENTS : ELEMENTS;
+            graphics.blit(RenderPipelines.GUI_TEXTURED, elements, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
                     THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, ELEMENT_TEXTURE_WIDTH, ELEMENT_TEXTURE_HEIGHT);
             int progress = progressWidth(thread.tick(), thread.totalTick());
             if (progress > 0) graphics.fill(progressOverlayX, progressOverlayY,
                     progressOverlayRight(elementX, progress), progressOverlayBottom(y), PROGRESS_THREAD_OVERLAY);
-            if (thread.index() == menu.selectedThread().index()) {
-                graphics.fill(selectedOverlayX, selectedOverlayY,
-                        selectedOverlayRight(elementX), selectedOverlayBottom(y), SELECTED_THREAD_OVERLAY);
-            }
             renderThreadText(graphics, Component.translatable("gui.mmcr.factory.thread", thread.index()),
                     leftPos + THREAD_ROW_X + 3, y + 3);
             renderThreadText(graphics, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"),
