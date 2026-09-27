@@ -144,13 +144,13 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
                                           ControllerScreenTextComposer.VisualLine line, int x, int y) {
         ControllerTextLine source = line.source();
         if (line.firstSegment() && source.icon() != null) {
-            renderIcon(graphics, source.icon(), x + source.leftIndent(), y);
+            renderIcon(graphics, source.icon(), x + source.leftIndent(), y, 9);
         }
         graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), false);
     }
 
     protected final void renderTextLine(GuiGraphicsExtractor graphics, ControllerTextLine line, int x, int y) {
-        if (line.icon() != null) renderIcon(graphics, line.icon(), x + line.leftIndent(), y);
+        if (line.icon() != null) renderIcon(graphics, line.icon(), x + line.leftIndent(), y, 9);
         graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), false);
     }
 
@@ -171,22 +171,24 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         if (!tooltip.isEmpty()) graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
     }
 
-    private static void renderIcon(GuiGraphicsExtractor graphics, ControllerTextLine.Icon icon, int x, int y) {
+    protected static void renderIcon(GuiGraphicsExtractor graphics, ControllerTextLine.Icon icon,
+                                     int x, int y, int size) {
         switch (icon) {
             case ControllerTextLine.ItemIcon item -> {
                 graphics.pose().pushMatrix();
                 graphics.pose().translate(x, y);
-                graphics.pose().scale(9F / 16F, 9F / 16F);
+                graphics.pose().scale(size / 16F, size / 16F);
                 graphics.fakeItem(item.stack(), 0, 0);
                 graphics.pose().popMatrix();
             }
-            case ControllerTextLine.FluidIcon fluid -> FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, 9, 9);
+            case ControllerTextLine.FluidIcon fluid ->
+                    FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, size, size);
             case ControllerTextLine.ChemicalIcon chemical -> {
                 MekanismBridge.ChemicalRenderData data = MekanismBridge.get().chemicalRenderData(chemical.chemicalId());
                 if (data != null) {
                     ChemicalGuiRenderer.drawChemical(graphics,
-                            new ChemicalGuiRenderer.ChemicalRenderState(data.spriteLocation(), data.tint(), 9),
-                            x, y, 9, 9);
+                            new ChemicalGuiRenderer.ChemicalRenderState(data.spriteLocation(), data.tint(), size),
+                            x, y, size, size);
                 }
             }
         }

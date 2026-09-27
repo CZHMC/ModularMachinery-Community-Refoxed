@@ -15,6 +15,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Builds controller text lines for a recipe's outputs.
@@ -74,6 +75,15 @@ final class ControllerRecipeTextLines {
         return List.copyOf(lines);
     }
 
+    static Optional<ControllerTextLine.Icon> firstRenderableOutputIcon(
+            ControllerRecipePresentation presentation) {
+        if (presentation == null) return Optional.empty();
+        for (MachineOutputAmount output : presentation.outputs()) {
+            if (isRenderable(output)) return Optional.of(icon(output));
+        }
+        return Optional.empty();
+    }
+
     static List<ControllerTextLine> forRecipe(MachineRecipe recipe, long parallelism) {
         if (recipe == null || parallelism < 1L) return List.of();
         return outputs(recipe.machineOutputs().stream()
@@ -93,24 +103,21 @@ final class ControllerRecipeTextLines {
     }
 
     private static ControllerTextLine line(MachineOutputAmount output) {
+        ControllerTextLine.Icon icon = icon(output);
         if (output.output() instanceof MachineOutput.ItemOutput item) {
-            ItemStack iconStack = item.stack().copy();
-            iconStack.setCount(1);
             String count = output.amount() > 1L
                     ? ReadableNumber.formatForSlot(output.amount(), 0, "") + " " : "";
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.item", count,
                     item.stack().getStyledHoverName()), MachineControllerScreen.STATUS_LABEL_COLOR,
-                    new ControllerTextLine.ItemIcon(iconStack),
+                    icon,
                     List.of(item.stack().getStyledHoverName(), Component.literal(ReadableNumber.formatExact(output.amount()))),
                     OUTPUT_INDENT);
         }
         if (output.output() instanceof MachineOutput.FluidOutput fluid) {
-            FluidStack iconStack = fluid.stack().copy();
-            iconStack.setAmount(1);
             String amount = fluidAmount(output.amount());
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.fluid", amount,
                     fluidName(fluid.stack())), MachineControllerScreen.STATUS_LABEL_COLOR,
-                    new ControllerTextLine.FluidIcon(iconStack),
+                    icon,
                     List.of(fluidName(fluid.stack()), exactFluidAmount(output.amount())),
                     OUTPUT_INDENT);
         }
@@ -119,9 +126,26 @@ final class ControllerRecipeTextLines {
             if (data == null) return new ControllerTextLine(Component.empty(), MachineControllerScreen.STATUS_LABEL_COLOR);
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.chemical",
                     fluidAmount(output.amount()), data.displayName()), MachineControllerScreen.STATUS_LABEL_COLOR,
-                    new ControllerTextLine.ChemicalIcon(chemical.id(), output.amount()),
+                    icon,
                     List.of(data.displayName(), exactFluidAmount(output.amount())),
                     OUTPUT_INDENT);
+        }
+        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.output().outputType().id());
+    }
+
+    private static ControllerTextLine.Icon icon(MachineOutputAmount output) {
+        if (output.output() instanceof MachineOutput.ItemOutput item) {
+            ItemStack stack = item.stack().copy();
+            stack.setCount(1);
+            return new ControllerTextLine.ItemIcon(stack);
+        }
+        if (output.output() instanceof MachineOutput.FluidOutput fluid) {
+            FluidStack stack = fluid.stack().copy();
+            stack.setAmount(1);
+            return new ControllerTextLine.FluidIcon(stack);
+        }
+        if (output.output() instanceof LoadedChemicalOutput chemical) {
+            return new ControllerTextLine.ChemicalIcon(chemical.id(), output.amount());
         }
         throw new IllegalArgumentException("Unsupported controller recipe output: " + output.output().outputType().id());
     }

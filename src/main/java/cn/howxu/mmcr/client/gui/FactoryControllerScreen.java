@@ -41,6 +41,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static final int THREAD_ROW_HEIGHT = 32;
     static final int THREAD_ROW_GAP = 1;
     static final int VISIBLE_THREADS = 6;
+    private static final int THREAD_OUTPUT_ICON_SIZE = 16;
+    private static final int THREAD_OUTPUT_ICON_PADDING = 2;
     static final int SCROLLBAR_X = 95;
     static final int SCROLLBAR_Y = 9;
     static final int SCROLLBAR_HEIGHT = 197;
@@ -270,6 +272,12 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                     leftPos + THREAD_ROW_X + 3, y + 3);
             renderThreadText(graphics, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"),
                     leftPos + THREAD_ROW_X + 3, y + 15);
+            if (thread.active()) {
+                ControllerRecipeTextLines.firstRenderableOutputIcon(thread.presentation()).ifPresent(icon ->
+                        renderIcon(graphics, icon,
+                                elementX + THREAD_ROW_WIDTH - THREAD_OUTPUT_ICON_SIZE - THREAD_OUTPUT_ICON_PADDING,
+                                threadElementY(y) + THREAD_OUTPUT_ICON_PADDING, THREAD_OUTPUT_ICON_SIZE));
+            }
         }
         if (shouldRenderScrollbar(menu.threads().size())) {
             int scrollbarX = leftPos + SCROLLBAR_X;
