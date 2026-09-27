@@ -64,3 +64,6 @@ specs/*
 
 example/startup_scripts/issue/*
 example/server_scripts/issue/*
+
+# reference
+reference/*
