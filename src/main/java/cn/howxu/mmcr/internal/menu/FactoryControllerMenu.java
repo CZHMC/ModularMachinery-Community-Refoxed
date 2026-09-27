@@ -27,6 +27,7 @@ import java.util.List;
  */
 public final class FactoryControllerMenu extends AbstractMachineMenu {
     private static final int FACTORY_PLAYER_INVENTORY_X = 112;
+    private static final int FACTORY_PLAYER_INVENTORY_Y_OFFSET = 1;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     private final BlockPos controllerPos;
@@ -45,7 +46,8 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         this.level = inventory.player == null ? null : inventory.player.level();
         controllerPos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
         state = new ControllerMenuState(this, owner);
-        ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
+        ControllerMenuState.addControllerPlayerSlots(this, inventory,
+                FACTORY_PLAYER_INVENTORY_X, FACTORY_PLAYER_INVENTORY_Y_OFFSET);
         snapshot = FactorySnapshot.empty();
         if (owner != null) {
             ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
@@ -67,7 +69,8 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
         this.level = inventory.player == null ? null : inventory.player.level();
         this.controllerPos = controllerPos;
         state = new ControllerMenuState(this, null);
-        ControllerMenuState.addControllerPlayerSlots(this, inventory, FACTORY_PLAYER_INVENTORY_X);
+        ControllerMenuState.addControllerPlayerSlots(this, inventory,
+                FACTORY_PLAYER_INVENTORY_X, FACTORY_PLAYER_INVENTORY_Y_OFFSET);
         snapshot = FactorySnapshot.empty();
     }
 

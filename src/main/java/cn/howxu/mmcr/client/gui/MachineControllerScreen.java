@@ -38,15 +38,15 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
-        titleLabelX += 2;
-        titleLabelY += 4;
+        titleLabelX += 3;
+        titleLabelY += 5;
         inventoryLabelY = -1000;
     }
 
     @Override
     protected TextViewport scrollableTextViewport() {
         int bodyY = titleLabelY + DETAIL_LINE_SPACING;
-        return new TextViewport(9, bodyY, 160, 123 - bodyY + 1,
+        return new TextViewport(10, bodyY, 160, 124 - bodyY + 1,
                 DETAIL_SCALE, DETAIL_LINE_SPACING);
     }
 

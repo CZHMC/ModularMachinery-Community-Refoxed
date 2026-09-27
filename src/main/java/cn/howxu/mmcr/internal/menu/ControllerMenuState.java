@@ -62,12 +62,19 @@ final class ControllerMenuState {
     }
 
     static void addControllerPlayerSlots(AbstractMachineMenu menu, Inventory inventory, int x) {
+        addControllerPlayerSlots(menu, inventory, x, 0);
+    }
+
+    static void addControllerPlayerSlots(AbstractMachineMenu menu, Inventory inventory, int x, int yOffset) {
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                menu.addControllerSlot(new Slot(inventory, col + row * 9 + 9, x + col * 18, PLAYER_INVENTORY_Y + row * 18));
+                menu.addControllerSlot(new Slot(inventory, col + row * 9 + 9,
+                        x + col * 18, PLAYER_INVENTORY_Y + yOffset + row * 18));
             }
         }
-        for (int col = 0; col < 9; col++) menu.addControllerSlot(new Slot(inventory, col, x + col * 18, HOTBAR_Y));
+        for (int col = 0; col < 9; col++) {
+            menu.addControllerSlot(new Slot(inventory, col, x + col * 18, HOTBAR_Y + yOffset));
+        }
     }
 
 }

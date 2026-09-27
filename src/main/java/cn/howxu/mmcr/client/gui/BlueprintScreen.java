@@ -43,7 +43,7 @@ public final class BlueprintScreen extends Screen {
     private static final int PREVIEW_WIDTH = 10 * MATERIAL_SLOT_SIZE + 9 * MATERIAL_SLOT_GAP;
     private static final int MATERIAL_TO_CANDIDATES_GAP = 10;
     private static final int MATERIAL_CONTENT_LEFT_PADDING = MATERIAL_SLOT_GAP + 4;
-    private static final int MATERIAL_CONTENT_TOP_PADDING = MATERIAL_SLOT_GAP + 2;
+    private static final int MATERIAL_CONTENT_TOP_PADDING = MATERIAL_SLOT_GAP + 5;
     private static final int CANDIDATE_CONTENT_LEFT_PADDING = MATERIAL_SLOT_GAP + 5;
     private static final int CANDIDATE_TITLE_LEFT_OFFSET = 4;
     private static final int CANDIDATE_TITLE_TOP_OFFSET = 3;

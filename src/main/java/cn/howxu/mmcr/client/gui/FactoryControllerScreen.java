@@ -34,15 +34,15 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
     private static final int PROGRESS_STATUS_COLOR = -1;
     static final int IMAGE_WIDTH = 280;
-    static final int IMAGE_HEIGHT = 213;
+    static final int IMAGE_HEIGHT = 216;
     static final int THREAD_ROW_X = 8;
-    static final int THREAD_ROW_Y = 8;
+    static final int THREAD_ROW_Y = 9;
     public static final int THREAD_ROW_WIDTH = 86;
     static final int THREAD_ROW_HEIGHT = 32;
     static final int THREAD_ROW_GAP = 1;
     static final int VISIBLE_THREADS = 6;
-    static final int SCROLLBAR_X = 94;
-    static final int SCROLLBAR_Y = 8;
+    static final int SCROLLBAR_X = 95;
+    static final int SCROLLBAR_Y = 9;
     static final int SCROLLBAR_HEIGHT = 197;
     static final int SCROLLBAR_HANDLE_WIDTH = 12;
     static final int SCROLLBAR_HANDLE_HEIGHT = 32;
@@ -70,7 +70,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     @Override
     protected TextViewport scrollableTextViewport() {
         int bodyY = 12 + DETAIL_LINE_SPACING;
-        return new TextViewport(113, bodyY, 160, 123 - bodyY + 1,
+        return new TextViewport(115, bodyY, 160, 123 - bodyY + 1,
                 DETAIL_TEXT_SCALE, DETAIL_LINE_SPACING);
     }
 
@@ -208,7 +208,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static int threadElementY(int y) { return y + THREAD_ELEMENT_Y_OFFSET; }
     static int progressOverlayX(int x) { return x; }
     static int progressOverlayY(int y) { return threadElementY(y); }
-    static int progressOverlayHeight() { return THREAD_ROW_HEIGHT - 1; }
+    static int progressOverlayHeight() { return THREAD_ROW_HEIGHT; }
     static int progressOverlayRight(int x, int progress) { return progressOverlayX(x) + progress; }
     static int progressOverlayBottom(int y) { return progressOverlayY(y) + progressOverlayHeight(); }
     static int detailTitleY(int y) { return y; }
@@ -277,7 +277,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                     SCROLLBAR_HANDLE_WIDTH, SCROLLBAR_HANDLE_HEIGHT, 32, 32);
         }
         FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
-        int x = leftPos + 113;
+        int x = leftPos + 115;
         int y = topPos + 12;
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE);
