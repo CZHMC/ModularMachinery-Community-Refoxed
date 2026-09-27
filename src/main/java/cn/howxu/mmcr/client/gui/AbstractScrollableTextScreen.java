@@ -146,7 +146,7 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         if (line.firstSegment() && source.icon() != null) {
             renderIcon(graphics, source.icon(), x + source.leftIndent(), y);
         }
-        graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), true);
+        graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), false);
     }
 
     protected final void renderTextLine(GuiGraphicsExtractor graphics, ControllerTextLine line, int x, int y) {

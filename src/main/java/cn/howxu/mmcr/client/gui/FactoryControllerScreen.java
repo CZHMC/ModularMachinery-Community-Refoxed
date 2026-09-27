@@ -27,7 +27,7 @@ import java.text.NumberFormat;
 public final class FactoryControllerScreen extends AbstractScrollableTextScreen<FactoryControllerMenu> {
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
-    private static final int CONTROLLER_TITLE_COLOR = 0xFFE8E8E8;
+    private static final int CONTROLLER_TITLE_COLOR = ControllerTextLine.DEFAULT_COLOR;
     private static final int STATUS_LABEL_COLOR = CONTROLLER_TITLE_COLOR;
     private static final int FORMED_STATUS_COLOR = 0xFF55FF55;
     private static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
@@ -285,7 +285,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         x = (int) (x / DETAIL_TEXT_SCALE);
         y = (int) (y / DETAIL_TEXT_SCALE);
         graphics.text(font, detailTitle(title, menu.machineName(), selected.index()), x, detailTitleY(y),
-                CONTROLLER_TITLE_COLOR, true);
+                CONTROLLER_TITLE_COLOR, false);
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();

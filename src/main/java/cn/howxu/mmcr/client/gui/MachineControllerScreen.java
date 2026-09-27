@@ -28,7 +28,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int IMAGE_HEIGHT = 213;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guicontroller_large.png");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
-    static final int STATUS_LABEL_COLOR = 0xFFE8E8E8;
+    static final int STATUS_LABEL_COLOR = ControllerTextLine.DEFAULT_COLOR;
     static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
     private static final int FORMED_STATUS_COLOR = 0xFF55FF55;
     private static final int IDLE_STATUS_COLOR = 0xFFFFAA00;

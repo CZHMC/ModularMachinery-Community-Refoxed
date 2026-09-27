@@ -18,6 +18,8 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public record ControllerTextLine(Component text, int color, Icon icon, List<Component> tooltip, int leftIndent) {
+    public static final int DEFAULT_COLOR = 0xFF403E53;
+
     public ControllerTextLine(Component text, int color) {
         this(text, color, null, List.of(), 0);
     }

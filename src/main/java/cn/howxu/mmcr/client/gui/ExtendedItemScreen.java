@@ -30,7 +30,7 @@ public final class ExtendedItemScreen extends AbstractPortScreen<ExtendedItemMen
     private static final int TITLE_X = 12;
     private static final int TITLE_Y = 12;
     private static final int ROW_X = 12;
-    private static final int TEXT_COLOR = 0xFFE0E0E0;
+    private static final int TEXT_COLOR = ControllerTextLine.DEFAULT_COLOR;
 
     public ExtendedItemScreen(ExtendedItemMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_HEIGHT);

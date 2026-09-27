@@ -13,7 +13,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class ControllerScreenTextComposer {
-    public static final int DEFAULT_EXTERNAL_COLOR = 0xFFE8E8E8;
+    public static final int DEFAULT_EXTERNAL_COLOR = ControllerTextLine.DEFAULT_COLOR;
 
     private ControllerScreenTextComposer() {
     }
