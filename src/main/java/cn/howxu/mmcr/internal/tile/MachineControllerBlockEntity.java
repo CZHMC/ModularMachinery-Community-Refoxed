@@ -1312,7 +1312,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void sendRecipeLockState(ServerPlayer player) {
         if (player == null) return;
         runtime.publishSnapshot();
-        player.connection.send(new ClientboundCustomPayloadPacket(PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot())));
+        player.connection.send(new ClientboundCustomPayloadPacket(PktMachineStatePayload.from(getBlockPos(),
+                runtimeSnapshot(), currentRecipePoolId())));
         sendControllerScreenTextOnMenuOpen(player);
     }
 
@@ -1380,7 +1381,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (player != null) {
             ControllerRuntimeSnapshot state = runtimeSnapshot();
             player.connection.send(new ClientboundCustomPayloadPacket(
-                    new PktFactoryControllerStatePayload(getBlockPos(), SYNC_RUNTIME.factoryState(state))));
+                    new PktFactoryControllerStatePayload(getBlockPos(),
+                            SYNC_RUNTIME.factoryState(state, currentRecipePoolId()))));
             sendControllerScreenTextOnMenuOpen(player);
             sendFactoryControllerScreenText(player);
         }
@@ -3664,7 +3666,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishSnapshot();
         ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
         if (!SYNC_RUNTIME.factoryControllerPresent(runtimeState)) return;
-        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtimeState);
+        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtimeState, currentRecipePoolId());
         for (ServerPlayer player : serverLevel.players()) {
             if (player.containerMenu instanceof FactoryControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos())) {
@@ -3738,7 +3740,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void broadcastStateIfChanged() {
-        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot());
+        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot(),
+                currentRecipePoolId());
         if (lastBroadcastState != null && !PktMachineStatePayload.stateChanged(packet, lastBroadcastState)) {
             return;
         }
