@@ -55,14 +55,29 @@ public final class MultiblockExportService {
 
     public static String renderJava(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
         PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
-        StringBuilder out = new StringBuilder(".pattern(p -> p").append(System.lineSeparator());
-        appendLayers(out, prepared, ".layer(");
+        String lineSeparator = System.lineSeparator();
+        StringBuilder out = new StringBuilder("public class ExportedStructure {").append(lineSeparator)
+                .append(lineSeparator)
+                .append("    public static void register(MMCRMachineStructuresEvent event) {").append(lineSeparator)
+                .append("        var id = Identifier.parse(\"mmcr:exported_structure\");").append(lineSeparator)
+                .append("        var structure = MachineStructureBuilder").append(lineSeparator)
+                .append("                .structure()").append(lineSeparator)
+                .append("                .fullStructure(s -> s").append(lineSeparator)
+                .append("                        .pattern(p -> p").append(lineSeparator);
+        appendLayers(out, prepared, ".layer(", "                                ");
         for (Map.Entry<PredicateKey, Character> symbol : prepared.symbols().entrySet()) {
             if (symbol.getValue() == 'C') continue;
-            out.append("        .where('").append(symbol.getValue()).append("', ")
-                    .append(predicateExpression(symbol.getKey())).append(")").append(System.lineSeparator());
+            out.append("                                .where('").append(symbol.getValue()).append("', ")
+                    .append(predicateExpression(symbol.getKey())).append(")").append(lineSeparator);
         }
-        return out.append(")").append(System.lineSeparator()).toString();
+        return out.append("                                .controller('C')").append(lineSeparator)
+                .append("                        )").append(lineSeparator)
+                .append("                )").append(lineSeparator)
+                .append("                .build(id);").append(lineSeparator)
+                .append("        event.registerStructure(structure);").append(lineSeparator)
+                .append("    }").append(lineSeparator)
+                .append("}").append(lineSeparator)
+                .toString();
     }
 
     public static String renderKubeJS(List<SnapshotEntry> entries, Direction controllerFace) {
@@ -71,34 +86,40 @@ public final class MultiblockExportService {
 
     public static String renderKubeJS(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
         PreparedExport prepared = prepare(entries, controllerFace, rollFacing);
-        StringBuilder out = new StringBuilder();
-        appendLayers(out, prepared, null);
+        String lineSeparator = System.lineSeparator();
+        StringBuilder out = new StringBuilder("MMCREvents.server(event => {").append(lineSeparator)
+                .append("    const api = event.getAPI()").append(lineSeparator)
+                .append("    const structure = event.createStructure(\"mmcr_kubejs:exported_structure\")").append(lineSeparator);
+        appendLayers(out, prepared, null, "        ");
         for (Map.Entry<PredicateKey, Character> symbol : prepared.symbols().entrySet()) {
-            out.append(".set('").append(symbol.getValue()).append("', ")
+            if (symbol.getValue() == 'C') continue;
+            out.append("        .set('").append(symbol.getValue()).append("', ")
                     .append(kubeJsPredicateExpression(symbol.getKey())).append(")")
-                    .append(System.lineSeparator());
+                    .append(lineSeparator);
         }
-        return out.toString();
+        return out.append("        .controller('C')").append(lineSeparator)
+                .append("        .build()").append(lineSeparator)
+                .append("})").append(lineSeparator)
+                .toString();
     }
 
     private static PreparedExport prepare(List<SnapshotEntry> entries, Direction controllerFace, Direction rollFacing) {
         Direction normalizedRoll = BlockRotator.normalizedRoll(controllerFace, rollFacing);
-        List<RenderedEntry> rendered = entries.stream()
-                .filter(entry -> !entry.air())
+        List<RenderedEntry> rendered = new ArrayList<>(entries.stream()
+                .filter(entry -> !entry.air() || entry.controller())
                 .map(entry -> new RenderedEntry(normalizeOffset(entry.offset(), controllerFace, normalizedRoll),
-                        new PredicateKey(entry.blockId(), normalizeState(entry.blockId(), entry.state()))))
+                        new PredicateKey(entry.blockId(), normalizeState(entry.blockId(), entry.state())),
+                        entry.controller()))
                 .sorted(Comparator.comparingInt((RenderedEntry entry) -> entry.pos().getZ())
                         .thenComparingInt(entry -> entry.pos().getY())
                         .thenComparingInt(entry -> entry.pos().getX())
-                        .thenComparing(entry -> entry.predicate().blockId().toString())
-                        .thenComparing(entry -> entry.predicate().state() == null ? "" : entry.predicate().state().toString()))
-                .toList();
-        PredicateKey controller = entries.stream()
-                .filter(SnapshotEntry::controller)
-                .map(entry -> new PredicateKey(entry.blockId(), normalizeState(entry.blockId(), entry.state())))
-                .findFirst()
-                .orElse(null);
-        return new PreparedExport(rendered, assignSymbols(rendered, controller));
+                .thenComparing(entry -> entry.predicate().blockId().toString())
+                .thenComparing(entry -> entry.predicate().state() == null ? "" : entry.predicate().state().toString()))
+                .toList());
+        if (rendered.stream().filter(RenderedEntry::controller).count() != 1) {
+            throw new IllegalArgumentException("Exactly one controller position is required for structure export");
+        }
+        return new PreparedExport(rendered, assignSymbols(rendered));
     }
 
     private static BlockState normalizeState(Identifier blockId, BlockState state) {
@@ -106,10 +127,12 @@ public final class MultiblockExportService {
                 && state.equals(BuiltInRegistries.BLOCK.getValue(blockId).defaultBlockState()) ? null : state;
     }
 
-    private static void appendLayers(StringBuilder out, PreparedExport prepared, String method) {
+    private static void appendLayers(StringBuilder out, PreparedExport prepared, String method, String indentation) {
         List<RenderedEntry> rendered = prepared.rendered();
         Map<BlockPos, Character> charsByPos = new HashMap<>();
-        for (RenderedEntry entry : rendered) charsByPos.put(entry.pos(), prepared.symbols().get(entry.predicate()));
+        for (RenderedEntry entry : rendered) {
+            charsByPos.put(entry.pos(), entry.controller() ? 'C' : prepared.symbols().get(entry.predicate()));
+        }
         int minX = rendered.stream().mapToInt(entry -> entry.pos().getX()).min().orElse(0);
         int maxX = rendered.stream().mapToInt(entry -> entry.pos().getX()).max().orElse(0);
         int minY = rendered.stream().mapToInt(entry -> entry.pos().getY()).min().orElse(0);
@@ -118,11 +141,11 @@ public final class MultiblockExportService {
         int maxZ = rendered.stream().mapToInt(entry -> entry.pos().getZ()).max().orElse(0);
         if (method == null) {
             if (rendered.isEmpty()) {
-                out.append(".pattern(\" \")").append(System.lineSeparator());
+                out.append(indentation).append(".pattern(\" \")").append(System.lineSeparator());
                 return;
             }
             for (int z = minZ; z <= maxZ; z++) {
-                out.append(".pattern(");
+                out.append(indentation).append(".pattern(");
                 for (int y = minY; y <= maxY; y++) {
                     StringBuilder row = new StringBuilder();
                     for (int x = minX; x <= maxX; x++) row.append(charsByPos.getOrDefault(new BlockPos(x, y, z), ' '));
@@ -134,7 +157,7 @@ public final class MultiblockExportService {
             return;
         }
         if (rendered.isEmpty()) {
-            appendLayer(out, method, List.of(" "));
+            appendLayer(out, method, List.of(" "), indentation);
             return;
         }
         for (int z = minZ; z <= maxZ; z++) {
@@ -144,12 +167,12 @@ public final class MultiblockExportService {
                 for (int x = minX; x <= maxX; x++) row.append(charsByPos.getOrDefault(new BlockPos(x, y, z), ' '));
                 rows.add(row.toString());
             }
-            appendLayer(out, method, rows);
+            appendLayer(out, method, rows, indentation);
         }
     }
 
-    private static void appendLayer(StringBuilder out, String method, List<String> rows) {
-        out.append("        ");
+    private static void appendLayer(StringBuilder out, String method, List<String> rows, String indentation) {
+        out.append(indentation);
         if (method != null) out.append(method);
         for (int i = 0; i < rows.size(); i++) {
             if (i > 0) out.append(", ");
@@ -159,11 +182,16 @@ public final class MultiblockExportService {
     }
 
     public static Path nextExportPath(Path gameDir, LocalDateTime timestamp) {
+        return nextExportPath(gameDir, timestamp, false);
+    }
+
+    public static Path nextExportPath(Path gameDir, LocalDateTime timestamp, boolean kubeJs) {
         String prefix = FILE_TIME.format(timestamp) + "-多方块导出-";
         Path exportDir = gameDir.resolve("mmcr_structure_export");
+        String extension = kubeJs ? ".js" : ".java";
         int index = 1;
         while (true) {
-            Path path = exportDir.resolve(prefix + index + ".txt");
+            Path path = exportDir.resolve(prefix + index + extension);
             if (!Files.exists(path)) return path;
             index++;
         }
@@ -182,34 +210,26 @@ public final class MultiblockExportService {
     public static Path writeExport(Path gameDir, LocalDateTime timestamp, List<SnapshotEntry> entries,
                                    Direction controllerFace, Direction rollFacing, boolean kubeJs) throws IOException {
         String text = kubeJs ? renderKubeJS(entries, controllerFace, rollFacing) : renderJava(entries, controllerFace, rollFacing);
-        Path path = nextExportPath(gameDir, timestamp);
+        Path path = nextExportPath(gameDir, timestamp, kubeJs);
         Files.createDirectories(path.getParent());
         Files.writeString(path, text, StandardCharsets.UTF_8);
         return path;
     }
 
-    private static LinkedHashMap<PredicateKey, Character> assignSymbols(List<RenderedEntry> rendered, PredicateKey explicitController) {
+    private static LinkedHashMap<PredicateKey, Character> assignSymbols(List<RenderedEntry> rendered) {
         LinkedHashMap<PredicateKey, Character> symbols = new LinkedHashMap<>();
         Map<PredicateKey, Integer> counts = new LinkedHashMap<>();
-        for (RenderedEntry entry : rendered) counts.merge(entry.predicate(), 1, Integer::sum);
-        PredicateKey controller = explicitController;
+        for (RenderedEntry entry : rendered) {
+            if (!entry.controller()) counts.merge(entry.predicate(), 1, Integer::sum);
+        }
         PredicateKey casing = null;
         for (PredicateKey key : counts.keySet()) {
-            String path = key.blockId().getPath();
-            if (controller == null && (path.endsWith("_controller") || path.equals("controller"))) controller = key;
-            if (!key.equals(controller) && (casing == null || counts.get(key) > counts.get(casing))) casing = key;
+            if (casing == null || counts.get(key) > counts.get(casing)) casing = key;
         }
-        if (controller != null) {
-            for (PredicateKey key : counts.keySet()) {
-                if (key.equals(controller)) {
-                    symbols.put(key, 'C');
-                    break;
-                }
-            }
-        }
-        if (casing != null && !symbols.containsKey(casing)) symbols.put(casing, 'X');
+        if (casing != null) symbols.put(casing, 'X');
         String available = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" + UNICODE_SYMBOLS;
         for (RenderedEntry entry : rendered) {
+            if (entry.controller()) continue;
             if (symbols.containsKey(entry.predicate())) continue;
             for (int i = 0; i < available.length(); i++) {
                 char c = available.charAt(i);
@@ -242,7 +262,7 @@ public final class MultiblockExportService {
     }
 
     private static String javaPropertyExpression(String block, Property<?> property) {
-        return "((net.minecraft.world.level.block.state.properties.Property) " + block
+        return "((Property) " + block
                 + ".getStateDefinition().getProperty(\"" + escapeJava(property.getName()) + "\"))";
     }
 
@@ -293,7 +313,7 @@ public final class MultiblockExportService {
 
     private record PredicateKey(Identifier blockId, BlockState state) {}
 
-    private record RenderedEntry(BlockPos pos, PredicateKey predicate) {}
+    private record RenderedEntry(BlockPos pos, PredicateKey predicate, boolean controller) {}
 
     private record PreparedExport(List<RenderedEntry> rendered, LinkedHashMap<PredicateKey, Character> symbols) {}
 
