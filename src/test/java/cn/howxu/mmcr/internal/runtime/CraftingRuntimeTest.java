@@ -57,6 +57,7 @@ import cn.howxu.mmcr.api.publicapi.machine.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.publicapi.machine.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
@@ -515,6 +516,20 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(network.extracted()).isZero();
+        assertThat(network.reserved()).isZero();
+    }
+
+    @Test
+    void recipeSearchRejectsIncompleteFluxPrefetchBeforeStartingALane() {
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(5L);
+        CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(network)));
+
+        var result = context.planStartResult(energyRecipe("runtime_flux_search_shortage", 3, 2), 1);
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(network.planned).isZero();
         assertThat(network.extracted()).isZero();
         assertThat(network.reserved()).isZero();
     }
