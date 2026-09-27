@@ -101,8 +101,12 @@ public final class FactoryControllerMenu extends AbstractMachineMenu {
     }
     public long maxParallelism() { return snapshot.maxParallelism(); }
     public String machineName() { return snapshot.machineName(); }
-    public @Nullable Identifier machineId() { return Identifier.tryParse(snapshot.machineId()); }
-    public @Nullable Identifier currentRecipePoolId() { return Identifier.tryParse(snapshot.recipePoolId()); }
+    public @Nullable Identifier machineId() {
+        return snapshot.machineId().isEmpty() ? null : Identifier.tryParse(snapshot.machineId());
+    }
+    public @Nullable Identifier currentRecipePoolId() {
+        return snapshot.recipePoolId().isEmpty() ? null : Identifier.tryParse(snapshot.recipePoolId());
+    }
     public List<Identifier> recipePoolIds() { return MachineRegistry.recipePoolsForMachine(machineId()); }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public int matchedStage() { return snapshot.matchedStage(); }
