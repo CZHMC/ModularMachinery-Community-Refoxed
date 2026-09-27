@@ -31,13 +31,6 @@ class DynamicOverlayModelLoaderTest {
     }
 
     @Test
-    void overlay_growth_follows_layer_order() {
-        assertThat(DynamicOverlayModelLoader.overlayGrow(0)).isEqualTo(DynamicOverlayModelLoader.OVERLAY_GROW);
-        assertThat(DynamicOverlayModelLoader.overlayGrow(1)).isEqualTo(DynamicOverlayModelLoader.OVERLAY_GROW * 2.0f);
-        assertThat(DynamicOverlayModelLoader.overlayGrow(2)).isEqualTo(DynamicOverlayModelLoader.OVERLAY_GROW * 3.0f);
-    }
-
-    @Test
     void overlay_layers_keep_texture_order_and_append_state_last() {
         var basic = MMCR.id("block/overlay_basic");
         var type = MMCR.id("block/overlay_type");

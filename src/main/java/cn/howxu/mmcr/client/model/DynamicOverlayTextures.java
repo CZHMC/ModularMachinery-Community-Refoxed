@@ -37,6 +37,14 @@ public final class DynamicOverlayTextures {
             return overlay(heatOverlay(kind.ioType()));
         }
         if (kind.itemBusSize().isPresent()) {
+            if (kind.itemBusSize().get() == ItemBusSize.TINY){
+                return ImmutableList.of(
+                        MMCR.id("block/overlay/base"),
+                        kind.ioType() == IOType.INPUT ? MMCR.id("block/overlay/direction/input") : MMCR.id("block/overlay/direction/output"),
+                        MMCR.id("block/overlay/type/item"),
+                        MMCR.id("block/overlay/tier/tiny")
+                );
+            }
             return overlay(tieredPortOverlay(kind.ioType(), "overlay_inputbus", "overlay_outputbus",
                     kind.itemBusSize().map(ItemBusSize::id).orElseThrow()));
         }
