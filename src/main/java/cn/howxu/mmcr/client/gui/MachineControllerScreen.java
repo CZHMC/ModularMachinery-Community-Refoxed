@@ -88,7 +88,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
             int textY = detailTextY(textLineY(visibleTextRow(index)));
             renderVisualLine(graphics, line, x, textY);
         }
-        renderScrollableTooltip(graphics, mouseX, mouseY);
+        renderScrollableTooltip(graphics, mouseX, mouseY, titleLabelX);
     }
 
     static int detailTextY(int localY) {

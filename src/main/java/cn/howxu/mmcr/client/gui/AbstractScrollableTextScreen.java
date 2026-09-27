@@ -67,6 +67,19 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
                 && mouseY >= viewportTop && mouseY < viewportTop + viewport.height();
     }
 
+    static boolean containsTextLine(int x, int y, int textXOffset, int textWidth,
+                                    float scale, int lineSpacing, double mouseX, double mouseY) {
+        int width = (int) ((textXOffset + textWidth) * scale);
+        return mouseX >= x && mouseX < x + width
+                && mouseY >= y && mouseY < y + lineSpacing;
+    }
+
+    static int textLineIndexAt(TextViewport viewport, int top, int firstVisibleLine, double mouseY) {
+        if (mouseY < top + viewport.y()) return -1;
+        int row = (int) ((mouseY - top - viewport.y()) / viewport.lineSpacing());
+        return firstVisibleLine + row;
+    }
+
     protected abstract TextViewport scrollableTextViewport();
 
     protected List<ControllerTextLine> scrollableTextLines() {
@@ -141,14 +154,20 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         graphics.text(font, line.text(), x + line.textXOffset(), y, line.color(), false);
     }
 
-    protected final void renderScrollableTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    protected final void renderScrollableTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY,
+                                                 int textX) {
         TextViewport viewport = scrollableTextViewport();
         if (!containsViewport(viewport, leftPos, topPos, mouseX, mouseY)) return;
-        int row = (int) ((mouseY - topPos - viewport.y()) / (double) viewport.lineSpacing());
-        int index = firstVisibleTextLine() + row;
+        int firstVisibleLine = firstVisibleTextLine();
+        int index = textLineIndexAt(viewport, topPos, firstVisibleLine, mouseY);
+        int row = index - firstVisibleLine;
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         if (row < 0 || index < 0 || index >= lines.size()) return;
-        List<Component> tooltip = lines.get(index).source().tooltip();
+        ControllerScreenTextComposer.VisualLine line = lines.get(index);
+        if (!containsTextLine(leftPos + textX, topPos + viewport.y() + row * viewport.lineSpacing(),
+                line.textXOffset(), font.width(line.text()), viewport.scale(), viewport.lineSpacing(),
+                mouseX, mouseY)) return;
+        List<Component> tooltip = line.source().tooltip();
         if (!tooltip.isEmpty()) graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
     }
 

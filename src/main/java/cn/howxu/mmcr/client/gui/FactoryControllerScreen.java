@@ -51,6 +51,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int THREAD_ELEMENT_Y_OFFSET = 0;
     static final int PROGRESS_THREAD_OVERLAY = 0x6600AA55;
     private static final int DETAIL_LINE_SPACING = 10;
+    private static final int DETAIL_X = 115;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
@@ -70,7 +71,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     @Override
     protected TextViewport scrollableTextViewport() {
         int bodyY = 12 + DETAIL_LINE_SPACING;
-        return new TextViewport(115, bodyY, 160, 123 - bodyY + 1,
+        return new TextViewport(DETAIL_X, bodyY, 160, 123 - bodyY + 1,
                 DETAIL_TEXT_SCALE, DETAIL_LINE_SPACING);
     }
 
@@ -277,7 +278,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                     SCROLLBAR_HANDLE_WIDTH, SCROLLBAR_HANDLE_HEIGHT, 32, 32);
         }
         FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
-        int x = leftPos + 115;
+        int x = leftPos + DETAIL_X;
         int y = topPos + 12;
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE);
@@ -294,7 +295,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             int textY = detailTextY(topPos, textLineY(visibleTextRow(index)));
             renderVisualLine(graphics, line, x, textY);
         }
-        renderScrollableTooltip(graphics, mouseX, mouseY);
+        renderScrollableTooltip(graphics, mouseX, mouseY, DETAIL_X);
         graphics.pose().popMatrix();
     }
 

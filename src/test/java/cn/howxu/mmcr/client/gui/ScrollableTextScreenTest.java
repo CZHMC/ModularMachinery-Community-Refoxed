@@ -66,6 +66,24 @@ class ScrollableTextScreenTest {
     }
 
     @Test
+    void tooltip_hit_test_excludes_blank_space_after_rendered_text() {
+        assertThat(AbstractScrollableTextScreen.containsTextLine(
+                10, 20, 11, 40, 0.85F, 10, 52, 29)).isTrue();
+        assertThat(AbstractScrollableTextScreen.containsTextLine(
+                10, 20, 11, 40, 0.85F, 10, 53, 29)).isFalse();
+    }
+
+    @Test
+    void tooltip_row_maps_to_the_current_visual_line_after_scrolling() throws Exception {
+        TestScreen screen = TestScreen.create();
+        screen.setLines(List.of(line("one"), line("two"), line("three")));
+        screen.scroll(-1);
+
+        assertThat(AbstractScrollableTextScreen.textLineIndexAt(
+                screen.scrollableTextViewport(), 0, screen.firstLine(), 0)).isEqualTo(1);
+    }
+
+    @Test
     void shrinking_external_visual_lines_clamps_the_existing_scroll_offset() throws Exception {
         TestScreen screen = TestScreen.create();
         screen.setLines(List.of(line("one"), line("two"), line("three")));
