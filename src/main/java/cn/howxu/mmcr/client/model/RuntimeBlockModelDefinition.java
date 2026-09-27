@@ -24,7 +24,7 @@ public record RuntimeBlockModelDefinition(
         Objects.requireNonNull(itemDescription, "itemDescription");
         itemDescription = new DynamicOverlayItemModel.Description(
                 itemDescription.kind(), itemDescription.machineId(), itemDescription.portKind(),
-                itemDescription.baseModel(), itemDescription.baseTextureSource(), itemDescription.overlayTexture(),
+                itemDescription.baseModel(), itemDescription.baseTextureSource(), itemDescription.overlayTextures(),
                 itemDescription.stateOverlayTexture(),
                 EnumSet.copyOf(itemDescription.overlayFaces()));
     }
@@ -33,7 +33,7 @@ public record RuntimeBlockModelDefinition(
     public DynamicOverlayItemModel.Description itemDescription() {
         return new DynamicOverlayItemModel.Description(
                 itemDescription.kind(), itemDescription.machineId(), itemDescription.portKind(),
-                itemDescription.baseModel(), itemDescription.baseTextureSource(), itemDescription.overlayTexture(),
+                itemDescription.baseModel(), itemDescription.baseTextureSource(), itemDescription.overlayTextures(),
                 itemDescription.stateOverlayTexture(),
                 EnumSet.copyOf(itemDescription.overlayFaces()));
     }

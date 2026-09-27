@@ -7,13 +7,11 @@ import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Isolates optional AE2 integration from the common runtime.
@@ -46,11 +44,6 @@ public interface AE2Bridge {
     }
 
     default void onPortNeighborChanged(IOPortBlockEntity port) {
-    }
-
-    @Nullable
-    default Identifier portOverlayTexture(IOPortKind kind) {
-        return null;
     }
 
     default void registerCapabilities(RegisterCapabilitiesEvent event) {

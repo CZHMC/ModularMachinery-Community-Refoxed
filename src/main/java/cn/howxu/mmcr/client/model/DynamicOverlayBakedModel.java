@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
+import com.google.common.collect.ImmutableList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
@@ -55,14 +56,15 @@ public final class DynamicOverlayBakedModel {
         }
     }
 
-    public record TextureSet(FaceTextures base, Identifier overlay) {
+    public record TextureSet(FaceTextures base, ImmutableList<Identifier> overlays) {
         public TextureSet {
             if (base == null) throw new IllegalArgumentException("base null");
-            if (overlay == null) throw new IllegalArgumentException("overlay null");
+            if (overlays == null || overlays.isEmpty()) throw new IllegalArgumentException("overlays empty");
+            overlays = ImmutableList.copyOf(overlays);
         }
 
         public TextureSet(Identifier base, Identifier overlay) {
-            this(FaceTextures.uniform(base), overlay);
+            this(FaceTextures.uniform(base), ImmutableList.of(overlay));
         }
     }
 
@@ -75,14 +77,17 @@ public final class DynamicOverlayBakedModel {
             Kind kind,
             Identifier machineId,
             FaceTextures baseTextures,
-            Identifier overlayTexture,
+            ImmutableList<Identifier> overlayTextures,
             MachineAppearanceSpec.TextureSource explicitPortTextureSource,
             long controllerRevision,
             long appearanceRevision) {
         public CacheKey {
             if (kind == null) throw new IllegalArgumentException("kind null");
             if (baseTextures == null) throw new IllegalArgumentException("baseTextures null");
-            if (overlayTexture == null) throw new IllegalArgumentException("overlayTexture null");
+            if (overlayTextures == null || overlayTextures.isEmpty()) {
+                throw new IllegalArgumentException("overlayTextures empty");
+            }
+            overlayTextures = ImmutableList.copyOf(overlayTextures);
         }
     }
 
@@ -93,7 +98,7 @@ public final class DynamicOverlayBakedModel {
         MachineControllerSpec controller = machineId == null
                 ? MachineControllerSpec.defaultsFor(MMCR.id("unknown"))
                 : ControllerSpecCache.specFor(machineId);
-        return new TextureSet(resolveBase(appearance.controllerTextureSource()), controller.frontTexture());
+        return new TextureSet(resolveBase(appearance.controllerTextureSource()), ImmutableList.of(controller.frontTexture()));
     }
 
     public static Identifier controllerStateOverlay(Identifier machineId, boolean active) {
@@ -129,17 +134,18 @@ public final class DynamicOverlayBakedModel {
     }
 
     public static TextureSet portTextures(Identifier machineId, MachineAppearanceSpec.TextureSource explicitSource,
-                                          Identifier overlayTexture) {
+                                          ImmutableList<Identifier> overlayTextures) {
         MachineAppearanceSpec.TextureSource source = explicitSource != null
                 ? explicitSource
                 : machineId == null ? MachineAppearanceSpec.defaults().formedPortTextureSource()
                 : MachineAppearanceCache.specFor(machineId).formedPortTextureSource();
-        return new TextureSet(resolveBase(source), overlayTexture);
+        return new TextureSet(resolveBase(source), overlayTextures);
     }
 
-    public static TextureSet portTextures(Identifier machineId, Identifier explicitBaseTexture, Identifier overlayTexture) {
+    public static TextureSet portTextures(Identifier machineId, Identifier explicitBaseTexture,
+                                          ImmutableList<Identifier> overlayTextures) {
         return portTextures(machineId, explicitBaseTexture == null ? null : new MachineAppearanceSpec.TextureSource(
-                MachineAppearanceSpec.defaults().machineBasicBlock(), explicitBaseTexture), overlayTexture);
+                MachineAppearanceSpec.defaults().machineBasicBlock(), explicitBaseTexture), overlayTextures);
     }
 
     public static Identifier defaultPortOverlayTexture() {
@@ -152,20 +158,20 @@ public final class DynamicOverlayBakedModel {
                 Kind.CONTROLLER,
                 machineId,
                 textures.base(),
-                textures.overlay(),
+                textures.overlays(),
                 null,
                 ControllerSpecCache.revision(),
                 MachineAppearanceCache.revision());
     }
 
     public static CacheKey portCacheKey(Identifier machineId, MachineAppearanceSpec.TextureSource explicitSource,
-                                        Identifier overlayTexture) {
-        TextureSet textures = portTextures(machineId, explicitSource, overlayTexture);
+                                        ImmutableList<Identifier> overlayTextures) {
+        TextureSet textures = portTextures(machineId, explicitSource, overlayTextures);
         return new CacheKey(
                 Kind.PORT,
                 machineId,
                 textures.base(),
-                textures.overlay(),
+                textures.overlays(),
                 explicitSource,
                 ControllerSpecCache.revision(),
                 MachineAppearanceCache.revision());

@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.compat.appliedflux.loaded;
 
 import appeng.api.AECapabilities;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyInputKind;
 import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyOutputKind;
@@ -9,7 +8,6 @@ import cn.howxu.mmcr.compat.appliedflux.loaded.tile.FluxEnergyInputInterfaceBloc
 import cn.howxu.mmcr.compat.appliedflux.loaded.tile.FluxEnergyOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
@@ -23,10 +21,6 @@ import java.util.List;
 public final class LoadedAppliedFluxBridge implements AppliedFluxBridge {
     private static final String INPUT_INTERFACE_ID = "appflux_me_flux_input_interface";
     private static final String OUTPUT_INTERFACE_ID = "appflux_me_flux_output_interface";
-    private static final Identifier INPUT_OVERLAY_TEXTURE =
-            MMCR.id("block/appliedflux/appflux_input");
-    private static final Identifier OUTPUT_OVERLAY_TEXTURE =
-            MMCR.id("block/appliedflux/appflux_output");
 
     @Override
     public boolean available() {
@@ -41,13 +35,6 @@ public final class LoadedAppliedFluxBridge implements AppliedFluxBridge {
     @Override
     public boolean isPort(String id) {
         return INPUT_INTERFACE_ID.equals(id) || OUTPUT_INTERFACE_ID.equals(id);
-    }
-
-    @Override
-    public Identifier portOverlayTexture(IOPortKind kind) {
-        if (kind instanceof FluxEnergyInputKind) return INPUT_OVERLAY_TEXTURE;
-        if (kind instanceof FluxEnergyOutputKind) return OUTPUT_OVERLAY_TEXTURE;
-        return null;
     }
 
     @Override

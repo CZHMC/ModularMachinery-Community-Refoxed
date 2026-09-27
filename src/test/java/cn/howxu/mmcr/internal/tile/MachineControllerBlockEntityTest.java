@@ -203,7 +203,7 @@ class MachineControllerBlockEntityTest {
         var itemDescription = DynamicOverlayItemModel.describeItem(ModItems.ITEMS.get("data_storage").get());
         assertThat(itemDescription.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(itemDescription.baseTextureSource()).isEqualTo(MachineAppearanceSpec.defaults().formedPortTextureSource());
-        assertThat(itemDescription.overlayTexture()).isEqualTo(MMCR.id("block/overlay_data_storage"));
+        assertThat(itemDescription.overlayTextures()).containsExactly(MMCR.id("block/overlay_data_storage"));
     }
 
     @Test

@@ -4,7 +4,6 @@ import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.List;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -49,11 +48,6 @@ final class UnavailableExtendedAEContributor implements ExtendedAEContributor {
 
     @Override
     public @Nullable ItemStack mainMenuIcon(IOPortKind kind) {
-        return null;
-    }
-
-    @Override
-    public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
         return null;
     }
 

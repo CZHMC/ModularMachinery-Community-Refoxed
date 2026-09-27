@@ -2,15 +2,23 @@ package cn.howxu.mmcr.client.model;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
-import cn.howxu.mmcr.compat.appliedenergistics2.AE2BridgeBootstrap;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
-import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridgeBootstrap;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyInputKind;
 import cn.howxu.mmcr.compat.appliedflux.loaded.kind.FluxEnergyOutputKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedOutputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedStockingInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeOutputInterfaceKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
+import com.google.common.collect.ImmutableList;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,17 +31,17 @@ class DynamicOverlayTexturesTest {
                 .filter(DynamicOverlayTexturesTest::usesDedicatedOverlay)
                 .forEach(kind -> assertThat(DynamicOverlayTextures.portOverlayTexture(kind))
                         .as(kind.id())
-                        .isEqualTo(MMCR.id(expectedOverlayPath(kind))));
+                        .isEqualTo(ImmutableList.of(MMCR.id(expectedOverlayPath(kind)))));
     }
 
     @Test
     void ordinary_port_kinds_keep_existing_overlay_names() {
         assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.ITEM_INPUT))
-                .isEqualTo(MMCR.id("block/overlay_inputbus_normal"));
+                .isEqualTo(ImmutableList.of(MMCR.id("block/overlay_inputbus_normal")));
         assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.FLUID_OUTPUT))
-                .isEqualTo(MMCR.id("block/overlay_fluidoutputhatch_normal"));
+                .isEqualTo(ImmutableList.of(MMCR.id("block/overlay_fluidoutputhatch_normal")));
         assertThat(DynamicOverlayTextures.portOverlayTexture(PortKinds.ENERGY_INPUT))
-                .isEqualTo(MMCR.id("block/overlay_energyinputhatch_normal"));
+                .isEqualTo(ImmutableList.of(MMCR.id("block/overlay_energyinputhatch_normal")));
     }
 
 @Test
@@ -69,47 +77,53 @@ class DynamicOverlayTexturesTest {
     }
 
     @Test
-    void ae2InputInterfaceUsesTheNativeInterfaceOverlay() {
-        AE2BridgeBootstrap.installForTesting(AE2BridgeBootstrap.selectForTesting(true));
-        try {
-            assertThat(DynamicOverlayTextures.portOverlayTexture(InputInterfaceKind.INSTANCE))
-                    .isEqualTo(MMCR.id("block/appliedenergistics2/ae2_input"));
-        } finally {
-            AE2BridgeBootstrap.resetForTesting();
-        }
+    void ae2InputInterfaceUsesTheDedicatedInterfaceOverlay() {
+        assertThat(DynamicOverlayTextures.portOverlayTexture(InputInterfaceKind.INSTANCE))
+                .isEqualTo(ImmutableList.of(MMCR.id("block/appliedenergistics2/ae2_input")));
     }
 
     @Test
     void ae2PatternInterfaceUsesItsDedicatedOverlay() {
-        AE2BridgeBootstrap.installForTesting(AE2BridgeBootstrap.selectForTesting(true));
-        try {
-            assertThat(DynamicOverlayTextures.portOverlayTexture(PatternInterfaceKind.INSTANCE))
-                    .isEqualTo(MMCR.id("block/appliedenergistics2/ae2_pattern_interface"));
-        } finally {
-            AE2BridgeBootstrap.resetForTesting();
-        }
+        assertThat(DynamicOverlayTextures.portOverlayTexture(PatternInterfaceKind.INSTANCE))
+                .isEqualTo(ImmutableList.of(MMCR.id("block/appliedenergistics2/ae2_pattern_interface")));
+    }
+
+    @Test
+    void allAe2InterfacesUseCentralDedicatedOverlays() {
+        assertThat(DynamicOverlayTextures.portOverlayTexture(StockingInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/appliedenergistics2/ae2_stocking_input"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(OutputInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/appliedenergistics2/ae2_output"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(AsyncOutputInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/appliedenergistics2/ae2_async_output"));
+    }
+
+    @Test
+    void extendedAeInterfacesUseCentralDedicatedOverlays() {
+        assertThat(DynamicOverlayTextures.portOverlayTexture(ExtendedInputInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/extendedae/eae_me_extended_input_interface"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(ExtendedStockingInputInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/extendedae/eae_me_extended_stocking_input_interface"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(ExtendedOutputInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/extendedae/eae_me_extended_output_interface"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(OversizeInputInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/extendedae/eae_me_oversize_input_interface"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(OversizeOutputInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/extendedae/eae_me_oversize_output_interface"));
+        assertThat(DynamicOverlayTextures.portOverlayTexture(ExtendedPatternInterfaceKind.INSTANCE))
+                .containsExactly(MMCR.id("block/extendedae/eae_me_extended_pattern_interface"));
     }
 
     @Test
     void appFluxInputInterfaceUsesTheAppFluxInputOverlay() {
-        AppliedFluxBridgeBootstrap.installForTesting(AppliedFluxBridgeBootstrap.selectForTesting(true));
-        try {
-            assertThat(DynamicOverlayTextures.portOverlayTexture(FluxEnergyInputKind.INSTANCE))
-                    .isEqualTo(MMCR.id("block/appliedflux/appflux_input"));
-        } finally {
-            AppliedFluxBridgeBootstrap.resetForTesting();
-        }
+        assertThat(DynamicOverlayTextures.portOverlayTexture(FluxEnergyInputKind.INSTANCE))
+                .isEqualTo(ImmutableList.of(MMCR.id("block/appliedflux/appflux_input")));
     }
 
     @Test
     void appFluxOutputInterfaceUsesTheAppFluxOutputOverlay() {
-        AppliedFluxBridgeBootstrap.installForTesting(AppliedFluxBridgeBootstrap.selectForTesting(true));
-        try {
-            assertThat(DynamicOverlayTextures.portOverlayTexture(FluxEnergyOutputKind.INSTANCE))
-                    .isEqualTo(MMCR.id("block/appliedflux/appflux_output"));
-        } finally {
-            AppliedFluxBridgeBootstrap.resetForTesting();
-        }
+        assertThat(DynamicOverlayTextures.portOverlayTexture(FluxEnergyOutputKind.INSTANCE))
+                .isEqualTo(ImmutableList.of(MMCR.id("block/appliedflux/appflux_output")));
     }
 
     private static boolean usesDedicatedOverlay(IOPortKind kind) {

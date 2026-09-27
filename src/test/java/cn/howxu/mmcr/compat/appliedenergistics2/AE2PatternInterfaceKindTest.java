@@ -9,7 +9,6 @@ import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -47,7 +46,5 @@ class AE2PatternInterfaceKindTest {
                 .containsExactly(PortFamilyIds.ITEM, PortFamilyIds.FLUID);
         assertThat(kind.definition().bindings())
                 .allSatisfy(binding -> assertThat(binding.directions()).isEqualTo(CapabilityDirections.bidirectional()));
-        assertThat(bridge.portOverlayTexture(kind)).isEqualTo(Identifier.fromNamespaceAndPath(
-                "mmcr", "block/appliedenergistics2/ae2_pattern_interface"));
     }
 }

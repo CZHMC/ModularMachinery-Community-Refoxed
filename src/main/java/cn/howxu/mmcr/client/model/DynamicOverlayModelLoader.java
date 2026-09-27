@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.compat.athena.AthenaModelBridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import com.google.common.collect.ImmutableList;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -48,7 +49,6 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/basic_casing"));
     static final float OVERLAY_GROW = 0.002f;
-    private static final float STATE_OVERLAY_GROW = OVERLAY_GROW * 2.0f;
     private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;
@@ -79,21 +79,20 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
             ctmBase = AthenaModelBridge.get().collectParts(sourceModel, level, pos, appearance, random, parts);
         }
 
-        Material.Baked overlay = material(textures.overlay());
         Direction overlayFace = overlayFace(state);
         Direction rollFacing = rollFacing(state);
-        Material.Baked stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
-                ? material(DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
-                        state.getValue(MachineControllerBlock.ACTIVE)))
+        Identifier stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
+                ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
+                        state.getValue(MachineControllerBlock.ACTIVE))
                 : null;
+        ImmutableList<OverlayLayer> overlayLayers = overlayLayers(textures.overlays(), stateOverlay);
         for (Direction direction : Direction.values()) {
             if (!ctmBase) {
                 addFace(quads, direction, baseMaterial(textures.base().forFace(direction)), 0.0f, true);
             }
             if (direction == overlayFace || overlayFace == null) {
-                addFace(quads, direction, rollFacing, overlay, OVERLAY_GROW, false);
-                if (stateOverlay != null) {
-                    addFace(quads, direction, rollFacing, stateOverlay, STATE_OVERLAY_GROW, false);
+                for (OverlayLayer layer : overlayLayers) {
+                    addFace(quads, direction, rollFacing, material(layer.texture()), layer.grow(), false);
                 }
             }
         }
@@ -117,7 +116,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
             return DynamicOverlayBakedModel.controllerTextures(machineId);
         }
         var source = modelData.get(MachineModelDataKeys.PORT_TEXTURE_SOURCE);
-        return DynamicOverlayBakedModel.portTextures(machineId, source, portOverlayTexture(state));
+        return DynamicOverlayBakedModel.portTextures(machineId, source, portOverlayTextures(state));
     }
 
     static @Nullable MachineAppearanceSpec.TextureSource ctmSource(DynamicOverlayBakedModel.Kind kind,
@@ -161,11 +160,29 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         return null;
     }
 
-    private static Identifier portOverlayTexture(BlockState state) {
+    private static ImmutableList<Identifier> portOverlayTextures(BlockState state) {
         RuntimeBlockModelDefinition definition = RuntimeMachineModelRegistry.definition(state.getBlock());
         return definition == null
-                ? DynamicOverlayBakedModel.defaultPortOverlayTexture()
-                : definition.itemDescription().overlayTexture();
+                ? ImmutableList.of(DynamicOverlayBakedModel.defaultPortOverlayTexture())
+                : definition.itemDescription().overlayTextures();
+    }
+
+    static float overlayGrow(int index) {
+        return OVERLAY_GROW * (index + 1);
+    }
+
+    static ImmutableList<OverlayLayer> overlayLayers(List<Identifier> overlays, @Nullable Identifier stateOverlay) {
+        ImmutableList.Builder<OverlayLayer> layers = ImmutableList.builder();
+        for (int index = 0; index < overlays.size(); index++) {
+            layers.add(new OverlayLayer(overlays.get(index), overlayGrow(index)));
+        }
+        if (stateOverlay != null) {
+            layers.add(new OverlayLayer(stateOverlay, overlayGrow(overlays.size())));
+        }
+        return layers.build();
+    }
+
+    record OverlayLayer(Identifier texture, float grow) {
     }
 
     private Material.Baked material(Identifier texture) {

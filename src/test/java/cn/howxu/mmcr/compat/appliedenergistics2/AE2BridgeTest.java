@@ -87,24 +87,4 @@ class AE2BridgeTest {
         assertThat(OversizeOutputInterfaceKind.INSTANCE.outputPriority()).isEqualTo(Integer.MAX_VALUE);
     }
 
-    @Test
-    void loadedBridgeReturnsDedicatedOverlaysForEachInterfaceKind() {
-        AE2Bridge bridge = AE2BridgeBootstrap.selectForTesting(true);
-
-        assertThat(bridge.portOverlayTexture(InputInterfaceKind.INSTANCE))
-                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
-                        "mmcr", "block/appliedenergistics2/ae2_input"));
-        assertThat(bridge.portOverlayTexture(StockingInterfaceKind.INSTANCE))
-                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
-                        "mmcr", "block/appliedenergistics2/ae2_stocking_input"));
-        assertThat(bridge.portOverlayTexture(OutputInterfaceKind.INSTANCE))
-                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
-                        "mmcr", "block/appliedenergistics2/ae2_output"));
-        assertThat(bridge.portOverlayTexture(AsyncOutputInterfaceKind.INSTANCE))
-                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
-                        "mmcr", "block/appliedenergistics2/ae2_async_output"));
-        assertThat(bridge.portOverlayTexture(cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind.INSTANCE))
-                .isEqualTo(net.minecraft.resources.Identifier.fromNamespaceAndPath(
-                        "mmcr", "block/appliedenergistics2/ae2_pattern_interface"));
-    }
 }

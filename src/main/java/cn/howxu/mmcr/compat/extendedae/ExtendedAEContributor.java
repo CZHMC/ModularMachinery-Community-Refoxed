@@ -4,7 +4,6 @@ import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.List;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -38,9 +37,6 @@ public interface ExtendedAEContributor {
      */
     @Nullable
     ItemStack mainMenuIcon(IOPortKind kind);
-
-    @Nullable
-    Identifier portOverlayTexture(IOPortKind kind);
 
     void registerCapabilities(RegisterCapabilitiesEvent event);
 }

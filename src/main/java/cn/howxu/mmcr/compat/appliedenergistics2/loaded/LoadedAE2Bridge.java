@@ -12,7 +12,6 @@ import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.implementations.PatternProviderMenu;
 import appeng.menu.locator.MenuLocators;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
@@ -36,7 +35,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -61,16 +59,6 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     private static final String OUTPUT_INTERFACE_ID = "ae2_me_output_interface";
     private static final String ASYNC_OUTPUT_INTERFACE_ID = "ae2_me_async_output_interface";
     private static final String PATTERN_INTERFACE_ID = "ae2_me_pattern_interface";
-    private static final Identifier INTERFACE_OVERLAY_TEXTURE =
-            MMCR.id("block/appliedenergistics2/ae2_input");
-    private static final Identifier STOCKING_INTERFACE_OVERLAY_TEXTURE =
-            MMCR.id("block/appliedenergistics2/ae2_stocking_input");
-    private static final Identifier OUTPUT_INTERFACE_OVERLAY_TEXTURE =
-            MMCR.id("block/appliedenergistics2/ae2_output");
-    private static final Identifier ASYNC_OUTPUT_INTERFACE_OVERLAY_TEXTURE =
-            MMCR.id("block/appliedenergistics2/ae2_async_output");
-    private static final Identifier PATTERN_INTERFACE_OVERLAY_TEXTURE =
-            MMCR.id("block/appliedenergistics2/ae2_pattern_interface");
     private final ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
 
     @Override
@@ -177,16 +165,6 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     @Override
     public void onPortNeighborChanged(IOPortBlockEntity port) {
         if (port instanceof PatternInterfaceBlockEntity host) host.getLogic().updateRedstoneState();
-    }
-
-    @Override
-    public Identifier portOverlayTexture(IOPortKind kind) {
-        if (kind instanceof InputInterfaceKind) return INTERFACE_OVERLAY_TEXTURE;
-        if (kind instanceof StockingInterfaceKind) return STOCKING_INTERFACE_OVERLAY_TEXTURE;
-        if (kind instanceof OutputInterfaceKind) return OUTPUT_INTERFACE_OVERLAY_TEXTURE;
-        if (kind instanceof AsyncOutputInterfaceKind) return ASYNC_OUTPUT_INTERFACE_OVERLAY_TEXTURE;
-        if (kind instanceof PatternInterfaceKind) return PATTERN_INTERFACE_OVERLAY_TEXTURE;
-        return contributor.available() ? contributor.portOverlayTexture(kind) : null;
     }
 
     @Override

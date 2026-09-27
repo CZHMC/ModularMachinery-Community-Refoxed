@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import com.google.common.collect.ImmutableList;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,19 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DynamicOverlayBakedModelTest {
+    @Test
+    void texture_set_preserves_overlay_insertion_order() {
+        var first = MMCR.id("block/overlay_basic");
+        var second = MMCR.id("block/overlay_type");
+        var third = MMCR.id("block/overlay_tier");
+
+        var textures = new DynamicOverlayBakedModel.TextureSet(
+                DynamicOverlayBakedModel.FaceTextures.uniform(MMCR.id("block/base")),
+                ImmutableList.of(first, second, third));
+
+        assertThat(textures.overlays()).containsExactly(first, second, third);
+    }
+
     @Test
     void incomplete_appearance_faces_use_uniform_fallback() {
         var faces = DynamicOverlayBakedModel.completeOrFallback(Map.of(Direction.NORTH, MMCR.id("block/north")));

@@ -7,6 +7,7 @@ import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.google.common.collect.ImmutableList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 class DynamicOverlayModelLoaderTest {
     private static final BlockPos POS = BlockPos.ZERO;
@@ -26,6 +28,30 @@ class DynamicOverlayModelLoaderTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void overlay_growth_follows_layer_order() {
+        assertThat(DynamicOverlayModelLoader.overlayGrow(0)).isEqualTo(DynamicOverlayModelLoader.OVERLAY_GROW);
+        assertThat(DynamicOverlayModelLoader.overlayGrow(1)).isEqualTo(DynamicOverlayModelLoader.OVERLAY_GROW * 2.0f);
+        assertThat(DynamicOverlayModelLoader.overlayGrow(2)).isEqualTo(DynamicOverlayModelLoader.OVERLAY_GROW * 3.0f);
+    }
+
+    @Test
+    void overlay_layers_keep_texture_order_and_append_state_last() {
+        var basic = MMCR.id("block/overlay_basic");
+        var type = MMCR.id("block/overlay_type");
+        var tier = MMCR.id("block/overlay_tier");
+        var state = MMCR.id("block/overlay_state");
+
+        assertThat(DynamicOverlayModelLoader.overlayLayers(ImmutableList.of(basic, type, tier), state))
+                .extracting(DynamicOverlayModelLoader.OverlayLayer::texture,
+                        DynamicOverlayModelLoader.OverlayLayer::grow)
+                .containsExactly(
+                        tuple(basic, DynamicOverlayModelLoader.OVERLAY_GROW),
+                        tuple(type, DynamicOverlayModelLoader.OVERLAY_GROW * 2.0f),
+                        tuple(tier, DynamicOverlayModelLoader.OVERLAY_GROW * 3.0f),
+                        tuple(state, DynamicOverlayModelLoader.OVERLAY_GROW * 4.0f));
     }
 
     @Test

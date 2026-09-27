@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import com.google.common.collect.ImmutableList;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.client.renderer.block.dispatch.BlockModelRotation;
 import net.minecraft.client.renderer.item.CuboidItemModelWrapper;
@@ -67,16 +68,11 @@ public final class DynamicOverlayItemModel implements ItemModel {
         BaseModel baseModel = baseModel(description.baseModel(), DynamicOverlayBakedModel.resolveBase(description.baseTextureSource()));
         baseModel.applyToLayer(renderState.newLayer(), displayContext, transformation);
 
-        Material.Baked overlay = material(description.overlayTexture());
         QuadCollection.Builder quads = new QuadCollection.Builder();
-        for (Direction direction : description.overlayFaces()) {
-            DynamicOverlayModelLoader.addFace(quads, direction, overlay, DynamicOverlayModelLoader.OVERLAY_GROW, false);
-        }
-        if (description.stateOverlayTexture() != null) {
-            Material.Baked stateOverlay = material(description.stateOverlayTexture());
+        for (DynamicOverlayModelLoader.OverlayLayer overlay : DynamicOverlayModelLoader.overlayLayers(
+                description.overlayTextures(), description.stateOverlayTexture())) {
             for (Direction direction : description.overlayFaces()) {
-                DynamicOverlayModelLoader.addFace(quads, direction, stateOverlay,
-                        DynamicOverlayModelLoader.OVERLAY_GROW * 2.0f, false);
+                DynamicOverlayModelLoader.addFace(quads, direction, material(overlay.texture()), overlay.grow(), false);
             }
         }
 
@@ -84,7 +80,7 @@ public final class DynamicOverlayItemModel implements ItemModel {
         baseModel.renderProperties().applyToLayer(layer, displayContext);
         layer.setExtents(baseModel.extents());
         layer.setLocalTransform(transformation);
-        layer.setParticleMaterial(overlay);
+        layer.setParticleMaterial(material(description.overlayTextures().getFirst()));
         layer.prepareQuadList().addAll(quads.build().getAll());
     }
 
@@ -131,32 +127,39 @@ public final class DynamicOverlayItemModel implements ItemModel {
             IOPortKind portKind,
             Identifier baseModel,
             MachineAppearanceSpec.TextureSource baseTextureSource,
-            Identifier overlayTexture,
+            ImmutableList<Identifier> overlayTextures,
             @Nullable Identifier stateOverlayTexture,
             EnumSet<Direction> overlayFaces) {
+        public Description {
+            overlayTextures = overlayTextures == null ? ImmutableList.of() : ImmutableList.copyOf(overlayTextures);
+        }
+
         static Description controller(Identifier machineId) {
             var appearance = MachineAppearanceCache.specFor(machineId);
             var controller = cn.howxu.mmcr.client.controller.ControllerSpecCache.specFor(machineId);
             return new Description(DynamicOverlayBakedModel.Kind.CONTROLLER, machineId, null,
-                    MMCR.id("block/dynamic_machine_controller"), appearance.controllerTextureSource(), controller.frontTexture(),
+                    MMCR.id("block/dynamic_machine_controller"), appearance.controllerTextureSource(),
+                    ImmutableList.of(controller.frontTexture()),
                     appearance.controllerIdleOverlayTexture(), EnumSet.of(Direction.NORTH));
         }
 
         static Description port(IOPortKind kind) {
-            Identifier overlay = DynamicOverlayTextures.portOverlayTexture(kind);
+            ImmutableList<Identifier> overlays = DynamicOverlayTextures.portOverlayTexture(kind);
             return new Description(DynamicOverlayBakedModel.Kind.PORT, null, kind,
-                    MMCR.id("block/dynamic_io_port"), MachineAppearanceSpec.defaults().formedPortTextureSource(), overlay,
+                    MMCR.id("block/dynamic_io_port"), MachineAppearanceSpec.defaults().formedPortTextureSource(), overlays,
                     null, EnumSet.allOf(Direction.class));
         }
 
         static Description portOverlay(Identifier overlay) {
             return new Description(DynamicOverlayBakedModel.Kind.PORT, null, null,
-                    MMCR.id("block/dynamic_io_port"), MachineAppearanceSpec.defaults().formedPortTextureSource(), overlay,
+                    MMCR.id("block/dynamic_io_port"), MachineAppearanceSpec.defaults().formedPortTextureSource(),
+                    ImmutableList.of(overlay),
                     null, EnumSet.allOf(Direction.class));
         }
 
         static Description staticItem() {
-            return new Description(null, null, null, null, null, null, null, EnumSet.noneOf(Direction.class));
+            return new Description(null, null, null, null, null, ImmutableList.of(), null,
+                    EnumSet.noneOf(Direction.class));
         }
     }
 

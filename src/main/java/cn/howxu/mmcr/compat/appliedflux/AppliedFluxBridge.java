@@ -2,9 +2,7 @@ package cn.howxu.mmcr.compat.appliedflux;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.List;
-import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * Isolates optional AppFlux integration from the common runtime.
@@ -25,8 +23,4 @@ public interface AppliedFluxBridge {
     default void registerCapabilities(RegisterCapabilitiesEvent event) {
     }
 
-    @Nullable
-    default Identifier portOverlayTexture(IOPortKind kind) {
-        return null;
-    }
 }

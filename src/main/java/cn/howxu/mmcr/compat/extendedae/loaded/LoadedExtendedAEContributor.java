@@ -6,7 +6,6 @@ import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
 import appeng.menu.MenuOpener;
 import appeng.menu.locator.MenuLocators;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedInputInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedOutputInterfaceKind;
@@ -26,7 +25,6 @@ import com.glodblock.github.extendedae.container.ContainerExInterface;
 import com.glodblock.github.extendedae.container.ContainerExPatternProvider;
 import java.util.List;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -87,21 +85,6 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
             return new ItemStack(EAESingletons.EX_PATTERN_PROVIDER);
         }
         return new ItemStack(EAESingletons.EX_INTERFACE);
-    }
-
-    @Override
-    public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
-        if (kind == null) return null;
-        return switch (kind.id()) {
-            case "eae_me_extended_input_interface" -> MMCR.id("block/extendedae/eae_me_extended_input_interface");
-            case "eae_me_extended_stocking_input_interface" -> MMCR.id("block/extendedae/eae_me_extended_stocking_input_interface");
-            case "eae_me_extended_output_interface" -> MMCR.id("block/extendedae/eae_me_extended_output_interface");
-            case "eae_me_oversize_input_interface" -> MMCR.id("block/extendedae/eae_me_oversize_input_interface");
-            case "eae_me_oversize_stocking_input_interface" -> MMCR.id("block/extendedae/eae_me_oversize_stocking_input_interface");
-            case "eae_me_oversize_output_interface" -> MMCR.id("block/extendedae/eae_me_oversize_output_interface");
-            case "eae_me_extended_pattern_interface" -> MMCR.id("block/extendedae/eae_me_extended_pattern_interface");
-            default -> null;
-        };
     }
 
     @Override

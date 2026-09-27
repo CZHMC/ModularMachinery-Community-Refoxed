@@ -115,10 +115,6 @@ class ExtendedAEBridgeTest {
         assertThat(bridge.isPort("eae_me_extended_input_interface")).isFalse();
         assertThat(bridge.openMenu(null, LevelStub.create(Blocks.AIR, 1, 1, 1, BlockPos.ZERO), BlockPos.ZERO))
                 .isFalse();
-        assertThat(bridge.portOverlayTexture(InputInterfaceKind.INSTANCE))
-                .isEqualTo(Identifier.fromNamespaceAndPath("mmcr", "block/appliedenergistics2/ae2_input"));
-        assertThat(bridge.portOverlayTexture(null)).isNull();
-
         assertThatCode(() -> bridge.registerCapabilities(capabilityEvent())).doesNotThrowAnyException();
 
         List<Registration> registrations = new ArrayList<>();
@@ -132,8 +128,6 @@ class ExtendedAEBridgeTest {
         LoadedAE2Bridge bridge = new LoadedAE2Bridge();
 
         assertThat(bridge.isPort("ae2_me_input_interface")).isTrue();
-        assertThat(bridge.portOverlayTexture(InputInterfaceKind.INSTANCE))
-                .isEqualTo(Identifier.fromNamespaceAndPath("mmcr", "block/appliedenergistics2/ae2_input"));
         var host = InputInterfaceKind.INSTANCE.entityFactory()
                 .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
         Level level = LevelStub.createWithBlockEntities(List.of(host));
@@ -279,11 +273,6 @@ class ExtendedAEBridgeTest {
         }
 
         @Override
-        public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
-            throw unexpectedDelegation();
-        }
-
-        @Override
         public void registerCapabilities(RegisterCapabilitiesEvent event) {
             throw unexpectedDelegation();
         }
@@ -330,11 +319,6 @@ class ExtendedAEBridgeTest {
         }
 
         @Override
-        public @Nullable Identifier portOverlayTexture(IOPortKind kind) {
-            throw unexpectedDelegation();
-        }
-
-        @Override
         public void registerCapabilities(RegisterCapabilitiesEvent event) {
         }
 
@@ -365,7 +349,6 @@ class ExtendedAEBridgeTest {
 
         @Override public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) { return false; }
         @Override public @Nullable ItemStack mainMenuIcon(IOPortKind kind) { return null; }
-        @Override public @Nullable Identifier portOverlayTexture(IOPortKind kind) { return null; }
         @Override public void registerCapabilities(RegisterCapabilitiesEvent event) {}
     }
 }

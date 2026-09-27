@@ -46,7 +46,7 @@ class RuntimeMachineModelRegistryTest {
         assertThat(description.kind()).isEqualTo(DynamicOverlayBakedModel.Kind.PORT);
         assertThat(description.baseModel()).isEqualTo(MMCR.id("block/dynamic_io_port"));
         assertThat(description.baseTextureSource()).isEqualTo(MachineAppearanceSpec.defaults().formedPortTextureSource());
-        assertThat(description.overlayTexture()).isEqualTo(MMCR.id("block/overlay_network_interface"));
+        assertThat(description.overlayTextures()).containsExactly(MMCR.id("block/overlay_network_interface"));
     }
 
     @Test

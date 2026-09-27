@@ -132,7 +132,7 @@ class InterfaceBlockItemTest {
             DynamicOverlayItemModel.Description description = DynamicOverlayItemModel.describeItem(
                     ModItems.ITEMS.get(id).get());
             DynamicOverlayBakedModel.TextureSet textures = DynamicOverlayBakedModel.portTextures(
-                    null, port.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE), description.overlayTexture());
+                    null, port.getModelData().get(MachineModelDataKeys.PORT_BASE_TEXTURE), description.overlayTextures());
 
             assertThat(textures.base().forFace(Direction.NORTH)).as(id).isEqualTo(linkedTexture);
         }
