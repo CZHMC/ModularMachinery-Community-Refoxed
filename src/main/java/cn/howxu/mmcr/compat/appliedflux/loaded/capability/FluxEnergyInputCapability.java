@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 /**
  * Input energy capability backed solely by a persistent local Flux cache.
@@ -52,6 +53,7 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     private final FluxEnergyBuffer buffer;
     private final String reservationKey;
     private final ExactPrefetchBridge prefetchBridge;
+    private final BooleanSupplier prefetchAvailable;
     private final CapabilityView view;
     private final AsyncPlanningFacet asyncPlanning;
 
@@ -60,11 +62,18 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     }
 
     public FluxEnergyInputCapability(FluxEnergyBuffer buffer, String reservationKey, ExactPrefetchBridge prefetchBridge) {
+        this(buffer, reservationKey, prefetchBridge, () -> true);
+    }
+
+    public FluxEnergyInputCapability(FluxEnergyBuffer buffer, String reservationKey, ExactPrefetchBridge prefetchBridge,
+                                     BooleanSupplier prefetchAvailable) {
         if (buffer == null) throw new IllegalArgumentException("buffer must not be null");
         if (reservationKey == null || reservationKey.isBlank()) throw new IllegalArgumentException("reservationKey must not be blank");
+        if (prefetchAvailable == null) throw new IllegalArgumentException("prefetchAvailable must not be null");
         this.buffer = buffer;
         this.reservationKey = reservationKey;
         this.prefetchBridge = prefetchBridge;
+        this.prefetchAvailable = prefetchAvailable;
         asyncPlanning = new AsyncPlanningFacet() {
             @Override
             public Object planningIdentity() {
@@ -115,6 +124,7 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == RecipeEnergyPrefetchFacet.class && !prefetchAvailable.getAsBoolean()) return Optional.empty();
         return MachineCapability.super.facet(facetType);
     }
 

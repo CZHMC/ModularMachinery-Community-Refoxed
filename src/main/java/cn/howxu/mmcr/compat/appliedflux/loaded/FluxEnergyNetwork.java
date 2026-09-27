@@ -52,7 +52,9 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
 
     @Override
     public Optional<CapabilityOperation> planExactExtract(long requestedAmount) {
-        if (requestedAmount <= 0L || energy == null) return Optional.empty();
+        if (requestedAmount <= 0L || energy == null || energy.extract(requestedAmount, true) != requestedAmount) {
+            return Optional.empty();
+        }
         return Optional.of(transaction -> extractExactly(requestedAmount, transaction));
     }
 

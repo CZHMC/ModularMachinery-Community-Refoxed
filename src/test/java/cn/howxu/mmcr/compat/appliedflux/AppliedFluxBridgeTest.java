@@ -48,8 +48,17 @@ class AppliedFluxBridgeTest {
             transaction.commit();
         }
 
-        assertThat(storage.calls).containsExactly("extract:40:true", "extract:40:false");
+        assertThat(storage.calls).containsExactly("extract:40:true", "extract:40:true", "extract:40:false");
         assertThat(storage.amount).isEqualTo(60L);
+    }
+
+    @Test
+    void unavailableEnergyDoesNotOfferAnExactExtractionPlan() {
+        RecordingStorage storage = new RecordingStorage(0L, 100L);
+        FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
+
+        assertThat(network.planExactExtract(40L)).isEmpty();
+        assertThat(storage.calls).containsExactly("extract:40:true");
     }
 
     @Test
@@ -63,7 +72,7 @@ class AppliedFluxBridgeTest {
             transaction.commit();
         }
 
-        assertThat(storage.calls).containsExactly("extract:40:true", "extract:40:false", "insert:25:false");
+        assertThat(storage.calls).containsExactly("extract:40:true", "extract:40:true", "extract:40:false", "insert:25:false");
         assertThat(storage.amount).isEqualTo(100L);
     }
 

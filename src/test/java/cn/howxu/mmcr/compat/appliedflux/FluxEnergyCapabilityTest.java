@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -135,6 +136,15 @@ class FluxEnergyCapabilityTest {
         }
         assertThat(buffer.amount()).isEqualTo(25L);
         assertThat(buffer.reserved()).isEqualTo(25L);
+    }
+
+    @Test
+    void offlineInputDoesNotExposeEnergyPrefetchFacet() {
+        BooleanSupplier offline = () -> false;
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "test-input",
+                requested -> Optional.empty(), offline);
+
+        assertThat(capability.facet(RecipeEnergyPrefetchFacet.class)).isEmpty();
     }
 
     @Test

@@ -73,7 +73,7 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
 
     @Override
     public void onMainNodeStateChanged(IGridNodeListener.State reason) {
-        wakeNode();
+        onNetworkChanged();
     }
 
     @Override
@@ -118,6 +118,7 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
     }
 
     protected final FluxEnergyNetwork network() {
+        if (!mainNode.isActive()) return null;
         IGrid grid = mainNode.getGrid();
         return grid == null ? null : new FluxEnergyNetwork(grid.getStorageService(), IActionSource.ofMachine(this));
     }

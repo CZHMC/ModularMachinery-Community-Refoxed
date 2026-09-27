@@ -28,7 +28,7 @@ public final class FluxEnergyInputInterfaceBlockEntity extends FluxInterfaceBloc
             "appflux_energy_input", requested -> {
                 FluxEnergyNetwork network = network();
                 return network == null ? java.util.Optional.empty() : network.planExactExtract(requested);
-            });
+            }, () -> network() != null);
     private final CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(List.of(capability));
     private final InputTicker ticker = new InputTicker();
 

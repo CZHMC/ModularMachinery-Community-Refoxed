@@ -55,6 +55,7 @@ public final class FluxEnergyOutputInterfaceBlockEntity extends FluxInterfaceBlo
 
     @Override
     protected void onNetworkChanged() {
+        if (!mainNode.isActive()) capability.refreshAdmissionBudget(0L);
         wakeNode();
     }
 
