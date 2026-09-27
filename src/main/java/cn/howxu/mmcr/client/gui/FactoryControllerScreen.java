@@ -284,8 +284,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE);
         x = (int) (x / DETAIL_TEXT_SCALE);
         y = (int) (y / DETAIL_TEXT_SCALE);
-        String machineName = menu.machineName().isEmpty() ? title.getString() : menu.machineName();
-        graphics.text(font, Component.translatable(machineName).append(" #" + selected.index()), x, detailTitleY(y), CONTROLLER_TITLE_COLOR, true);
+        graphics.text(font, detailTitle(title, menu.machineName(), selected.index()), x, detailTitleY(y),
+                CONTROLLER_TITLE_COLOR, true);
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
@@ -297,6 +297,11 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         }
         renderScrollableTooltip(graphics, mouseX, mouseY, DETAIL_X);
         graphics.pose().popMatrix();
+    }
+
+    static Component detailTitle(Component title, String machineName, int threadIndex) {
+        Component name = machineName.isEmpty() ? title : Component.translatable(machineName);
+        return Component.empty().append(name).append(" #" + threadIndex);
     }
 
     private void renderThreadText(GuiGraphicsExtractor graphics, Component text, int x, int y) {

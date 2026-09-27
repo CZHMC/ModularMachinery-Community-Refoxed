@@ -12,6 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -318,9 +319,13 @@ public final class TerminalScreen extends Screen {
         Level level = Minecraft.getInstance().level;
         if (level != null && level.dimension().equals(storage.dimension()) && level.hasChunkAt(storage.pos())) {
             Component blockName = level.getBlockState(storage.pos()).getBlock().getName();
-            detail = Component.literal(blockName.getString() + " @ " + storage.pos().toShortString());
+            detail = storageDetail(blockName, storage.pos());
         }
         return Component.translatable("gui.mmcr.terminal.inventory_source", detail);
+    }
+
+    static Component storageDetail(Component blockName, BlockPos pos) {
+        return Component.empty().append(blockName).append(" @ ").append(pos.toShortString());
     }
 
     private Component layerLabel() {
@@ -338,7 +343,7 @@ public final class TerminalScreen extends Screen {
         return level == null ? Component.translatable("gui.mmcr.terminal.level")
                 : level.statePredicate().preferredState()
                         .map(state -> (Component) state.getBlock().getName())
-                        .orElseGet(() -> view.slotStack().getHoverName());
+                        .orElseGet(() -> view.slotStack().getStyledHoverName());
     }
 
     private MutableComponent previewLabel() {

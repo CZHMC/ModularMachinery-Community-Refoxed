@@ -11,6 +11,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -142,6 +143,20 @@ class ExtendedPortScreenTest {
         assertThat(ExtendedItemScreen.tooltipLines(entry)).extracting(component -> component.getString())
                 .containsExactly(entry.resource().getHoverName().getString(),
                         "1,200,123,543,243 / 9,223,372,036,854,775,807");
+    }
+
+    @Test
+    void extended_item_names_preserve_vanilla_rarity_style() {
+        var stack = Items.ENCHANTED_GOLDEN_APPLE.getDefaultInstance();
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal("Styled apple").withStyle(ChatFormatting.AQUA));
+        ItemStorageEntry entry = new ItemStorageEntry(0, ItemResource.of(stack), 1L, 64L);
+        Component styledName = entry.resource().toStack(1).getStyledHoverName();
+
+        assertThat(ExtendedItemScreen.displayLines(List.of(entry)).getFirst().getSiblings().getFirst())
+                .isEqualTo(styledName);
+        assertThat(ExtendedItemScreen.tooltipLines(entry).getFirst()).isEqualTo(styledName);
+        assertThat(ExtendedCombinedScreen.displayLines(List.of(entry), List.of()).get(1).getSiblings().getFirst())
+                .isEqualTo(styledName);
     }
 
     @Test

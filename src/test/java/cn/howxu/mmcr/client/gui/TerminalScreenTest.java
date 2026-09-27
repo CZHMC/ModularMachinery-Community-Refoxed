@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.item.TerminalAction;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -140,4 +142,15 @@ class TerminalScreenTest {
         assertThat(TerminalScreen.closesAfter(TerminalAction.BUILD)).isTrue();
         assertThat(TerminalScreen.closesAfter(TerminalAction.SET_STAGE)).isFalse();
     }
+
+    @Test
+    void storage_detail_preserves_block_name_style() {
+        Component blockName = Component.literal("Styled storage").withStyle(ChatFormatting.AQUA);
+
+        Component detail = TerminalScreen.storageDetail(blockName, BlockPos.ZERO);
+
+        assertThat(detail.getSiblings().getFirst()).isEqualTo(blockName);
+        assertThat(detail.getString()).isEqualTo(blockName.getString() + " @ " + BlockPos.ZERO.toShortString());
+    }
+
 }

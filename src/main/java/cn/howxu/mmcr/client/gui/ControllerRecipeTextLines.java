@@ -99,9 +99,9 @@ final class ControllerRecipeTextLines {
             String count = output.amount() > 1L
                     ? ReadableNumber.formatForSlot(output.amount(), 0, "") + " " : "";
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.item", count,
-                    item.stack().getHoverName()), MachineControllerScreen.STATUS_LABEL_COLOR,
+                    item.stack().getStyledHoverName()), MachineControllerScreen.STATUS_LABEL_COLOR,
                     new ControllerTextLine.ItemIcon(iconStack),
-                    List.of(item.stack().getHoverName(), Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    List.of(item.stack().getStyledHoverName(), Component.literal(ReadableNumber.formatExact(output.amount()))),
                     OUTPUT_INDENT);
         }
         if (output.output() instanceof MachineOutput.FluidOutput fluid) {

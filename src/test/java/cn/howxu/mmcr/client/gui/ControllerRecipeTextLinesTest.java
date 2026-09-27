@@ -9,6 +9,8 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -74,6 +76,20 @@ class ControllerRecipeTextLinesTest {
     }
 
     @Test
+    void itemOutputTextAndTooltipPreserveVanillaRarityStyle() {
+        ItemStack stack = new ItemStack(Items.ENCHANTED_GOLDEN_APPLE);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal("Styled apple").withStyle(ChatFormatting.AQUA));
+        Component styledName = stack.getStyledHoverName();
+
+        ControllerTextLine line = ControllerRecipeTextLines.outputs(List.of(
+                new MachineOutputAmount(new MachineOutput.ItemOutput(stack, 1F), 1L))).getFirst();
+
+        assertThat(line.text()).isEqualTo(Component.translatable(
+                "gui.mmcr.controller.recipe_output.item", "", styledName));
+        assertThat(line.tooltip().getFirst()).isEqualTo(styledName);
+    }
+
+    @Test
     void plainTextDoesNotReserveSpaceForAnIcon() {
         assertThat(new ControllerTextLine(Component.literal("external"), 0xFFFFFFFF).textXOffset()).isZero();
     }
@@ -87,7 +103,7 @@ class ControllerRecipeTextLinesTest {
         assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L))
                 .extracting(ControllerTextLine::text)
                 .contains(Component.translatable("gui.mmcr.controller.recipe_output.item", "6 ",
-                        new ItemStack(Items.DIAMOND).getHoverName()));
+                        new ItemStack(Items.DIAMOND).getStyledHoverName()));
     }
 
     @Test
@@ -119,7 +135,7 @@ class ControllerRecipeTextLinesTest {
                 Component.translatable("gui.mmcr.controller.recipe.energy_input", "400"),
                 Component.translatable("gui.mmcr.controller.recipe_output.title"),
                 Component.translatable("gui.mmcr.controller.recipe_output.item", "",
-                        new ItemStack(Items.DIAMOND).getHoverName()));
+                        new ItemStack(Items.DIAMOND).getStyledHoverName()));
         assertThat(lines.get(0).leftIndent()).isZero();
         assertThat(lines.get(1).leftIndent()).isZero();
         assertThat(lines.get(2).leftIndent()).isEqualTo(4);

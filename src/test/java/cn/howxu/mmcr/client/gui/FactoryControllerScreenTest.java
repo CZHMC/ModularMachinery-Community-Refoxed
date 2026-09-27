@@ -18,6 +18,7 @@ import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Map;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -65,6 +66,16 @@ class FactoryControllerScreenTest {
         for (int index = 0; index < DETAIL_LEVEL_IDS.size(); index++) {
             TestBootstrap.registerLevel(detailLevel(index));
         }
+    }
+
+    @Test
+    void fallback_detail_title_preserves_screen_title_style() {
+        Component title = Component.literal("Styled factory").withStyle(ChatFormatting.GOLD);
+
+        Component detailTitle = FactoryControllerScreen.detailTitle(title, "", 2);
+
+        assertThat(detailTitle.getSiblings().getFirst()).isEqualTo(title);
+        assertThat(detailTitle.getString()).isEqualTo("Styled factory #2");
     }
 
     @Test
