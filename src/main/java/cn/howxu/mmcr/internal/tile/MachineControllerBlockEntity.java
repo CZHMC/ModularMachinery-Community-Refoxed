@@ -4177,7 +4177,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         List<Identifier> pools = supportedRecipePoolIds();
         if (pools.isEmpty()) return null;
         if (selectedRecipePoolId == null || !pools.contains(selectedRecipePoolId)) {
+            boolean poolChanged = selectedRecipePoolId != null;
             selectedRecipePoolId = pools.getFirst();
+            if (poolChanged) discardWorkForRecipePoolChange();
             if (level != null && !level.isClientSide()) setChanged();
         }
         return selectedRecipePoolId;
@@ -4187,14 +4189,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide() || !supportedRecipePoolIds().contains(recipePoolId)) return false;
         if (recipePoolId.equals(currentRecipePoolId())) return false;
         selectedRecipePoolId = recipePoolId;
+        discardWorkForRecipePoolChange();
+        setChanged();
+        broadcastStateIfChanged();
+        return true;
+    }
+
+    private void discardWorkForRecipePoolChange() {
         normalRecipeThread.discardForRecipePoolChange();
         runtime.factoryRuntime().discardForRecipePoolChange();
         clearPendingSharedStart();
         clearSharedTickPending();
         clearCandidateCache();
-        setChanged();
-        broadcastStateIfChanged();
-        return true;
     }
 
     private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {

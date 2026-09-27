@@ -1421,6 +1421,24 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void removed_current_recipe_pool_discards_active_work_when_falling_back() {
+        Identifier machineId = MMCR.id("controller_recipe_pool_removed_active");
+        Identifier firstPool = MMCR.id("controller_recipe_pool_removed_active_first");
+        Identifier removedPool = MMCR.id("controller_recipe_pool_removed_active_second");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
+        controller.selectRecipePool(removedPool);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_removed_active_recipe"),
+                removedPool, 20, List.of(), List.of());
+        CraftingRuntime craftingRuntime = controllerRuntime(controller).craftingRuntime();
+
+        assertThat(craftingRuntime.start(recipe, 1).isCrafting()).isTrue();
+        MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+        assertThat(craftingRuntime.active()).isFalse();
+    }
+
+    @Test
     void selecting_a_recipe_pool_discards_active_controller_work() {
         Identifier machineId = MMCR.id("controller_recipe_pool_switch");
         Identifier firstPool = MMCR.id("controller_recipe_pool_switch_first");
