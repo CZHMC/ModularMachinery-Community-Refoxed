@@ -2,9 +2,11 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -15,7 +17,9 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,6 +43,9 @@ class AutoIOPortTest {
         Items.IRON_INGOT.builtInRegistryHolder().bindComponents(
                 DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
         Items.IRON_INGOT.resetDefaultResource();
+        Items.GOLD_INGOT.builtInRegistryHolder().bindComponents(
+                DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 64).build());
+        Items.GOLD_INGOT.resetDefaultResource();
     }
 
     @Test
@@ -103,6 +110,65 @@ class AutoIOPortTest {
     }
 
     @Test
+    void normal_ejection_moves_only_the_first_resource_while_shift_moves_all_resources() {
+        ItemInputBusBlockEntity source = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+        ItemOutputBusBlockEntity target = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+        setItem(source, 0, Items.IRON_INGOT, 3L);
+        setItem(source, 1, Items.GOLD_INGOT, 4L);
+        Level level = LevelStub.createWithBlockEntities(List.of(source, target));
+        source.setLevel(level);
+        target.setLevel(level);
+        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+                itemHandler(target, true, false));
+
+        assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, false)).isTrue();
+        assertThat(source.itemStorage().amount(0)).isZero();
+        assertThat(source.itemStorage().amount(1)).isEqualTo(4L);
+
+        assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, true)).isTrue();
+        assertThat(source.itemStorage().amount(1)).isZero();
+        assertThat(target.itemStorage().amount(0) + target.itemStorage().amount(1)).isEqualTo(7L);
+    }
+
+    @Test
+    void extended_item_ejection_ignores_the_automatic_io_stack_limit() {
+        ExtendedItemBusBlockEntity source = extendedItemBus("extended_item_input_bus_basic", BlockPos.ZERO);
+        ExtendedItemBusBlockEntity target = extendedItemBus("extended_item_output_bus_basic", new BlockPos(1, 0, 0));
+        setItem(source, 0, Items.IRON_INGOT, 2_100L);
+        Level level = LevelStub.createWithBlockEntities(List.of(source, target));
+        source.setLevel(level);
+        target.setLevel(level);
+        LevelStub.setCapability(level, ModCapabilities.ITEM_BLOCK, target.getBlockPos(),
+                itemHandler(target, true, false));
+
+        assertThat(source.ejectContents(BuiltinCapabilityDefinitions.ITEM_TYPE, false)).isTrue();
+        assertThat(source.itemStorage().amount(0)).isZero();
+        assertThat(target.itemStorage().amount(0)).isEqualTo(2_100L);
+    }
+
+    @Test
+    void extended_fluid_ejection_uses_the_selected_control_mode() {
+        ExtendedFluidHatchBlockEntity source = extendedFluidHatch("extended_fluid_input_hatch_basic", BlockPos.ZERO);
+        ExtendedFluidHatchBlockEntity target = extendedFluidHatch("extended_fluid_input_hatch_basic",
+                new BlockPos(1, 0, 0));
+        source.fluidStorage().setContents(0, FluidResource.of(Fluids.WATER), 2_000L);
+        source.fluidStorage().setContents(1, FluidResource.of(Fluids.LAVA), 3_000L);
+        Level level = LevelStub.createWithBlockEntities(List.of(source, target));
+        source.setLevel(level);
+        target.setLevel(level);
+        LevelStub.setCapability(level, ModCapabilities.FLUID_BLOCK, target.getBlockPos(),
+                target.getResourceHandler(null));
+
+        assertThat(source.ejectContents(BuiltinCapabilityDefinitions.FLUID_TYPE, false)).isTrue();
+        assertThat(source.fluidStorage().amount(0)).isZero();
+        assertThat(source.fluidStorage().amount(1)).isEqualTo(3_000L);
+
+        assertThat(source.ejectContents(BuiltinCapabilityDefinitions.FLUID_TYPE, true)).isTrue();
+        assertThat(source.fluidStorage().amount(1)).isZero();
+        assertThat(target.fluidStorage().amount(0) + target.fluidStorage().amount(1)).isEqualTo(5_000L);
+    }
+
+    @Test
     void output_port_rejects_manual_ejection_without_mutating_contents() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(BlockPos.ZERO);
         setItems(output, 2L);
@@ -134,17 +200,23 @@ class AutoIOPortTest {
         assertThat(source.itemStorage().amount(0)).isEqualTo(3L);
     }
 
-    private static ItemStack stack(int count) {
-        ItemStack stack = new ItemStack(Items.IRON_INGOT, count);
-        stack.set(DataComponents.MAX_STACK_SIZE, 64);
-        return stack;
+    private static void setItems(ItemBusBlockEntity port, long amount) {
+        setItem(port, 0, Items.IRON_INGOT, amount);
     }
 
-    private static void setItems(ItemBusBlockEntity port, long amount) {
+    private static void setItem(ItemBusBlockEntity port, int slot, net.minecraft.world.item.Item item, long amount) {
         try (Transaction transaction = Transaction.openRoot()) {
-            port.itemStorage().insert(0, ItemResource.of(stack((int) amount)), amount, transaction);
+            port.itemStorage().insert(slot, ItemResource.of(new ItemStack(item)), amount, transaction);
             transaction.commit();
         }
+    }
+
+    private static ExtendedItemBusBlockEntity extendedItemBus(String id, BlockPos pos) {
+        return new ExtendedItemBusBlockEntity(pos, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
+    }
+
+    private static ExtendedFluidHatchBlockEntity extendedFluidHatch(String id, BlockPos pos) {
+        return new ExtendedFluidHatchBlockEntity(pos, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
     }
 
     private static FactoryRuntime factoryRuntime(MachineControllerBlockEntity controller) throws Exception {

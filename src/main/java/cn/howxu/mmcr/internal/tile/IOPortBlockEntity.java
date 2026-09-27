@@ -44,6 +44,7 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.TreeMap;
@@ -516,6 +517,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     public boolean ejectContents(CapabilityType type) {
+        return ejectContents(type, false);
+    }
+
+    public boolean ejectContents(CapabilityType type, boolean allResources) {
         if (level == null || level.isClientSide() || ioType() != IOType.INPUT) return false;
         MachineCapability capability = capability(type);
         if (capability == null || !capability.directions().supports(IOType.INPUT)) return false;
@@ -530,13 +535,28 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             sides.set(swapIndex, side);
         }
         boolean moved = false;
+        List<Resource> resources = policy.ejectionResources(capability);
+        if (resources.isEmpty()) return ejectResource(policy, capability, null, sides);
+        int resourceCount = allResources ? resources.size() : 1;
+        for (int resourceIndex = 0; resourceIndex < resourceCount; resourceIndex++) {
+            moved |= ejectResource(policy, capability, resources.get(resourceIndex), sides);
+        }
+        return moved;
+    }
+
+    private static boolean ejectResource(TransferPolicy policy, MachineCapability capability,
+                                         @Nullable Resource resource, List<Direction> sides) {
+        long remaining = Integer.MAX_VALUE;
+        boolean moved = false;
         for (Direction side : sides) {
             TransferResult result;
             try (Transaction transaction = Transaction.openRoot()) {
-                result = policy.eject(TransferContext.commit(capability, side, 1L, transaction).asEjection());
+                result = policy.eject(TransferContext.commit(capability, side, 1L, transaction), resource, remaining);
                 if (result.successful()) transaction.commit();
             }
             moved |= result.successful();
+            remaining -= Math.min(remaining, result.amount());
+            if (remaining == 0L) break;
         }
         return moved;
     }

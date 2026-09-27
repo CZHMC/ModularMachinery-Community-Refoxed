@@ -128,6 +128,18 @@ class PktEjectPortContentsPayloadTest {
         assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
                 new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id()))).isTrue();
         assertThat(port.ejectCalls).isEqualTo(1);
+        assertThat(port.ejectAllResources).isFalse();
+    }
+
+    @Test
+    void shift_ejection_requests_all_resources() throws Exception {
+        ProbePort port = inputPort();
+        ServerPlayer player = playerWith(port, new ItemBusMenu(1, new Inventory(null, null), port), PORT_POS);
+
+        assertThat(PktEjectPortContentsPayload.ejectOnServer(player,
+                new PktEjectPortContentsPayload(PORT_POS, BuiltinCapabilityDefinitions.ITEM_TYPE.id(), true))).isTrue();
+        assertThat(port.ejectCalls).isEqualTo(1);
+        assertThat(port.ejectAllResources).isTrue();
     }
 
     @Test
@@ -191,7 +203,7 @@ class PktEjectPortContentsPayloadTest {
     void payload_round_trips_its_target_position() {
         var buffer = Unpooled.buffer();
         PktEjectPortContentsPayload payload = new PktEjectPortContentsPayload(new BlockPos(3, 4, 5),
-                BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+                BuiltinCapabilityDefinitions.ITEM_TYPE.id(), true);
 
         PktEjectPortContentsPayload.STREAM_CODEC.encode(buffer, payload);
         PktEjectPortContentsPayload decoded = PktEjectPortContentsPayload.STREAM_CODEC.decode(buffer);
@@ -318,6 +330,7 @@ class PktEjectPortContentsPayloadTest {
         private final IOType ioType;
         private final IOPortKind kind;
         private int ejectCalls;
+        private boolean ejectAllResources;
 
         private ProbePort(BlockPos pos, BlockState state, IOType ioType, IOPortKind kind) {
             super(ModBlockEntities.BES.get(kind.id()).get(), pos, state,
@@ -355,6 +368,12 @@ class PktEjectPortContentsPayloadTest {
         }
         @Override public boolean ejectContents(CapabilityType capabilityType) {
             ejectCalls++;
+            ejectAllResources = false;
+            return true;
+        }
+        @Override public boolean ejectContents(CapabilityType capabilityType, boolean allResources) {
+            ejectCalls++;
+            ejectAllResources = allResources;
             return true;
         }
     }

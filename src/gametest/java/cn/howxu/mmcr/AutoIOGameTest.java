@@ -187,7 +187,7 @@ public class AutoIOGameTest {
 
         CapabilityType itemType = capabilityType(input, BuiltinCapabilityDefinitions.ITEM_TYPE);
         CapabilityType fluidType = capabilityType(input, BuiltinCapabilityDefinitions.FLUID_TYPE);
-        helper.assertTrue(input.ejectContents(itemType), "Item-specific ejection moves item contents");
+        helper.assertTrue(input.ejectContents(itemType, true), "Item-specific Shift ejection moves item contents");
         helper.assertTrue(itemTarget.getItem(0).is(Items.COBBLESTONE), "Item ejection reaches the item handler");
         helper.assertTrue(input.fluidStorage().getAmountAsLong() == 2_000,
                 "Item-specific ejection leaves fluid contents untouched");

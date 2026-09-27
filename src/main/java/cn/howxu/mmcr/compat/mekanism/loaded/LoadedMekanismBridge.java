@@ -401,12 +401,16 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             ResourceHandler<ChemicalResource> adjacent = adjacentChemical(context.capability(), context.side());
             if (adjacent == null) return transferBlocked(BuiltinFailureReasons.NO_TARGET);
             ResourceHandler<ChemicalResource> internal = ChemicalPortCapability.resourceHandler(port.chemicalTank());
-            int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
+            int limit = (int) Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(),
+                    Integer.MAX_VALUE);
+            ChemicalResource selected = context.ejectionResource() instanceof ChemicalResource chemical
+                    ? chemical : null;
+            Predicate<ChemicalResource> filter = selected == null ? resource -> true : selected::equals;
             long moved = context.eject()
-                    ? moveResource(internal, adjacent, limit, context)
+                    ? moveResource(internal, adjacent, filter, limit, context)
                     : context.ioType() == IOType.INPUT
-                    ? moveResource(adjacent, internal, limit, context)
-                    : moveResource(internal, adjacent, limit, context);
+                    ? moveResource(adjacent, internal, resource -> true, limit, context)
+                    : moveResource(internal, adjacent, resource -> true, limit, context);
             return TransferResult.moved(moved);
         }
 
@@ -424,14 +428,15 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         }
 
         private static long moveResource(ResourceHandler<ChemicalResource> from,
-                                         ResourceHandler<ChemicalResource> to, int limit,
+                                         ResourceHandler<ChemicalResource> to, Predicate<ChemicalResource> filter,
+                                         int limit,
                                          TransferContext context) {
             if (limit <= 0) return 0L;
             if (!context.simulate()) {
-                return ResourceHandlerUtil.move(from, to, resource -> true, limit, context.transaction());
+                return ResourceHandlerUtil.move(from, to, filter, limit, context.transaction());
             }
             try (Transaction transaction = Transaction.open(context.transaction())) {
-                return ResourceHandlerUtil.move(from, to, resource -> true, limit, transaction);
+                return ResourceHandlerUtil.move(from, to, filter, limit, transaction);
             }
         }
     }

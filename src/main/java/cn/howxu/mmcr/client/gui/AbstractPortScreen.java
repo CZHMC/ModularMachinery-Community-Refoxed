@@ -194,7 +194,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
         ejectButton = addRenderableWidget(new EjectButton(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
                 Component.translatable("mmcr.auto_io.eject_contents"), button -> {
-            ClientPacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId()));
+            ClientPacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId(),
+                    Minecraft.getInstance().hasShiftDown()));
                 button.setFocused(false);
         }, topPos + autoIOSideButtonY(1)));
 

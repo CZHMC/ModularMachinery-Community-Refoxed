@@ -34,7 +34,10 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
  * Built-in automatic IO policies registered by capability identity.
@@ -107,6 +110,11 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
+        public List<Resource> ejectionResources(MachineCapability capability) {
+            return storedResources(CapabilityFactories.resourceStorage(capability, ItemResource.class));
+        }
+
+        @Override
         public TransferResult transfer(TransferContext context) {
             MachineCapability capability = context.capability();
             ResourceStorage<ItemResource> storage = CapabilityFactories.resourceStorage(capability, ItemResource.class);
@@ -120,12 +128,14 @@ public final class CapabilityTransferPolicies {
             ResourceHandler<ItemResource> adjacent = adjacentItem(capability, context.side());
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
             ResourceHandler<ItemResource> internal = resourceHandler(storage);
-            int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
+            int limit = (int) Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(),
+                    Integer.MAX_VALUE);
+            Predicate<ItemResource> filter = ejectionFilter(context);
             long moved = context.eject()
-                    ? moveResource(internal, adjacent, limit, context)
+                    ? moveResource(internal, adjacent, filter, limit, context)
                     : context.ioType() == IOType.INPUT
-                    ? moveResource(adjacent, internal, limit, context)
-                    : moveResource(internal, adjacent, limit, context);
+                    ? moveResource(adjacent, internal, resource -> true, limit, context)
+                    : moveResource(internal, adjacent, resource -> true, limit, context);
             return TransferResult.moved(moved);
         }
 
@@ -163,6 +173,11 @@ public final class CapabilityTransferPolicies {
         }
 
         @Override
+        public List<Resource> ejectionResources(MachineCapability capability) {
+            return storedResources(CapabilityFactories.resourceStorage(capability, FluidResource.class));
+        }
+
+        @Override
         public TransferResult transfer(TransferContext context) {
             MachineCapability capability = context.capability();
             ResourceStorage<FluidResource> storage = CapabilityFactories.resourceStorage(capability, FluidResource.class);
@@ -176,12 +191,14 @@ public final class CapabilityTransferPolicies {
             ResourceHandler<FluidResource> adjacent = adjacentFluid(capability, context.side());
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
             ResourceHandler<FluidResource> internal = resourceHandler(storage);
-            int limit = (int) Math.min(transfer.transferLimit(), Integer.MAX_VALUE);
+            int limit = (int) Math.min(context.eject() ? context.ejectionLimit() : transfer.transferLimit(),
+                    Integer.MAX_VALUE);
+            Predicate<FluidResource> filter = ejectionFilter(context);
             long moved = context.eject()
-                    ? moveResource(internal, adjacent, limit, context)
+                    ? moveResource(internal, adjacent, filter, limit, context)
                     : context.ioType() == IOType.INPUT
-                    ? moveResource(adjacent, internal, limit, context)
-                    : moveResource(internal, adjacent, limit, context);
+                    ? moveResource(adjacent, internal, resource -> true, limit, context)
+                    : moveResource(internal, adjacent, resource -> true, limit, context);
             return TransferResult.moved(moved);
         }
 
@@ -228,8 +245,8 @@ public final class CapabilityTransferPolicies {
             }
             EnergyHandler adjacent = adjacentEnergy(capability, context.side());
             if (adjacent == null) return blocked(BuiltinFailureReasons.NO_TARGET);
-            EnergyHandler internal = energyHandler(storage, transfer.transferLimit());
-            long limit = transfer.transferLimit();
+            long limit = context.eject() ? context.ejectionLimit() : transfer.transferLimit();
+            EnergyHandler internal = energyHandler(storage, limit);
             long moved = context.eject()
                     ? moveEnergy(internal, adjacent, limit, context)
                     : context.ioType() == IOType.INPUT
@@ -251,13 +268,28 @@ public final class CapabilityTransferPolicies {
     }
 
     private static <R extends Resource> long moveResource(ResourceHandler<R> from, ResourceHandler<R> to,
-                                                          int limit, TransferContext context) {
+                                                          Predicate<R> filter, int limit, TransferContext context) {
         if (!context.simulate()) {
-            return ResourceHandlerUtil.move(from, to, resource -> true, limit, context.transaction());
+            return ResourceHandlerUtil.move(from, to, filter, limit, context.transaction());
         }
         try (Transaction transaction = Transaction.open(context.transaction())) {
-            return ResourceHandlerUtil.move(from, to, resource -> true, limit, transaction);
+            return ResourceHandlerUtil.move(from, to, filter, limit, transaction);
         }
+    }
+
+    private static <R extends Resource> Predicate<R> ejectionFilter(TransferContext context) {
+        Resource selected = context.ejectionResource();
+        return selected == null ? resource -> true : selected::equals;
+    }
+
+    private static <R extends Resource> List<Resource> storedResources(ResourceStorage<R> storage) {
+        if (storage == null) return List.of();
+        LinkedHashSet<Resource> resources = new LinkedHashSet<>();
+        for (int slot = 0; slot < storage.size(); slot++) {
+            R resource = storage.resource(slot);
+            if (storage.amount(slot) > 0L && !isEmpty(resource)) resources.add(resource);
+        }
+        return List.copyOf(resources);
     }
 
     private static <R extends Resource> ResourceHandler<R> resourceHandler(ResourceStorage<R> storage) {

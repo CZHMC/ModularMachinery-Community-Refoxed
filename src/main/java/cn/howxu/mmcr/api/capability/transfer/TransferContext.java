@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.capability.transfer;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
+import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
@@ -18,10 +19,13 @@ import java.util.Objects;
  * @param simulate whether the operation must leave storage unchanged
  * @param transaction transaction supplied for a committed operation
  * @param eject whether the operation moves contents out of the local port
+ * @param ejectionLimit maximum amount moved by a manual ejection attempt
+ * @param ejectionResource optional resource selected for manual ejection
  * @author howxu <dev@howxu.cn>
  */
 public record TransferContext(MachineCapability capability, IOType ioType, Direction side, long parallelism,
-                              boolean simulate, @Nullable TransactionContext transaction, boolean eject) {
+                              boolean simulate, @Nullable TransactionContext transaction, boolean eject,
+                              long ejectionLimit, @Nullable Resource ejectionResource) {
     public TransferContext {
         Objects.requireNonNull(capability, "capability");
         Objects.requireNonNull(ioType, "ioType");
@@ -33,11 +37,12 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
         if (!simulate && transaction == null) {
             throw new IllegalArgumentException("committed transfer requires a transaction");
         }
+        if (eject && ejectionLimit <= 0L) throw new IllegalArgumentException("ejection limit must be positive");
     }
 
     public TransferContext(MachineCapability capability, IOType ioType, Direction side, long parallelism,
                            boolean simulate, @Nullable TransactionContext transaction) {
-        this(capability, ioType, side, parallelism, simulate, transaction, false);
+        this(capability, ioType, side, parallelism, simulate, transaction, false, 0L, null);
     }
 
     public static TransferContext simulate(MachineCapability capability, Direction side, long parallelism) {
@@ -47,7 +52,7 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
 
     public static TransferContext simulate(MachineCapability capability, IOType ioType, Direction side,
                                            long parallelism) {
-        return new TransferContext(capability, ioType, side, parallelism, true, null, false);
+        return new TransferContext(capability, ioType, side, parallelism, true, null, false, 0L, null);
     }
 
     public static TransferContext commit(MachineCapability capability, Direction side, long parallelism,
@@ -59,11 +64,19 @@ public record TransferContext(MachineCapability capability, IOType ioType, Direc
     public static TransferContext commit(MachineCapability capability, IOType ioType, Direction side,
                                          long parallelism, TransactionContext transaction) {
         return new TransferContext(capability, ioType, side, parallelism, false,
-                Objects.requireNonNull(transaction, "transaction"), false);
+                Objects.requireNonNull(transaction, "transaction"), false, 0L, null);
     }
 
     public TransferContext asEjection() {
-        return new TransferContext(capability, ioType, side, parallelism, simulate, transaction, true);
+        return asEjection(null, Integer.MAX_VALUE);
+    }
+
+    public TransferContext asEjection(@Nullable Resource resource) {
+        return asEjection(resource, Integer.MAX_VALUE);
+    }
+
+    public TransferContext asEjection(@Nullable Resource resource, long limit) {
+        return new TransferContext(capability, ioType, side, parallelism, simulate, transaction, true, limit, resource);
     }
 
     private static IOType singleDirection(MachineCapability capability) {
