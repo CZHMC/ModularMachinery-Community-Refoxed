@@ -115,6 +115,26 @@ public final class FactoryRuntime {
         pendingAsyncSearches.clear();
     }
 
+    public void discardForRecipePoolChange() {
+        boolean changed = !recipeLocks.isEmpty() || !recipeLockUsed.isEmpty() || !startReservations.isEmpty()
+                || !patternStartReservations.isEmpty() || !readyLanes.isEmpty() || !pendingAsyncSearches.isEmpty();
+        for (FactoryRecipeThread lane : lanes) {
+            LaneObservation before = observe(lane);
+            lane.discardForRecipePoolChange();
+            changed |= !before.equals(observe(lane));
+        }
+        recipeLocks.clear();
+        recipeLockUsed.clear();
+        startReservations.clear();
+        patternStartReservations.clear();
+        readyLanes.clear();
+        pendingAsyncSearches.clear();
+        clearCandidateCaches();
+        failureDirty = true;
+        recomputeFailureIfDirty();
+        if (changed) markLaneStateChanged();
+    }
+
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism, Runnable onFinished) {
         return tick(candidates, maxParallelism, onFinished, currentGameTime());
     }

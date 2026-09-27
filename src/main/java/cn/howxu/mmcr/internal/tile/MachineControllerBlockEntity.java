@@ -192,6 +192,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable Identifier lockedRecipeId;
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable Identifier pendingControllerLockId;
+    private @Nullable Identifier selectedRecipePoolId;
     private boolean redstonePaused;
     private boolean runtimePersistenceChanged;
     private @Nullable MachineWorkMode activeWorkMode;
@@ -4162,11 +4163,35 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return RecipeRegistry.catalogForMachine(machine).version();
     }
 
-    private @Nullable Identifier currentRecipePoolId() {
+    public List<Identifier> supportedRecipePoolIds() {
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        return MachineRegistry.recipePoolForMachine(machine);
+        return MachineRegistry.recipePoolsForMachine(machine);
+    }
+
+    public @Nullable Identifier currentRecipePoolId() {
+        List<Identifier> pools = supportedRecipePoolIds();
+        if (pools.isEmpty()) return null;
+        if (selectedRecipePoolId == null || !pools.contains(selectedRecipePoolId)) {
+            selectedRecipePoolId = pools.getFirst();
+            if (level != null && !level.isClientSide()) setChanged();
+        }
+        return selectedRecipePoolId;
+    }
+
+    public boolean selectRecipePool(Identifier recipePoolId) {
+        if (level == null || level.isClientSide() || !supportedRecipePoolIds().contains(recipePoolId)) return false;
+        if (recipePoolId.equals(currentRecipePoolId())) return false;
+        selectedRecipePoolId = recipePoolId;
+        normalRecipeThread.discardForRecipePoolChange();
+        runtime.factoryRuntime().discardForRecipePoolChange();
+        clearPendingSharedStart();
+        clearSharedTickPending();
+        clearCandidateCache();
+        setChanged();
+        broadcastStateIfChanged();
+        return true;
     }
 
     private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {
@@ -4301,6 +4326,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.craftingRuntime().save(output.child("crafting_runtime"));
         Identifier lockToSave = lockedRecipeId == null ? pendingControllerLockId : lockedRecipeId;
         if (lockToSave != null) output.putString("locked_recipe", lockToSave.toString());
+        if (selectedRecipePoolId != null) output.putString("selected_recipe_pool", selectedRecipePoolId.toString());
         if (hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
             runtime.factoryRuntime().save(output.child("factory_runtime"));
         }
@@ -4318,6 +4344,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             redstonePaused = false;
             lockedRecipeId = null;
             pendingControllerLockId = null;
+            selectedRecipePoolId = Identifier.tryParse(input.getStringOr("selected_recipe_pool", ""));
             runtime.craftingRuntime().invalidate();
             Map<Identifier, MachineLevel> restoredLevels = new LinkedHashMap<>();
             input.listOrEmpty("found_levels", Codec.STRING).forEach(id -> {

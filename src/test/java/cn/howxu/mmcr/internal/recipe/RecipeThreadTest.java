@@ -143,6 +143,42 @@ class RecipeThreadTest {
         assertThat(thread.runtime().active()).isTrue();
     }
 
+    @Test
+    void recipe_pool_change_discards_an_active_recipe_and_its_restart_memory() {
+        MachineControllerBlockEntity controller = normalController();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_pool_active_discard"), MMCR.id("test_cube"),
+                20, List.of(), List.of());
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        thread.markRecipeFinished();
+
+        thread.discardForRecipePoolChange();
+
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.tryRestartLastRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isFalse();
+    }
+
+    @Test
+    void recipe_pool_change_discards_a_pending_recipe_start() {
+        MachineControllerBlockEntity controller = normalController();
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("recipe_pool_pending_discard"), MMCR.id("test_cube"),
+                20, List.of(), List.of());
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
+                controller.runtimeSnapshot().structure().version())).isTrue();
+        assertThat(thread.isStartPending()).isTrue();
+
+        thread.discardForRecipePoolChange();
+        completeAsyncLevelTick(level);
+
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.runtime().active()).isFalse();
+    }
+
     private static MachineControllerBlockEntity normalController() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         RuntimeTestFixtures.formStructure(controller,

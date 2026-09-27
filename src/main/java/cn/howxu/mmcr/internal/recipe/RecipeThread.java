@@ -1018,9 +1018,23 @@ public abstract class RecipeThread {
         pendingAsyncStart = null;
         pendingAsyncStartExecution = null;
         asyncFinishPrepared = false;
-        clearPendingStart(pendingStartToken, pendingStartRecipe);
+        clearPendingStartUnconditionally();
         clearPendingTick();
     }
+
+    public void discardForRecipePoolChange() {
+        cancelAsyncState();
+        clearPendingStartUnconditionally();
+        runtime.invalidate();
+        controller.clearRecipeScreenText(laneId());
+        onDiscardedForRecipePoolChange();
+    }
+
+    private void clearPendingStartUnconditionally() {
+        if (startPending) clearPendingStart(pendingStartToken, pendingStartRecipe);
+    }
+
+    protected void onDiscardedForRecipePoolChange() { }
 
     public void invalidateForSmartInterfaceChange() {
         runtime.invalidateForSmartInterfaceChange();

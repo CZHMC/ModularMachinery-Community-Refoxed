@@ -206,6 +206,11 @@ public final class MachineRecipeThread extends RecipeThread {
         super.invalidate();
     }
 
+    @Override
+    protected void onDiscardedForRecipePoolChange() {
+        clearLastRecipe();
+    }
+
     private String asyncSearchLaneId() {
         return "normal-search/" + asyncLaneId();
     }
