@@ -3762,7 +3762,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         long maxParallelism = getMaxParallelism();
         RecipeSearchResult result;
         try {
-            result = new RecipeSearchTask(current, machineId, current.structure().version(),
+            result = new RecipeSearchTask(current, machineId, currentRecipePoolId(), current.structure().version(),
                     maxParallelism, candidates, lockedRecipeId, componentRuntime().capabilities(),
                     MachineModifier.recipeModifiers(componentRuntime().modifierList())).compute();
         } catch (RuntimeException e) {
@@ -4195,10 +4195,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean recipeBelongsToCurrentMachine(MachineRecipe recipe) {
-        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        Identifier recipePoolId = currentRecipePoolId();
         return recipePoolId != null && recipePoolId.equals(recipe.recipePoolId());
     }
 
@@ -4252,7 +4249,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot structure = currentRuntimeSnapshot().structure();
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         Identifier machineId = machine == null ? null : machine.registryName();
-        Identifier recipePoolId = MachineRegistry.recipePoolForMachine(machine);
+        Identifier recipePoolId = currentRecipePoolId();
         if (machineId == null || recipePoolId == null) return List.of();
         MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
         if (machineId.equals(cachedCandidatesMachineId)
@@ -4263,7 +4260,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         cachedCandidatesMachineId = machineId;
         cachedCandidatesRecipePoolId = recipePoolId;
         cachedCandidatesCatalogVersion = catalog.version();
-        cachedCandidates = catalog.recipes();
+        cachedCandidates = catalog.recipes().stream()
+                .filter(recipe -> recipePoolId.equals(recipe.recipePoolId())).toList();
         return cachedCandidates;
     }
 
