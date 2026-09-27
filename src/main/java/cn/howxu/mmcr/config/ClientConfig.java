@@ -12,12 +12,16 @@ public final class ClientConfig {
     public static final boolean DEFAULT_INTERACTIVE_SKIP_TRANSLUCENT = true;
     public static final boolean DEFAULT_INTERACTIVE_SKIP_BLOCK_ENTITIES = true;
     public static final int DEFAULT_SCENE_PARALLEL_COMPILE_THRESHOLD = 80_000;
+    public static final boolean DEFAULT_SHOW_FACTORY_THREAD_OUTPUT_ICON = true;
+    public static final boolean DEFAULT_SHOW_FACTORY_THREAD_RECIPE_PROGRESS = true;
     public static final ModConfigSpec.DoubleValue PREVIEW_RENDER_RADIUS;
     public static final ModConfigSpec.DoubleValue INTERACTIVE_RENDER_SCALE;
     public static final ModConfigSpec.IntValue INTERACTIVE_RESTORE_DELAY_MS;
     public static final ModConfigSpec.BooleanValue INTERACTIVE_SKIP_TRANSLUCENT;
     public static final ModConfigSpec.BooleanValue INTERACTIVE_SKIP_BLOCK_ENTITIES;
     public static final ModConfigSpec.IntValue SCENE_PARALLEL_COMPILE_THRESHOLD;
+    public static final ModConfigSpec.BooleanValue SHOW_FACTORY_THREAD_OUTPUT_ICON;
+    public static final ModConfigSpec.BooleanValue SHOW_FACTORY_THREAD_RECIPE_PROGRESS;
     public static final ModConfigSpec SPEC;
 
     static {
@@ -42,6 +46,14 @@ public final class ClientConfig {
                 .comment("Preview block count that enables parallel scene mesh compilation")
                 .defineInRange("scene_parallel_compile_threshold", DEFAULT_SCENE_PARALLEL_COMPILE_THRESHOLD,
                         1, Integer.MAX_VALUE);
+        builder.pop();
+        builder.push("factory_controller");
+        SHOW_FACTORY_THREAD_OUTPUT_ICON = builder
+                .comment("Show the first recipe output icon in active factory thread elements")
+                .define("show_thread_output_icon", DEFAULT_SHOW_FACTORY_THREAD_OUTPUT_ICON);
+        SHOW_FACTORY_THREAD_RECIPE_PROGRESS = builder
+                .comment("Show recipe progress below the output icon area in active factory thread elements")
+                .define("show_thread_recipe_progress", DEFAULT_SHOW_FACTORY_THREAD_RECIPE_PROGRESS);
         builder.pop();
         SPEC = builder.build();
     }
@@ -86,6 +98,22 @@ public final class ClientConfig {
             return SCENE_PARALLEL_COMPILE_THRESHOLD.get();
         } catch (IllegalStateException ignored) {
             return DEFAULT_SCENE_PARALLEL_COMPILE_THRESHOLD;
+        }
+    }
+
+    public static boolean showFactoryThreadOutputIcon() {
+        try {
+            return SHOW_FACTORY_THREAD_OUTPUT_ICON.get();
+        } catch (IllegalStateException ignored) {
+            return DEFAULT_SHOW_FACTORY_THREAD_OUTPUT_ICON;
+        }
+    }
+
+    public static boolean showFactoryThreadRecipeProgress() {
+        try {
+            return SHOW_FACTORY_THREAD_RECIPE_PROGRESS.get();
+        } catch (IllegalStateException ignored) {
+            return DEFAULT_SHOW_FACTORY_THREAD_RECIPE_PROGRESS;
         }
     }
 }

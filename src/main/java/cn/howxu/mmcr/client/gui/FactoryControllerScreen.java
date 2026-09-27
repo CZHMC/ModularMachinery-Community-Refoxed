@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
+import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -43,6 +44,9 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static final int VISIBLE_THREADS = 6;
     private static final int THREAD_OUTPUT_ICON_SIZE = 16;
     private static final int THREAD_OUTPUT_ICON_PADDING = 2;
+    private static final int THREAD_PROGRESS_TEXT_Y_OFFSET = 21;
+    private static final float THREAD_PROGRESS_TEXT_SCALE = 0.7F;
+    private static final int THREAD_TEXT_COLOR = 0xFF222222;
     static final int SCROLLBAR_X = 95;
     static final int SCROLLBAR_Y = 9;
     static final int SCROLLBAR_HEIGHT = 197;
@@ -101,7 +105,12 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
 
     public static int progressWidth(int tick, int totalTick) {
         if (tick <= 0 || totalTick <= 0) return 0;
-        return Math.min(THREAD_ROW_WIDTH, tick * THREAD_ROW_WIDTH / totalTick);
+        return (int) Math.min(THREAD_ROW_WIDTH, (long) tick * THREAD_ROW_WIDTH / totalTick);
+    }
+
+    static int progressPercent(int tick, int totalTick) {
+        if (tick <= 0 || totalTick <= 0) return 0;
+        return (int) Math.min(100L, (long) tick * 100L / totalTick);
     }
 
     static long selectedParallelism(FactoryControllerMenu menu) {
@@ -199,7 +208,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         lines.add(new ControllerTextLine(factoryThreadLine(menu.activeThreadCount(), menu.threadCount()),
                 STATUS_LABEL_COLOR));
         if (selected.totalTick() > 0) {
-            int percent = progressWidth(selected.tick(), selected.totalTick()) * 100 / THREAD_ROW_WIDTH;
+            int percent = progressPercent(selected.tick(), selected.totalTick());
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.progress", percent + "%"),
                     PROGRESS_STATUS_COLOR));
         }
@@ -254,6 +263,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
         scrollOffset = clampScrollOffset(scrollOffset, menu.threads().size());
         int visibleThreadCount = visibleThreadCount(menu.threads().size());
+        boolean showOutputIcon = ClientConfig.showFactoryThreadOutputIcon();
+        boolean showRecipeProgress = ClientConfig.showFactoryThreadRecipeProgress();
         for (int row = 0; row < visibleThreadCount; row++) {
             int index = scrollOffset + row;
             if (index >= menu.threads().size()) break;
@@ -272,11 +283,18 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                     leftPos + THREAD_ROW_X + 3, y + 3);
             renderThreadText(graphics, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"),
                     leftPos + THREAD_ROW_X + 3, y + 15);
-            if (thread.active()) {
-                ControllerRecipeTextLines.firstRenderableOutputIcon(thread.presentation()).ifPresent(icon ->
-                        renderIcon(graphics, icon,
-                                elementX + THREAD_ROW_WIDTH - THREAD_OUTPUT_ICON_SIZE - THREAD_OUTPUT_ICON_PADDING,
-                                threadElementY(y) + THREAD_OUTPUT_ICON_PADDING, THREAD_OUTPUT_ICON_SIZE));
+            if (thread.active() && (showOutputIcon || showRecipeProgress)) {
+                int iconX = elementX + THREAD_ROW_WIDTH - THREAD_OUTPUT_ICON_SIZE - THREAD_OUTPUT_ICON_PADDING;
+                int elementY = threadElementY(y);
+                if (showOutputIcon) {
+                    ControllerRecipeTextLines.firstRenderableOutputIcon(thread.presentation()).ifPresent(icon ->
+                            renderIcon(graphics, icon, iconX,
+                                    elementY + THREAD_OUTPUT_ICON_PADDING, THREAD_OUTPUT_ICON_SIZE));
+                }
+                if (showRecipeProgress && thread.totalTick() > 0) {
+                    renderThreadProgress(graphics, progressPercent(thread.tick(), thread.totalTick()),
+                            iconX, elementY + THREAD_PROGRESS_TEXT_Y_OFFSET);
+                }
             }
         }
         if (shouldRenderScrollbar(menu.threads().size())) {
@@ -316,7 +334,17 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         graphics.pose().pushMatrix();
         graphics.pose().translate(x, y);
         graphics.pose().scale(THREAD_TEXT_SCALE, THREAD_TEXT_SCALE);
-        graphics.text(font, text, 0, 0, 0xFF222222, false);
+        graphics.text(font, text, 0, 0, THREAD_TEXT_COLOR, false);
+        graphics.pose().popMatrix();
+    }
+
+    private void renderThreadProgress(GuiGraphicsExtractor graphics, int percent, int x, int y) {
+        Component text = Component.literal(percent + "%");
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(x, y);
+        graphics.pose().scale(THREAD_PROGRESS_TEXT_SCALE, THREAD_PROGRESS_TEXT_SCALE);
+        int availableWidth = (int) (THREAD_OUTPUT_ICON_SIZE / THREAD_PROGRESS_TEXT_SCALE);
+        graphics.text(font, text, (availableWidth - font.width(text)) / 2, 0, THREAD_TEXT_COLOR, false);
         graphics.pose().popMatrix();
     }
 
