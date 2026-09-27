@@ -131,7 +131,7 @@ class BlueprintItemTest {
         assertThat(tooltip).isNotEmpty();
         assertThat(tooltip.getFirst().getContents()).isInstanceOf(TranslatableContents.class);
         assertThat(((TranslatableContents) tooltip.getFirst().getContents()).getKey())
-                .isEqualTo("tooltip.mmcr.blueprint.recipe_list");
+                .isEqualTo("tooltip.mmcr.blueprint.recipe_list_collapsed");
         assertThat(tooltip.getFirst().getStyle().getColor().getValue()).isEqualTo(ChatFormatting.AQUA.getColor());
     }
 

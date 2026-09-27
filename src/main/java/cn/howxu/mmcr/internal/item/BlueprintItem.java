@@ -85,8 +85,11 @@ public class BlueprintItem extends Item {
         if (machineId == null) return;
         Machine machine = MachineRegistry.getMachine(machineId);
         if (machine == null) return;
-        tooltip.accept(Component.translatable("tooltip.mmcr.blueprint.recipe_list").withStyle(ChatFormatting.AQUA));
-        requirementText(machine).forEach(tooltip);
+        boolean showRequirements = flag.hasShiftDown() || flag.shouldDisplayAllInformation();
+        tooltip.accept(Component.translatable(showRequirements
+                ? "tooltip.mmcr.blueprint.recipe_list"
+                : "tooltip.mmcr.blueprint.recipe_list_collapsed").withStyle(ChatFormatting.AQUA));
+        if (showRequirements) requirementText(machine).forEach(tooltip);
     }
 
     private static List<Component> requirementText(Machine machine) {
