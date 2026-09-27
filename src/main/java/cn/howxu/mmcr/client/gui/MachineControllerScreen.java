@@ -37,6 +37,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int DETAIL_LINE_SPACING = 10;
     static final int RECIPE_POOL_BUTTON_X = 160;
     static final int RECIPE_POOL_BUTTON_Y = 4;
+    private StyledButton recipePoolButton;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -48,12 +49,23 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     @Override
     protected void init() {
         super.init();
-        if (menu.recipePoolIds().size() > 1) {
-            addRenderableWidget(new StyledButton(leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y,
-                    12, 12, Component.translatable("gui.mmcr.recipe_pool.open"), button -> minecraft.setScreen(
-                    new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
-                            menu.currentRecipePoolId()))));
-        }
+        recipePoolButton = addRenderableWidget(new StyledButton(
+                leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
+                Component.translatable("gui.mmcr.recipe_pool.open"), button -> minecraft.setScreen(
+                        new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
+                                menu.currentRecipePoolId()))));
+        updateRecipePoolButton();
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        updateRecipePoolButton();
+    }
+
+    private void updateRecipePoolButton() {
+        List<Identifier> recipePoolIds = menu.recipePoolIds();
+        if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
     @Override
