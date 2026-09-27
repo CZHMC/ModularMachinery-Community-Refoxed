@@ -444,6 +444,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void onNormalRecipeThreadSearchFailed() {
         recipeSearchRetryCounter++;
+        if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending()) {
+            setActiveState(false);
+        }
         lastFailure = runtime.craftingRuntime().failure();
         syncRuntimeStateIfChanged();
     }

@@ -322,7 +322,8 @@ public final class FactoryRecipeThread extends RecipeThread {
                                              long modifierVersion, long componentStateVersion,
                                              @Nullable Identifier lockedRecipeId) {
         if (!tryRestartEligibility(candidates, availableParallelism, structureVersion, capabilityVersion,
-                modifierVersion, componentStateVersion, lockedRecipeId, context.catalogVersion())) return false;
+                modifierVersion, componentStateVersion, lockedRecipeId, context.catalogVersion())
+                || !canRestartNow(context, lastRecipe, structureVersion, lockedRecipeId)) return false;
         return enqueueAsyncFinishRestart(lastRecipe, availableParallelism, structureVersion, context);
     }
 
@@ -445,9 +446,19 @@ public final class FactoryRecipeThread extends RecipeThread {
                 && lastRecipeComponentStateVersion == componentStateVersion
                 && recipeBelongsToCurrentMachine(retryRecipe)
                 && candidatesFor(candidates, catalogVersion).contains(retryRecipe);
-        if (!canRestart) return false;
+        if (!canRestart || !canRestartNow(context, retryRecipe, structureVersion, lockedRecipeId)) return false;
         failureCandidates = List.of(retryRecipe);
         return startRecipe(retryRecipe, availableParallelism, structureVersion, context);
+    }
+
+    private boolean canRestartNow(@Nullable FactorySearchContext context, MachineRecipe recipe, long structureVersion,
+                                  @Nullable Identifier lockedRecipeId) {
+        if (context == null || recipe == null) return context == null;
+        SearchResult preflight = search(context, List.of(recipe), structureVersion, lockedRecipeId);
+        RecipeSearchResult result = preflight.result();
+        if (preflight.failure() == null && result != null && result.success()) return true;
+        onStartSearchFailed(result == null ? null : result.failure());
+        return false;
     }
 
     private boolean tryRestartEligibility(List<MachineRecipe> candidates, long availableParallelism,

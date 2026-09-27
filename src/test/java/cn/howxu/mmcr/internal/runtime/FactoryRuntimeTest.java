@@ -323,7 +323,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void async_pending_start_counts_as_an_active_factory_lane_before_shared_io_grants_it() {
+    void async_pending_start_is_not_active_before_shared_io_grants_it() {
         MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
@@ -335,7 +335,7 @@ class FactoryRuntimeTest {
 
         runtime.tick(List.of(recipe), 1, 0L);
 
-        assertThat(runtime.activeLaneCount()).isEqualTo(1);
+        assertThat(runtime.activeLaneCount()).isZero();
         resolveSharedRequests(controller);
         assertThat(runtime.activeLaneCount()).isEqualTo(1);
     }

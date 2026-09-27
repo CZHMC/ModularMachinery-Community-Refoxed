@@ -275,17 +275,17 @@ class AsyncCraftingExecutionTest {
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
                 controller.runtimeSnapshot().structure().version())).isTrue();
 
-        // The worker continuation has yielded lifecycle and screen-flush work, but shared IO is not resolved yet.
+        // Prefetch feasibility is planned on the main thread before shared IO, but nothing commits yet.
         MachineAsyncCoordinator.get(level).completeTick();
-        assertThat(network.planCalls()).isZero();
+        assertThat(network.planCalls()).isEqualTo(1);
         assertThat(network.commitCalls()).isZero();
-        assertThat(network.planThread()).isNull();
+        assertThat(network.planThread()).isSameAs(Thread.currentThread());
         assertThat(network.commitThread()).isNull();
         assertThat(thread.runtime().active()).isFalse();
 
         completeTick(controller);
 
-        assertThat(network.planCalls()).isEqualTo(1);
+        assertThat(network.planCalls()).isEqualTo(2);
         assertThat(network.commitCalls()).isEqualTo(1);
         assertThat(network.committedAmount()).isEqualTo(4L);
         assertThat(network.planThread()).isSameAs(Thread.currentThread());

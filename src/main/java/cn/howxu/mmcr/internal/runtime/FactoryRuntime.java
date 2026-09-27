@@ -80,7 +80,6 @@ public final class FactoryRuntime {
     private long searchAttemptsForTesting;
     private long asyncSearchScansForTesting;
     private boolean failureDirty = true;
-    private boolean activeCountDirty = true;
     private long factoryStateEpoch;
     private int cachedActiveLaneCount;
     private long cachedSnapshotEpoch = Long.MIN_VALUE;
@@ -256,7 +255,7 @@ public final class FactoryRuntime {
             lane.tickIdle(gameTime);
             if (lane.isTimedOut(recipeLockUsed.contains(lane))) removeLane(lane);
         }
-        if (activeLaneCount() == 0) {
+        if (lanes.stream().noneMatch(lane -> lane.runtime().active() || lane.isStartPending())) {
             CraftingRuntime baseRuntime = lanes.isEmpty() ? null : lanes.getFirst().runtime();
             if (baseRuntime != null) baseRuntime.tickIdle();
         }
@@ -618,14 +617,11 @@ public final class FactoryRuntime {
     }
 
     public int activeLaneCount() {
-        if (activeCountDirty) {
-            int count = 0;
-            for (FactoryRecipeThread lane : lanes) {
-                if (lane.runtime().active() || lane.isStartPending()) count++;
-            }
-            cachedActiveLaneCount = count;
-            activeCountDirty = false;
+        int count = 0;
+        for (FactoryRecipeThread lane : lanes) {
+            if (lane.runtime().active()) count++;
         }
+        cachedActiveLaneCount = count;
         return cachedActiveLaneCount;
     }
 
@@ -1284,7 +1280,6 @@ public final class FactoryRuntime {
     }
 
     private void markLaneStateChanged() {
-        activeCountDirty = true;
         failureDirty = true;
         factoryStateEpoch++;
     }
