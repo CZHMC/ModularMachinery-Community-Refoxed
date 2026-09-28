@@ -229,6 +229,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
             lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
                     Component.translatable(failure)), STATUS_LABEL_COLOR));
         }
+        lines.addAll(MachineControllerScreen.moduleStatusLines(false, menu.isModuleController(),
+                0, menu.connectedHostId()));
         if (menu.parallelSlots() > 0) {
             lines.add(new ControllerTextLine(parallelSlotLine(menu.parallelSlots()), STATUS_LABEL_COLOR));
         }

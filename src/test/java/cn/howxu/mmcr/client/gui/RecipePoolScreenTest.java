@@ -23,7 +23,7 @@ class RecipePoolScreenTest {
         assertThat(RecipePoolScreen.IMAGE_WIDTH).isEqualTo(108);
         assertThat(RecipePoolScreen.IMAGE_HEIGHT).isEqualTo(141);
         assertThat(RecipePoolScreen.VISIBLE_ROWS).isEqualTo(4);
-        assertThat(RecipePoolScreen.RETURN_X).isEqualTo(91);
+        assertThat(RecipePoolScreen.RETURN_X).isEqualTo(92);
         assertThat(RecipePoolScreen.RETURN_Y).isEqualTo(125);
     }
 
