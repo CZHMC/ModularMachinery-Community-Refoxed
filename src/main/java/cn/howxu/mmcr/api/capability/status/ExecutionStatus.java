@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.capability.status;
 
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
+import cn.howxu.mmcr.MMCR;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -56,7 +57,7 @@ public record ExecutionStatus(
         try {
             Identifier reasonId = rawReason.contains(":")
                     ? Identifier.parse(rawReason)
-                    : Identifier.fromNamespaceAndPath("mmcr", rawReason);
+                    : MMCR.id(rawReason);
             reason = FailureReasonRegistry.find(reasonId);
         } catch (IllegalArgumentException exception) {
             reason = null;
