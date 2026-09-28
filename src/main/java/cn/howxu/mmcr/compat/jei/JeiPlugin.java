@@ -110,10 +110,12 @@ public final class JeiPlugin implements IModPlugin {
     }
 
     static Map<Identifier, List<Identifier>> machineIdsByPool() {
-        return machineIds().stream()
-                .sorted()
-                .collect(Collectors.groupingBy(MachineRegistry::recipePoolForMachine,
-                        java.util.LinkedHashMap::new, Collectors.toList()));
+        Map<Identifier, List<Identifier>> machinesByPool = new LinkedHashMap<>();
+        machineIds().stream().sorted().forEach(machineId ->
+                MachineRegistry.recipePoolsForMachine(machineId).forEach(poolId ->
+                        machinesByPool.computeIfAbsent(poolId, ignored -> new java.util.ArrayList<>()).add(machineId)));
+        machinesByPool.replaceAll((ignored, machineIds) -> List.copyOf(machineIds));
+        return machinesByPool;
     }
 
 }
