@@ -48,6 +48,44 @@ class DynamicOverlayModelLoaderTest {
     }
 
     @Test
+    void controller_state_overlay_uses_egg_only_for_the_default_idle_texture() {
+        var defaultMachine = MMCR.id("default_idle");
+        var customMachine = MMCR.id("custom_idle");
+        var customIdle = MMCR.id("block/custom_idle");
+        var defaults = MachineAppearanceSpec.defaults();
+        MachineAppearanceCache.replaceSnapshot(Map.of(
+                defaultMachine, defaults,
+                customMachine, new MachineAppearanceSpec(defaults.machineBasicBlock(), null, null, customIdle, null)));
+
+        assertThat(DynamicOverlayBakedModel.controllerStateOverlay(defaultMachine, false, true))
+                .isEqualTo(MMCR.id("block/overlay_egg"));
+        assertThat(DynamicOverlayBakedModel.controllerStateOverlay(defaultMachine, true, true))
+                .isEqualTo(MMCR.id("block/overlay_basic_active"));
+        assertThat(DynamicOverlayBakedModel.controllerStateOverlay(customMachine, false, true))
+                .isEqualTo(customIdle);
+    }
+
+    @Test
+    void idle_easter_egg_requires_a_formed_inactive_controller_with_default_idle_texture() {
+        var defaultMachine = MMCR.id("test_cube");
+        var customMachine = MMCR.id("ineligible_custom_idle");
+        var defaults = MachineAppearanceSpec.defaults();
+        MachineAppearanceCache.replaceSnapshot(Map.of(
+                defaultMachine, defaults,
+                customMachine, new MachineAppearanceSpec(defaults.machineBasicBlock(), null, null,
+                        MMCR.id("block/custom_idle"), null)));
+        MachineControllerBlock block = (MachineControllerBlock) ModBlocks.controllerFor(defaultMachine).get();
+        BlockState idle = block.defaultBlockState().setValue(MachineControllerBlock.FORMED, true);
+
+        assertThat(ControllerIdleEasterEggManager.eligible(idle, defaultMachine)).isTrue();
+        assertThat(ControllerIdleEasterEggManager.eligible(
+                idle.setValue(MachineControllerBlock.ACTIVE, true), defaultMachine)).isFalse();
+        assertThat(ControllerIdleEasterEggManager.eligible(
+                idle.setValue(MachineControllerBlock.FORMED, false), defaultMachine)).isFalse();
+        assertThat(ControllerIdleEasterEggManager.eligible(idle, customMachine)).isFalse();
+    }
+
+    @Test
     void controller_ctm_source_requires_formed_state_and_default_face_textures() {
         var machineId = MMCR.id("test_cube");
         var source = new MachineAppearanceSpec.TextureSource(BuiltInRegistries.BLOCK.getKey(Blocks.STONE), null);

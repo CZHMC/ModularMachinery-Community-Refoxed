@@ -81,10 +81,13 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
         Direction overlayFace = overlayFace(state);
         Direction rollFacing = rollFacing(state);
-        Identifier stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
-                ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
-                        state.getValue(MachineControllerBlock.ACTIVE))
-                : null;
+        Identifier stateOverlay = null;
+        if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER) {
+            Identifier machineId = machineId(state, modelData);
+            boolean easterEgg = ControllerIdleEasterEggManager.trackAndIsActive(level, pos, state, machineId);
+            stateOverlay = DynamicOverlayBakedModel.controllerStateOverlay(machineId,
+                    state.getValue(MachineControllerBlock.ACTIVE), easterEgg);
+        }
         ImmutableList<OverlayLayer> overlayLayers = overlayLayers(textures.overlays(), stateOverlay);
         for (Direction direction : Direction.values()) {
             if (!ctmBase) {

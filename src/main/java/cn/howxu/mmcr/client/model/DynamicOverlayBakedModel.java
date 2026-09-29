@@ -33,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class DynamicOverlayBakedModel {
     private static final Identifier DEFAULT_PORT_OVERLAY_TEXTURE = Identifier.withDefaultNamespace("block/copper_block");
     private static final Identifier FALLBACK_BASE_TEXTURE = MMCR.id("block/basic_casing");
+    private static final Identifier DEFAULT_IDLE_OVERLAY_TEXTURE = MMCR.id("block/overlay_basic_idle");
+    private static final Identifier EASTER_EGG_OVERLAY_TEXTURE = MMCR.id("block/overlay_egg");
     private static final Map<MachineAppearanceSpec.TextureSource, FaceTextures> BASE_TEXTURES = new ConcurrentHashMap<>();
 
     private DynamicOverlayBakedModel() {
@@ -102,10 +104,18 @@ public final class DynamicOverlayBakedModel {
     }
 
     public static Identifier controllerStateOverlay(Identifier machineId, boolean active) {
+        return controllerStateOverlay(machineId, active, false);
+    }
+
+    static Identifier controllerStateOverlay(Identifier machineId, boolean active, boolean idleEasterEgg) {
         MachineAppearanceSpec appearance = machineId == null
                 ? MachineAppearanceSpec.defaults()
                 : MachineAppearanceCache.specFor(machineId);
-        return active ? appearance.controllerActiveOverlayTexture() : appearance.controllerIdleOverlayTexture();
+        Identifier idleOverlay = appearance.controllerIdleOverlayTexture();
+        if (!active && idleEasterEgg && idleOverlay.equals(DEFAULT_IDLE_OVERLAY_TEXTURE)) {
+            return EASTER_EGG_OVERLAY_TEXTURE;
+        }
+        return active ? appearance.controllerActiveOverlayTexture() : idleOverlay;
     }
 
     static boolean controllerCtmEligible(Identifier machineId, MachineAppearanceSpec appearance,
