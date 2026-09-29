@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -31,10 +32,16 @@ import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
+import mekanism.api.MekanismAPI;
+import mekanism.api.chemical.Chemical;
 import mekanism.api.chemical.ChemicalResource;
 import mekanism.api.chemical.IChemicalTank;
+import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -51,7 +58,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class ChemicalPortCapability implements LoadedMekanismBridge.ChemicalPort,
-        ResourceFacet<ChemicalResource>, TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
+        ResourceFacet<ChemicalResource>, ChemicalViewFacet, TransferFacet, OperationFacet, PresentationFacet, SyncFacet {
     private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.CHEMICAL);
 
     private final ChemicalPortBlockEntity port;
@@ -105,7 +112,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
             }
         };
         this.view = CapabilityFactories.view(TYPE, directions(),
-                Set.of(ResourceFacet.class, TransferFacet.class, OperationFacet.class,
+                Set.of(ResourceFacet.class, ChemicalViewFacet.class, TransferFacet.class, OperationFacet.class,
                         PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class));
     }
 
@@ -130,6 +137,36 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
     @Override
     public Class<ChemicalResource> resourceType() {
         return ChemicalResource.class;
+    }
+
+    @Override
+    public Optional<Identifier> chemicalId() {
+        ChemicalResource resource = chemicalTank.resource();
+        return resource.isEmpty() ? Optional.empty()
+                : Optional.of(Identifier.parse(resource.typeHolder().getRegisteredName()));
+    }
+
+    @Override
+    public long amount() {
+        return Math.max(0L, chemicalTank.amountAsLong());
+    }
+
+    @Override
+    public boolean matchesTag(Identifier tagId) {
+        if (tagId == null || chemicalTank.resource().isEmpty()) return false;
+        return chemicalTank.resource().typeHolder().is(TagKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, tagId));
+    }
+
+    @Override
+    public long outputCapacity(Identifier chemicalId) {
+        if (chemicalId == null) return 0L;
+        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
+                ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemicalId));
+        if (holder.isEmpty()) return 0L;
+        ChemicalResource resource = ChemicalResource.of(holder.get());
+        ChemicalResource current = chemicalTank.resource();
+        if ((!current.isEmpty() && !current.equals(resource)) || !chemicalTank.isValid(resource)) return 0L;
+        return Math.max(0L, chemicalTank.capacityAsLong(resource) - chemicalTank.amountAsLong());
     }
 
     @Override
