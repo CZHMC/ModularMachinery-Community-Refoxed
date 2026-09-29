@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.common.collect.ImmutableList;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -17,6 +18,7 @@ import net.neoforged.neoforge.model.data.ModelData;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -83,6 +85,16 @@ class DynamicOverlayModelLoaderTest {
         assertThat(ControllerIdleEasterEggManager.eligible(
                 idle.setValue(MachineControllerBlock.FORMED, false), defaultMachine)).isFalse();
         assertThat(ControllerIdleEasterEggManager.eligible(idle, customMachine)).isFalse();
+    }
+
+    @Test
+    void idle_easter_egg_accepts_section_compilation_views_that_are_not_client_levels() {
+        BlockAndTintGetter renderRegion = (BlockAndTintGetter) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{BlockAndTintGetter.class},
+                (proxy, method, args) -> null);
+
+        assertThat(ControllerIdleEasterEggManager.canTrackRenderView(renderRegion, true)).isTrue();
+        assertThat(ControllerIdleEasterEggManager.canTrackRenderView(renderRegion, false)).isFalse();
     }
 
     @Test

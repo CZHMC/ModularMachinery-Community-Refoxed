@@ -15,9 +15,9 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 final class ControllerIdleEasterEggTracker {
-    private static final long CHECK_INTERVAL = 1200L;
+    private static final long CHECK_INTERVAL = 12000L;
     private static final long ANIMATION_DURATION = 104L;
-    private static final double TRIGGER_CHANCE = 0.03D;
+    private static final double TRIGGER_CHANCE = 0.12D;
 
     private final DoubleSupplier random;
     private final Map<BlockPos, Entry> entries = new HashMap<>();
@@ -52,7 +52,8 @@ final class ControllerIdleEasterEggTracker {
             }
             if (tick >= state.nextCheck) {
                 state.nextCheck = tick + CHECK_INTERVAL;
-                if (random.getAsDouble() < TRIGGER_CHANCE) {
+                double roll = random.getAsDouble();
+                if (roll < TRIGGER_CHANCE) {
                     state.activeUntil = tick + ANIMATION_DURATION;
                     changed.add(pos);
                 }

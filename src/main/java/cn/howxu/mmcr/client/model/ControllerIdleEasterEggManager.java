@@ -28,7 +28,8 @@ public final class ControllerIdleEasterEggManager {
     }
 
     static boolean trackAndIsActive(BlockAndTintGetter level, BlockPos pos, BlockState state, Identifier machineId) {
-        if (!(level instanceof ClientLevel clientLevel) || clientLevel != Minecraft.getInstance().level) {
+        ClientLevel clientLevel = Minecraft.getInstance().level;
+        if (!canTrackRenderView(level, clientLevel != null)) {
             return false;
         }
         if (!eligible(state, machineId)) {
@@ -38,6 +39,10 @@ public final class ControllerIdleEasterEggManager {
         long tick = clientTicks;
         TRACKER.track(pos, tick);
         return TRACKER.isActive(pos, tick);
+    }
+
+    static boolean canTrackRenderView(BlockAndTintGetter level, boolean currentLevelAvailable) {
+        return currentLevelAvailable && level != BlockAndTintGetter.EMPTY;
     }
 
     public static void clientTick(Minecraft minecraft) {
