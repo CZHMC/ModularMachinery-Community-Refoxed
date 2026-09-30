@@ -270,14 +270,12 @@ public final class FactoryRecipeThread extends RecipeThread {
         MachineRecipe recipe = runtime.recipe();
         if (recipe != null) {
             ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-            Machine machine = snapshot.structure().machine() == null
-                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
             lastRecipe = recipe;
             lastRecipeStructureVersion = snapshot.structure().version();
             lastRecipeCapabilityVersion = snapshot.capabilityVersion();
             lastRecipeModifierVersion = snapshot.modifierVersion();
             lastRecipeComponentStateVersion = snapshot.stateVersion();
-            lastRecipeCatalogVersion = RecipeRegistry.catalogForMachine(machine).version();
+            lastRecipeCatalogVersion = currentRecipeCatalog().version();
         }
     }
     @Override
@@ -571,9 +569,7 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private RecipeSearchContextKey currentSearchContextKey() {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        var machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-        MachineRecipeCatalog catalog = RecipeRegistry.catalogForMachine(machine);
+        MachineRecipeCatalog catalog = currentRecipeCatalog();
         return new RecipeSearchContextKey(snapshot.structure().version(), snapshot.capabilityVersion(),
                 snapshot.modifierVersion(), snapshot.stateVersion(), catalog.version(),
                 controller.resourceAvailabilityEpoch(), recipeSetVersion);
@@ -736,13 +732,10 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private static List<MachineRecipe> candidatesForMachine(MachineControllerBlockEntity controller,
                                                              @Nullable List<MachineRecipe> candidates) {
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        Machine machine = snapshot.structure().machine() == null
-                ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         Identifier recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null) return List.of();
         List<MachineRecipe> source = candidates == null
-                ? RecipeRegistry.catalogForMachine(machine).recipes() : candidates;
+                ? RecipeRegistry.catalogForPool(recipePoolId).recipes() : candidates;
         return source.stream().filter(recipe -> recipe != null
                 && recipePoolId.equals(recipe.recipePoolId())).toList();
     }
@@ -757,7 +750,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     private MachineRecipeCatalog currentRecipeCatalog() {
-        return RecipeRegistry.catalogForMachine(currentMachine());
+        return RecipeRegistry.catalogForPool(currentRecipePoolId());
     }
 
     private @Nullable Machine currentMachine() {
