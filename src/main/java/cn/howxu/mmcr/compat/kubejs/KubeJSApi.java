@@ -6,6 +6,9 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -15,6 +18,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.publicapi.recipe.LevelRequirement;
+import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.publicapi.recipe.StageRequirement;
 import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
 import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
@@ -281,6 +285,48 @@ public final class KubeJSApi {
         return new MachineIngredient.EnergyIngredient(RecipeModifier.IOType.OUTPUT, fePerTick);
     }
 
+    public CustomRecipeIo chemicalInput(String chemicalId, long amount) {
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(
+                        ChemicalIngredient.chemical(requireChemicalId(chemicalId, "chemicalId"), amount)));
+    }
+
+    public CustomRecipeIo chemicalInput(String chemicalId, long amount, double consumeChance) {
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(
+                        ChemicalIngredient.chemical(requireChemicalId(chemicalId, "chemicalId"), amount),
+                        (float) consumeChance));
+    }
+
+    public CustomRecipeIo chemicalTagInput(String tagId, long amount) {
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(
+                        ChemicalIngredient.tag(requireChemicalId(tagId, "tagId"), amount)));
+    }
+
+    public CustomRecipeIo chemicalTagInput(String tagId, long amount, double consumeChance) {
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.chemicalInputPayload(
+                        ChemicalIngredient.tag(requireChemicalId(tagId, "tagId"), amount),
+                        (float) consumeChance));
+    }
+
+    public CustomRecipeIo chemicalOutput(String chemicalId, long amount, double chance) {
+        return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), RecipeIo.OUTPUT,
+                MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(
+                        requireChemicalId(chemicalId, "chemicalId"), amount, (float) chance)));
+    }
+
+    public CustomRecipeIo heatTemperatureInput(double temperature) {
+        return customRecipeIo(MekanismPortFamilies.HEAT_TEMPERATURE.toString(), RecipeIo.INPUT,
+                MachineRecipeBuilder.heatInputPayload(temperature));
+    }
+
+    public CustomRecipeIo heatOutput(double heat) {
+        return customRecipeIo(MekanismPortFamilies.HEAT.toString(), RecipeIo.OUTPUT,
+                MachineRecipeBuilder.heatOutputPayload(heat));
+    }
+
     public MachineRequirement energyRequirement(RecipeIo io, long fePerTick) {
         return new EnergyRequirement(io == RecipeIo.OUTPUT ? RecipeModifier.IOType.OUTPUT : RecipeModifier.IOType.INPUT,
                 fePerTick);
@@ -402,6 +448,17 @@ public final class KubeJSApi {
         Identifier identifier = Identifier.parse(id);
         if (!BuiltInRegistries.ITEM.containsKey(identifier)) throw new IllegalArgumentException("Unknown item: " + id);
         return BuiltInRegistries.ITEM.getValue(identifier);
+    }
+
+    private static Identifier requireChemicalId(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be null or blank");
+        }
+        try {
+            return Identifier.parse(value);
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid " + name + ": " + value, exception);
+        }
     }
 
     private static RecipeModifier.IOType ioType(String io) {
