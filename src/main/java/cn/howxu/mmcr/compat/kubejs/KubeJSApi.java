@@ -73,6 +73,7 @@ public final class KubeJSApi {
     private final ScreenScopeValues screenScope = new ScreenScopeValues();
     private final RecipeIoValues recipeIO = new RecipeIoValues();
     private final OutputPolicyValues outputPolicy = new OutputPolicyValues();
+    private final ModifierOperationValues modifierOperation = new ModifierOperationValues();
 
     public ScreenScopeValues screenScope() {
         return screenScope;
@@ -84,6 +85,10 @@ public final class KubeJSApi {
 
     public OutputPolicyValues outputPolicy() {
         return outputPolicy;
+    }
+
+    public ModifierOperationValues modifierOperation() {
+        return modifierOperation;
     }
 
     /**
@@ -110,6 +115,16 @@ public final class KubeJSApi {
     public static final class OutputPolicyValues {
         public final OutputPolicy REQUIRE_FULL = OutputPolicy.REQUIRE_FULL;
         public final OutputPolicy ALLOW_PARTIAL = OutputPolicy.ALLOW_PARTIAL;
+    }
+
+    /** KubeJS-visible recipe modifier operation constants.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class ModifierOperationValues {
+        public final RecipeModifier.Operation ADD = RecipeModifier.Operation.ADD;
+        public final RecipeModifier.Operation MULTIPLY = RecipeModifier.Operation.MULTIPLY;
+        public final RecipeModifier.Operation SUBTRACT = RecipeModifier.Operation.SUBTRACT;
+        public final RecipeModifier.Operation DIVIDE = RecipeModifier.Operation.DIVIDE;
     }
 
     public String readableNumber(long value) {

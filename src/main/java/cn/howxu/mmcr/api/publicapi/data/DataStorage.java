@@ -37,9 +37,15 @@ public final class DataStorage {
 
     public void set(String key, DataValue value) { storage.set(key, DataValue.toInternal(value)); }
 
+    public void set(String key, Object value) { set(key, DataValue.from(value)); }
+
     public boolean set(String key, DataValue value, Transaction transaction) {
         Objects.requireNonNull(transaction, "transaction");
         return storage.set(key, DataValue.toInternal(value), transaction.context);
+    }
+
+    public boolean set(String key, Object value, Transaction transaction) {
+        return set(key, DataValue.from(value), transaction);
     }
 
     public Optional<DataValue> remove(String key) { return storage.remove(key).map(DataValue::fromInternal); }

@@ -266,6 +266,23 @@ class MachineIoPlanTest {
     }
 
     @Test
+    void commit_data_accepts_plain_script_values_without_public_data_value_factories() {
+        LongValueStorage energy = new LongValueStorage(100L, 100L, null);
+        energy.setAmount(10L);
+        DataStorage data = new DataStorage();
+        cn.howxu.mmcr.api.publicapi.data.DataStorage publicData =
+                cn.howxu.mmcr.api.publicapi.data.DataStorage.view(data);
+        MachineIoPlan plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new EnergyHatchCapability(energy, IOType.INPUT))));
+        plan.addInput(new EnergyRequirement(4));
+        assertThat(plan.simulate().energySatisfied()).isTrue();
+
+        assertThat(plan.commitData(transaction -> publicData.set("energy", 42D, transaction)).successful()).isTrue();
+
+        assertThat(data.get("energy")).contains(DataValue.of(42D));
+    }
+
+    @Test
     void commit_callback_rolls_back_capability_io_and_data_storage_together() {
         LongValueStorage energy = new LongValueStorage(100L, 100L, null);
         energy.setAmount(10L);
