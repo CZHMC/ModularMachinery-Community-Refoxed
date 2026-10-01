@@ -31,6 +31,7 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
@@ -153,7 +154,8 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> {
+        // The request carries an absolute total, not a per-parallel recipe quantity.
+        CapabilityOperation operation = transaction -> {
             long moved = valueRequest.insert()
                     ? storage.insert(valueRequest.amount(), transaction)
                     : storage.extract(valueRequest.amount(), transaction);
@@ -163,6 +165,14 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
                     Map.of("required", Long.toString(valueRequest.amount()),
                             "available", Long.toString(Math.max(0L, moved)),
                             "shortfall", Long.toString(Math.max(0L, valueRequest.amount() - moved))));
+        };
+        return new CapabilityOperation() {
+            public CapabilityResult commit(TransactionContext transaction) {
+                return operation.commit(transaction);
+            }
+            public CapabilityOperation forParallelism(long parallelism) {
+                return parallelism == valueRequest.parallelism() ? this : null;
+            }
         };
     }
 

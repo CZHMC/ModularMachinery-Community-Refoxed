@@ -6,6 +6,16 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
+import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.ScriptableObject;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -13,6 +23,8 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.plan.OutputSimulation;
+import cn.howxu.mmcr.api.capability.plan.OutputFit;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
@@ -20,6 +32,7 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
@@ -72,6 +85,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies optional Mekanism recipe handler planning behavior.
@@ -100,6 +114,84 @@ class MekanismRecipeHandlerTest {
         outputScope.close();
         requirementScope.close();
         MekanismBridgeBootstrap.resetForTesting();
+    }
+
+    @Test
+    void rhino_custom_helpers_simulate_then_commit_tick_chemical_and_heat_io() {
+        MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(true));
+        MekanismRecipeTypes.register();
+        var chemical = registerChemical("rhino_tick_custom");
+        var resource = ChemicalResource.of(chemical);
+        var inputTank = new FakeChemicalTank(1000, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        var outputTank = new FakeChemicalTank(1000, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        inputTank.setContents(resource, 1000, null);
+        var temperaturePort = new FakeHeatPort(360);
+        var heatOutputPort = new FakeHeatPort(300, IOType.OUTPUT);
+        var energy = new LongValueStorage(100, 100, null);
+        energy.setAmount(4);
+        var plan = new MachineIoPlan(new CapabilitySnapshot(List.of(
+                new FakeChemicalPort(inputTank, IOType.INPUT),
+                new FakeChemicalPort(outputTank, IOType.OUTPUT), temperaturePort, heatOutputPort,
+                new EnergyHatchCapability(energy, IOType.INPUT))));
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var outputPayload = MachineRecipeBuilder.chemicalOutputPayload(
+                ChemicalOutput.of(chemical.key().identifier(), 200, 1F));
+        ScriptableObject.putProperty(scope, "api", new KubeJSApi(), context);
+        ScriptableObject.putProperty(scope, "plan", plan, context);
+        ScriptableObject.putProperty(scope, "chemicalId", chemical.key().identifier().toString(), context);
+        ScriptableObject.putProperty(scope, "output", RecipeModifier.IOType.OUTPUT, context);
+        ScriptableObject.putProperty(scope, "input", RecipeModifier.IOType.INPUT, context);
+        ScriptableObject.putProperty(scope, "payload", outputPayload, context);
+        context.evaluateString(scope, """
+                plan.addOutput(api.customRecipeIo('mekanism:chemical', output, payload));
+                plan.addInput(api.chemicalInput(chemicalId, 400));
+                plan.addInput(api.heatTemperatureInput(350));
+                plan.addInput(api.energyRequirement(input, 4));
+                plan.add(api.heatOutput(5));
+                """, "tick-custom-helpers", 1, null);
+        assertThat(plan.requirements()).extracting(MachineRequirement::io).containsExactly(
+                RecipeModifier.IOType.INPUT, RecipeModifier.IOType.INPUT, RecipeModifier.IOType.INPUT,
+                RecipeModifier.IOType.OUTPUT, RecipeModifier.IOType.OUTPUT);
+        assertThat(plan.requirements()).extracting(value -> value.type().id()).containsExactly(
+                MekanismRecipeTypes.CHEMICAL, MekanismRecipeTypes.HEAT_TEMPERATURE, EnergyRequirement.TYPE.id(),
+                MekanismRecipeTypes.CHEMICAL, MekanismRecipeTypes.HEAT);
+        assertThat(((LoadedChemicalRequirement) plan.requirements().getFirst()).ingredient())
+                .isEqualTo(ChemicalIngredient.chemical(chemical.key().identifier(), 400));
+        assertThat(((LoadedHeatRequirement) plan.requirements().get(1)).heat().value()).isEqualTo(350);
+        assertThat(MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE,
+                OutputRegistry.fromRequirement(plan.requirements().get(3))).getOrThrow())
+                .isEqualTo(MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE,
+                        MachineOutput.CODEC.parse(JsonOps.INSTANCE, outputPayload).getOrThrow()).getOrThrow());
+        assertThatThrownBy(() -> context.evaluateString(scope,
+                "plan.addInput(api.chemicalOutput(chemicalId, 1, 1))", "tick-output-as-input", 1, null))
+                .hasMessageContaining("direction must be INPUT");
+        assertThatThrownBy(() -> context.evaluateString(scope,
+                "plan.addOutput(api.heatTemperatureInput(350))", "tick-input-as-output", 1, null))
+                .hasMessageContaining("direction must be OUTPUT");
+        assertThat(plan.requirements()).hasSize(5);
+        assertThat(plan.simulate()).satisfies(simulation -> {
+            assertThat(simulation.failure()).isNull();
+            assertThat(simulation.inputsSatisfied()).isTrue();
+            assertThat(simulation.energySatisfied()).isTrue();
+            assertThat(simulation.outputs()).containsExactly(new OutputSimulation(200, 200, OutputFit.FULL),
+                    new OutputSimulation(5, 5, OutputFit.FULL));
+        });
+        assertThat(inputTank.amount()).isEqualTo(1000);
+        assertThat(energy.amount()).isEqualTo(4);
+        assertThat(outputTank.amount()).isZero();
+        assertThat(temperaturePort.handledHeat()).isZero();
+        assertThat(heatOutputPort.handledHeat()).isZero();
+        assertThat(plan.commit().successful()).isTrue();
+        assertThat(inputTank.amount()).isEqualTo(600);
+        assertThat(energy.amount()).isZero();
+        assertThat(outputTank.amount()).isEqualTo(200);
+        assertThat(outputTank.asStack().resource()).isEqualTo(resource);
+        assertThat(temperaturePort.temperature()).isEqualTo(360);
+        assertThat(temperaturePort.handledHeat()).isZero();
+        assertThat(heatOutputPort.handledHeat()).isEqualTo(5);
+        assertThat(plan.commit().successful()).isFalse();
+        assertThat(outputTank.amount()).isEqualTo(200);
     }
 
     @Test

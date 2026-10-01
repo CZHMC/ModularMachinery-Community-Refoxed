@@ -9,11 +9,11 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineDefinationsEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineRecipesEvent;
-import cn.howxu.mmcr.api.publicapi.machine.BlockPredicate;
-import cn.howxu.mmcr.api.publicapi.recipe.MachineRecipeBuilder;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
@@ -360,19 +360,19 @@ public final class TestBootstrap {
                 TestBootstrap::registerAllRecipes);
     }
 
-    public static void registerAllMachineDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerAllMachineDefinitions(MachineDefinitionRegistration event) {
         registerTestMachineDefinitions(event);
     }
 
-    public static void registerAllMachineStructures(MMCRMachineStructuresEvent event) {
+    public static void registerAllMachineStructures(StructureRegistration event) {
         registerTestMachineStructures(event);
     }
 
-    public static void registerAllRecipes(MMCRMachineRecipesEvent event) {
+    public static void registerAllRecipes(MachineRecipeRegistration event) {
         registerTestRecipes(event);
     }
 
-    public static void registerTestMachineDefinitions(MMCRMachineDefinationsEvent event) {
+    public static void registerTestMachineDefinitions(MachineDefinitionRegistration event) {
         for (String name : testMachineNames()) {
             Identifier id = id(name);
             event.registerMachine(id, builder -> {
@@ -383,7 +383,7 @@ public final class TestBootstrap {
         }
     }
 
-    public static void registerTestMachineStructures(MMCRMachineStructuresEvent event) {
+    public static void registerTestMachineStructures(StructureRegistration event) {
         try {
             for (String name : testMachineNames()) bindController(id(name));
             bind(ModBlocks.CASING, Blocks.STONE);
@@ -415,7 +415,7 @@ public final class TestBootstrap {
         }
     }
 
-    public static void registerTestRecipes(MMCRMachineRecipesEvent event) {
+    public static void registerTestRecipes(MachineRecipeRegistration event) {
         event.registerRecipe(MachineRecipeBuilder.recipe(
                 Identifier.parse("mmcr_test:datapack_static_override")).recipePool(id("iron_compressor"))
                 .duration(20).inputItem(Items.COAL, 1).outputItem(Items.CHARCOAL, 1).build());

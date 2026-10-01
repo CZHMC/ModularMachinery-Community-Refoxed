@@ -19,7 +19,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
-import cn.howxu.mmcr.api.publicapi.machine.DisplayStack;
+import cn.howxu.mmcr.api.machine.definition.DisplayStack;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
@@ -189,7 +189,7 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
         if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> {
+        CapabilityOperation operation = transaction -> {
             for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
                 if (!storage.resourceType().isInstance(action.resource())) {
                     return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
@@ -206,6 +206,12 @@ public final class ItemBusCapability implements MachineCapability, ResourceFacet
                 }
             }
             return CapabilityResult.successful();
+        };
+        return new CapabilityOperation() {
+            public CapabilityResult commit(TransactionContext transaction) { return operation.commit(transaction); }
+            public CapabilityOperation forParallelism(long parallelism) {
+                return parallelism == resourceRequest.parallelism() ? this : null;
+            }
         };
     }
 

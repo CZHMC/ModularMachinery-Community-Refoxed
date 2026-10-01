@@ -48,7 +48,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     public static final MapCodec<Unbaked> PORT_CODEC = MapCodec.unit(() -> new Unbaked(DynamicOverlayBakedModel.Kind.PORT));
 
     private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/basic_casing"));
-    static final float OVERLAY_GROW = 0.0005f;
+    static final float OVERLAY_GROW = 0.0003f;
     private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;

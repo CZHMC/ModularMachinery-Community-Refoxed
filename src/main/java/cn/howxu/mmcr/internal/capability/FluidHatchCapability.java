@@ -178,7 +178,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
         if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> {
+        CapabilityOperation operation = transaction -> {
             for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
                 if (!storage.resourceType().isInstance(action.resource())) {
                     return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
@@ -195,6 +195,12 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
                 }
             }
             return CapabilityResult.successful();
+        };
+        return new CapabilityOperation() {
+            public CapabilityResult commit(TransactionContext transaction) { return operation.commit(transaction); }
+            public CapabilityOperation forParallelism(long parallelism) {
+                return parallelism == resourceRequest.parallelism() ? this : null;
+            }
         };
     }
 

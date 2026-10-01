@@ -216,7 +216,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         if (!(request instanceof CapabilityRequests.ResourceRequest<?> resourceRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> {
+        CapabilityOperation operation = transaction -> {
             for (CapabilityRequests.ResourceAction<?> action : resourceRequest.actions()) {
                 if (!(action.resource() instanceof ChemicalResource resource)) {
                     return failure(MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
@@ -233,6 +233,12 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
                 }
             }
             return CapabilityResult.successful();
+        };
+        return new CapabilityOperation() {
+            public CapabilityResult commit(TransactionContext transaction) { return operation.commit(transaction); }
+            public CapabilityOperation forParallelism(long parallelism) {
+                return parallelism == resourceRequest.parallelism() ? this : null;
+            }
         };
     }
 

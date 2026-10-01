@@ -138,7 +138,14 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest) || valueRequest.insert()) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> extractLocal(valueRequest.amount(), transaction);
+        return new CapabilityOperation() {
+            public CapabilityResult commit(TransactionContext transaction) {
+                return extractLocal(valueRequest.amount(), transaction);
+            }
+            public CapabilityOperation forParallelism(long parallelism) {
+                return parallelism == valueRequest.parallelism() ? this : null;
+            }
+        };
     }
 
     @Override

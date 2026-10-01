@@ -3,7 +3,7 @@ package cn.howxu.mmcr.internal.capability;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.publicapi.machine.MachineIoView;
+import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.util.IOType;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

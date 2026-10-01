@@ -150,7 +150,7 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
         if (!(request instanceof CapabilityRequests.ValueRequest valueRequest)) {
             return ignored -> failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        return transaction -> {
+        CapabilityOperation operation = transaction -> {
             double amount = valueRequest.amount();
             if (!valueRequest.insert() && heatCapacitor.getHeat() < amount) {
                 double available = Math.max(0D, heatCapacitor.getHeat());
@@ -166,6 +166,12 @@ public final class HeatPortCapability implements LoadedMekanismBridge.HeatPort,
                         Map.of("requested_heat", Long.toString(valueRequest.amount())));
             }
             return CapabilityResult.successful();
+        };
+        return new CapabilityOperation() {
+            public CapabilityResult commit(TransactionContext transaction) { return operation.commit(transaction); }
+            public CapabilityOperation forParallelism(long parallelism) {
+                return parallelism == valueRequest.parallelism() ? this : null;
+            }
         };
     }
 

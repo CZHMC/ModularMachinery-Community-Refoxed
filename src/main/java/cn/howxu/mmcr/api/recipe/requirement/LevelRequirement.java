@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import com.mojang.serialization.Codec;
@@ -37,6 +39,10 @@ public record LevelRequirement(RecipeModifier.IOType io, Identifier typeId, Iden
 
     public static LevelRequirement input(Identifier typeId, Identifier levelId) {
         return new LevelRequirement(RecipeModifier.IOType.INPUT, typeId, levelId);
+    }
+
+    public LevelRequirement(Identifier typeId, Identifier levelId) {
+        this(RecipeModifier.IOType.INPUT, typeId, levelId);
     }
 
     private static LevelRequirement copy(LevelRequirement requirement) {

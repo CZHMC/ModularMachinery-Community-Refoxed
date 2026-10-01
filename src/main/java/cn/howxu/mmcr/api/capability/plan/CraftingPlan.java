@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;

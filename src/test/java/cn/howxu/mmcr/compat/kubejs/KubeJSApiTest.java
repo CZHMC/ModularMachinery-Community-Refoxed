@@ -5,19 +5,18 @@ import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.api.publicapi.event.MMCRMachineStructuresEvent;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierDefinition;
-import cn.howxu.mmcr.api.publicapi.machine.ModifierUse;
-import cn.howxu.mmcr.api.publicapi.controller.ControllerScreenTextScope;
-import cn.howxu.mmcr.api.publicapi.machine.OutputPolicy;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.machine.definition.ModifierUse;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.publicapi.recipe.RecipeIo;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -66,8 +65,8 @@ class KubeJSApiTest {
 
     @AfterEach
     void restoreMachineLevels() {
-        MMCRMachineStructuresEvent.resetCollector();
-        var event = MMCRMachineStructuresEvent.prepare(Set.of());
+        StructureRegistration.resetCollector();
+        var event = StructureRegistration.prepare(Set.of());
         event.registerLevelType(new LevelType(TEST_LEVEL_TYPE, Component.literal("API Test")));
         event.registerLevel(new MachineLevel(TEST_LEVEL, TEST_LEVEL_TYPE, 0,
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY,
@@ -230,11 +229,11 @@ class KubeJSApiTest {
 
     @Test
     void exposes_recipe_io_and_output_policy_values_to_kubejs() {
-        assertThat(api.recipeIO().INPUT).isSameAs(RecipeIo.INPUT);
-        assertThat(api.recipeIO().OUTPUT).isSameAs(RecipeIo.OUTPUT);
+        assertThat(api.recipeIO().INPUT).isSameAs(IOType.INPUT);
+        assertThat(api.recipeIO().OUTPUT).isSameAs(IOType.OUTPUT);
         assertThat(api.outputPolicy().REQUIRE_FULL).isSameAs(OutputPolicy.REQUIRE_FULL);
         assertThat(api.outputPolicy().ALLOW_PARTIAL).isSameAs(OutputPolicy.ALLOW_PARTIAL);
-        assertThat(api.energyRequirement(RecipeIo.OUTPUT, 1).io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
+        assertThat(api.energyRequirement(IOType.OUTPUT, 1).io()).isEqualTo(RecipeModifier.IOType.OUTPUT);
 
         var context = new ContextFactory().enter();
         var scope = context.initStandardObjects();
@@ -267,10 +266,10 @@ class KubeJSApiTest {
                 RecipeModifier.IOType.INPUT, 12);
         var payload = MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, input).getOrThrow();
 
-        var custom = api.customRecipeIo(input.type().id().toString(), RecipeIo.INPUT, payload);
+        var custom = api.customRecipeIo(input.type().id().toString(), IOType.INPUT, payload);
 
         assertThat(custom.typeId()).isEqualTo(input.type().id());
-        assertThatThrownBy(() -> api.customRecipeIo("mmcr:missing", RecipeIo.INPUT, payload))
+        assertThatThrownBy(() -> api.customRecipeIo("mmcr:missing", IOType.INPUT, payload))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
