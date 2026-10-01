@@ -56,6 +56,12 @@ public final class GameTestRegistry {
         });
         register(event, "recipe_amount_codec_limits", 20,
                 helper -> new RecipeAmountCodecGameTest().long_recipe_output_amounts_are_capped_at_native_stack_limits(helper));
+        register(event, "item_output_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().outputResolvesPlainJsonEnchantments(helper));
+        register(event, "async_item_output_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().asyncOutputPreservesEnchantmentComponents(helper));
+        register(event, "cached_item_output_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().cachedOutputSurvivesFinishReplacement(helper));
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
         register(event, "upgrade_bus_invalidation", 100,
