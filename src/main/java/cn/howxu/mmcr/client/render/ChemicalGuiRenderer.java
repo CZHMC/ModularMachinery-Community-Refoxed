@@ -29,7 +29,7 @@ public final class ChemicalGuiRenderer {
         TextureAtlasSprite sprite = Minecraft.getInstance().getAtlasManager()
                 .getAtlasOrThrow(AtlasIds.BLOCKS).getSprite(state.identifier());
         int fillHeight = Math.min(state.fillHeight(), height);
-        FluidGuiRenderer.drawSprite(graphics, sprite, state.tint(), x, y + height - fillHeight,
+        FluidGuiRenderer.drawSprite(graphics, sprite, state.tint() | 0xFF000000, x, y + height - fillHeight,
                 width, fillHeight);
     }
 }
