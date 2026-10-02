@@ -1264,10 +1264,10 @@ class FactoryRuntimeTest {
 
     @Test
     void multi_slot_input_notifies_every_resource_available_after_a_committed_insert() {
-        BlockPos inputPos = new BlockPos(1, 0, 0);
+        BlockPos inputPos = new BlockPos(101, 20, 30);
         ExtendedItemBusBlockEntity input = new ExtendedItemBusBlockEntity(inputPos,
                 ModBlocks.BLOCKS.get("extended_item_input_bus_basic").get().defaultBlockState());
-        RecordingController controller = new RecordingController(new BlockPos(0, 0, 0),
+        RecordingController controller = new RecordingController(inputPos.offset(-1, 0, 0),
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         var level = LevelStub.create(
                 Map.of(controller.getBlockPos(), controller.getBlockState().getBlock(),
@@ -1281,22 +1281,25 @@ class FactoryRuntimeTest {
             transaction.commit();
         }
         controller.notifiedResources.clear();
+        controller.notifiedSources.clear();
 
         try (Transaction transaction = Transaction.openRoot()) {
             input.itemStorage().insert(1, ItemResource.of(Items.GOLD_INGOT), 1L, transaction);
             transaction.commit();
         }
 
-        assertThat(controller.notifiedResources).contains(ItemResource.of(Items.IRON_INGOT),
+        assertThat(controller.notifiedResources).containsExactly(ItemResource.of(Items.IRON_INGOT),
                 ItemResource.of(Items.GOLD_INGOT));
+        assertThat(controller.notifiedSources).containsExactly(inputPos, inputPos);
+        assertThat(inputPos).isNotEqualTo(inputPos.subtract(controller.getBlockPos()));
     }
 
     @Test
     void multi_slot_output_notifies_the_resource_released_from_the_changed_slot() {
-        BlockPos outputPos = new BlockPos(1, 0, 0);
+        BlockPos outputPos = new BlockPos(101, 20, 30);
         ExtendedItemBusBlockEntity output = new ExtendedItemBusBlockEntity(outputPos,
                 ModBlocks.BLOCKS.get("extended_item_output_bus_basic").get().defaultBlockState());
-        RecordingController controller = new RecordingController(new BlockPos(0, 0, 0),
+        RecordingController controller = new RecordingController(outputPos.offset(-1, 0, 0),
                 ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
         var level = LevelStub.create(
                 Map.of(controller.getBlockPos(), controller.getBlockState().getBlock(),
@@ -1313,6 +1316,7 @@ class FactoryRuntimeTest {
             transaction.commit();
         }
         controller.notifiedOutputResources.clear();
+        controller.notifiedOutputSources.clear();
 
         try (Transaction transaction = Transaction.openRoot()) {
             output.itemStorage().extract(1, gold, 1L, transaction);
@@ -1320,6 +1324,24 @@ class FactoryRuntimeTest {
         }
 
         assertThat(controller.notifiedOutputResources).containsExactly(gold);
+        assertThat(controller.notifiedOutputSources).containsExactly(outputPos);
+        assertThat(outputPos).isNotEqualTo(outputPos.subtract(controller.getBlockPos()));
+    }
+
+    @Test
+    void legacy_availability_entry_records_each_resource_once_with_unknown_source() {
+        RecordingController controller = new RecordingController(BlockPos.ZERO,
+                ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+        ItemResource gold = ItemResource.of(Items.GOLD_INGOT);
+
+        controller.notifyResourceAvailability(Reason.INPUT_AVAILABLE, iron);
+        controller.notifyResourceAvailability(Reason.OUTPUT_CAPACITY, gold);
+
+        assertThat(controller.notifiedResources).containsExactly(iron);
+        assertThat(controller.notifiedOutputResources).containsExactly(gold);
+        assertThat(controller.notifiedSources).containsExactly((BlockPos) null);
+        assertThat(controller.notifiedOutputSources).containsExactly((BlockPos) null);
     }
 
     @Test
@@ -1690,9 +1712,14 @@ class FactoryRuntimeTest {
                 snapshot.maxParallelControllerCount(), snapshot.maxParallelism(), snapshot.dataStorageValues());
     }
 
+    /** Records both availability entry points without duplicating legacy forwarding.
+     * @author howxu <dev@howxu.cn>
+     */
     private static final class RecordingController extends MachineControllerBlockEntity {
         private final List<Object> notifiedResources = new ArrayList<>();
         private final List<Object> notifiedOutputResources = new ArrayList<>();
+        private final List<BlockPos> notifiedSources = new ArrayList<>();
+        private final List<BlockPos> notifiedOutputSources = new ArrayList<>();
 
         private RecordingController(BlockPos pos, BlockState state) {
             super(pos, state);
@@ -1700,8 +1727,20 @@ class FactoryRuntimeTest {
 
         @Override
         public void notifyResourceAvailability(Reason reason, Object resource) {
-            if (reason == Reason.INPUT_AVAILABLE) notifiedResources.add(resource);
-            if (reason == Reason.OUTPUT_CAPACITY) notifiedOutputResources.add(resource);
+            super.notifyResourceAvailability(reason, resource);
+        }
+
+        @Override
+        public void notifyResourceAvailability(Reason reason, Object resource, BlockPos sourcePos) {
+            if (reason == Reason.INPUT_AVAILABLE) {
+                notifiedResources.add(resource);
+                notifiedSources.add(sourcePos);
+            }
+            if (reason == Reason.OUTPUT_CAPACITY) {
+                notifiedOutputResources.add(resource);
+                notifiedOutputSources.add(sourcePos);
+            }
+            super.notifyResourceAvailability(reason, resource, sourcePos);
         }
     }
 

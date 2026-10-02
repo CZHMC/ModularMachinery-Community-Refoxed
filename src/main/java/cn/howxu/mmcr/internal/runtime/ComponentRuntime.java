@@ -35,10 +35,12 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.resource.Resource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,9 @@ public final class ComponentRuntime {
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();
+    private List<CapabilityPresentationSegment> capabilityPresentationSegments = List.of();
+    private Map<BlockPos, List<Integer>> capabilitySourceIndices = Map.of();
+    private Map<MachineCapability, List<Integer>> capabilityAliasIndices = Map.of();
     private long capabilityVersion;
     private long modifierVersion;
     private long stateVersion;
@@ -93,15 +98,37 @@ public final class ComponentRuntime {
         List<CapabilityIdentity> nextIdentity = capabilityState.identity();
         boolean componentsChanged = !this.components.equals(nextComponents);
         boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
+        List<CapabilityPresentationSegment> nextSegments = new ArrayList<>(capabilityState.segments());
+        boolean presentationsChanged = nextSegments.size() != capabilityPresentationSegments.size();
+        Map<BlockPos, List<Integer>> nextSources = new LinkedHashMap<>();
+        Map<MachineCapability, List<Integer>> nextAliases = new IdentityHashMap<>();
+        for (int index = 0; index < nextSegments.size(); index++) {
+            CapabilityPresentationSegment segment = nextSegments.get(index);
+            if (index < capabilityPresentationSegments.size()
+                    && capabilityPresentationSegments.get(index).sameSource(segment)) {
+                segment = capabilityPresentationSegments.get(index);
+                nextSegments.set(index, segment);
+            } else {
+                presentationsChanged = true;
+            }
+            nextSources.computeIfAbsent(segment.sourcePos, ignored -> new ArrayList<>()).add(index);
+            nextAliases.computeIfAbsent(segment.capability, ignored -> new ArrayList<>()).add(index);
+        }
         this.components = nextComponents;
         if (componentsChanged) {
             stateVersion++;
             componentPresentationEpoch++;
         }
         this.capabilities = nextCapabilities;
-        if (capabilitiesChanged) capabilityPresentationEpoch++;
+        this.capabilityIdentity = nextIdentity;
+        capabilityPresentationSegments = List.copyOf(nextSegments);
+        capabilitySourceIndices = nextSources;
+        capabilityAliasIndices = nextAliases;
+        if (presentationsChanged) {
+            capabilityPresentationEpoch++;
+            cachedCapabilityPresentations = List.of();
+        }
         if (capabilitiesChanged) {
-            this.capabilityIdentity = nextIdentity;
             capabilityVersion++;
         }
         return componentsChanged;
@@ -170,21 +197,9 @@ public final class ComponentRuntime {
     public List<ControllerRuntimeSnapshot.CapabilityPresentation> capabilityPresentations() {
         if (cachedCapabilityPresentationEpoch == capabilityPresentationEpoch) return cachedCapabilityPresentations;
         List<ControllerRuntimeSnapshot.CapabilityPresentation> snapshots = new ArrayList<>(capabilities.size());
-        for (MachineCapability capability : capabilities) {
-            LongValueStorage value = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
-            ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
-            for (IOType direction : capability.view().directions().values()) {
-                if (value != null) {
-                    snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
-                            capability.type() == null ? null : capability.type().id(), direction,
-                            value.amount(), value.capacity(), List.of()));
-                } else if (resourceStorage != null) {
-                    snapshots.add(resourcePresentation(capability, resourceStorage, direction));
-                } else {
-                    snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
-                        capability.type() == null ? null : capability.type().id(), direction, 0L, 0L, List.of()));
-                }
-            }
+        for (CapabilityPresentationSegment segment : capabilityPresentationSegments) {
+            if (segment.dirty) segment.refresh();
+            snapshots.addAll(segment.rows);
         }
         cachedCapabilityPresentations = List.copyOf(snapshots);
         cachedCapabilityPresentationEpoch = capabilityPresentationEpoch;
@@ -346,6 +361,39 @@ public final class ComponentRuntime {
 
     public void markCapabilityPresentationChanged() {
         capabilityPresentationEpoch++;
+        for (CapabilityPresentationSegment segment : capabilityPresentationSegments) segment.dirty = true;
+    }
+
+    /** Invalidates the occurrences at an absolute source position, including aliases at other hosts. */
+    public void markCapabilityPresentationChanged(@Nullable BlockPos sourcePos) {
+        List<Integer> indices = sourcePos == null ? null : capabilitySourceIndices.get(sourcePos);
+        if (indices == null) {
+            markCapabilityPresentationChanged();
+            return;
+        }
+        capabilityPresentationEpoch++;
+        Set<Object> changedStorage = Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<MachineCapability> seedProviders = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (int index : indices) {
+            MachineCapability capability = capabilityPresentationSegments.get(index).capability;
+            if (!seedProviders.add(capability)) continue;
+            for (int alias : capabilityAliasIndices.get(capability)) {
+                CapabilityPresentationSegment segment = capabilityPresentationSegments.get(alias);
+                segment.dirty = true;
+                changedStorage.add(segment.storage);
+                changedStorage.add(segment.resourceStorage);
+                changedStorage.add(CapabilityFactories.valueStorage(segment.capability, CapabilityStorage.class));
+                changedStorage.add(CapabilityFactories.resourceStorage(segment.capability));
+            }
+        }
+        changedStorage.remove(null);
+        for (CapabilityPresentationSegment segment : capabilityPresentationSegments) {
+            if (changedStorage.contains(segment.storage) || changedStorage.contains(segment.resourceStorage)
+                    || changedStorage.contains(CapabilityFactories.valueStorage(segment.capability, CapabilityStorage.class))
+                    || changedStorage.contains(CapabilityFactories.resourceStorage(segment.capability))) {
+                segment.dirty = true;
+            }
+        }
     }
 
     public long maxParallelism(Machine machine) {
@@ -371,6 +419,8 @@ public final class ComponentRuntime {
 
     public void clear() {
         replaceComponents(List.of());
+        cachedComponentPresentations = List.of();
+        cachedCapabilityPresentations = List.of();
         replaceModifiers(Map.of());
         replaceLevels(Map.of());
         replaceSmartInterfaceModifiers(List.of());
@@ -382,21 +432,27 @@ public final class ComponentRuntime {
     private static CapabilityState capabilityStateFor(List<ProcessingComponent> components) {
         List<MachineCapability> result = new ArrayList<>();
         List<CapabilityIdentity> identities = new ArrayList<>();
+        List<CapabilityPresentationSegment> segments = new ArrayList<>();
         for (ProcessingComponent component : components) {
             if (component.getContainer() instanceof CapabilityHost host) {
                 try {
                     for (MachineCapability capability : host.capabilities()) {
+                        List<CapabilityIdentity> occurrenceIdentity = new ArrayList<>();
                         for (IOType direction : capability.view().directions().values()) {
-                            identities.add(CapabilityIdentity.of(component.getPos(), capability, direction));
+                            occurrenceIdentity.add(CapabilityIdentity.of(component.getPos(), capability, direction));
                         }
+                        CapabilityPresentationSegment segment = new CapabilityPresentationSegment(
+                                component.getPos().immutable(), capability, List.copyOf(occurrenceIdentity));
+                        identities.addAll(occurrenceIdentity);
                         result.add(capability);
+                        segments.add(segment);
                     }
                 } catch (RuntimeException ignored) {
                     // A partially initialized port must not invalidate the controller runtime snapshot.
                 }
             }
         }
-        return new CapabilityState(List.copyOf(result), List.copyOf(identities));
+        return new CapabilityState(List.copyOf(result), List.copyOf(identities), List.copyOf(segments));
     }
 
     private static <K, V> Map<K, V> immutableMap(Map<K, V> values) {
@@ -535,7 +591,68 @@ public final class ComponentRuntime {
         return value > 0L && current > Long.MAX_VALUE - value ? Long.MAX_VALUE : current + value;
     }
 
-    private record CapabilityState(List<MachineCapability> capabilities, List<CapabilityIdentity> identity) { }
+    /**
+     * Owns immutable rows for one capability occurrence in the current component order.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class CapabilityPresentationSegment {
+        private final BlockPos sourcePos;
+        private final MachineCapability capability;
+        private CapabilityStorage storage;
+        private ResourceStorage<?> resourceStorage;
+        private List<CapabilityIdentity> identity;
+        private List<ControllerRuntimeSnapshot.CapabilityPresentation> rows = List.of();
+        private boolean dirty = true;
+
+        private CapabilityPresentationSegment(BlockPos sourcePos, MachineCapability capability,
+                                              List<CapabilityIdentity> identity) {
+            this.sourcePos = sourcePos;
+            this.capability = capability;
+            this.storage = CapabilityFactories.valueStorage(capability, CapabilityStorage.class);
+            this.resourceStorage = CapabilityFactories.resourceStorage(capability);
+            this.identity = identity;
+        }
+
+        private boolean sameSource(CapabilityPresentationSegment other) {
+            return capability == other.capability && storage == other.storage && resourceStorage == other.resourceStorage
+                    && sourcePos.equals(other.sourcePos) && identity.equals(other.identity);
+        }
+
+        private void refresh() {
+            CapabilityStorage currentStorage = CapabilityFactories.valueStorage(capability, CapabilityStorage.class);
+            LongValueStorage currentValue = currentStorage instanceof LongValueStorage value ? value : null;
+            ResourceStorage<?> currentResourceStorage = CapabilityFactories.resourceStorage(capability);
+            List<ControllerRuntimeSnapshot.CapabilityPresentation> snapshots = new ArrayList<>(identity.size());
+            List<CapabilityIdentity> currentIdentity = new ArrayList<>(identity.size());
+            for (IOType direction : capability.view().directions().values()) {
+                currentIdentity.add(CapabilityIdentity.of(sourcePos, capability, direction));
+                if (currentValue != null) {
+                    snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
+                            capability.type() == null ? null : capability.type().id(), direction,
+                            currentValue.amount(), currentValue.capacity(), List.of()));
+                } else if (currentResourceStorage != null) {
+                    snapshots.add(resourcePresentation(capability, currentResourceStorage, direction));
+                } else {
+                    snapshots.add(new ControllerRuntimeSnapshot.CapabilityPresentation(
+                            capability.type() == null ? null : capability.type().id(), direction, 0L, 0L, List.of()));
+                }
+            }
+            rows = List.copyOf(snapshots);
+            storage = currentStorage;
+            resourceStorage = currentResourceStorage;
+            identity = List.copyOf(currentIdentity);
+            dirty = false;
+        }
+    }
+
+    /**
+     * Captures execution identity and presentation sources from the complete host capability view.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private record CapabilityState(List<MachineCapability> capabilities, List<CapabilityIdentity> identity,
+                                   List<CapabilityPresentationSegment> segments) { }
 
     private record CapabilityIdentity(BlockPos componentPos, Identifier type, IOType ioType, List<String> tags,
         String storageType, Object storageIdentity) {

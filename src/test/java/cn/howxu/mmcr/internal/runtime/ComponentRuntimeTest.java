@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
@@ -27,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -47,9 +49,11 @@ import org.junit.jupiter.api.BeforeAll;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -139,6 +143,9 @@ class ComponentRuntimeTest {
         runtime.replaceComponents(List.of(component(host, "combined")));
 
         assertThat(runtime.capabilities()).containsExactly(item, fluid);
+        assertThat(runtime.capabilityPresentations())
+                .extracting(ControllerRuntimeSnapshot.CapabilityPresentation::typeId)
+                .containsExactly(item.type().id(), fluid.type().id());
     }
 
     @Test
@@ -185,6 +192,576 @@ class ComponentRuntimeTest {
         runtime.replaceComponents(List.of(component));
 
         assertThat(runtime.capabilityVersion()).isEqualTo(version);
+    }
+
+    @Test
+    void local_presentation_refresh_reuses_other_rows_without_reading_their_storage() {
+        CountingItemStorage items = new CountingItemStorage();
+        items.setContents(0, ItemResource.of(Items.IRON_INGOT), 12);
+        LongValueStorage energy = new LongValueStorage(100, 100, () -> {});
+        BlockPos itemPos = new BlockPos(10, 20, 30);
+        BlockPos energyPos = new BlockPos(11, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(itemPos, List.of(new TestCapability("items", items))), "items"),
+                component(new TestCapabilityHost(energyPos, List.of(new TestCapability("energy", energy))), "energy")));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+        long epoch = runtime.capabilityPresentationEpoch();
+        items.resetReads();
+
+        energy.setAmount(40);
+        runtime.markCapabilityPresentationChanged(energyPos);
+        runtime.markCapabilityPresentationChanged(energyPos);
+        var after = runtime.capabilityPresentations();
+
+        assertThat(after.get(0)).isSameAs(before.get(0));
+        assertThat(after.get(1).amount()).isEqualTo(40);
+        assertThat(before.get(1).amount()).isZero();
+        assertThat(before.get(0).slots().getFirst().amount()).isEqualTo(12);
+        assertThat(runtime.capabilityPresentations()).isSameAs(after);
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        assertThat(runtime.capabilityPresentationEpoch()).isEqualTo(epoch + 2);
+        assertThat(items.resourceReads).isZero();
+        assertThat(items.amountReads).isZero();
+        assertThat(items.capacityReads).isZero();
+        assertThatThrownBy(after::clear).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> after.get(0).slots().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void one_source_refreshes_every_capability_and_both_view_directions_in_original_order() {
+        LongValueStorage energy = new LongValueStorage(100, 100, () -> {});
+        LongValueStorage secondValue = new LongValueStorage(100, 100, () -> {});
+        TestCapability bidirectional = new TestCapability("energy", energy, CapabilityDirections.bidirectional());
+        CountingItemStorage otherItems = new CountingItemStorage();
+        BlockPos source = new BlockPos(15, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(source, List.of(bidirectional,
+                        new TestCapability("second", secondValue))), "combined"),
+                component(new TestCapabilityHost(new BlockPos(16, 20, 30),
+                        List.of(new TestCapability("items", otherItems))), "items")));
+        var before = runtime.capabilityPresentations();
+        otherItems.resetReads();
+
+        energy.setAmount(40);
+        secondValue.setAmount(25);
+        runtime.markCapabilityPresentationChanged(source);
+        var after = runtime.capabilityPresentations();
+
+        assertThat(after.subList(0, 2)).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::ioType)
+                .containsExactlyElementsOf(bidirectional.view().directions().values());
+        assertThat(after).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::ioType)
+                .containsExactlyElementsOf(before.stream()
+                        .map(ControllerRuntimeSnapshot.CapabilityPresentation::ioType).toList());
+        assertThat(after).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(40L, 40L, 25L, 0L);
+        assertThat(before).allSatisfy(row -> assertThat(row.amount()).isZero());
+        assertThat(after.get(3)).isSameAs(before.get(3));
+        assertThat(otherItems.resourceReads).isZero();
+        assertThat(otherItems.amountReads).isZero();
+        assertThat(otherItems.capacityReads).isZero();
+    }
+
+    @Test
+    void a_shared_capability_refreshes_every_occurrence_at_the_source_and_other_hosts() {
+        CountingItemStorage sharedItems = new CountingItemStorage();
+        TestCapability shared = new TestCapability("shared", sharedItems);
+        LongValueStorage untouched = new LongValueStorage(100, 100, () -> {});
+        BlockPos firstPos = new BlockPos(21, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(firstPos, List.of(shared, shared)), "first"),
+                component(new TestCapabilityHost(new BlockPos(22, 20, 30), List.of(shared)), "alias"),
+                component(new TestCapabilityHost(new BlockPos(23, 20, 30),
+                        List.of(new TestCapability("untouched", untouched))), "untouched")));
+        var before = runtime.capabilityPresentations();
+        sharedItems.setContents(0, ItemResource.of(Items.GOLD_INGOT), 37);
+        sharedItems.resetReads();
+
+        runtime.markCapabilityPresentationChanged(firstPos);
+        runtime.markCapabilityPresentationChanged(firstPos);
+        var after = runtime.capabilityPresentations();
+
+        assertThat(after.subList(0, 3)).allSatisfy(row -> {
+            assertThat(row.amount()).isEqualTo(37);
+            assertThat(row.slots().getFirst().amount()).isEqualTo(37);
+        });
+        assertThat(before.subList(0, 3)).allSatisfy(row -> assertThat(row.amount()).isZero());
+        assertThat(after.get(3)).isSameAs(before.get(3));
+        assertThat(sharedItems.resourceReads).isEqualTo(3);
+        assertThat(sharedItems.amountReads).isEqualTo(3);
+        assertThat(sharedItems.capacityReads).isEqualTo(3);
+        assertThat(runtime.capabilityPresentations()).isSameAs(after);
+        assertThat(sharedItems.resourceReads).isEqualTo(3);
+    }
+
+    @Test
+    void repeated_seed_provider_expansion_is_linear_and_preserves_all_storage_aliases() {
+        for (int repeats : List.of(1, 8, 32)) {
+            CountingItemStorage original = new CountingItemStorage();
+            CountingItemStorage replacement = new CountingItemStorage();
+            CountingItemStorage latest = new CountingItemStorage();
+            CountingItemStorage unrelated = new CountingItemStorage();
+            original.setContents(0, ItemResource.of(Items.IRON_INGOT), 12);
+            replacement.setContents(0, ItemResource.of(Items.GOLD_INGOT), 37);
+            latest.setContents(0, ItemResource.of(Items.GOLD_INGOT), 55);
+            unrelated.setContents(0, ItemResource.of(Items.IRON_INGOT), 7);
+            MutableTestCapability provider = new MutableTestCapability("shared", original);
+            MutableTestCapability currentAlias = new MutableTestCapability("current_alias", unrelated);
+            BlockPos source = new BlockPos(24, 20, 30);
+            ComponentRuntime runtime = new ComponentRuntime();
+            runtime.replaceComponents(List.of(
+                    component(new TestCapabilityHost(source, Collections.nCopies(repeats, provider)), "source"),
+                    component(new TestCapabilityHost(new BlockPos(25, 20, 30), List.of(provider, provider)), "aliases"),
+                    component(new TestCapabilityHost(new BlockPos(26, 20, 30), List.of(currentAlias)), "current_alias"),
+                    component(new TestCapabilityHost(new BlockPos(27, 20, 30),
+                            List.of(new TestCapability("published_alias", original))), "published_alias"),
+                    component(new TestCapabilityHost(new BlockPos(28, 20, 30),
+                            List.of(new TestCapability("unrelated", unrelated))), "unrelated")));
+            var before = runtime.capabilityPresentations();
+            long epoch = runtime.capabilityPresentationEpoch();
+            long version = runtime.capabilityVersion();
+            int occurrences = repeats + 2;
+            unrelated.resetReads();
+            original.setContents(0, ItemResource.of(Items.IRON_INGOT), 19);
+
+            // A second notification must resolve new backing even while every provider occurrence is dirty.
+            for (CountingItemStorage backing : List.of(replacement, latest)) {
+                provider.storage = backing;
+                currentAlias.storage = backing;
+                provider.facetReads = 0;
+                provider.storageReads = 0;
+                runtime.markCapabilityPresentationChanged(source);
+                assertThat(provider.facetReads).isPositive().isLessThanOrEqualTo(6 * occurrences);
+                assertThat(provider.storageReads).isPositive().isLessThanOrEqualTo(6 * occurrences);
+            }
+            var after = runtime.capabilityPresentations();
+
+            assertThat(after).hasSize(occurrences + 3);
+            assertThat(after.subList(0, occurrences + 1)).allSatisfy(row -> {
+                assertThat(row.amount()).isEqualTo(55);
+                assertThat(row.slots().getFirst().amount()).isEqualTo(55);
+            });
+            assertThat(after.get(occurrences + 1).amount()).isEqualTo(19);
+            assertThat(after.get(occurrences + 1)).isNotSameAs(before.get(occurrences + 1));
+            assertThat(after.get(occurrences + 2)).isSameAs(before.get(occurrences + 2));
+            assertThat(before.subList(0, occurrences)).allSatisfy(row -> assertThat(row.amount()).isEqualTo(12));
+            assertThat(before.get(occurrences).amount()).isEqualTo(7);
+            assertThat(before.get(occurrences + 1).amount()).isEqualTo(12);
+            assertThat(unrelated.resourceReads).isZero();
+            assertThat(unrelated.amountReads).isZero();
+            assertThat(unrelated.capacityReads).isZero();
+            assertThat(runtime.capabilityPresentationEpoch()).isEqualTo(epoch + 2);
+            assertThat(runtime.capabilityVersion()).isEqualTo(version);
+            assertThat(runtime.capabilityPresentations()).isSameAs(after);
+        }
+    }
+
+    @Test
+    void unknown_null_and_noarg_notifications_refresh_all_sources() {
+        CountingItemStorage items = new CountingItemStorage();
+        LongValueStorage energy = new LongValueStorage(100, 100, () -> {});
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(new BlockPos(31, 20, 30),
+                        List.of(new TestCapability("items", items))), "items"),
+                component(new TestCapabilityHost(new BlockPos(32, 20, 30),
+                        List.of(new TestCapability("energy", energy))), "energy")));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+        for (int refresh = 0; refresh < 3; refresh++) {
+            items.setContents(0, ItemResource.of(Items.IRON_INGOT), refresh + 1);
+            energy.setAmount(refresh + 10);
+            items.resetReads();
+            switch (refresh) {
+                case 0 -> runtime.markCapabilityPresentationChanged(BlockPos.ZERO);
+                case 1 -> runtime.markCapabilityPresentationChanged(null);
+                default -> runtime.markCapabilityPresentationChanged();
+            }
+            var after = runtime.capabilityPresentations();
+
+            assertThat(after.get(0)).isNotSameAs(before.get(0));
+            assertThat(after.get(1)).isNotSameAs(before.get(1));
+            assertThat(after.get(0).amount()).isEqualTo(refresh + 1);
+            assertThat(after.get(1).amount()).isEqualTo(refresh + 10);
+            assertThat(items.resourceReads).isEqualTo(1);
+            assertThat(items.amountReads).isEqualTo(1);
+            assertThat(items.capacityReads).isEqualTo(1);
+            assertThat(runtime.capabilityPresentations()).isSameAs(after);
+            assertThat(runtime.capabilityVersion()).isEqualTo(version);
+            before = after;
+        }
+    }
+
+    @Test
+    void equal_but_distinct_provider_replacement_refreshes_only_its_rows_without_changing_version() {
+        CountingItemStorage items = new CountingItemStorage();
+        LongValueStorage energy = new LongValueStorage(100, 100, () -> {});
+        TestCapability original = new TestCapability("energy", energy);
+        TestCapability replacement = new TestCapability("energy", energy);
+        BlockPos energyPos = new BlockPos(42, 20, 30);
+        ProcessingComponent itemComponent = component(new TestCapabilityHost(new BlockPos(41, 20, 30),
+                List.of(new TestCapability("items", items))), "items");
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(itemComponent,
+                component(new TestCapabilityHost(energyPos, List.of(original)), "energy")));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+        items.resetReads();
+
+        energy.setAmount(40);
+        runtime.replaceComponents(List.of(itemComponent,
+                component(new TestCapabilityHost(energyPos, List.of(replacement)), "energy")));
+        var after = runtime.capabilityPresentations();
+
+        assertThat(replacement).isEqualTo(original).isNotSameAs(original);
+        assertThat(runtime.capabilities().get(1)).isSameAs(replacement);
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        assertThat(after.get(0)).isSameAs(before.get(0));
+        assertThat(after.get(1).amount()).isEqualTo(40);
+        assertThat(before.get(1).amount()).isZero();
+        assertThat(items.resourceReads).isZero();
+        assertThat(items.amountReads).isZero();
+        assertThat(items.capacityReads).isZero();
+        runtime.replaceComponents(runtime.components());
+        assertThat(runtime.capabilityPresentations()).isSameAs(after);
+    }
+
+    @Test
+    void same_provider_with_equal_but_distinct_storage_refreshes_without_changing_execution_identity() {
+        CountingItemStorage first = new EqualItemStorage();
+        CountingItemStorage replacement = new EqualItemStorage();
+        first.setContents(0, ItemResource.of(Items.IRON_INGOT), 12);
+        replacement.setContents(0, ItemResource.of(Items.GOLD_INGOT), 27);
+        MutableTestCapability capability = new MutableTestCapability("items", first);
+        ProcessingComponent component = component(new TestCapabilityHost(List.of(capability)), "items");
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+        first.resetReads();
+        replacement.resetReads();
+
+        capability.storage = replacement;
+        runtime.replaceComponents(List.of(component));
+        var after = runtime.capabilityPresentations();
+
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        assertThat(after.getFirst().amount()).isEqualTo(27);
+        assertThat(after.getFirst().slots().getFirst().resourceId()).isEqualTo(ItemResource.of(Items.GOLD_INGOT).toString());
+        assertThat(before.getFirst().amount()).isEqualTo(12);
+        assertThat(first.resourceReads).isZero();
+        assertThat(first.amountReads).isZero();
+        assertThat(first.capacityReads).isZero();
+        assertThat(replacement.resourceReads).isEqualTo(1);
+        assertThat(replacement.amountReads).isEqualTo(1);
+        assertThat(replacement.capacityReads).isEqualTo(1);
+    }
+
+    @Test
+    void different_providers_sharing_value_storage_refresh_together_after_dynamic_rebinding() {
+        LongValueStorage original = new LongValueStorage(100, 100, () -> {});
+        LongValueStorage shared = new LongValueStorage(100, 100, () -> {});
+        CountingItemStorage unrelated = new CountingItemStorage();
+        MutableTestCapability first = new MutableTestCapability("first", original);
+        MutableTestCapability second = new MutableTestCapability("second", shared);
+        BlockPos firstPos = new BlockPos(91, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(firstPos, List.of(first)), "first"),
+                component(new TestCapabilityHost(new BlockPos(92, 20, 30), List.of(second)), "second"),
+                component(new TestCapabilityHost(new BlockPos(93, 20, 30),
+                        List.of(new TestCapability("unrelated", unrelated))), "unrelated"),
+                component(new TestCapabilityHost(new BlockPos(98, 20, 30),
+                        List.of(new TestCapability("former_alias", original))), "former_alias")));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+        unrelated.resetReads();
+
+        first.storage = shared;
+        shared.setAmount(40);
+        runtime.markCapabilityPresentationChanged(firstPos);
+        var after = runtime.capabilityPresentations();
+
+        assertThat(after).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(40L, 40L, 0L, 0L);
+        assertThat(after.get(2)).isSameAs(before.get(2));
+        assertThat(before.get(0).amount()).isZero();
+        assertThat(before.get(1).amount()).isZero();
+        assertThat(unrelated.resourceReads).isZero();
+        assertThat(unrelated.amountReads).isZero();
+        assertThat(unrelated.capacityReads).isZero();
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+
+        shared.setAmount(55);
+        runtime.markCapabilityPresentationChanged(new BlockPos(92, 20, 30));
+        var changedAgain = runtime.capabilityPresentations();
+        assertThat(changedAgain)
+                .extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(55L, 55L, 0L, 0L);
+        assertThat(after.get(0).amount()).isEqualTo(40L);
+
+        original.setAmount(12L);
+        runtime.markCapabilityPresentationChanged(new BlockPos(98, 20, 30));
+        var formerAliasChanged = runtime.capabilityPresentations();
+        assertThat(formerAliasChanged.get(0)).isSameAs(changedAgain.get(0));
+        assertThat(formerAliasChanged.get(1)).isSameAs(changedAgain.get(1));
+        assertThat(formerAliasChanged.get(2)).isSameAs(before.get(2));
+        assertThat(formerAliasChanged.get(3).amount()).isEqualTo(12L);
+    }
+
+    @Test
+    void shared_resource_storage_uses_identity_and_does_not_refresh_equal_distinct_storage() {
+        CountingItemStorage shared = new EqualItemStorage();
+        CountingItemStorage unrelated = new EqualItemStorage();
+        BlockPos source = new BlockPos(94, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(source,
+                        List.of(new TestResourceCapability("first", shared))), "first"),
+                component(new TestCapabilityHost(new BlockPos(95, 20, 30),
+                        List.of(new TestResourceCapability("second", shared))), "second"),
+                component(new TestCapabilityHost(new BlockPos(96, 20, 30),
+                        List.of(new TestResourceCapability("unrelated", unrelated))), "unrelated")));
+        var before = runtime.capabilityPresentations();
+        shared.resetReads();
+        unrelated.resetReads();
+        shared.setContents(0, ItemResource.of(Items.GOLD_INGOT), 27L);
+        runtime.markCapabilityPresentationChanged(source);
+        var after = runtime.capabilityPresentations();
+
+        assertThat(shared).isEqualTo(unrelated).isNotSameAs(unrelated);
+        assertThat(after.get(0).amount()).isEqualTo(27L);
+        assertThat(after.get(1).amount()).isEqualTo(27L);
+        assertThat(after.get(1).slots()).isEqualTo(after.get(0).slots());
+        assertThat(after.get(2)).isSameAs(before.get(2));
+        assertThat(before.get(0).amount()).isZero();
+        assertThat(before.get(1).amount()).isZero();
+        assertThat(shared.resourceReads).isEqualTo(2);
+        assertThat(shared.amountReads).isEqualTo(2);
+        assertThat(shared.capacityReads).isEqualTo(2);
+        assertThat(unrelated.resourceReads).isZero();
+        assertThat(unrelated.amountReads).isZero();
+        assertThat(unrelated.capacityReads).isZero();
+    }
+
+    @Test
+    void dirty_refresh_then_return_to_original_storage_rebinds_published_provenance() {
+        for (boolean equalStorage : List.of(false, true)) {
+            CapabilityStorage original = equalStorage ? new EqualItemStorage() : new LongValueStorage(100, 100, () -> {});
+            CapabilityStorage replacement = equalStorage ? new EqualItemStorage() : new LongValueStorage(100, 100, () -> {});
+            if (replacement instanceof LongValueStorage value) value.setAmount(40L);
+            else ((CountingItemStorage) replacement).setContents(0, ItemResource.of(Items.GOLD_INGOT), 40L);
+            MutableTestCapability capability = new MutableTestCapability("stored", original);
+            BlockPos source = new BlockPos(97, 20, 30);
+            ComponentRuntime runtime = new ComponentRuntime();
+            runtime.replaceComponents(List.of(component(new TestCapabilityHost(source, List.of(capability)), "stored")));
+            var before = runtime.capabilityPresentations();
+            long version = runtime.capabilityVersion();
+
+            capability.storage = replacement;
+            if (equalStorage) runtime.markCapabilityPresentationChanged();
+            else runtime.markCapabilityPresentationChanged(source);
+            var refreshed = runtime.capabilityPresentations();
+            assertThat(refreshed.getFirst().amount()).isEqualTo(40L);
+            long epoch = runtime.capabilityPresentationEpoch();
+            capability.storage = original;
+            runtime.replaceComponents(runtime.components());
+            var rebound = runtime.capabilityPresentations();
+
+            assertThat(runtime.capabilityPresentationEpoch()).isEqualTo(epoch + 1L);
+            assertThat(runtime.capabilityVersion()).isEqualTo(version);
+            assertThat(rebound.getFirst()).isNotSameAs(refreshed.getFirst());
+            assertThat(rebound.getFirst().amount()).isZero();
+            assertThat(before.getFirst().amount()).isZero();
+            assertThat(refreshed.getFirst().amount()).isEqualTo(40L);
+            if (replacement instanceof CountingItemStorage items) {
+                items.resetReads();
+                runtime.markCapabilityPresentationChanged(source);
+                runtime.capabilityPresentations();
+                assertThat(items.resourceReads).isZero();
+                assertThat(items.amountReads).isZero();
+                assertThat(items.capacityReads).isZero();
+            }
+        }
+    }
+
+    @Test
+    void dirty_presentations_resolve_current_storage_even_without_component_replacement() {
+        LongValueStorage original = new LongValueStorage(100, 100, () -> {});
+        LongValueStorage replacement = new LongValueStorage(100, 100, () -> {});
+        replacement.setAmount(40);
+        MutableTestCapability capability = new MutableTestCapability("stored", original);
+        BlockPos source = new BlockPos(45, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(source, List.of(capability)), "stored")));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+
+        capability.storage = replacement;
+        runtime.markCapabilityPresentationChanged();
+        var fullRefresh = runtime.capabilityPresentations();
+        assertThat(fullRefresh.getFirst().amount()).isEqualTo(40);
+        assertThat(before.getFirst().amount()).isZero();
+
+        CountingItemStorage items = new CountingItemStorage();
+        items.setContents(0, ItemResource.of(Items.IRON_INGOT), 12);
+        capability.storage = items;
+        runtime.markCapabilityPresentationChanged(source);
+        var localRefresh = runtime.capabilityPresentations();
+        assertThat(localRefresh.getFirst().amount()).isEqualTo(12);
+        assertThat(localRefresh.getFirst().slots()).hasSize(1);
+        assertThat(fullRefresh.getFirst().amount()).isEqualTo(40);
+        assertThat(items.resourceReads).isEqualTo(1);
+        assertThat(items.amountReads).isEqualTo(1);
+        assertThat(items.capacityReads).isEqualTo(1);
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+    }
+
+    @Test
+    void clear_releases_old_sources_and_rebinding_the_same_position_uses_the_new_storage() {
+        CountingItemStorage oldItems = new CountingItemStorage();
+        CountingItemStorage newItems = new CountingItemStorage();
+        newItems.setContents(0, ItemResource.of(Items.IRON_INGOT), 12);
+        BlockPos source = new BlockPos(51, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(source,
+                List.of(new TestCapability("items", oldItems))), "old")));
+        var before = runtime.capabilityPresentations();
+        oldItems.resetReads();
+
+        runtime.clear();
+        assertThat(runtime.components()).isEmpty();
+        assertThat(runtime.capabilities()).isEmpty();
+        assertThat(runtime.capabilityPresentations()).isEmpty();
+        runtime.markCapabilityPresentationChanged(source);
+        assertThat(runtime.capabilityPresentations()).isEmpty();
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(source,
+                List.of(new TestCapability("items", newItems))), "new")));
+        var rebound = runtime.capabilityPresentations();
+        newItems.setContents(0, ItemResource.of(Items.GOLD_INGOT), 29);
+        runtime.markCapabilityPresentationChanged(source);
+        var after = runtime.capabilityPresentations();
+
+        assertThat(before.getFirst().amount()).isZero();
+        assertThat(rebound.getFirst().amount()).isEqualTo(12);
+        assertThat(after.getFirst().amount()).isEqualTo(29);
+        assertThat(oldItems.resourceReads).isZero();
+        assertThat(oldItems.amountReads).isZero();
+        assertThat(oldItems.capacityReads).isZero();
+    }
+
+    @Test
+    void component_reordering_and_removal_rebuild_the_source_mapping_and_keep_row_order() {
+        CountingItemStorage items = new CountingItemStorage();
+        items.setContents(0, ItemResource.of(Items.IRON_INGOT), 12);
+        LongValueStorage energy = new LongValueStorage(100, 100, () -> {});
+        energy.setAmount(40);
+        BlockPos itemPos = new BlockPos(61, 20, 30);
+        BlockPos energyPos = new BlockPos(62, 20, 30);
+        ProcessingComponent itemComponent = component(new TestCapabilityHost(itemPos,
+                List.of(new TestCapability("items", items))), "items");
+        ProcessingComponent energyComponent = component(new TestCapabilityHost(energyPos,
+                List.of(new TestCapability("energy", energy))), "energy");
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(itemComponent, energyComponent));
+        var before = runtime.capabilityPresentations();
+
+        runtime.replaceComponents(List.of(energyComponent, itemComponent));
+        var reordered = runtime.capabilityPresentations();
+        assertThat(reordered).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(40L, 12L);
+        items.resetReads();
+        energy.setAmount(55);
+        runtime.markCapabilityPresentationChanged(energyPos);
+        var updated = runtime.capabilityPresentations();
+        assertThat(updated.get(0).amount()).isEqualTo(55);
+        assertThat(updated.get(1)).isSameAs(reordered.get(1));
+        assertThat(items.resourceReads).isZero();
+        assertThat(items.amountReads).isZero();
+        assertThat(items.capacityReads).isZero();
+
+        runtime.replaceComponents(List.of(itemComponent));
+        assertThat(runtime.capabilityPresentations()).hasSize(1);
+        items.setContents(0, ItemResource.of(Items.IRON_INGOT), 23);
+        runtime.markCapabilityPresentationChanged(energyPos);
+        assertThat(runtime.capabilityPresentations().getFirst().amount()).isEqualTo(23);
+        assertThat(before).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(12L, 40L);
+    }
+
+    @Test
+    void source_positions_are_owned_and_rebinding_updates_the_absolute_source() {
+        CountingItemStorage items = new CountingItemStorage();
+        LongValueStorage energy = new LongValueStorage(100, 100, () -> {});
+        BlockPos oldSource = new BlockPos(72, 20, 30);
+        BlockPos.MutableBlockPos source = oldSource.mutable();
+        ProcessingComponent energyComponent = new ProcessingComponent(null,
+                new TestCapabilityHost(oldSource, List.of(new TestCapability("energy", energy))),
+                source, BlockPos.ZERO, List.of("energy"), null);
+        ProcessingComponent itemComponent = component(new TestCapabilityHost(new BlockPos(71, 20, 30),
+                List.of(new TestCapability("items", items))), "items");
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(itemComponent, energyComponent));
+        var before = runtime.capabilityPresentations();
+        items.resetReads();
+        source.set(73, 20, 30);
+        energy.setAmount(40);
+
+        runtime.markCapabilityPresentationChanged(oldSource);
+        var ownedSourceRows = runtime.capabilityPresentations();
+        assertThat(ownedSourceRows.get(0)).isSameAs(before.get(0));
+        assertThat(ownedSourceRows.get(1).amount()).isEqualTo(40);
+        assertThat(items.resourceReads).isZero();
+        assertThat(items.amountReads).isZero();
+        assertThat(items.capacityReads).isZero();
+
+        runtime.replaceComponents(List.of(itemComponent, energyComponent));
+        var rebound = runtime.capabilityPresentations();
+        assertThat(rebound.get(0)).isSameAs(before.get(0));
+        assertThat(rebound.get(1)).isNotSameAs(ownedSourceRows.get(1));
+        energy.setAmount(55);
+        runtime.markCapabilityPresentationChanged(source.immutable());
+        var after = runtime.capabilityPresentations();
+        assertThat(after.get(0)).isSameAs(before.get(0));
+        assertThat(after.get(1).amount()).isEqualTo(55);
+        assertThat(items.resourceReads).isZero();
+        assertThat(items.amountReads).isZero();
+        assertThat(items.capacityReads).isZero();
+        items.setContents(0, ItemResource.of(Items.IRON_INGOT), 12);
+        runtime.markCapabilityPresentationChanged(oldSource);
+        assertThat(runtime.capabilityPresentations().get(0).amount()).isEqualTo(12);
+    }
+
+    @Test
+    void equivalent_component_rebinding_preserves_pending_local_refreshes_and_other_rows() {
+        CountingItemStorage items = new CountingItemStorage();
+        LongValueStorage energy = new LongValueStorage(100, 100, () -> {});
+        TestCapabilityHost itemHost = new TestCapabilityHost(new BlockPos(81, 20, 30),
+                List.of(new TestCapability("items", items)));
+        BlockPos energyPos = new BlockPos(82, 20, 30);
+        TestCapabilityHost energyHost = new TestCapabilityHost(energyPos,
+                List.of(new TestCapability("energy", energy)));
+        ComponentRuntime runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(itemHost, "items"), component(energyHost, "energy")));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+        items.resetReads();
+
+        energy.setAmount(40);
+        runtime.markCapabilityPresentationChanged(energyPos);
+        runtime.replaceComponents(List.of(component(itemHost, "new_items"), component(energyHost, "new_energy")));
+        var after = runtime.capabilityPresentations();
+
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        assertThat(after.get(0)).isSameAs(before.get(0));
+        assertThat(after.get(1).amount()).isEqualTo(40);
+        assertThat(before.get(1).amount()).isZero();
+        assertThat(items.resourceReads).isZero();
+        assertThat(items.amountReads).isZero();
+        assertThat(items.capacityReads).isZero();
     }
 
     @Test
@@ -506,7 +1083,7 @@ class ComponentRuntimeTest {
     }
 
     private static ProcessingComponent component(BlockEntity host, String tag) {
-        return new ProcessingComponent(null, host, BlockPos.ZERO, BlockPos.ZERO, List.of(tag), null);
+        return new ProcessingComponent(null, host, host.getBlockPos(), BlockPos.ZERO, List.of(tag), null);
     }
 
     private static Machine parallelizableMachine(Identifier id) {
@@ -550,8 +1127,16 @@ class ComponentRuntimeTest {
             this(new CapabilitySnapshot(capabilities), capabilities);
         }
 
+        private TestCapabilityHost(BlockPos position, List<MachineCapability> capabilities) {
+            this(position, new CapabilitySnapshot(capabilities), capabilities);
+        }
+
         private TestCapabilityHost(CapabilitySnapshot snapshot, List<MachineCapability> capabilities) {
-            super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
+            this(BlockPos.ZERO, snapshot, capabilities);
+        }
+
+        private TestCapabilityHost(BlockPos position, CapabilitySnapshot snapshot, List<MachineCapability> capabilities) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), position,
                     ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
             this.snapshot = snapshot;
             this.capabilities = List.copyOf(capabilities);
@@ -566,6 +1151,103 @@ class ComponentRuntimeTest {
         public List<MachineCapability> capabilities() {
             return capabilities;
         }
+    }
+
+    /**
+     * Counts presentation reads while retaining the real item storage behavior.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static class CountingItemStorage extends LongResourceStorage<ItemResource> {
+        private int resourceReads;
+        private int amountReads;
+        private int capacityReads;
+
+        private CountingItemStorage() {
+            super(ItemResource.class, 1, 100L, ItemResource::isEmpty, () -> {});
+        }
+
+        @Override
+        public ItemResource resource(int slot) {
+            resourceReads++;
+            return super.resource(slot);
+        }
+
+        @Override
+        public long amount(int slot) {
+            amountReads++;
+            return super.amount(slot);
+        }
+
+        @Override
+        public long capacityResource(int slot, Object resource) {
+            capacityReads++;
+            return super.capacityResource(slot, resource);
+        }
+
+        private void resetReads() {
+            resourceReads = 0;
+            amountReads = 0;
+            capacityReads = 0;
+        }
+    }
+
+    /**
+     * Models storage providers whose equality does not distinguish their backing instances.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class EqualItemStorage extends CountingItemStorage {
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof EqualItemStorage;
+        }
+
+        @Override
+        public int hashCode() {
+            return EqualItemStorage.class.hashCode();
+        }
+    }
+
+    /**
+     * Allows a host to replace storage while retaining the same capability instance.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class MutableTestCapability implements MachineCapability, ValueFacet<CapabilityStorage> {
+        private final TestCapability delegate;
+        private CapabilityStorage storage;
+        private int facetReads;
+        private int storageReads;
+
+        private MutableTestCapability(String id, CapabilityStorage storage) {
+            delegate = new TestCapability(id);
+            this.storage = storage;
+        }
+
+        @Override
+        public CapabilityType type() { return delegate.type(); }
+
+        @Override
+        public CapabilityDirections directions() { return delegate.directions(); }
+
+        @Override
+        public CapabilityView view() { return delegate.view(); }
+
+        @Override
+        public CapabilityStorage storage() {
+            storageReads++;
+            return storage;
+        }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+            facetReads++;
+            return MachineCapability.super.facet(facetType);
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
     }
 
     private record TestCapability(String id, CapabilityStorage storage, CapabilityDirections directions)
@@ -611,6 +1293,31 @@ class ComponentRuntimeTest {
                     return Set.of(ValueFacet.class);
                 }
             };
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            return transaction -> CapabilityResult.successful();
+        }
+    }
+
+    /** Exposes the typed resource facet separately from the value-only fixture.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record TestResourceCapability(String id, ResourceStorage<ItemResource> storage)
+            implements MachineCapability, ResourceFacet<ItemResource> {
+        @Override
+        public Class<ItemResource> resourceType() { return ItemResource.class; }
+
+        @Override
+        public CapabilityType type() { return new TestCapability(id).type(); }
+
+        @Override
+        public CapabilityDirections directions() { return CapabilityDirections.input(); }
+
+        @Override
+        public CapabilityView view() {
+            return CapabilityFactories.view(type(), directions(), Set.of(ResourceFacet.class, ValueFacet.class));
         }
 
         @Override
