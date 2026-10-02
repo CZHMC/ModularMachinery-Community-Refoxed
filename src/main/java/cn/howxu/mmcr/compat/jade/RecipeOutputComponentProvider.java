@@ -81,7 +81,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
     }
 
     private static void renderItem(ITooltip tooltip, MachineOutput.ItemOutput item, long amount) {
-        ItemStack stack = item.stack();
+        ItemStack stack = item.resolvedStack();
         if (stack.isEmpty() || amount <= 0L) return;
         ItemStack iconStack = stack.copy();
         iconStack.setCount(1);
@@ -92,7 +92,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 : "";
         Component text = Component.translatable("jade.mmcr.machine_controller.recipe_output.item",
                 count,
-                stack.getHoverName().copy().withStyle(ChatFormatting.WHITE));
+                stack.getStyledHoverName());
         tooltip.append(text);
     }
 

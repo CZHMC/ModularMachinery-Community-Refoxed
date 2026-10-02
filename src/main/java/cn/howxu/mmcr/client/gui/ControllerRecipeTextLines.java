@@ -105,12 +105,13 @@ final class ControllerRecipeTextLines {
     private static ControllerTextLine line(MachineOutputAmount output) {
         ControllerTextLine.Icon icon = icon(output);
         if (output.output() instanceof MachineOutput.ItemOutput item) {
+            Component name = item.resolvedStack().getStyledHoverName();
             String count = output.amount() > 1L
                     ? ReadableNumber.formatForSlot(output.amount(), 0, "") + " " : "";
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.item", count,
-                    item.stack().getStyledHoverName()), MachineControllerScreen.STATUS_LABEL_COLOR,
+                    name), MachineControllerScreen.STATUS_LABEL_COLOR,
                     icon,
-                    List.of(item.stack().getStyledHoverName(), Component.literal(ReadableNumber.formatExact(output.amount()))),
+                    List.of(name, Component.literal(ReadableNumber.formatExact(output.amount()))),
                     OUTPUT_INDENT);
         }
         if (output.output() instanceof MachineOutput.FluidOutput fluid) {
@@ -135,7 +136,7 @@ final class ControllerRecipeTextLines {
 
     private static ControllerTextLine.Icon icon(MachineOutputAmount output) {
         if (output.output() instanceof MachineOutput.ItemOutput item) {
-            ItemStack stack = item.stack().copy();
+            ItemStack stack = item.resolvedStack();
             stack.setCount(1);
             return new ControllerTextLine.ItemIcon(stack);
         }
