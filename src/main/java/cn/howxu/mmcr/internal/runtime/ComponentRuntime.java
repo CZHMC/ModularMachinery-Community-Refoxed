@@ -3,7 +3,9 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
+import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
@@ -67,6 +69,7 @@ public final class ComponentRuntime {
     private List<CapabilityPresentationSegment> capabilityPresentationSegments = List.of();
     private Map<BlockPos, List<Integer>> capabilitySourceIndices = Map.of();
     private Map<MachineCapability, List<Integer>> capabilityAliasIndices = Map.of();
+    private List<Integer> capabilityProviderIndices = List.of();
     private long capabilityVersion;
     private long modifierVersion;
     private long stateVersion;
@@ -102,6 +105,8 @@ public final class ComponentRuntime {
         boolean presentationsChanged = nextSegments.size() != capabilityPresentationSegments.size();
         Map<BlockPos, List<Integer>> nextSources = new LinkedHashMap<>();
         Map<MachineCapability, List<Integer>> nextAliases = new IdentityHashMap<>();
+        Map<MachineCapability, Integer> representatives = new IdentityHashMap<>();
+        List<Integer> nextProviders = new ArrayList<>();
         for (int index = 0; index < nextSegments.size(); index++) {
             CapabilityPresentationSegment segment = nextSegments.get(index);
             if (index < capabilityPresentationSegments.size()
@@ -111,7 +116,14 @@ public final class ComponentRuntime {
             } else {
                 presentationsChanged = true;
             }
-            nextSources.computeIfAbsent(segment.sourcePos, ignored -> new ArrayList<>()).add(index);
+            Integer representative = representatives.get(segment.capability);
+            if (representative == null) {
+                representative = index;
+                representatives.put(segment.capability, representative);
+                nextProviders.add(representative);
+            }
+            List<Integer> sourceProviders = nextSources.computeIfAbsent(segment.sourcePos, ignored -> new ArrayList<>());
+            if (!sourceProviders.contains(representative)) sourceProviders.add(representative);
             nextAliases.computeIfAbsent(segment.capability, ignored -> new ArrayList<>()).add(index);
         }
         this.components = nextComponents;
@@ -124,6 +136,7 @@ public final class ComponentRuntime {
         capabilityPresentationSegments = List.copyOf(nextSegments);
         capabilitySourceIndices = nextSources;
         capabilityAliasIndices = nextAliases;
+        capabilityProviderIndices = List.copyOf(nextProviders);
         if (presentationsChanged) {
             capabilityPresentationEpoch++;
             cachedCapabilityPresentations = List.of();
@@ -372,28 +385,78 @@ public final class ComponentRuntime {
             return;
         }
         capabilityPresentationEpoch++;
-        Set<Object> changedStorage = Collections.newSetFromMap(new IdentityHashMap<>());
-        Set<MachineCapability> seedProviders = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (int index : indices) {
-            MachineCapability capability = capabilityPresentationSegments.get(index).capability;
-            if (!seedProviders.add(capability)) continue;
-            for (int alias : capabilityAliasIndices.get(capability)) {
-                CapabilityPresentationSegment segment = capabilityPresentationSegments.get(alias);
+        if (indices.size() == 1) {
+            CapabilityPresentationSegment seed = capabilityPresentationSegments.get(indices.getFirst());
+            CapabilityStorage publishedStorage = seed.storage;
+            ResourceStorage<?> publishedResourceStorage = seed.resourceStorage;
+            List<Integer> aliases = capabilityAliasIndices.get(seed.capability);
+            boolean sameBacking = true;
+            for (int alias = 0; alias < aliases.size(); alias++) {
+                CapabilityPresentationSegment segment = capabilityPresentationSegments.get(aliases.get(alias));
+                segment.dirty = true;
+                if (segment.storage != publishedStorage || segment.resourceStorage != publishedResourceStorage) sameBacking = false;
+            }
+            if (sameBacking) {
+                CapabilityStorage currentStorage = CapabilityFactories.valueStorage(seed.capability, CapabilityStorage.class);
+                ResourceStorage<?> currentResourceStorage = CapabilityFactories.resourceStorage(seed.capability);
+                markCapabilitiesSharingStorage(publishedStorage, publishedResourceStorage, currentStorage, currentResourceStorage,
+                        null, seed.capability);
+                return;
+            }
+        }
+        Set<Object> changedStorage = Collections.newSetFromMap(new IdentityHashMap<>(indices.size() * 4));
+        for (int index = 0; index < indices.size(); index++) {
+            MachineCapability capability = capabilityPresentationSegments.get(indices.get(index)).capability;
+            List<Integer> aliases = capabilityAliasIndices.get(capability);
+            for (int alias = 0; alias < aliases.size(); alias++) {
+                CapabilityPresentationSegment segment = capabilityPresentationSegments.get(aliases.get(alias));
                 segment.dirty = true;
                 changedStorage.add(segment.storage);
                 changedStorage.add(segment.resourceStorage);
-                changedStorage.add(CapabilityFactories.valueStorage(segment.capability, CapabilityStorage.class));
-                changedStorage.add(CapabilityFactories.resourceStorage(segment.capability));
+            }
+            changedStorage.add(CapabilityFactories.valueStorage(capability, CapabilityStorage.class));
+            changedStorage.add(CapabilityFactories.resourceStorage(capability));
+        }
+        markCapabilitiesSharingStorage(null, null, null, null, changedStorage, null);
+    }
+
+    private void markCapabilitiesSharingStorage(Object first, Object second, Object third, Object fourth,
+                                               @Nullable Set<Object> others, @Nullable MachineCapability seed) {
+        for (int provider = 0; provider < capabilityProviderIndices.size(); provider++) {
+            MachineCapability capability = capabilityPresentationSegments.get(capabilityProviderIndices.get(provider)).capability;
+            if (capability == seed) continue;
+            List<Integer> aliases = capabilityAliasIndices.get(capability);
+            boolean resolved = false;
+            boolean currentMatches = false;
+            for (int alias = 0; alias < aliases.size(); alias++) {
+                CapabilityPresentationSegment segment = capabilityPresentationSegments.get(aliases.get(alias));
+                if (matchesStorage(segment.storage, first, second, third, fourth, others)
+                        || matchesStorage(segment.resourceStorage, first, second, third, fourth, others)) {
+                    segment.dirty = true;
+                    continue;
+                }
+                if (!resolved) {
+                    resolved = true;
+                    ValueFacet<?> valueFacet = capability.facet(ValueFacet.class).orElse(null);
+                    CapabilityStorage currentStorage = valueFacet == null ? null : valueFacet.storage();
+                    ResourceFacet<?> resourceFacet = capability.facet(ResourceFacet.class).orElse(null);
+                    ResourceStorage<?> currentResourceStorage = resourceFacet != null ? resourceFacet.storage()
+                            : currentStorage instanceof ResourceStorage<?> resource ? resource : null;
+                    if (currentStorage == null) currentStorage = currentResourceStorage;
+                    currentMatches = matchesStorage(currentStorage, first, second, third, fourth, others)
+                            || matchesStorage(currentResourceStorage, first, second, third, fourth, others);
+                }
+                if (currentMatches) segment.dirty = true;
             }
         }
-        changedStorage.remove(null);
-        for (CapabilityPresentationSegment segment : capabilityPresentationSegments) {
-            if (changedStorage.contains(segment.storage) || changedStorage.contains(segment.resourceStorage)
-                    || changedStorage.contains(CapabilityFactories.valueStorage(segment.capability, CapabilityStorage.class))
-                    || changedStorage.contains(CapabilityFactories.resourceStorage(segment.capability))) {
-                segment.dirty = true;
-            }
-        }
+        // A custom facet may have published rows while the dependency scan was still in progress.
+        cachedCapabilityPresentationEpoch = Long.MIN_VALUE;
+    }
+
+    private static boolean matchesStorage(Object storage, Object first, Object second, Object third, Object fourth,
+                                          @Nullable Set<Object> others) {
+        return storage != null && (storage == first || storage == second || storage == third || storage == fourth
+                || (others != null && others.contains(storage)));
     }
 
     public long maxParallelism(Machine machine) {
