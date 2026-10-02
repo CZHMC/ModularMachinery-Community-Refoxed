@@ -3,6 +3,7 @@ package cn.howxu.mmcr;
 import appeng.api.AECapabilities;
 import appeng.api.config.Actionable;
 import appeng.api.networking.GridHelper;
+import appeng.api.networking.IGridConnection;
 import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
@@ -42,6 +43,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import com.mojang.authlib.GameProfile;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -84,6 +86,7 @@ public class AE2StockingInterfaceGameTest {
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
         port.getInterfaceLogic().getConfig().setStack(1,
                 new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L));
+        List<IGridConnection> connections = new ArrayList<>();
 
         helper.runAtTickTime(2, () -> {
             helper.assertTrue(port.getMainNode().getNode() != null,
@@ -94,9 +97,9 @@ public class AE2StockingInterfaceGameTest {
                     "Fluid ME Chest has initialized its AE2 grid node");
             helper.assertTrue(energy.getMainNode().getNode() != null,
                     "Creative energy cell has initialized its AE2 grid node");
-            GridHelper.createConnection(port.getMainNode().getNode(), itemChest.getMainNode().getNode());
-            GridHelper.createConnection(port.getMainNode().getNode(), fluidChest.getMainNode().getNode());
-            GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode());
+            connections.add(GridHelper.createConnection(port.getMainNode().getNode(), itemChest.getMainNode().getNode()));
+            connections.add(GridHelper.createConnection(port.getMainNode().getNode(), fluidChest.getMainNode().getNode()));
+            connections.add(GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode()));
         });
 
         helper.runAtTickTime(10, () -> {
@@ -226,7 +229,72 @@ public class AE2StockingInterfaceGameTest {
                     "Item watcher display updates on the next tick without a full scan");
             helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(1)).amount() == FLUID_AMOUNT - 1_000L,
                     "Fluid watcher display updates on the next tick without a full scan");
-            helper.succeed();
+            var items = port.itemStorage();
+            var fluids = port.fluidStorage();
+            Object originalNetwork = items.reservationIdentity();
+            helper.startSequence()
+                    .thenExecute(() -> {
+                        port.getInterfaceLogic().getConfig().setStack(0,
+                                new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L));
+                        port.getInterfaceLogic().getConfig().setStack(1,
+                                new GenericStack(AEFluidKey.of(Fluids.LAVA), 1_000L));
+                        helper.assertTrue(items == port.itemStorage() && fluids == port.fluidStorage(),
+                                "Config changes rebind the existing live storage views");
+                        helper.assertTrue(items.size() == 2 && fluids.size() == 2
+                                        && ItemResource.of(Items.GOLD_INGOT).equals(items.resource(0))
+                                        && items.resource(1) == null && fluids.resource(0) == null
+                                        && FluidResource.of(Fluids.LAVA).equals(fluids.resource(1)),
+                                "Config changes immediately replace cached resources and retain mixed slot indices");
+                        helper.assertTrue(items.reservationIdentity() == originalNetwork
+                                        && fluids.reservationIdentity() == originalNetwork,
+                                "Config rebind retains the live network reservation identity");
+                        helper.assertTrue(itemChest.getInventory().insert(AEItemKey.of(Items.GOLD_INGOT),
+                                        6L, Actionable.MODULATE, IActionSource.empty()) == 6L,
+                                "Item storage accepts the newly configured key");
+                        helper.assertTrue(fluidChest.getInventory().insert(AEFluidKey.of(Fluids.LAVA),
+                                        2_000L, Actionable.MODULATE, IActionSource.empty()) == 2_000L,
+                                "Fluid storage accepts the newly configured key");
+                    })
+                    .thenWaitUntil(() -> helper.assertTrue(items.amount(0) == 6L && fluids.amount(1) == 2_000L,
+                            "Watchers update quantities for the new delegate configuration"))
+                    .thenExecute(() -> {
+                        try (Transaction transaction = Transaction.openRoot()) {
+                            helper.assertTrue(items.extract(0, items.resource(0), 1L, transaction) == 1L
+                                            && fluids.extract(1, fluids.resource(1), 500L, transaction) == 500L,
+                                    "Reconfigured delegates extract the new keys from live storage");
+                            transaction.commit();
+                        }
+                        connections.forEach(IGridConnection::destroy);
+                        connections.clear();
+                    })
+                    .thenWaitUntil(() -> helper.assertTrue(items.amount(0) == 0L && fluids.amount(1) == 0L,
+                            "Disconnecting the network clears watcher quantities"))
+                    .thenExecute(() -> {
+                        MEStorage isolatedNetwork = port.getMainNode().getGrid().getStorageService().getInventory();
+                        helper.assertTrue(items.reservationIdentity() == isolatedNetwork
+                                        && fluids.reservationIdentity() == isolatedNetwork,
+                                "Network split rebinds both delegates to the isolated network");
+                        helper.assertTrue(ItemResource.of(Items.GOLD_INGOT).equals(items.resource(0))
+                                        && FluidResource.of(Fluids.LAVA).equals(fluids.resource(1)),
+                                "Network rebind retains the current resource configuration");
+                        try (Transaction transaction = Transaction.openRoot()) {
+                            helper.assertTrue(items.extract(0, items.resource(0), 1L, transaction) == 0L
+                                            && fluids.extract(1, fluids.resource(1), 500L, transaction) == 0L,
+                                    "Isolated delegates cannot extract from the previous network");
+                        }
+                        connections.add(GridHelper.createConnection(port.getMainNode().getNode(), itemChest.getMainNode().getNode()));
+                        connections.add(GridHelper.createConnection(port.getMainNode().getNode(), fluidChest.getMainNode().getNode()));
+                        connections.add(GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode()));
+                    })
+                    .thenWaitUntil(() -> helper.assertTrue(items.amount(0) == 5L && fluids.amount(1) == 1_500L,
+                            "Reconnected delegates receive the live network quantities"))
+                    .thenExecute(() -> {
+                        MEStorage reconnectedNetwork = port.getMainNode().getGrid().getStorageService().getInventory();
+                        helper.assertTrue(items.reservationIdentity() == reconnectedNetwork
+                                        && fluids.reservationIdentity() == reconnectedNetwork,
+                                "Reconnected delegates share the current network reservation identity");
+                    })
+                    .thenSucceed();
         });
     }
 

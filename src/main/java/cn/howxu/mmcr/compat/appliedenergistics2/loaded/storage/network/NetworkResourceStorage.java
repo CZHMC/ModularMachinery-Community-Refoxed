@@ -26,6 +26,7 @@ public abstract class NetworkResourceStorage<R> extends SnapshotJournal<Map<AEKe
     private final MEStorage meStorage;
     private final List<AEKey> keys;
     private final AE2KeyAdapter<R> adapter;
+    private final List<R> resources;
     private final long[] amounts;
     private final Map<AEKey, Long> pendingExtracts = new HashMap<>();
 
@@ -33,6 +34,9 @@ public abstract class NetworkResourceStorage<R> extends SnapshotJournal<Map<AEKe
         this.meStorage = Objects.requireNonNull(meStorage, "meStorage");
         this.keys = List.copyOf(Objects.requireNonNull(keys, "keys"));
         this.adapter = Objects.requireNonNull(adapter, "adapter");
+        this.resources = this.keys.stream()
+                .map(key -> this.adapter.toResource(key).orElse(null))
+                .toList();
         this.amounts = new long[this.keys.size()];
     }
 
@@ -61,7 +65,7 @@ public abstract class NetworkResourceStorage<R> extends SnapshotJournal<Map<AEKe
     @Nullable
     public R resource(int slot) {
         checkSlot(slot);
-        return adapter.toResource(keys.get(slot)).orElse(null);
+        return resources.get(slot);
     }
 
     @Override

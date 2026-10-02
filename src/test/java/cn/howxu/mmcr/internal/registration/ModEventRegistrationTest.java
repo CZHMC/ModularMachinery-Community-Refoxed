@@ -15,6 +15,7 @@ import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktMachineProgressPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorExportPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorPickPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
@@ -54,6 +55,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.level.ChunkWatchEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
@@ -113,7 +115,8 @@ class ModEventRegistrationTest {
                 BlockEvent.EntityPlaceEvent.class, BlockEvent.EntityMultiPlaceEvent.class,
                 BlockEvent.FluidPlaceBlockEvent.class, BreakBlockEvent.class, EntityJoinLevelEvent.class,
                 ChunkEvent.Unload.class,
-                ChunkEvent.Load.class, LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
+                ChunkEvent.Load.class, ChunkWatchEvent.Sent.class, ChunkWatchEvent.UnWatch.class,
+                LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
                 ServerAboutToStartEvent.class, ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
                 AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
                 PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class);
@@ -125,6 +128,7 @@ class ModEventRegistrationTest {
                         RegisterGameTestsEvent.class, BlockEvent.EntityPlaceEvent.class,
                         BlockEvent.EntityMultiPlaceEvent.class, BlockEvent.FluidPlaceBlockEvent.class,
                         BreakBlockEvent.class, EntityJoinLevelEvent.class, ChunkEvent.Unload.class, ChunkEvent.Load.class,
+                        ChunkWatchEvent.Sent.class, ChunkWatchEvent.UnWatch.class,
                         LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
                         ServerStoppedEvent.class, DefaultDataComponentsBoundEvent.class,
                         AddServerReloadListenersEvent.class, PlayerEvent.PlayerLoggedInEvent.class,
@@ -142,11 +146,12 @@ class ModEventRegistrationTest {
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
-                 PacketFlow.SERVERBOUND,
+                  PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
                 PktMachineStatePayload.TYPE,
+                PktMachineProgressPayload.TYPE,
                 PktFactoryControllerStatePayload.TYPE,
                 PktControllerSpecsPayload.TYPE,
                 PktControllerScreenTextPayload.TYPE,
@@ -170,7 +175,7 @@ class ModEventRegistrationTest {
 
     @Test
     void production_payload_protocol_version_tracks_the_current_packet_layout() {
-        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("7");
+        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("8");
     }
 
     @Test
@@ -290,7 +295,8 @@ class ModEventRegistrationTest {
                  recording(invoked, BlockEvent.FluidPlaceBlockEvent.class),
                  recording(invoked, BreakBlockEvent.class), recording(invoked, EntityJoinLevelEvent.class),
                  recording(invoked, ChunkEvent.Unload.class),
-                recording(invoked, ChunkEvent.Load.class), recording(invoked, LevelTickEvent.Post.class),
+                 recording(invoked, ChunkEvent.Load.class), recording(invoked, ChunkWatchEvent.Sent.class),
+                 recording(invoked, ChunkWatchEvent.UnWatch.class), recording(invoked, LevelTickEvent.Post.class),
                 recording(invoked, ServerTickEvent.Post.class),
                 recording(invoked, LevelEvent.Unload.class), recording(invoked, ServerAboutToStartEvent.class),
                 recording(invoked, ServerStoppedEvent.class),

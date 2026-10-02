@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEFluidKey;
+import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
@@ -72,6 +75,34 @@ class AE2ResourceFamilyTest {
                 .contains(fluid);
         assertThat(ItemResourceStorage.adapter()).isSameAs(AE2ResourceFamilies.ITEM.adapter());
         assertThat(FluidResourceStorage.adapter()).isSameAs(AE2ResourceFamilies.FLUID.adapter());
+    }
+
+    @Test
+    void stockingFamiliesPreserveMixedKeySlotsAndIndependentAmounts() {
+        List<AEKey> keys = List.of(AEItemKey.of(Items.IRON_INGOT), AEFluidKey.of(Fluids.WATER),
+                AEItemKey.of(Items.GOLD_INGOT), AEFluidKey.of(Fluids.LAVA));
+        var network = NullInventory.of();
+        var items = AE2ResourceFamilies.ITEM.stockingInputView(network, keys);
+        var fluids = AE2ResourceFamilies.FLUID.stockingInputView(network, keys);
+
+        assertThat(items.size()).isEqualTo(keys.size());
+        assertThat(fluids.size()).isEqualTo(keys.size());
+        assertThat(items.reservationIdentity()).isSameAs(network);
+        assertThat(fluids.reservationIdentity()).isSameAs(network);
+        assertThat(items.resource(0)).isEqualTo(ItemResource.of(Items.IRON_INGOT));
+        assertThat(items.resource(1)).isNull();
+        assertThat(items.resource(2)).isEqualTo(ItemResource.of(Items.GOLD_INGOT));
+        assertThat(items.resource(3)).isNull();
+        assertThat(fluids.resource(0)).isNull();
+        assertThat(fluids.resource(1)).isEqualTo(FluidResource.of(Fluids.WATER));
+        assertThat(fluids.resource(2)).isNull();
+        assertThat(fluids.resource(3)).isEqualTo(FluidResource.of(Fluids.LAVA));
+        items.onStackChange(keys.get(0), 6L);
+        fluids.onStackChange(keys.get(1), 15L);
+        assertThat(items.amount(0)).isEqualTo(6L);
+        assertThat(fluids.amount(0)).isZero();
+        assertThat(fluids.amount(1)).isEqualTo(15L);
+        assertThat(items.amount(1)).isZero();
     }
 
     @Test

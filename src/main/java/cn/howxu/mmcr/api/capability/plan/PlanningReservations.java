@@ -15,9 +15,9 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class PlanningReservations {
-    private final Map<Object, Map<Integer, ResourceReservation>> resources = new IdentityHashMap<>();
-    private final Map<Object, Map<Object, Long>> outputReservations = new IdentityHashMap<>();
-    private final Map<LongValueStorage, Long> values = new IdentityHashMap<>();
+    private Map<Object, Map<Integer, ResourceReservation>> resources;
+    private Map<Object, Map<Object, Long>> outputReservations;
+    private Map<LongValueStorage, Long> values;
 
     public Object resource(ResourceStorage<?> storage, int slot) {
         ResourceReservation reservation = reservation(storage, slot, false);
@@ -58,14 +58,15 @@ public final class PlanningReservations {
         if (currentAmount == null || currentAmount < 0L || capacity < 0L || currentAmount > capacity
                 || mismatchedNonEmptyResource(current, resource)
                 || amount > capacity - currentAmount) return false;
-        if (reservation == null) reservation = reservation(storage, slot, true);
-        if (reservation.insertedResource != null && !reservation.insertedResource.equals(resource)) return false;
+        if (reservation != null && reservation.insertedResource != null
+                && !reservation.insertedResource.equals(resource)) return false;
         long inserted;
         try {
-            inserted = Math.addExact(reservation.inserted, amount);
+            inserted = Math.addExact(reservation == null ? 0L : reservation.inserted, amount);
         } catch (ArithmeticException ignored) {
             return false;
         }
+        if (reservation == null) reservation = reservation(storage, slot, true);
         reservation.insertedResource = resource;
         reservation.inserted = inserted;
         return true;
@@ -74,7 +75,7 @@ public final class PlanningReservations {
     public long outputAvailable(Object identity, Object key, long capacity) {
         checkOutputReservationKey(identity, key);
         if (capacity < 0L) throw new IllegalArgumentException("capacity must be non-negative");
-        Map<Object, Long> byKey = outputReservations.get(identity);
+        Map<Object, Long> byKey = outputReservations == null ? null : outputReservations.get(identity);
         long reserved = byKey == null ? 0L : byKey.getOrDefault(key, 0L);
         try {
             return Math.max(0L, Math.subtractExact(capacity, reserved));
@@ -86,7 +87,7 @@ public final class PlanningReservations {
     public boolean reserveOutput(Object identity, Object key, long amount) {
         checkOutputReservationKey(identity, key);
         if (amount <= 0L) return false;
-        Map<Object, Long> byKey = outputReservations.get(identity);
+        Map<Object, Long> byKey = outputReservations == null ? null : outputReservations.get(identity);
         long reserved = byKey == null ? 0L : byKey.getOrDefault(key, 0L);
         long next;
         try {
@@ -94,6 +95,7 @@ public final class PlanningReservations {
         } catch (ArithmeticException ignored) {
             return false;
         }
+        if (outputReservations == null) outputReservations = new IdentityHashMap<>();
         if (byKey == null) {
             byKey = new HashMap<>();
             outputReservations.put(identity, byKey);
@@ -103,7 +105,7 @@ public final class PlanningReservations {
     }
 
     public long valueAvailable(LongValueStorage storage, boolean insert) {
-        long reserved = values.getOrDefault(storage, 0L);
+        long reserved = values == null ? 0L : values.getOrDefault(storage, 0L);
         long available;
         try {
             available = insert
@@ -127,13 +129,14 @@ public final class PlanningReservations {
                                  boolean enforceTransferLimit) {
         if (amount <= 0L || enforceTransferLimit && amount > storage.transferLimit()
                 || valueAvailable(storage, insert) < amount) return false;
-        long reserved = values.getOrDefault(storage, 0L);
+        long reserved = values == null ? 0L : values.getOrDefault(storage, 0L);
         long next;
         try {
             next = Math.addExact(reserved, insert ? amount : -amount);
         } catch (ArithmeticException ignored) {
             return false;
         }
+        if (values == null) values = new IdentityHashMap<>();
         values.put(storage, next);
         return true;
     }
@@ -150,21 +153,27 @@ public final class PlanningReservations {
 
     public PlanningReservations copy() {
         PlanningReservations copy = new PlanningReservations();
-        for (Map.Entry<Object, Map<Integer, ResourceReservation>> entry : resources.entrySet()) {
-            Map<Integer, ResourceReservation> copiedSlots = new HashMap<>();
-            for (Map.Entry<Integer, ResourceReservation> slot : entry.getValue().entrySet()) {
-                ResourceReservation source = slot.getValue();
-                ResourceReservation copied = new ResourceReservation();
-                copied.extracted = source.extracted;
-                copied.inserted = source.inserted;
-                copied.insertedResource = source.insertedResource;
-                copiedSlots.put(slot.getKey(), copied);
+        if (resources != null) {
+            copy.resources = new IdentityHashMap<>();
+            for (Map.Entry<Object, Map<Integer, ResourceReservation>> entry : resources.entrySet()) {
+                Map<Integer, ResourceReservation> copiedSlots = new HashMap<>();
+                for (Map.Entry<Integer, ResourceReservation> slot : entry.getValue().entrySet()) {
+                    ResourceReservation source = slot.getValue();
+                    ResourceReservation copied = new ResourceReservation();
+                    copied.extracted = source.extracted;
+                    copied.inserted = source.inserted;
+                    copied.insertedResource = source.insertedResource;
+                    copiedSlots.put(slot.getKey(), copied);
+                }
+                copy.resources.put(entry.getKey(), copiedSlots);
             }
-            copy.resources.put(entry.getKey(), copiedSlots);
         }
-        copy.values.putAll(values);
-        for (Map.Entry<Object, Map<Object, Long>> entry : outputReservations.entrySet()) {
-            copy.outputReservations.put(entry.getKey(), new HashMap<>(entry.getValue()));
+        if (values != null) copy.values = new IdentityHashMap<>(values);
+        if (outputReservations != null) {
+            copy.outputReservations = new IdentityHashMap<>();
+            for (Map.Entry<Object, Map<Object, Long>> entry : outputReservations.entrySet()) {
+                copy.outputReservations.put(entry.getKey(), new HashMap<>(entry.getValue()));
+            }
         }
         return copy;
     }
@@ -182,9 +191,10 @@ public final class PlanningReservations {
 
     private ResourceReservation reservation(ResourceStorage<?> storage, int slot, boolean create) {
         Object identity = storage.reservationIdentity();
-        Map<Integer, ResourceReservation> bySlot = resources.get(identity);
+        Map<Integer, ResourceReservation> bySlot = resources == null ? null : resources.get(identity);
         if (bySlot == null) {
             if (!create) return null;
+            if (resources == null) resources = new IdentityHashMap<>();
             bySlot = new HashMap<>();
             resources.put(identity, bySlot);
         }
