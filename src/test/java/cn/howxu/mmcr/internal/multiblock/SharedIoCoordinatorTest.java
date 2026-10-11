@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.multiblock;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.ServerConfig;
+import com.electronwill.nightconfig.core.CommentedConfig;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import net.neoforged.fml.config.IConfigSpec;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
@@ -43,6 +47,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
@@ -78,6 +83,11 @@ class SharedIoCoordinatorTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        ServerConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @BeforeEach
@@ -149,6 +159,246 @@ class SharedIoCoordinatorTest {
         fixture.shared().executeInstalled(fixture.level());
         assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(before - 7L);
         assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void paid_lane_repeated_scans_skip_live_validation_but_next_tick_validates_again(MachineWorkMode mode) throws Exception {
+        InstalledFixture fixture = installedFixture(mode, 40);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
+        fixture.runtime().prepareInstalledTick(fixture.shared().executionRoundId());
+        if (mode == MachineWorkMode.SYNC) fixture.shared().executeInstalled(fixture.program(), fixture.level());
+        else fixture.shared().resolve(fixture.level());
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        long afterPaid = fixture.input().getEnergyStorage().amount();
+        var domain = fixture.controller().resourceDomain();
+        CountingDomainMap domains = countDomainLookups(StructureClaimRegistry.get(fixture.level()));
+        CountingLookupMap<BlockPos, BlockEntity> world = countLookups(fixture.level(), "blockEntities");
+
+        for (int scan = 0; scan < 3; scan++) {
+            assertThat(resolveInstalledDomain(fixture, domain)).isZero();
+            assertThat(fixture.shared().executeInstalled(fixture.program(), fixture.level())).isFalse();
+        }
+        assertThat(domains.lookups).hasValue(0);
+        assertThat(world.lookups).hasValue(0);
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(afterPaid);
+
+        // Public resolve still reconciles topology once; the paid lane adds no live validation.
+        assertThat(fixture.shared().resolve(fixture.level())).isZero();
+        assertThat(domains.lookups).hasValue(1);
+        assertThat(world.lookups).hasValue(0);
+
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
+        fixture.runtime().prepareInstalledTick(fixture.shared().executionRoundId());
+        domains.lookups.set(0);
+        world.lookups.set(0);
+        if (mode == MachineWorkMode.SYNC) assertThat(fixture.shared().executeInstalled(fixture.program(), fixture.level())).isTrue();
+        else assertThat(resolveInstalledDomain(fixture, domain)).isEqualTo(1);
+        assertThat(domains.lookups.get()).isGreaterThan(0);
+        assertThat(world.lookups.get()).isGreaterThan(0);
+        assertThat(fixture.runtime().tickCount()).isEqualTo(2);
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(afterPaid - 7L);
+    }
+
+    @Test
+    void live_selection_qualifies_the_selected_lane_once_before_payment() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
+        assertThat(fixture.runtime().prepareInstalledTick(fixture.shared().executionRoundId())).isTrue();
+        var domain = fixture.controller().resourceDomain();
+        long before = fixture.input().getEnergyStorage().amount();
+        CountingLookupMap<BlockPos, BlockEntity> world = countLookups(fixture.level(), "blockEntities");
+
+        assertThat(resolveInstalledDomain(fixture, domain)).isEqualTo(1);
+
+        assertThat(world.lookups).hasValue(1);
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(before - 7L);
+        assertThat(resolveInstalledDomain(fixture, domain)).isZero();
+        assertThat(world.lookups).hasValue(1);
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(before - 7L);
+    }
+
+    @Test
+    void unattempted_lane_still_validates_when_another_lane_already_paid_this_tick() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.controller().serverTick();
+        fixture.shared().resolve(fixture.level());
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        CraftingRuntime other = new CraftingRuntime(fixture.controller(), fixture.controller().componentRuntime());
+        other.bindRecipeLane("unattempted", () -> { });
+        assertThat(fixture.shared().reserveExecution(other, "unattempted")).isTrue();
+        assertThat(other.start(fixture.recipe(), 1L).isCrafting()).isTrue();
+        assertThat(fixture.shared().install(other.ensureInstalledProgram(),
+                fixture.shared().controllerPermit(fixture.controller().getBlockPos()))).isTrue();
+        assertThat(other.prepareInstalledTick(fixture.shared().executionRoundId())).isTrue();
+        long afterStarts = fixture.input().getEnergyStorage().amount();
+        var domain = fixture.controller().resourceDomain();
+        CountingDomainMap domains = countDomainLookups(StructureClaimRegistry.get(fixture.level()));
+        CountingLookupMap<BlockPos, BlockEntity> world = countLookups(fixture.level(), "blockEntities");
+
+        assertThat(resolveInstalledDomain(fixture, domain)).isEqualTo(1);
+
+        assertThat(domains.lookups.get()).isGreaterThan(0);
+        assertThat(world.lookups.get()).isGreaterThan(0);
+        assertThat(other.tickCount()).isEqualTo(1);
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(afterStarts - 7L);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RecipeCommitLedger.Phase.class, names = {"READY", "ERROR_PAUSED"})
+    void invalid_unattempted_execution_is_cancelled_before_phase_gates(RecipeCommitLedger.Phase phase) throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        if (phase == RecipeCommitLedger.Phase.ERROR_PAUSED) fixture.program().ledger().pauseAfterCommitFailure();
+        fixture.program().cancel();
+        long before = fixture.input().getEnergyStorage().amount();
+        long paidAttempts = fixture.program().ledger().state().paidAttempts();
+        Field remaining = SharedIoCoordinator.class.getDeclaredField("remainingRequests");
+        remaining.setAccessible(true);
+        int budget = remaining.getInt(fixture.shared());
+
+        assertThat(fixture.shared().resolve(fixture.level())).isZero();
+
+        assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base")).singleElement()
+                .satisfies(receipt -> {
+                    assertThat(receipt.terminal()).isTrue();
+                    assertThat(receipt.paidAttempts()).isEqualTo(paidAttempts);
+                });
+        assertThat(remaining.getInt(fixture.shared())).isEqualTo(budget);
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(before);
+    }
+
+    @Test
+    void output_paid_terminates_a_slot_before_the_same_tick_attempt_fence() {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.controller().serverTick();
+        fixture.shared().resolve(fixture.level());
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        long afterPaid = fixture.input().getEnergyStorage().amount();
+        long paidAttempts = fixture.program().ledger().state().paidAttempts();
+        try (Transaction transaction = Transaction.openRoot()) {
+            fixture.program().ledger().markOutputPaid(transaction);
+            transaction.commit();
+        }
+
+        assertThat(fixture.shared().resolve(fixture.level())).isZero();
+
+        assertThat(fixture.program().current()).isFalse();
+        assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base")).singleElement()
+                .satisfies(receipt -> {
+                    assertThat(receipt.terminal()).isTrue();
+                    assertThat(receipt.paidAttempts()).isEqualTo(paidAttempts);
+                });
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(afterPaid);
+    }
+
+    @Test
+    void paid_lane_does_not_hide_a_same_tick_domain_removal() {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.controller().serverTick();
+        fixture.shared().resolve(fixture.level());
+        long afterPaid = fixture.input().getEnergyStorage().amount();
+        long paidAttempts = fixture.program().ledger().state().paidAttempts();
+        StructureClaimRegistry.get(fixture.level()).release(fixture.controller().getBlockPos());
+
+        assertThat(fixture.shared().resolve(fixture.level())).isZero();
+
+        assertThat(fixture.program().current()).isFalse();
+        assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base")).singleElement()
+                .satisfies(receipt -> {
+                    assertThat(receipt.terminal()).isTrue();
+                    assertThat(receipt.paidAttempts()).isEqualTo(paidAttempts);
+                });
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(afterPaid);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void paid_lane_cancellation_publishes_terminal_facts_in_a_frozen_same_tick(MachineWorkMode mode) throws Exception {
+        InstalledFixture fixture = installedFixture(mode, 40);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.controller().serverTick();
+        fixture.shared().resolve(fixture.level());
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        long afterPaid = fixture.input().getEnergyStorage().amount();
+        long paidAttempts = fixture.program().ledger().state().paidAttempts();
+        fixture.program().cancel();
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), false);
+        var domain = fixture.controller().resourceDomain();
+
+        if (mode == MachineWorkMode.SYNC) {
+            assertThat(fixture.shared().executeInstalled(fixture.program(), fixture.level())).isFalse();
+        }
+        assertThat(resolveInstalledDomain(fixture, domain)).isZero();
+        assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base")).singleElement()
+                .satisfies(receipt -> {
+                    assertThat(receipt.terminal()).isTrue();
+                    assertThat(receipt.paidAttempts()).isEqualTo(paidAttempts);
+                });
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(afterPaid);
+    }
+
+    private int resolveInstalledDomain(InstalledFixture fixture, StructureClaimRegistry.ResourceDomain domain) throws Exception {
+        // Exercise the live arbitration loop separately from its mandatory topology reconciliation.
+        var method = SharedIoCoordinator.class.getDeclaredMethod("resolveKnownDomains", Map.class, boolean.class, ServerLevel.class);
+        method.setAccessible(true);
+        return (int) method.invoke(fixture.shared(), Map.of(domain.id(), domain), true, fixture.level());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static CountingDomainMap countDomainLookups(StructureClaimRegistry registry) throws Exception {
+        Field field = StructureClaimRegistry.class.getDeclaredField("domainsByController");
+        field.setAccessible(true);
+        CountingDomainMap counted = new CountingDomainMap((Long2ObjectOpenHashMap<StructureClaimRegistry.ResourceDomain>) field.get(registry));
+        field.set(registry, counted);
+        return counted;
+    }
+
+    /** Counts live packed-position domain queries. @author howxu <dev@howxu.cn> */
+    private static final class CountingDomainMap extends Long2ObjectOpenHashMap<StructureClaimRegistry.ResourceDomain> {
+        private final AtomicInteger lookups = new AtomicInteger();
+
+        private CountingDomainMap(Long2ObjectOpenHashMap<StructureClaimRegistry.ResourceDomain> initial) { super(initial); }
+
+        @Override public StructureClaimRegistry.ResourceDomain get(long key) {
+            lookups.incrementAndGet();
+            return super.get(key);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <K, V> CountingLookupMap<K, V> countLookups(Object target, String name) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        CountingLookupMap<K, V> counted = new CountingLookupMap<>((Map<K, V>) field.get(target));
+        field.set(target, counted);
+        return counted;
+    }
+
+    /** Observes real registry/world reads without replacing their lookup results. @author howxu <dev@howxu.cn> */
+    private static final class CountingLookupMap<K, V> extends HashMap<K, V> {
+        private final AtomicInteger lookups = new AtomicInteger();
+
+        private CountingLookupMap(Map<K, V> initial) { super(initial); }
+
+        @Override public V get(Object key) {
+            lookups.incrementAndGet();
+            return super.get(key);
+        }
     }
 
     @Test

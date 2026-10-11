@@ -107,6 +107,7 @@ public final class InstalledRecipeProgram {
     public CompiledRecipeProgram program() { return program; }
     public RecipeCommitLedger ledger() { return ledger; }
     public CraftingRuntime owner() { return owner; }
+    public boolean cancelled() { return cancelled; }
     public boolean current() { return !cancelled && owner.installedCurrent(this); }
 
     /** Completion rules and their live binding are ready, including main-thread compatibility/callbacks. */

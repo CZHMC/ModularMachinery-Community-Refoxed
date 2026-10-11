@@ -1599,6 +1599,18 @@ public final class CraftingRuntime {
     record StateObservation(@Nullable Identifier recipeId, CraftingStatus.Status status, String statusMessage,
                             @Nullable ExecutionStatus failure, long structureVersion, long capabilityVersion,
                             long modifierVersion, int tick, int totalTick, long parallelism, long maxParallelism) {
+        boolean matches(CraftingRuntime runtime) {
+            MachineRecipe recipe = runtime.recipe();
+            return Objects.equals(recipeId, recipe == null ? null : recipe.id())
+                    && status == runtime.status.getStatus()
+                    && Objects.equals(statusMessage, runtime.status.getUnlocMessage())
+                    && Objects.equals(failure, runtime.failure)
+                    && structureVersion == (runtime.structureVersion == Long.MIN_VALUE ? 0L : runtime.structureVersion)
+                    && capabilityVersion == (runtime.capabilityVersion == Long.MIN_VALUE ? 0L : runtime.capabilityVersion)
+                    && modifierVersion == (runtime.modifierVersion == Long.MIN_VALUE ? 0L : runtime.modifierVersion)
+                    && tick == runtime.tickCount() && totalTick == runtime.totalTick()
+                    && parallelism == runtime.parallelism() && maxParallelism == runtime.maxParallelism();
+        }
     }
 
     String recipeIdText() {

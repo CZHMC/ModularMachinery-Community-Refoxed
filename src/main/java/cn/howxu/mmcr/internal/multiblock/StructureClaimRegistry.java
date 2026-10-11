@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.multiblock;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.jspecify.annotations.Nullable;
@@ -23,7 +24,7 @@ public final class StructureClaimRegistry {
     private static final Map<ServerLevel, StructureClaimRegistry> REGISTRIES = new WeakHashMap<>();
     private final Map<BlockPos, Set<BlockPos>> ownersByComponent = new LinkedHashMap<>();
     private final Map<BlockPos, Set<Claim>> claimsByController = new LinkedHashMap<>();
-    private final Map<BlockPos, ResourceDomain> domainsByController = new HashMap<>();
+    private final Long2ObjectOpenHashMap<ResourceDomain> domainsByController = new Long2ObjectOpenHashMap<>();
     private @Nullable Set<BlockPos> cachedClaimedControllers;
     private long nextDomainId;
     private long nextGeneration;
@@ -87,7 +88,7 @@ public final class StructureClaimRegistry {
     }
 
     public @Nullable ResourceDomain domainFor(BlockPos controllerPos) {
-        return domainsByController.get(controllerPos);
+        return domainsByController.get(controllerPos.asLong());
     }
 
     public long generationFor(BlockPos controllerPos) {
@@ -142,7 +143,7 @@ public final class StructureClaimRegistry {
             ResourceDomain domain = existingDomains.get(members);
             if (domain == null) domain = new ResourceDomain(++nextDomainId, ++nextGeneration, members);
             for (BlockPos member : controllers) {
-                domainsByController.put(member, domain);
+                domainsByController.put(member.asLong(), domain);
             }
         }
     }

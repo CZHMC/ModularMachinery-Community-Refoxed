@@ -131,7 +131,7 @@ public final class FactoryRuntime {
         for (FactoryRecipeThread lane : lanes) {
             LaneObservation before = observe(lane);
             lane.discardForRecipePoolChange();
-            changed |= !before.equals(observe(lane));
+            changed |= !matchesObservation(lane, before);
         }
         startReservations.clear();
         patternStartReservations.clear();
@@ -616,7 +616,7 @@ public final class FactoryRuntime {
             lane.invalidateForSmartInterfaceChange();
         }
         for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : observations.entrySet()) {
-            if (!entry.getValue().equals(observe(entry.getKey()))) markLaneStateChanged();
+            if (!matchesObservation(entry.getKey(), entry.getValue())) markLaneStateChanged();
         }
         recomputeFailureIfDirty();
     }
@@ -962,7 +962,7 @@ public final class FactoryRuntime {
             lane.rebindCurrentVersions();
         }
         for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : observations.entrySet()) {
-            if (!entry.getValue().equals(observe(entry.getKey()))) markLaneStateChanged();
+            if (!matchesObservation(entry.getKey(), entry.getValue())) markLaneStateChanged();
         }
     }
 
@@ -1120,7 +1120,7 @@ public final class FactoryRuntime {
         LaneObservation before = observe(lane);
         MachineRecipe recipe = lane.runtime().recipe();
         lane.tick(snapshot);
-        if (!before.equals(observe(lane)) || recipe != lane.runtime().recipe()) {
+        if (!matchesObservation(lane, before) || recipe != lane.runtime().recipe()) {
             markLaneStateChanged();
         }
     }
@@ -1130,8 +1130,8 @@ public final class FactoryRuntime {
         FactoryRecipeThread base = lanes.getFirst();
         LaneObservation before = observe(base);
         CapabilityTickResult result = base.runtime().tickIdle();
-        LaneObservation after = observe(base);
-        boolean changed = result.stateChanged() || !before.equals(after);
+        boolean unchanged = matchesObservation(base, before);
+        boolean changed = result.stateChanged() || !unchanged;
         if (changed) markLaneStateChanged();
         return currentTickResult(initialEpoch, changed);
     }
@@ -1361,6 +1361,13 @@ public final class FactoryRuntime {
         refreshLaneAccounting(lane);
         return new LaneObservation(lane.runtime().observation(), lane.getStatus(), lane.isStartPending(),
                 lane.getPendingStartRecipe());
+    }
+
+    private boolean matchesObservation(FactoryRecipeThread lane, LaneObservation before) {
+        refreshLaneAccounting(lane);
+        return before.runtime().matches(lane.runtime()) && before.status() == lane.getStatus()
+                && before.startPending() == lane.isStartPending()
+                && Objects.equals(before.pendingRecipe(), lane.getPendingStartRecipe());
     }
 
     private FactoryTickResult currentTickResult(long initialEpoch, boolean laneStateChanged) {

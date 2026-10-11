@@ -470,22 +470,26 @@ public final class SharedIoCoordinator {
     }
 
     private boolean eligibleExecution(ExecutionSlot slot, ServerLevel level, boolean sync) {
-        if (!validExecution(slot, level)) {
+        if (slot.execution == null || slot.execution.cancelled()
+                || slot.execution.owner().installedProgram() != slot.execution || !slot.execution.owner().active()
+                || slot.execution.ledger().state().outputPaid()) {
             terminateExecution(slot);
             return false;
         }
-        if (slot.execution.ledger().state().outputPaid()) {
+        LaneRecords lane = slot.lane;
+        long gameTime = level.getGameTime();
+        // Scans revisit paid lanes: reject scheduling fences before touching live domains/world state.
+        if (lane.lastAttemptRound == executionRoundId || lane.lastAttemptTime == gameTime
+                || slot.waiting || gameTime < slot.retryAt
+                || (slot.execution.owner().controller().activeWorkMode() == MachineWorkMode.SYNC) != sync
+                || sync && slot.synchronousRound != executionRoundId) return false;
+        if (!validExecution(slot, level)) {
             terminateExecution(slot);
             return false;
         }
         if (slot.execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED) return false;
         if (slot.execution.owner().finishPending() && !slot.execution.finishAttemptReady()) return false;
-        LaneRecords lane = slot.lane;
-        return !slot.waiting && (slot.execution.owner().controller().activeWorkMode() == MachineWorkMode.SYNC) == sync
-                && (!sync || slot.synchronousRound == executionRoundId)
-                && level.getGameTime() >= slot.retryAt
-                && currentPermit(slot.execution.owner().controller(), slot.permit, level)
-                && lane.lastAttemptRound != executionRoundId && lane.lastAttemptTime != level.getGameTime();
+        return currentPermit(slot.execution.owner().controller(), slot.permit, level);
     }
 
     private boolean attemptExecution(ExecutionSlot slot, ServerLevel level) {
@@ -922,12 +926,13 @@ public final class SharedIoCoordinator {
             StructureClaimRegistry.ResourceDomain domain = knownDomains.get(key.id);
             if (domain != null && domain.generation() == key.generation) eligible.addAll(bucket.allRequests());
         });
+        WorkSelection selection = new WorkSelection();
         try (AsyncPlanningFacet.CaptureScope ignored = AsyncPlanningFacet.beginCaptureScope()) {
             while (remainingRequests > 0) {
-                DomainKey key = nextDomainWithWork(attempted, eligible, level);
-                if (key == null) break;
+                if (!selectNextWork(attempted, eligible, level, selection)) break;
+                DomainKey key = selection.domain;
                 DomainBucket bucket = domains.get(key);
-                Object next = bucket.nextWork(attempted, eligible, level, this);
+                Object next = selection.work;
                 if (next instanceof ExecutionSlot slot) {
                     if (attemptExecution(slot, level)) progress++;
                     continue;
@@ -969,22 +974,32 @@ public final class SharedIoCoordinator {
         return requestsByController.size();
     }
 
-    private DomainKey nextDomainWithWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level) {
+    private boolean selectNextWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
+                                   WorkSelection selection) {
         int domainCount = domains.size();
-        if (domainCount == 0) return null;
+        if (domainCount == 0) return false;
         DomainKey key = domainCursor == null ? domains.firstKey() : domains.higherKey(domainCursor);
         if (key == null) key = domains.firstKey();
         // Selection invokes no callbacks. Re-read the live topology after each request instead
         // of retaining an iterator across commits, which may add/remove domains or resolve again.
         for (int offset = 0; offset < domainCount; offset++) {
             DomainBucket bucket = domains.get(key);
-            if ((level == null ? bucket.hasUnattempted(attempted, eligible)
-                    : bucket.hasQualifiedRequest(attempted, eligible, level, this))
-                    || level != null && bucket.hasInstalled(level, this)) return key;
+            Object work = bucket.nextWork(attempted, eligible, level, this);
+            if (work != null) {
+                selection.domain = key;
+                selection.work = work;
+                return true;
+            }
             key = domains.higherKey(key);
             if (key == null) key = domains.firstKey();
         }
-        return null;
+        return false;
+    }
+
+    /** Invocation-local candidate, consumed before callbacks. @author howxu <dev@howxu.cn> */
+    private static final class WorkSelection {
+        private DomainKey domain;
+        private Object work;
     }
 
     private void includeSpawnedSuccessors(DomainKey key, Request request, Set<Request> eligible) {
@@ -1048,6 +1063,7 @@ public final class SharedIoCoordinator {
     private enum RequestType { START, TICK, FINISH }
 
     private static final class DomainBucket {
+        private static final RequestType[] REQUEST_TYPES = RequestType.values();
         private final EnumMap<RequestType, NavigableMap<LaneKey, ArrayDeque<Request>>> requests =
                 new EnumMap<>(RequestType.class);
         private final EnumMap<RequestType, LaneKey> cursors = new EnumMap<>(RequestType.class);
@@ -1059,7 +1075,7 @@ public final class SharedIoCoordinator {
         private boolean worksetInFlight;
 
         private DomainBucket() {
-            for (RequestType type : RequestType.values()) {
+            for (RequestType type : REQUEST_TYPES) {
                 requests.put(type, new TreeMap<>());
                 controllerLaneCursors.put(type, new HashMap<>());
             }
@@ -1068,7 +1084,7 @@ public final class SharedIoCoordinator {
         private Object nextWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
                                 SharedIoCoordinator coordinator) {
             if (level != null) return nextLiveWork(attempted, eligible, level, coordinator);
-            RequestType[] types = RequestType.values();
+            RequestType[] types = REQUEST_TYPES;
             for (int typeOffset = 0; typeOffset < types.length; typeOffset++) {
                 int typeIndex = (nextType + typeOffset) % types.length;
                 RequestType type = types[typeIndex];
@@ -1095,7 +1111,7 @@ public final class SharedIoCoordinator {
 
         private Object nextLiveWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
                                     SharedIoCoordinator coordinator) {
-            RequestType[] types = RequestType.values();
+            RequestType[] types = REQUEST_TYPES;
             for (int offset = 0; offset < types.length; offset++) {
                 int index = (nextType + offset) % types.length;
                 RequestType type = types[index];
@@ -1190,32 +1206,6 @@ public final class SharedIoCoordinator {
                         ? installedByController.firstKey() : nextController;
             }
             return null;
-        }
-
-        private boolean hasInstalled(ServerLevel level, SharedIoCoordinator coordinator) {
-            return nextInstalled(level, coordinator) != null;
-        }
-
-        private boolean hasUnattempted(Set<Request> attempted, Set<Request> eligible) {
-            for (NavigableMap<LaneKey, ArrayDeque<Request>> lanes : requests.values()) {
-                for (ArrayDeque<Request> queue : lanes.values()) {
-                    for (Request request : queue) {
-                        if (!attempted.contains(request) && eligible.contains(request)) return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        private boolean hasQualifiedRequest(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
-                                            SharedIoCoordinator coordinator) {
-            for (NavigableMap<LaneKey, ArrayDeque<Request>> lanes : requests.values()) {
-                for (ArrayDeque<Request> queue : lanes.values()) for (Request request : queue) {
-                    if (!attempted.contains(request) && eligible.contains(request)
-                            && coordinator.qualifiedRequest(request, level)) return true;
-                }
-            }
-            return false;
         }
 
         private void remove(Request request) {

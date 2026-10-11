@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.ServerConfig;
+import com.electronwill.nightconfig.core.CommentedConfig;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
@@ -114,6 +116,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import org.junit.jupiter.api.AfterEach;
+import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -151,6 +154,11 @@ class CraftingRuntimeTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        ServerConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
         if (FailureReasonRegistry.isFrozen()) FailureReasonRegistry.clearForTesting();
         if (FailureReasonRegistry.find(BuiltinFailureReasons.UNKNOWN.id()) == null) {
             BuiltinFailureReasons.register();
@@ -504,30 +512,110 @@ class CraftingRuntimeTest {
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         CraftingStateSnapshot oldSnapshot = runtime.snapshot();
         var started = runtime.observation();
+        assertThat(started.matches(runtime)).isTrue();
         String recipeText = runtime.recipeIdText();
         assertThat(recipeText).isEqualTo(recipe.id().toString());
 
         runtime.tick();
         var progressed = runtime.observation();
+        assertThat(started.matches(runtime)).isFalse();
+        assertThat(progressed.matches(runtime)).isTrue();
         assertThat(progressed).isNotEqualTo(started);
         assertThat(progressed.tick()).isGreaterThan(started.tick());
         assertThat(runtime.recipeIdText()).isSameAs(recipeText);
         runtime.pause();
         var paused = runtime.observation();
+        assertThat(progressed.matches(runtime)).isFalse();
+        assertThat(paused.matches(runtime)).isTrue();
         assertThat(paused.status()).isEqualTo(CraftingStatus.Status.PAUSED);
         runtime.resume();
+        assertThat(paused.matches(runtime)).isFalse();
+        assertThat(progressed.matches(runtime)).isTrue();
         assertThat(runtime.observation().status()).isEqualTo(CraftingStatus.Status.CRAFTING);
         runtime.recordSearchFailure(null);
+        assertThat(progressed.matches(runtime)).isFalse();
         assertThat(runtime.observation().failure()).isNotNull();
         assertThat(started.failure()).isNull();
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        assertThat(started.matches(runtime)).isFalse();
+        assertThat(runtime.observation().matches(runtime)).isTrue();
         assertThat(runtime.observation().recipeId()).isNull();
         assertThat(runtime.recipeIdText()).isEmpty();
         assertThat(oldSnapshot.tick()).isZero();
         assertThat(oldSnapshot.status().isPaused()).isFalse();
         oldSnapshot.status().overrideStatusMessage("test.changed.returned.copy");
         assertThat(oldSnapshot.status().getUnlocMessage()).isEqualTo(started.statusMessage());
+    }
+
+    @Test
+    void observation_comparison_detects_live_progress_metadata_and_keeps_its_baseline() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        CraftingStatus status = runtime.start(recipe("observation_metadata", 20, List.of()), 1L);
+        runtime.activeRecipe().setMaxParallelism(4);
+        var before = runtime.observation();
+        runtime.activeRecipe().setTick(1);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setTick(before.tick());
+        assertThat(before.matches(runtime)).isTrue();
+        runtime.activeRecipe().setTotalTick(30);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setTotalTick(before.totalTick());
+        runtime.activeRecipe().setMaxParallelism(8);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setMaxParallelism(before.maxParallelism());
+        runtime.activeRecipe().setParallelism(2);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setParallelism(before.parallelism());
+        assertThat(before.matches(runtime)).isTrue();
+        status.overrideStatusMessage("test.observation.message");
+        assertThat(before.matches(runtime)).isFalse();
+        status.overrideStatusMessage(before.statusMessage());
+        assertThat(before.matches(runtime)).isTrue();
+        assertThat(runtime.observation()).isEqualTo(before);
+    }
+
+    @Test
+    void observation_comparison_normalizes_unset_versions_and_detects_each_restore_change() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.start(recipe("observation_versions", 20, List.of()), 1L);
+        ActiveMachineRecipe active = runtime.activeRecipe();
+        runtime.restore(active, null, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE);
+        var before = runtime.observation();
+        runtime.restore(active, null, 0L, 0L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isTrue();
+        runtime.restore(active, null, 1L, 0L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.restore(active, null, 0L, 2L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.restore(active, null, 0L, 0L, 3L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.restore(active, null, 0L, 0L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isTrue();
+    }
+
+    @Test
+    void observation_comparison_uses_failure_values_without_losing_changed_details() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        ExecutionStatus original = ExecutionStatus.blocked(MMCR.id("observation_failure"), MMCR.id("test"),
+                FailureOccurrence.at(BuiltinFailureReasons.RECIPE_SEARCH, MMCR.id("test"), FailurePhase.RECIPE_SEARCH,
+                        null, null, Map.of("detail", "first")));
+        runtime.recordSearchFailure(original);
+        var before = runtime.observation();
+        ExecutionStatus equal = ExecutionStatus.blocked(original.id(), original.source(),
+                FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
+                        null, null, Map.of("detail", "first")));
+        runtime.recordSearchFailure(equal);
+        assertThat(runtime.failure()).isNotSameAs(original);
+        assertThat(before.matches(runtime)).isTrue();
+        runtime.recordSearchFailure(ExecutionStatus.blocked(original.id(), original.source(),
+                FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
+                        null, null, Map.of("detail", "changed"))));
+        assertThat(before.matches(runtime)).isFalse();
+        assertThat(before.failure().details()).containsEntry("detail", "first");
     }
 
     @Test
