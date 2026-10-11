@@ -13,12 +13,9 @@ import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.item.ModelRenderProperties;
 import net.minecraft.client.resources.model.ResolvableModel;
-import net.minecraft.client.resources.model.ModelBaker;
-import net.minecraft.client.resources.model.ModelDebugName;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.client.resources.model.geometry.QuadCollection;
 import net.minecraft.client.resources.model.sprite.Material;
-import net.minecraft.client.resources.model.sprite.MaterialBaker;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.ItemOwner;
@@ -32,6 +29,10 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3fc;
 
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -43,14 +44,14 @@ public final class DynamicOverlayItemModel implements ItemModel {
     public static final Identifier ID = MMCR.id("dynamic_machine_item");
     public static final MapCodec<Unbaked> CODEC = MapCodec.unit(Unbaked::new);
 
-    private final MaterialBaker materials;
-    private final ModelBaker modelBaker;
+    private final Map<Identifier, ModelRenderProperties> renderProperties;
+    private final Function<Identifier, Material.Baked> runtimeMaterialGetter;
     private final Matrix4fc transformation;
-    private final ModelDebugName debugName = getClass()::toString;
 
-    private DynamicOverlayItemModel(ModelBaker modelBaker, MaterialBaker materials, Matrix4fc transformation) {
-        this.modelBaker = modelBaker;
-        this.materials = materials;
+    DynamicOverlayItemModel(Map<Identifier, ModelRenderProperties> renderProperties,
+                            Function<Identifier, Material.Baked> runtimeMaterialGetter, Matrix4fc transformation) {
+        this.renderProperties = Map.copyOf(renderProperties);
+        this.runtimeMaterialGetter = runtimeMaterialGetter;
         this.transformation = transformation;
     }
 
@@ -89,19 +90,17 @@ public final class DynamicOverlayItemModel implements ItemModel {
     }
 
     private BaseModel baseModel(Identifier modelId, DynamicOverlayBakedModel.FaceTextures baseTextures) {
-        var model = modelBaker.getModel(modelId);
-        var textures = model.getTopTextureSlots();
         QuadCollection.Builder quads = new QuadCollection.Builder();
         for (Direction direction : Direction.values()) {
             DynamicOverlayModelLoader.addFace(quads, direction, material(baseTextures.forFace(direction)), 0.0f, true);
         }
-        var renderProperties = ModelRenderProperties.fromResolvedModel(modelBaker, model, textures);
         QuadCollection builtQuads = quads.build();
-        return new BaseModel(builtQuads, () -> CuboidItemModelWrapper.computeExtents(builtQuads.getAll()), renderProperties);
+        return new BaseModel(builtQuads, () -> CuboidItemModelWrapper.computeExtents(builtQuads.getAll()),
+                renderProperties.get(modelId));
     }
 
     private Material.Baked material(Identifier texture) {
-        return materials.get(new Material(texture), debugName);
+        return runtimeMaterialGetter.apply(texture);
     }
 
     public static Description describe(ItemStack stack) {
@@ -188,7 +187,13 @@ public final class DynamicOverlayItemModel implements ItemModel {
 
         @Override
         public ItemModel bake(ItemModel.BakingContext context, Matrix4fc transform) {
-            return new DynamicOverlayItemModel(context.blockModelBaker(), context.blockModelBaker().materials(), transform);
+            var baker = context.blockModelBaker();
+            Map<Identifier, ModelRenderProperties> renderProperties = new HashMap<>();
+            for (Identifier modelId : List.of(MMCR.id("block/dynamic_machine_controller"), MMCR.id("block/dynamic_io_port"))) {
+                var model = baker.getModel(modelId);
+                renderProperties.put(modelId, ModelRenderProperties.fromResolvedModel(baker, model, model.getTopTextureSlots()));
+            }
+            return new DynamicOverlayItemModel(renderProperties, DynamicOverlayModelLoader::runtimeMaterial, transform);
         }
 
         @Override

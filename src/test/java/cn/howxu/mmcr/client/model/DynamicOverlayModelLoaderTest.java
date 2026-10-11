@@ -10,6 +10,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -18,7 +19,10 @@ import net.minecraft.client.resources.model.ModelBaker;
 import net.minecraft.client.resources.model.sprite.Material;
 import net.minecraft.client.resources.model.sprite.MaterialBaker;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,6 +34,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -72,10 +77,54 @@ class DynamicOverlayModelLoaderTest {
 
             var model = new DynamicOverlayModelLoader.Unbaked(kind).bake(baker);
 
-            assertThat(model.particleMaterial().sprite()).isSameAs(sprites.getFirst());
+            assertThat(sprites).singleElement().isSameAs(model.particleMaterial().sprite());
         } finally {
             sprites.forEach(TextureAtlasSprite::close);
         }
+    }
+
+    @Test
+    void runtime_block_quads_follow_the_reloaded_atlas() {
+        var base = MMCR.id("block/test_runtime_base");
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var data = ModelData.builder().with(MachineModelDataKeys.PORT_TEXTURE_SOURCE,
+                new MachineAppearanceSpec.TextureSource(MMCR.id("basic_casing"), base)).build();
+        BlockAndTintGetter level = (BlockAndTintGetter) Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[]{BlockAndTintGetter.class}, (proxy, method, args) -> data);
+        Map<Identifier, TextureAtlasSprite> sprites = new HashMap<>();
+        try {
+            var particle = sprite(MMCR.id("block/ctm/basic_casing/particle"));
+            sprites.put(particle.contents().name(), particle);
+            var model = new DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind.PORT,
+                    new Material.Baked(particle, false),
+                    texture -> new Material.Baked(sprites.computeIfAbsent(texture, DynamicOverlayModelLoaderTest::sprite), false));
+            List<BlockStateModelPart> parts = new ArrayList<>();
+            model.collectParts(level, POS, state, RandomSource.create(0L), parts);
+            var originalBase = parts.getFirst().getQuads(Direction.DOWN).getFirst().materialInfo().sprite();
+            var originalOverlays = parts.getFirst().getQuads(null).stream()
+                    .map(quad -> quad.materialInfo().sprite()).toList();
+
+            sprites.replaceAll((texture, oldSprite) -> {
+                oldSprite.close();
+                return sprite(texture);
+            });
+            parts.clear();
+            model.collectParts(level, POS, state, RandomSource.create(0L), parts);
+
+            assertThat(parts.getFirst().getQuads(Direction.DOWN)).singleElement().satisfies(quad ->
+                    assertThat(quad.materialInfo().sprite()).isSameAs(sprites.get(base)).isNotSameAs(originalBase));
+            assertThat(parts.getFirst().getQuads(null)).extracting(quad -> quad.materialInfo().sprite())
+                    .hasSize(6).containsOnly(sprites.get(DynamicOverlayBakedModel.defaultPortOverlayTexture()))
+                    .doesNotContainAnyElementsOf(originalOverlays);
+        } finally {
+            sprites.values().forEach(TextureAtlasSprite::close);
+        }
+    }
+
+    private static TextureAtlasSprite sprite(Identifier texture) {
+        var image = new NativeImage(1, 1, true);
+        var contents = new SpriteContents(texture, new FrameSize(1, 1), image);
+        return new TextureAtlasSprite(TextureAtlas.LOCATION_BLOCKS, contents, 1, 1, 0, 0, 0) {};
     }
 
     @Test

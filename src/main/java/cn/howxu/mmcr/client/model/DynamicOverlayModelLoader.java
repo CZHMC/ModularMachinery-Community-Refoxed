@@ -18,7 +18,7 @@ import net.minecraft.client.resources.model.SimpleModelWrapper;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.client.resources.model.geometry.QuadCollection;
 import net.minecraft.client.resources.model.sprite.Material;
-import net.minecraft.client.resources.model.sprite.MaterialBaker;
+import net.minecraft.data.AtlasIds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
@@ -35,6 +35,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * Dynamic block-state model for shared machine controller and I/O port overlays.
@@ -52,14 +53,14 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;
-    private final MaterialBaker materials;
+    private final Function<Identifier, Material.Baked> runtimeMaterialGetter;
     private final Material.Baked particle;
-    private final ModelDebugName debugName = getClass()::toString;
 
-    private DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind kind, MaterialBaker materials) {
+    DynamicOverlayModelLoader(DynamicOverlayBakedModel.Kind kind, Material.Baked particle,
+                              Function<Identifier, Material.Baked> runtimeMaterialGetter) {
         this.kind = kind;
-        this.materials = materials;
-        this.particle = materials.get(FALLBACK_PARTICLE, debugName);
+        this.runtimeMaterialGetter = runtimeMaterialGetter;
+        this.particle = particle;
     }
 
     @Override
@@ -189,7 +190,12 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     }
 
     private Material.Baked material(Identifier texture) {
-        return materials.get(new Material(texture), debugName);
+        return runtimeMaterialGetter.apply(texture);
+    }
+
+    static Material.Baked runtimeMaterial(Identifier texture) {
+        return new Material.Baked(Minecraft.getInstance().getAtlasManager()
+                .getAtlasOrThrow(AtlasIds.BLOCKS).getSprite(texture), false);
     }
 
     private Material.Baked baseMaterial(Identifier texture) {
@@ -202,7 +208,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         if (MISSING_BASE_TEXTURES.add(texture)) {
             MMCR.LOG.warn("Missing dynamic base texture {}; using fallback", texture);
         }
-        return materials.get(FALLBACK_PARTICLE, debugName);
+        return material(FALLBACK_PARTICLE.sprite());
     }
 
     static void clearMissingBaseTextureWarnings() {
@@ -285,7 +291,10 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     public record Unbaked(DynamicOverlayBakedModel.Kind kind) implements CustomUnbakedBlockStateModel {
         @Override
         public BlockStateModel bake(ModelBaker baker) {
-            return new DynamicOverlayModelLoader(kind, baker.materials());
+            ModelDebugName debugName = () -> DynamicOverlayModelLoader.class.toString();
+            Material.Baked particle = baker.materials().get(FALLBACK_PARTICLE, debugName);
+            // Runtime lookups must not feed CTM's baking-time texture scraper for this shared model.
+            return new DynamicOverlayModelLoader(kind, particle, DynamicOverlayModelLoader::runtimeMaterial);
         }
 
         @Override

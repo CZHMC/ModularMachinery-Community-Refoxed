@@ -6,20 +6,16 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.gui.render.DynamicAtlasAllocator;
-import net.minecraft.client.renderer.item.ItemModel;
+import net.minecraft.client.renderer.item.ModelRenderProperties;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;
 import net.minecraft.client.resources.metadata.animation.FrameSize;
-import net.minecraft.client.resources.model.ModelBaker;
-import net.minecraft.client.resources.model.ResolvedModel;
-import net.minecraft.client.resources.model.UnbakedModel;
 import net.minecraft.client.resources.model.cuboid.ItemTransforms;
 import net.minecraft.client.resources.model.sprite.Material;
-import net.minecraft.client.resources.model.sprite.MaterialBaker;
-import net.minecraft.client.resources.model.sprite.TextureSlots;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.junit.jupiter.api.AfterEach;
@@ -28,7 +24,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.joml.Matrix4f;
 
-import java.lang.reflect.Proxy;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,30 +62,14 @@ class DynamicOverlayItemModelTest {
         var description = DynamicOverlayItemModel.Description.controller(machineId);
 
         try (var staticSprite = sprite(false); var animatedSprite = sprite(true)) {
-            MaterialBaker materials = (MaterialBaker) Proxy.newProxyInstance(getClass().getClassLoader(),
-                    new Class<?>[]{MaterialBaker.class}, (proxy, method, args) -> {
-                        Material material = (Material) args[0];
-                        boolean animated = material.sprite().equals(baseTexture) ? animatedBase
-                                : material.sprite().equals(description.stateOverlayTexture()) ? animatedStateOverlay
+            var model = new DynamicOverlayItemModel(Map.of(description.baseModel(),
+                    new ModelRenderProperties(true, new Material.Baked(staticSprite, false), ItemTransforms.NO_TRANSFORMS)),
+                    texture -> {
+                        boolean animated = texture.equals(baseTexture) ? animatedBase
+                                : texture.equals(description.stateOverlayTexture()) ? animatedStateOverlay
                                 : animatedOverlay;
-                        return new Material.Baked(animated ? animatedSprite : staticSprite, material.forceTranslucent());
-                    });
-            ResolvedModel resolved = (ResolvedModel) Proxy.newProxyInstance(getClass().getClassLoader(),
-                    new Class<?>[]{ResolvedModel.class}, (proxy, method, args) -> switch (method.getName()) {
-                        case "getTopTextureSlots" -> TextureSlots.EMPTY;
-                        case "getTopGuiLight" -> UnbakedModel.GuiLight.SIDE;
-                        case "getTopTransforms" -> ItemTransforms.NO_TRANSFORMS;
-                        case "resolveParticleMaterial" -> new Material.Baked(staticSprite, false);
-                        default -> throw new UnsupportedOperationException(method.getName());
-                    });
-            ModelBaker baker = (ModelBaker) Proxy.newProxyInstance(getClass().getClassLoader(),
-                    new Class<?>[]{ModelBaker.class}, (proxy, method, args) -> switch (method.getName()) {
-                        case "getModel" -> resolved;
-                        case "materials" -> materials;
-                        default -> throw new UnsupportedOperationException(method.getName());
-                    });
-            ItemModel model = new DynamicOverlayItemModel.Unbaked().bake(
-                    new ItemModel.BakingContext(baker, null, null, null, null, null), new Matrix4f());
+                        return new Material.Baked(animated ? animatedSprite : staticSprite, false);
+                    }, new Matrix4f());
             var renderState = new ItemStackRenderState();
             model.update(renderState, new ItemStack(ModBlocks.controllerFor(machineId).get().asItem()),
                     null, ItemDisplayContext.GUI, null, null, 0);
@@ -101,6 +81,47 @@ class DynamicOverlayItemModelTest {
             allocator.endFrame();
             assertThat(allocator.getOrAllocate(description, renderState.isAnimated()).state())
                     .isEqualTo(animated ? DynamicAtlasAllocator.SlotState.STALE : DynamicAtlasAllocator.SlotState.READY);
+        }
+    }
+
+    @Test
+    void runtime_item_quads_follow_the_reloaded_atlas() throws Exception {
+        TestBootstrap.bootstrap();
+        var machineId = MMCR.id("test_cube");
+        var base = MMCR.id("block/test_runtime_item_base");
+        MachineAppearanceCache.replaceSnapshot(Map.of(machineId,
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), base, null)));
+        var description = DynamicOverlayItemModel.Description.controller(machineId);
+        Map<Identifier, TextureAtlasSprite> sprites = new HashMap<>();
+        try (var particle = sprite(false)) {
+            var model = new DynamicOverlayItemModel(Map.of(description.baseModel(),
+                    new ModelRenderProperties(true, new Material.Baked(particle, false), ItemTransforms.NO_TRANSFORMS)),
+                    texture -> new Material.Baked(sprites.computeIfAbsent(texture, id -> sprite(false)), false), new Matrix4f());
+            var stack = new ItemStack(ModBlocks.controllerFor(machineId).get().asItem());
+            var renderState = new ItemStackRenderState();
+            model.update(renderState, stack, null, ItemDisplayContext.GUI, null, null, 0);
+            var originalSprites = List.copyOf(sprites.values());
+            assertThat(renderState.isAnimated()).isFalse();
+
+            sprites.replaceAll((texture, oldSprite) -> {
+                oldSprite.close();
+                return sprite(true);
+            });
+            renderState.clear();
+            model.update(renderState, stack, null, ItemDisplayContext.GUI, null, null, 0);
+
+            var layersField = ItemStackRenderState.class.getDeclaredField("layers");
+            layersField.setAccessible(true);
+            var layers = (ItemStackRenderState.LayerRenderState[]) layersField.get(renderState);
+            assertThat(layers[0].prepareQuadList()).hasSize(6).allSatisfy(quad ->
+                    assertThat(quad.materialInfo().sprite()).isSameAs(sprites.get(base)));
+            assertThat(layers[1].prepareQuadList()).extracting(quad -> quad.materialInfo().sprite())
+                    .containsExactly(sprites.get(description.overlayTextures().getFirst()),
+                            sprites.get(description.stateOverlayTexture()))
+                    .doesNotContainAnyElementsOf(originalSprites);
+            assertThat(renderState.isAnimated()).isTrue();
+        } finally {
+            sprites.values().forEach(TextureAtlasSprite::close);
         }
     }
 
