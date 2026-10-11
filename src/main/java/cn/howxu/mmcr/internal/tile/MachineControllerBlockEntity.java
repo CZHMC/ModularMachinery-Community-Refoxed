@@ -204,6 +204,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable Identifier selectedRecipePoolId;
     private boolean redstonePaused;
+    private final BlockPos directSignalPosition;
     private boolean runtimePersistenceChanged;
     private @Nullable MachineWorkMode activeWorkMode;
     private @Nullable MachineAsyncCoordinator.TaskKey pendingStructureScanTask;
@@ -267,6 +268,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
+        directSignalPosition = new DirectSignalPosition(worldPosition);
         runtime = new MachineControllerRuntime(this);
         normalRecipeThread = new MachineRecipeThread(this, runtime.craftingRuntime());
     }
@@ -1515,7 +1517,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         try {
             if (!advanceBuildTask()) {
                 // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
-                boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
+                boolean powered = level.getDirectSignalTo(directSignalPosition) > 0;
                 if (powered) {
                     if (!redstonePaused) invalidateAsyncLifecycle(runtimeLevel);
                     redstonePaused = true;

@@ -411,29 +411,40 @@ public final class StructureMatcher {
                 }
                 default -> predicate;
             };
-            memo.put(predicate, snapshot);
+            memo.put(predicate, snapshot, cached);
             return snapshot;
         }
 
         /** @author howxu <dev@howxu.cn> */
         private static final class CapturePredicates {
             private @Nullable IdentityHashMap<BlockPredicate, CapturedPredicate> captured;
+            private @Nullable BlockPredicate lastPredicate;
+            private @Nullable CapturedPredicate lastCaptured;
             private long batch;
 
             void beginBatch() { batch++; }
 
             @Nullable CapturedPredicate get(BlockPredicate predicate) {
-                return captured == null ? null : captured.get(predicate);
+                if (predicate == lastPredicate) return lastCaptured;
+                CapturedPredicate entry = captured == null ? null : captured.get(predicate);
+                if (entry != null) {
+                    lastPredicate = predicate;
+                    lastCaptured = entry;
+                }
+                return entry;
             }
 
-            void put(BlockPredicate predicate, BlockPredicate snapshot) {
-                if (captured == null) captured = new IdentityHashMap<>();
-                CapturedPredicate entry = captured.get(predicate);
-                if (entry == null) captured.put(predicate, new CapturedPredicate(batch, snapshot));
-                else {
+            void put(BlockPredicate predicate, BlockPredicate snapshot, @Nullable CapturedPredicate entry) {
+                if (entry == null) {
+                    if (captured == null) captured = new IdentityHashMap<>();
+                    entry = new CapturedPredicate(batch, snapshot);
+                    captured.put(predicate, entry);
+                } else {
                     entry.batch = batch;
                     entry.snapshot = snapshot;
                 }
+                lastPredicate = predicate;
+                lastCaptured = entry;
             }
         }
 

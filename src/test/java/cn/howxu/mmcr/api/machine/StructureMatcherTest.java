@@ -692,6 +692,44 @@ class StructureMatcherTest {
     }
 
     @Test
+    void failed_capture_retries_suppliers_without_reusing_partial_or_old_snapshots() {
+        AtomicReference<Block> supplied = new AtomicReference<>(Blocks.STONE);
+        AtomicInteger firstCalls = new AtomicInteger();
+        AtomicInteger secondCalls = new AtomicInteger();
+        BlockPredicate firstLeaf = new BlockPredicate.DeferredBlock(() -> {
+            firstCalls.incrementAndGet();
+            return supplied.get();
+        });
+        BlockPredicate secondLeaf = new BlockPredicate.DeferredBlock(() -> {
+            if (secondCalls.incrementAndGet() == 2) throw new IllegalStateException("supplier unavailable");
+            return supplied.get();
+        });
+        BlockPredicate nested = new BlockPredicate.AnyOf(List.of(firstLeaf, secondLeaf, firstLeaf));
+        BlockPredicate expected = new BlockPredicate.AnyOf(List.of(nested, secondLeaf));
+        BlockPos nextPos = new BlockPos(1, 0, 0);
+        Map<BlockPos, BlockPredicate> ordered = new LinkedHashMap<>();
+        ordered.put(BlockPos.ZERO, expected);
+        ordered.put(nextPos, expected);
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(ordered), Map.of(), true,
+                StructureMatcher.ScanOptions.of(2, false, 0));
+        Level level = LevelStub.create(Map.of(BlockPos.ZERO, Blocks.STONE, nextPos, Blocks.DIRT));
+        StructureMatcher.ScanBatch first = scan.capture(level, BlockPos.ZERO);
+        scan.apply(first.identity(), first.match());
+        supplied.set(Blocks.DIRT);
+
+        assertThatThrownBy(() -> scan.capture(level, BlockPos.ZERO))
+                .isInstanceOf(IllegalStateException.class).hasMessage("supplier unavailable");
+        assertThat(scan.cursor()).isEqualTo(1);
+        assertThat(first.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        StructureMatcher.ScanBatch retry = scan.capture(level, BlockPos.ZERO);
+
+        assertThat(retry.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+        assertThat(retry.entries().getFirst().matchingExpected()).isNotSameAs(first.entries().getFirst().matchingExpected());
+        assertThat(firstCalls.get()).isEqualTo(3);
+        assertThat(secondCalls.get()).isEqualTo(3);
+    }
+
+    @Test
     void capture_shared_replacements_match_only_their_configured_positions() {
         AtomicInteger calls = new AtomicInteger();
         BlockPredicate replacementPredicate = new BlockPredicate.AnyOf(List.of(new BlockPredicate.DeferredBlock(() -> {

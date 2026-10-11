@@ -63,7 +63,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -313,6 +315,63 @@ class CapabilityTransferPolicyTest {
     }
 
     @Test
+    void dynamic_transfer_disable_clears_configuration_and_candidates_before_reenabling() throws Exception {
+        OperationOnlyItemCapability capability = new OperationOnlyItemCapability();
+        capability.transferEnabled = true;
+        OperationOnlyPort port = new OperationOnlyPort(capability);
+        port.setLevel(LevelStub.createWithBlockEntities(List.of(port)));
+        AutoIOConfig original = port.autoIOConfig(capability.type());
+        original.setEnabled(true);
+        original.setSide(Direction.NORTH, false);
+        port.runAutoIOCycleForTesting();
+        Map<?, ?> states = autoIOStates(port);
+        Object originalState = states.get(capability.type());
+        assertThat(originalState).isNotNull();
+
+        capability.transferEnabled = false;
+        port.runAutoIOCycleForTesting();
+        port.runAutoIOCycleForTesting();
+        assertThat(states).isEmpty();
+        capability.transferEnabled = true;
+        AutoIOConfig restored = port.autoIOConfig(capability.type());
+
+        assertThat(restored).isNotSameAs(original);
+        assertThat(restored.enabled()).isFalse();
+        assertThat(restored.isSideEnabled(Direction.NORTH)).isTrue();
+        restored.setEnabled(true);
+        port.runAutoIOCycleForTesting();
+        assertThat(states.get(capability.type())).isNotNull().isNotSameAs(originalState);
+    }
+
+    @Test
+    void no_policy_cleanup_preserves_another_capability_configuration_and_state() throws Exception {
+        OperationOnlyItemCapability item = new OperationOnlyItemCapability();
+        OperationOnlyItemCapability fluid = new OperationOnlyItemCapability(BuiltinCapabilityDefinitions.FLUID_TYPE);
+        item.transferEnabled = true;
+        fluid.transferEnabled = true;
+        OperationOnlyPort port = new OperationOnlyPort(item, fluid);
+        port.setLevel(LevelStub.createWithBlockEntities(List.of(port)));
+        port.autoIOConfig(item.type()).setEnabled(true);
+        AutoIOConfig fluidConfig = port.autoIOConfig(fluid.type());
+        fluidConfig.setEnabled(true);
+        fluidConfig.setSide(Direction.WEST, false);
+        port.runAutoIOCycleForTesting();
+        Map<?, ?> states = autoIOStates(port);
+        Object fluidState = states.get(fluid.type());
+        assertThat(fluidState).isNotNull();
+
+        item.transferEnabled = false;
+        port.runAutoIOCycleForTesting();
+        port.runAutoIOCycleForTesting();
+
+        assertThat(states.get(item.type())).isNull();
+        assertThat(states.get(fluid.type())).isSameAs(fluidState);
+        assertThat(port.autoIOConfig(fluid.type())).isSameAs(fluidConfig);
+        assertThat(fluidConfig.enabled()).isTrue();
+        assertThat(fluidConfig.isSideEnabled(Direction.WEST)).isFalse();
+    }
+
+    @Test
     void longValueStorageKeepsLongAmountsAndHonorsTransactionRollback() {
         LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
         long amount = (long) Integer.MAX_VALUE + 17L;
@@ -432,15 +491,21 @@ class CapabilityTransferPolicyTest {
                 HolderLookup.Provider.create(Stream.empty()));
     }
 
+    private static Map<?, ?> autoIOStates(IOPortBlockEntity port) throws ReflectiveOperationException {
+        Field field = IOPortBlockEntity.class.getDeclaredField("autoIOStates");
+        field.setAccessible(true);
+        return (Map<?, ?>) field.get(port);
+    }
+
     private static final class OperationOnlyPort extends IOPortBlockEntity {
         private final IOPortKind kind = PortKinds.ITEM_INPUT;
         private final CapabilitySnapshot snapshot;
         private int activeRecipeChecks;
 
-        private OperationOnlyPort(MachineCapability capability) {
+        private OperationOnlyPort(MachineCapability... capabilities) {
             super(ModBlockEntities.BES.get(PortKinds.ITEM_INPUT.id()).get(), BlockPos.ZERO,
                     ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState());
-            snapshot = new CapabilitySnapshot(List.of(capability));
+            snapshot = new CapabilitySnapshot(List.of(capabilities));
         }
 
         @Override
@@ -483,11 +548,20 @@ class CapabilityTransferPolicyTest {
 
     private static final class OperationOnlyItemCapability implements MachineCapability, OperationFacet, TransferFacet {
         private final AtomicInteger prepareCalls = new AtomicInteger();
+        private final CapabilityType capabilityType;
         private boolean transferEnabled;
+
+        private OperationOnlyItemCapability() {
+            this(BuiltinCapabilityDefinitions.ITEM_TYPE);
+        }
+
+        private OperationOnlyItemCapability(CapabilityType capabilityType) {
+            this.capabilityType = capabilityType;
+        }
 
         @Override
         public CapabilityType type() {
-            return BuiltinCapabilityDefinitions.ITEM_TYPE;
+            return capabilityType;
         }
 
         @Override
