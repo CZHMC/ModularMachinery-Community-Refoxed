@@ -587,7 +587,7 @@ public class TerminalAssemblyGameTest {
         MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, false);
         helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Survival build reserves materials");
         player.setRemoved(RemovalReason.DISCARDED);
-        helper.runAtTickTime(2, () -> {
+        helper.succeedWhen(() -> {
             long dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
                             new AABB(helper.absolutePos(controllerPos)).inflate(1))
                     .stream()
@@ -596,7 +596,6 @@ public class TerminalAssemblyGameTest {
                     .sum();
             helper.assertTrue(dropped == template.size(),
                     "A disconnected builder receives every unplaced reserved material as drops");
-            helper.succeed();
         });
     }
 
