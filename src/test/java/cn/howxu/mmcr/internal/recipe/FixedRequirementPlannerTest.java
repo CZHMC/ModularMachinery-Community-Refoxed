@@ -1,0 +1,501 @@
+package cn.howxu.mmcr.internal.recipe;
+
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.plan.OutputFit;
+import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.plan.PlanningResult;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import com.mojang.serialization.MapCodec;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Verifies fixed planning against the existing planner and transactional storage protocol.
+ *
+ * @author howxu <dev@howxu.cn>
+ */
+class FixedRequirementPlannerTest {
+    @BeforeAll
+    static void bootstrap() throws Exception {
+        TestBootstrap.bootstrap();
+        TestBootstrap.bootstrapCapabilities();
+    }
+
+    @Test
+    void second_port_completes_fixed_input_with_the_same_transfer_as_maximum_planning() {
+        LongValueStorage oldFirst = storage(40L, 40L, 7L);
+        LongValueStorage oldSecond = storage(40L, 40L, 20L);
+        LongValueStorage fixedFirst = storage(40L, 40L, 7L);
+        LongValueStorage fixedSecond = storage(40L, 40L, 20L);
+        List<MachineRequirement> requirements = List.of(new EnergyRequirement(8L));
+        var old = new RequirementPlanner().plan(requirements,
+                List.of(input(oldFirst), input(oldSecond)), new PlanningContext(3L, 0));
+        var fixed = fixed(requirements, List.of(input(fixedFirst), input(fixedSecond)), 3L, List.of(9), Map.of());
+
+        assertThat(old.successful()).isTrue();
+        assertThat(fixed.successful()).isTrue();
+        assertThat(fixed.plan().parallelism()).isEqualTo(old.plan().parallelism());
+        assertThat(fixed.plan().requirements()).singleElement()
+                .satisfies(plan -> assertThat(plan.requirementIndex()).isEqualTo(9));
+        assertThat(old.plan().commit()).isTrue();
+        assertThat(fixed.plan().commit()).isTrue();
+        assertThat(fixedFirst.amount()).isEqualTo(oldFirst.amount());
+        assertThat(fixedSecond.amount()).isEqualTo(oldSecond.amount());
+        assertThat(27L - fixedFirst.amount() - fixedSecond.amount()).isEqualTo(24L);
+    }
+
+    @Test
+    void insufficient_fixed_input_fails_without_lowering_parallelism_or_mutating_storage() {
+        LongValueStorage storage = storage(40L, 40L, 17L);
+        List<MachineRequirement> requirements = List.of(new EnergyRequirement(8L));
+        var old = new RequirementPlanner().plan(requirements, List.of(input(storage)), new PlanningContext(3L, 0));
+        var fixed = fixed(requirements, List.of(input(storage)), 3L, List.of(11), Map.of());
+
+        assertThat(old.plan().parallelism()).isEqualTo(2L);
+        assertThat(fixed.successful()).isFalse();
+        assertThat(fixed.failureRequirementIndex()).isEqualTo(11);
+        assertThat(fixed.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(storage.amount()).isEqualTo(17L);
+        var unavailableOld = new RequirementPlanner().plan(requirements, List.of(), new PlanningContext(3L, 0));
+        assertThat(fixed.failure().reason()).isEqualTo(unavailableOld.failure().reason());
+    }
+
+    @Test
+    void aliases_cannot_supply_the_same_energy_twice_across_atomic_requirements() {
+        LongValueStorage storage = storage(20L, 20L, 10L);
+        PlanningReservations base = new PlanningReservations();
+        var result = new RequirementPlanner().planFixed(List.of(new EnergyRequirement(6L), new EnergyRequirement(6L)),
+                List.of(input(storage), input(storage)), new PlanningContext(1L, 0, false, base), List.of(2, 7));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failureRequirementIndex()).isEqualTo(7);
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(base.valueAvailable(storage, false)).isEqualTo(10L);
+        assertThat(storage.amount()).isEqualTo(10L);
+    }
+
+    @Test
+    void output_policy_at_original_index_preserves_partial_fit_and_transfer() {
+        LongValueStorage oldStorage = storage(20L, 20L, 15L);
+        LongValueStorage fixedStorage = storage(20L, 20L, 15L);
+        List<MachineRequirement> requirements = List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4L));
+        Map<Integer, OutputPolicy> policies = Map.of(13, OutputPolicy.ALLOW_PARTIAL);
+        var old = new RequirementPlanner().plan(requirements, List.of(output(oldStorage)),
+                new PlanningContext(3L, 0, policies), List.of(13));
+        var fixed = fixed(requirements, List.of(output(fixedStorage)), 3L, List.of(13), policies);
+
+        assertThat(fixed.successful()).isTrue();
+        assertThat(fixed.outputSimulations()).isEqualTo(old.outputSimulations());
+        assertThat(fixed.outputSimulations()).singleElement().satisfies(simulation -> {
+            assertThat(simulation.requested()).isEqualTo(12L);
+            assertThat(simulation.accepted()).isEqualTo(5L);
+            assertThat(simulation.fit()).isEqualTo(OutputFit.PARTIAL);
+        });
+        assertThat(old.plan().commit()).isTrue();
+        assertThat(fixed.plan().commit()).isTrue();
+        assertThat(fixedStorage.amount()).isEqualTo(oldStorage.amount());
+        var full = fixed(requirements, List.of(output(fixedStorage)), 3L, List.of(13), Map.of());
+        assertThat(full.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(full.outputSimulations()).singleElement()
+                .satisfies(simulation -> assertThat(simulation.fit()).isEqualTo(OutputFit.NONE));
+    }
+
+    @Test
+    void tags_and_direction_filter_the_same_candidate_set() {
+        LongValueStorage matching = storage(20L, 20L, 8L);
+        LongValueStorage wrongTag = storage(20L, 20L, 20L);
+        LongValueStorage wrongDirection = storage(20L, 20L, 20L);
+        var result = fixed(List.of(new EnergyRequirement(8L, List.of("selected"))), List.of(
+                new TaggedCapability(input(wrongTag), List.of("other"), 0),
+                new TaggedCapability(output(wrongDirection), List.of("selected"), 0),
+                new TaggedCapability(input(matching), List.of("selected"), 0)), 1L, List.of(4), Map.of());
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commitInputs()).isTrue();
+        assertThat(matching.amount()).isZero();
+        assertThat(wrongTag.amount()).isEqualTo(20L);
+        assertThat(wrongDirection.amount()).isEqualTo(20L);
+    }
+
+    @Test
+    void admission_is_queried_once_without_outer_or_inner_maximum_search() {
+        AdmissionCapability capability = new AdmissionCapability(1_000_000L);
+        var result = fixed(List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 1L)),
+                List.of(capability), 100_000L, List.of(5), Map.of());
+
+        assertThat(result.successful()).isTrue();
+        assertThat(capability.capacityCalls).isEqualTo(1);
+        assertThat(capability.planCalls).isEqualTo(1);
+        assertThat(capability.materialized).isEqualTo(1);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(capability.destination.amount()).isEqualTo(100_000L);
+    }
+
+    @Test
+    void output_priority_and_full_remaining_admission_rule_are_preserved() {
+        LongValueStorage ordinary = storage(5L, 5L, 0L);
+        AdmissionCapability admission = new AdmissionCapability(3L);
+        var result = fixed(List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 8L)), List.of(
+                admission, new TaggedCapability(output(ordinary), List.of(), 1)), 1L, List.of(6), Map.of());
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(ordinary.amount()).isEqualTo(5L);
+        assertThat(admission.destination.amount()).isEqualTo(3L);
+        AdmissionCapability tooSmall = new AdmissionCapability(3L);
+        var partial = fixed(List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 8L)),
+                List.of(tooSmall), 1L, List.of(6), Map.of(6, OutputPolicy.ALLOW_PARTIAL));
+        assertThat(partial.successful()).isFalse();
+        assertThat(tooSmall.planCalls).isZero();
+        assertThat(partial.outputSimulations()).singleElement()
+                .satisfies(simulation -> assertThat(simulation.accepted()).isZero());
+    }
+
+    @Test
+    void changed_storage_rolls_back_all_prepared_inputs_and_fresh_context_binds_replacement() {
+        LongValueStorage first = storage(20L, 20L, 8L);
+        LongValueStorage second = storage(20L, 4L, 8L);
+        List<MachineRequirement> requirements = List.of(new EnergyRequirement(4L), new EnergyRequirement(4L));
+        CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(input(first), input(second))));
+        var result = context.planFixedRequirements(requirements, 2L, Map.of(), List.of(0, 1));
+        assertThat(result.successful()).isTrue();
+        second.setAmount(4L);
+        assertThat(result.plan().commit()).isFalse();
+        assertThat(first.amount()).isEqualTo(8L);
+        assertThat(second.amount()).isEqualTo(4L);
+
+        LongValueStorage replacement = storage(30L, 30L, 24L);
+        CraftingContext replaced = new CraftingContext(new CapabilitySnapshot(List.of(input(replacement))));
+        var fresh = replaced.planFixedRequirements(requirements, 2L, Map.of(), List.of(0, 1));
+        assertThat(fresh.successful()).isTrue();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(fresh.plan().commit(transaction)).isTrue();
+        }
+        assertThat(replacement.amount()).isEqualTo(24L);
+        assertThat(replaced.planFixedRequirements(requirements, 2L, Map.of(), List.of(0, 1)).plan().commit()).isTrue();
+        assertThat(replacement.amount()).isEqualTo(8L);
+        assertThat(first.amount()).isEqualTo(8L);
+    }
+
+    @Test
+    void zero_probability_compatibility_output_remains_a_no_op() {
+        var result = fixed(List.of(new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                FluidStack.EMPTY, 0F, List.of())), List.of(), 8L, List.of(12), Map.of());
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(8L);
+        assertThat(result.plan().hasOperations(12)).isFalse();
+        assertThat(result.plan().commit()).isTrue();
+    }
+
+    @Test
+    void transfer_limit_and_native_single_operation_protocol_match_existing_planning() {
+        LongValueStorage oldStorage = storage(30L, 4L, 24L);
+        LongValueStorage fixedStorage = storage(30L, 4L, 24L);
+        List<MachineRequirement> requirements = List.of(new EnergyRequirement(4L));
+        var old = new RequirementPlanner().plan(requirements, List.of(input(oldStorage)), new PlanningContext(3L, 0));
+        var fixed = fixed(requirements, List.of(input(fixedStorage)), 3L, List.of(0), Map.of());
+
+        assertThat(fixed.successful()).isEqualTo(old.successful()).isTrue();
+        assertThat(fixed.plan().parallelism()).isEqualTo(old.plan().parallelism());
+        // Direct hatches commit one operation; a total above their operation limit must still roll back.
+        assertThat(fixed.plan().commit()).isEqualTo(old.plan().commit()).isFalse();
+        assertThat(fixedStorage.amount()).isEqualTo(oldStorage.amount()).isEqualTo(24L);
+        var overLimit = fixed(List.of(new EnergyRequirement(5L)), List.of(input(fixedStorage)),
+                3L, List.of(0), Map.of());
+        assertThat(overLimit.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+    }
+
+    @Test
+    void compatibility_reservation_failure_is_checked_once_without_materializing_or_reducing() {
+        AtomicInteger reserveCalls = new AtomicInteger();
+        AtomicInteger materializeCalls = new AtomicInteger();
+        RequirementHandler<CompatibilityRequirement> handler = (requirement, capabilities, context) ->
+                new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null,
+                        (parallelism, reservations) -> {
+                            materializeCalls.incrementAndGet();
+                            return new RequirementPlan.OperationPlan(List.of(), null);
+                        }, (parallelism, reservations) -> {
+                            reserveCalls.incrementAndGet();
+                            return RequirementHandlerSupport.blocked(requirement, context,
+                                    BuiltinFailureReasons.MISSING_INPUT);
+                        });
+        RequirementType<CompatibilityRequirement> type = compatibilityType("fixed_compatibility", handler);
+        try (var scope = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(type);
+            var result = fixed(List.of(new CompatibilityRequirement(type)), List.of(), 100L, List.of(17), Map.of());
+            assertThat(result.successful()).isFalse();
+            assertThat(result.failureRequirementIndex()).isEqualTo(17);
+            assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+            assertThat(reserveCalls).hasValue(1);
+            assertThat(materializeCalls).hasValue(0);
+        }
+    }
+
+    @Test
+    void compatibility_factories_materialize_once_each_using_shared_reservations() {
+        LongValueStorage storage = storage(20L, 20L, 12L);
+        MachineCapability capability = input(storage);
+        AtomicInteger reserveCalls = new AtomicInteger();
+        AtomicInteger materializeCalls = new AtomicInteger();
+        RequirementHandler<CompatibilityRequirement> handler = (requirement, candidates, context) ->
+                new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null,
+                        (parallelism, reservations) -> {
+                            materializeCalls.incrementAndGet();
+                            if (!reservations.reserveValueTotal(storage, 6L, false)) {
+                                return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(
+                                        requirement, context, BuiltinFailureReasons.MISSING_INPUT));
+                            }
+                            return new RequirementPlan.OperationPlan(List.of(capability.prepare(
+                                    new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT,
+                                            parallelism, 6L, false))), null);
+                        }, (parallelism, reservations) -> {
+                            reserveCalls.incrementAndGet();
+                            return reservations.reserveValueTotal(storage, 6L, false) ? null
+                                    : RequirementHandlerSupport.blocked(requirement, context,
+                                            BuiltinFailureReasons.MISSING_INPUT);
+                        });
+        RequirementType<CompatibilityRequirement> type = compatibilityType("fixed_factory", handler);
+        try (var scope = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(type);
+            var requirement = new CompatibilityRequirement(type);
+            var result = fixed(List.of(requirement, requirement), List.of(), 1L, List.of(3, 8), Map.of());
+            assertThat(result.successful()).isTrue();
+            assertThat(reserveCalls).hasValue(2);
+            assertThat(materializeCalls).hasValue(2);
+            assertThat(result.plan().commit()).isTrue();
+            assertThat(storage.amount()).isZero();
+        }
+    }
+
+    @Test
+    void reservation_only_deferred_conflicts_match_old_planner_in_both_mixed_energy_orders() {
+        for (int order = 0; order < 3; order++) verifyReservationOnlyDeferred(order, false);
+    }
+
+    @Test
+    void reservation_only_deferred_success_matches_old_transaction_in_both_mixed_energy_orders() {
+        for (int order = 0; order < 3; order++) verifyReservationOnlyDeferred(order, true);
+    }
+
+    @Test
+    void operation_only_legacy_factories_still_share_the_budget_when_no_reservation_callback_exists() {
+        LongValueStorage storage = storage(20L, 20L, 10L);
+        PlanningReservations base = new PlanningReservations();
+        AtomicInteger materializeCalls = new AtomicInteger();
+        RequirementHandler<CompatibilityRequirement> handler = (requirement, candidates, context) ->
+                new RequirementPlan(context.requirementIndex(), 1L, List.of(), null,
+                        (parallelism, reservations) -> {
+                            materializeCalls.incrementAndGet();
+                            return new RequirementPlan.OperationPlan(List.of(),
+                                    reservations.reserveValueTotal(storage, 6L, false) ? null
+                                            : RequirementHandlerSupport.blocked(requirement, context,
+                                                    BuiltinFailureReasons.MISSING_INPUT));
+                        });
+        RequirementType<CompatibilityRequirement> type = compatibilityType("fixed_operation_only", handler);
+        try (var scope = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(type);
+            var requirement = new CompatibilityRequirement(type);
+            var result = new RequirementPlanner().planFixed(List.of(requirement, requirement), List.of(),
+                    new PlanningContext(1L, 0, false, base), List.of(3, 17));
+            assertThat(result.successful()).isFalse();
+            assertThat(result.failureRequirementIndex()).isEqualTo(17);
+            assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+            assertThat(materializeCalls).hasValue(2);
+            assertThat(base.valueAvailable(storage, false)).isEqualTo(10L);
+            assertThat(storage.amount()).isEqualTo(10L);
+        }
+    }
+
+    private static void verifyReservationOnlyDeferred(int order, boolean sufficient) {
+        long initial = sufficient ? 14L : 12L;
+        LongValueStorage storage = storage(20L, 20L, initial);
+        MachineCapability capability = input(storage);
+        AtomicInteger planCalls = new AtomicInteger();
+        AtomicInteger reserveCalls = new AtomicInteger();
+        AtomicInteger materializeCalls = new AtomicInteger();
+        RequirementHandler<CompatibilityRequirement> handler = (requirement, candidates, context) -> {
+            planCalls.incrementAndGet();
+            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null,
+                    (parallelism, reservations) -> {
+                        materializeCalls.incrementAndGet();
+                        // Legal deferred contract: only the reservation callback records the resource budget.
+                        return new RequirementPlan.OperationPlan(List.of(capability.prepare(
+                                new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT,
+                                        parallelism, 6L, false))), null);
+                    }, (parallelism, reservations) -> {
+                        reserveCalls.incrementAndGet();
+                        return reservations.reserveValueTotal(storage, 6L, false) ? null
+                                : RequirementHandlerSupport.blocked(requirement, context,
+                                        BuiltinFailureReasons.MISSING_INPUT);
+                    });
+        };
+        RequirementType<CompatibilityRequirement> type = compatibilityType("fixed_reservation_only", handler);
+        try (var scope = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(type);
+            MachineRequirement compatibility = new CompatibilityRequirement(type);
+            MachineRequirement energy = new EnergyRequirement(6L);
+            List<MachineRequirement> requirements = switch (order) {
+                case 0 -> List.of(compatibility, compatibility);
+                case 1 -> List.of(compatibility, energy);
+                default -> List.of(energy, compatibility);
+            };
+            PlanningReservations base = new PlanningReservations();
+            assertThat(base.reserveValueTotal(storage, 2L, false)).isTrue();
+            PlanningContext context = new PlanningContext(1L, 0, false, base);
+            List<Integer> indices = List.of(3, 17);
+            var old = new RequirementPlanner().plan(requirements, List.of(capability), context, indices);
+            planCalls.set(0);
+            reserveCalls.set(0);
+            materializeCalls.set(0);
+            var fixed = new RequirementPlanner().planFixed(requirements, List.of(capability), context, indices);
+
+            assertThat(fixed.successful()).isEqualTo(old.successful()).isEqualTo(sufficient);
+            assertThat(planCalls).hasValue(order == 0 ? 2 : 1);
+            assertThat(reserveCalls).hasValue(order == 0 ? 2 : 1);
+            assertThat(materializeCalls).hasValue(sufficient ? (order == 0 ? 2 : 1) : 0);
+            assertThat(base.valueAvailable(storage, false)).isEqualTo(initial - 2L);
+            assertThat(storage.amount()).isEqualTo(initial);
+            if (!sufficient) {
+                assertThat(fixed.failureRequirementIndex()).isEqualTo(old.failureRequirementIndex()).isEqualTo(17);
+                assertThat(fixed.failure().reason()).isEqualTo(old.failure().reason());
+                return;
+            }
+            assertThat(fixed.plan().parallelism()).isEqualTo(old.plan().parallelism()).isEqualTo(1L);
+            try (Transaction transaction = Transaction.openRoot()) {
+                assertThat(fixed.plan().commit(transaction)).isTrue();
+                assertThat(storage.amount()).isEqualTo(initial - 12L);
+            }
+            assertThat(storage.amount()).isEqualTo(initial);
+            assertThat(old.plan().commit()).isTrue();
+            long oldBalance = storage.amount();
+            storage.setAmount(initial);
+            try (Transaction transaction = Transaction.openRoot()) {
+                assertThat(fixed.plan().commit(transaction)).isTrue();
+                transaction.commit();
+            }
+            assertThat(storage.amount()).isEqualTo(oldBalance).isEqualTo(initial - 12L);
+            assertThat(base.valueAvailable(storage, false)).isEqualTo(initial - 14L);
+        }
+    }
+
+    private static RequirementType<CompatibilityRequirement> compatibilityType(String path,
+            RequirementHandler<CompatibilityRequirement> handler) {
+        return new RequirementType<>() {
+            public Identifier id() { return Identifier.fromNamespaceAndPath("mmcr_test", path); }
+            public MapCodec<CompatibilityRequirement> codec() {
+                return MapCodec.unit(() -> new CompatibilityRequirement(this));
+            }
+            public RequirementHandler<CompatibilityRequirement> handler() { return handler; }
+        };
+    }
+
+    private record CompatibilityRequirement(RequirementType<CompatibilityRequirement> type)
+            implements MachineRequirement {
+        public RecipeModifier.IOType io() { return RecipeModifier.IOType.INPUT; }
+        public List<String> tags() { return List.of(); }
+    }
+
+    private static PlanningResult fixed(List<MachineRequirement> requirements, List<MachineCapability> capabilities,
+                                         long parallelism, List<Integer> indices, Map<Integer, OutputPolicy> policies) {
+        return new RequirementPlanner().planFixed(requirements, capabilities,
+                new PlanningContext(parallelism, 0, policies), indices);
+    }
+
+    private static LongValueStorage storage(long capacity, long limit, long amount) {
+        LongValueStorage storage = new LongValueStorage(capacity, limit, null);
+        storage.setAmount(amount);
+        return storage;
+    }
+
+    private static MachineCapability input(LongValueStorage storage) {
+        return new EnergyHatchCapability(storage, IOType.INPUT);
+    }
+
+    private static MachineCapability output(LongValueStorage storage) {
+        return new EnergyHatchCapability(storage, IOType.OUTPUT);
+    }
+
+    private record TaggedCapability(MachineCapability delegate, List<String> tags, int outputPriority)
+            implements MachineCapability {
+        public CapabilityType type() { return delegate.type(); }
+        public CapabilityDirections directions() { return delegate.directions(); }
+        public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) { return delegate.facet(type); }
+        public CapabilityView view() {
+            return new CapabilityView() {
+                public CapabilityType type() { return delegate.type(); }
+                public CapabilityDirections directions() { return delegate.directions(); }
+                public List<String> tags() { return tags; }
+            };
+        }
+    }
+
+    private static final class AdmissionCapability implements MachineCapability, EnergyOutputAdmissionFacet {
+        private final LongValueStorage destination;
+        private final MachineCapability delegate;
+        private int capacityCalls;
+        private int planCalls;
+        private int materialized;
+
+        private AdmissionCapability(long capacity) {
+            destination = storage(capacity, capacity, 0L);
+            delegate = output(destination);
+        }
+
+        public CapabilityType type() { return delegate.type(); }
+        public CapabilityDirections directions() { return delegate.directions(); }
+        public CapabilityView view() { return delegate.view(); }
+        public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
+            return type == EnergyOutputAdmissionFacet.class ? Optional.of(type.cast(this)) : Optional.empty();
+        }
+
+        public long outputCapacity(PlanningReservations reservations) {
+            capacityCalls++;
+            return reservations.valueAvailable(destination, true);
+        }
+
+        public OutputPlan planOutput(long amount, PlanningReservations reservations, boolean materialize) {
+            planCalls++;
+            if (!reservations.reserveValueTotal(destination, amount, true)) return new OutputPlan(0L, null);
+            if (materialize) materialized++;
+            return new OutputPlan(amount, materialize ? delegate.prepare(new CapabilityRequests.ValueRequest(
+                    type(), IOType.OUTPUT, 1L, amount, true)) : null);
+        }
+    }
+}

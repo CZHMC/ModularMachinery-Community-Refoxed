@@ -36,6 +36,9 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mekanism.api.AutomationType;
 import mekanism.api.MekanismAPI;
@@ -352,6 +355,48 @@ public class MekanismPortGameTest {
 
         helper.assertValueEqual(before, port.heatCapacitor().getHeat(),
                 "Reading the heat input port does not consume its stored heat");
+        helper.succeed();
+    }
+
+    public void preparedTemperatureRechecksLivePortAndRollsBackEnergy(GameTestHelper helper) {
+        BlockPos heatPos = new BlockPos(0, 1, 0);
+        BlockPos energyPos = new BlockPos(2, 1, 0);
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get().defaultBlockState());
+        var heat = helper.getBlockEntity(heatPos, HeatPortBlockEntity.class);
+        var energy = helper.getBlockEntity(energyPos, EnergyInputHatchBlockEntity.class);
+        double threshold = HeatAPI.getAmbientTemp(heat.getLevel(), heat.getBlockPos()) + 100D;
+        double capacity = heat.heatCapacitor().getHeatCapacity();
+        setHeat(heat, (threshold + 1D) * capacity);
+        energy.getEnergyStorage().setAmount(20L);
+        var capability = heat.capabilitySnapshot().capabilities().getFirst();
+        var facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+        var captured = facet.captureSnapshot();
+        var operation = facet.workerPlanner().plan(captured, new AsyncCapabilityRequest.Heat(
+                capability.type().id(), 1, threshold, true, 1)).orElseThrow();
+        setHeat(heat, (threshold - 1D) * capacity);
+        double cooled = heat.heatCapacitor().getHeat();
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertTrue(energy.getEnergyStorage().extract(7, transaction) == 7,
+                    "Actual energy hatch mutates before the prepared heat check");
+            var result = facet.commit(operation, transaction);
+            helper.assertFalse(result.success(), "Prepared temperature operation must recheck the cooled registered port");
+            helper.assertTrue(result.status() != null && result.status().reason().id().equals(
+                            MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT.id()),
+                    "Live temperature failure reports the registered Mekanism reason");
+        }
+        helper.assertTrue(energy.getEnergyStorage().amount() == 20 && heat.heatCapacitor().getHeat() == cooled,
+                "Failed live temperature check rolls back energy and never consumes heat");
+        setHeat(heat, (threshold + 1D) * capacity);
+        double reheated = heat.heatCapacitor().getHeat();
+        try (Transaction transaction = Transaction.openRoot()) {
+            energy.getEnergyStorage().extract(7, transaction);
+            helper.assertTrue(facet.commit(operation, transaction).success(),
+                    "Same prepared operation succeeds when the actual port reaches the threshold again");
+            transaction.commit();
+        }
+        helper.assertTrue(energy.getEnergyStorage().amount() == 13 && heat.heatCapacitor().getHeat() == reheated,
+                "Successful live check commits one energy payment without heat consumption");
         helper.succeed();
     }
 

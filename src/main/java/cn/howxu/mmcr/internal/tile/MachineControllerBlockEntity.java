@@ -52,6 +52,7 @@ import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSink;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
@@ -122,6 +123,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -265,6 +267,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private transient long cachedCouplerPositionsVersion = Long.MIN_VALUE;
     private transient Set<BlockPos> cachedCouplerWorldPositions = Set.of();
     private final Runnable upgradeBusChangeListener = this::onUpgradeBusContentsChanged;
+    private final Set<ServerPlayer> trackingObservers = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Map<ServerPlayer, AbstractContainerMenu> menuObservers = new IdentityHashMap<>();
+    private @Nullable MachineRecipe broadcastRecipe;
+    private @Nullable ExecutionStatus broadcastFailure;
+    private @Nullable ExecutionStatus broadcastFactoryFailure;
+    private boolean broadcastActive;
+    private boolean broadcastPaused;
+    private int broadcastFactoryActiveCount;
+    private int broadcastFactoryLaneCount;
+    private @Nullable ServerLevel tickingLevel;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -281,6 +293,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public ControllerRuntimeSnapshot currentRuntimeSnapshot() {
         ensureFactoryRuntimeLoaded();
         return runtime.currentSnapshot();
+    }
+
+    /** Internal execution bindings; does not project changing progress or port contents on a stable definition. */
+    public ControllerRuntimeSnapshot executionRuntimeSnapshot() {
+        ensureFactoryRuntimeLoaded();
+        return runtime.executionSnapshot();
     }
 
     public ComponentRuntime componentRuntime() {
@@ -304,7 +322,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 CraftingRuntime crafting = runtime.craftingRuntime();
                 CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, 1L, requestCapabilities);
                 if (prepared == null || !crafting.reservePatternStart()) continue;
-                return PatternStartReservation.reserved(recipe, "", crafting, prepared, crafting::releasePatternStart);
+                return PatternStartReservation.reserved(recipe, "", crafting, prepared,
+                        () -> crafting.releasePatternStart(prepared));
             }
             FactoryRecipeScheduler scheduler = factoryScheduler();
             scheduler.setThreadLimit(effectiveFactoryThreadLimit());
@@ -344,7 +363,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     return PatternStartBatchReservation.unavailable();
                 }
                 PatternStartReservation reservation = PatternStartReservation.reserved(recipe, "", crafting, prepared,
-                        crafting::releasePatternStart);
+                        () -> crafting.releasePatternStart(prepared));
                 return reservation.status() == PatternStartReservation.Status.RESERVED
                         ? PatternStartBatchReservation.reserved(List.of(reservation))
                         : PatternStartBatchReservation.unavailable();
@@ -537,7 +556,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public StructureSnapshot structureSnapshot() {
-        return runtimeSnapshot().structure();
+        return runtime.currentStructureSnapshot();
     }
 
     public StructureSnapshot currentStructureSnapshot() {
@@ -555,7 +574,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void tickStructure(ServerLevel level, BlockPos controllerPos) {
         validateRuntimeBoundary(level, controllerPos);
         if (level.isClientSide() || isRemoved()) return;
-        if (currentRuntimeSnapshot().structure().configuredMachine() == null) bindDefaultMachine();
+        if (runtime.currentStructureSnapshot().configuredMachine() == null) bindDefaultMachine();
         invalidateForControllerRotation();
         if (shouldCheckStructure()) checkStructure();
     }
@@ -569,7 +588,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level != null && level.isClientSide()) return;
         StructureSnapshot structure = runtime.currentStructureSnapshot();
         CraftingRuntime craftingRuntime = runtime.craftingRuntime();
-        var publishedCrafting = runtime.snapshot().crafting();
+        var publishedCrafting = runtime.craftingState();
         if (publishedCrafting.recipeId() != null || publishedCrafting.failure() != null
                 || craftingRuntime.active() || craftingRuntime.failure() != null) {
             ExecutionStatus runtimeFailure = craftingRuntime.failure();
@@ -592,6 +611,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 structure.configuredMachine(), structure.matchedStage(), recipeId, status,
                 craftingFailureStatus(), craftingRuntime.tickCount(),
                 craftingRuntime.totalTick(), craftingRuntime.parallelism(), craftingRuntime.maxParallelism());
+        rememberDiscreteRuntimeState();
         if (runtime.updateBatchActive()) {
             runtimeStateBroadcastPending = true;
             if (hasFactoryControllerCurrent()) factoryMenuSyncPending = true;
@@ -601,7 +621,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     void publishRuntimeStateAfterSnapshotBatch() {
-        if (runtimeStateBroadcastPending || level instanceof ServerLevel) {
+        if (runtimeStateBroadcastPending) {
             runtimeStateBroadcastPending = false;
             broadcastStateIfChanged();
         }
@@ -627,9 +647,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void syncRecipeRuntimeFailure(CraftingRuntime recipeRuntime) {
         if (recipeRuntime == runtime.craftingRuntime()) {
             syncCraftingFailure();
-            syncRuntimeStateIfChanged();
-            markRuntimePersistenceChanged();
-            return;
+            if (!runtime.factoryRuntime().contains(recipeRuntime)) {
+                syncRuntimeStateIfChanged();
+                markRuntimePersistenceChanged();
+                return;
+            }
         }
         if (!runtime.factoryRuntime().contains(recipeRuntime)) return;
         runtime.factoryRuntime().markLaneRuntimeChanged(recipeRuntime);
@@ -755,7 +777,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void setMachine(Machine m) {
-        StructureSnapshot current = runtimeSnapshot().structure();
+        if (level instanceof ServerLevel serverLevel && runtime.currentStructureSnapshot().configuredMachine() != m) {
+            invalidateAsyncLifecycle(serverLevel);
+        }
+        StructureSnapshot current = currentStructureSnapshot();
         boolean bindingRestoredMachine = (restoringFactoryRuntime || pendingFactoryRuntimeInput != null)
                 && current.configuredMachine() == null
                 && m != null;
@@ -764,11 +789,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         invalidateStructureScan(StructureMatcher.InvalidationReason.PATTERN);
         clearFoundModifiers();
         runtime.setModifiersAllowed(allowsModifiers(m));
-        ControllerRuntimeSnapshot currentState = runtimeSnapshot();
-        runtime.publishStructureState(isStructureAreaLoaded(currentState.structure()), currentState.structure().formed(), m,
-                currentState.structure().matchedStage());
-        runtime.publishComponentState(runtime.components(), currentState.foundModifiers(), Map.of(),
-                currentState.linkedPortPositions());
+        current = currentStructureSnapshot();
+        runtime.publishStructureState(isStructureAreaLoaded(current), current.formed(), m, current.matchedStage());
+        runtime.publishComponentState(runtime.components(), runtime.componentRuntime().foundModifiers(), Map.of(),
+                runtime.componentRuntime().linkedPortPositions());
         refreshModuleConnectionState();
         setChanged();
         // Resolve pool changes before publishing, independently of network recipients.
@@ -873,7 +897,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void setFormed(boolean f) {
         boolean before = physicalFormed();
-        StructureSnapshot current = runtimeSnapshot().structure();
+        StructureSnapshot current = currentStructureSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(current), f, current.configuredMachine(), current.matchedStage());
         if (f) registerFormedController();
         else {
@@ -1311,7 +1335,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public long getMaxParallelism() {
-        return currentRuntimeSnapshot().maxParallelism();
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
+        return runtime.maxParallelism(structure.machine() == null ? structure.configuredMachine() : structure.machine());
     }
 
     public int parallelControllerCount() {
@@ -1323,14 +1348,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public @Nullable FactorySchedulerBlockEntity getFactoryController() {
-        Machine configuredMachine = currentRuntimeSnapshot().structure().configuredMachine();
+        Machine configuredMachine = runtime.currentStructureSnapshot().configuredMachine();
         if (configuredMachine == null || !configuredMachine.hasFactory()
                 || configuredMachine.behavior() instanceof TickBehavior) return null;
         return factoryComponents().stream().findFirst().orElse(null);
     }
 
     public boolean hasFactoryController() {
-        return isFactoryController(currentRuntimeSnapshot());
+        return level != null && level.isClientSide() ? isFactoryController(currentRuntimeSnapshot())
+                : hasFactoryControllerCurrent();
     }
 
     private static boolean isFactoryController(ControllerRuntimeSnapshot state) {
@@ -1386,8 +1412,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void sendMachineControllerState(@Nullable ServerPlayer player) {
         if (player == null) return;
         runtime.publishSnapshot();
-        player.connection.send(new ClientboundCustomPayloadPacket(PktMachineStatePayload.from(getBlockPos(),
-                runtimeSnapshot(), currentRecipePoolId())));
+        player.connection.send(new ClientboundCustomPayloadPacket(machineStatePacket()));
         sendControllerScreenTextOnMenuOpen(player);
     }
 
@@ -1492,10 +1517,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void serverTick() {
-        if (level == null || level.isClientSide() || isRemoved()) {
+        if (level == null || level.isClientSide() || isRemoved() || chunkUnloaded) {
             return;
         }
-        if (level instanceof ServerLevel serverLevel) runtime.serverTick(serverLevel, getBlockPos());
+        if (level instanceof ServerLevel serverLevel) {
+            SharedIoCoordinator sharedIo = SharedIoCoordinator.get(serverLevel);
+            sharedIo.markControllerEligible(this, serverLevel.getGameTime());
+            ServerLevel previousTickingLevel = tickingLevel;
+            tickingLevel = serverLevel;
+            try {
+                runtime.serverTick(serverLevel, getBlockPos());
+                // A work-mode transition may cancel the old permit during this real ticker call.
+                if (!isRemoved() && !chunkUnloaded && level == serverLevel) {
+                    sharedIo.markControllerEligible(this, serverLevel.getGameTime());
+                }
+            } finally {
+                tickingLevel = previousTickingLevel;
+            }
+        }
     }
 
     public void tickRuntimeWork(ServerLevel runtimeLevel, BlockPos controllerPos) {
@@ -1503,7 +1542,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide() || isRemoved()) {
             return;
         }
-        ControllerRuntimeSnapshot tickState = currentRuntimeSnapshot();
+        ControllerRuntimeSnapshot tickState = runtime.executionSnapshot();
         boolean structureStateChanged = runtime.structureStateChangedSincePublication();
         boolean tickMachine = hasTickBehavior(tickState.structure());
         boolean factoryController = !tickMachine && isFactoryController(tickState);
@@ -1581,17 +1620,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
             int finalFactoryActiveLaneCount = factoryTickResult == null
                     ? initialFactoryActiveLaneCount : factoryTickResult.activeLaneCount();
             boolean publish = structureStateChanged
-                    || hadActiveWork || hasActiveRuntimeWork(factoryTickResult, finalFactoryActiveLaneCount)
+                    || hadActiveWork != hasActiveRuntimeWork(factoryTickResult, finalFactoryActiveLaneCount)
+                    || hadActiveOperation != hasActiveOperation()
                     || wasRedstonePaused != redstonePaused
                     || !Objects.equals(previousFailure, lastFailure)
                     || !Objects.equals(previousCraftingFailure, runtime.craftingRuntime().failure())
-                    || factoryTickResult != null
-                    && (factoryTickResult.snapshotChanged() || factoryTickResult.laneStateChanged());
+                    || discreteRuntimeStateChanged();
             if (publish) {
                 publishRuntimeState(factoryTickResult, finalFactoryActiveLaneCount);
                 if (factoryController && !runtime.updateBatchActive()) syncOpenFactoryControllerMenus();
             }
             syncOpenControllerScreenText();
+            runtime.acknowledgeTickStructureState();
         }
     }
 
@@ -1612,10 +1652,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
                                                                     ControllerRuntimeSnapshot tickState,
                                                                     boolean factoryController) {
         MachineWorkMode mode = configuredWorkMode();
-        if (activeWorkMode != null && activeWorkMode != mode) {
+        boolean modeChanged = activeWorkMode != null && activeWorkMode != mode;
+        if (modeChanged) {
             invalidateAsyncLifecycle(runtimeLevel);
         }
         activeWorkMode = mode;
+        // The new mode may consume inside dispatch, before the wrapper's final qualification.
+        // Debug/runtime-only ticks must never replace the cancelled permit with synthetic eligibility.
+        if (modeChanged && tickingLevel == runtimeLevel && level == runtimeLevel && !isRemoved() && !chunkUnloaded) {
+            SharedIoCoordinator.get(runtimeLevel).markControllerEligible(this, runtimeLevel.getGameTime());
+        }
         return switch (mode) {
             case SYNC -> tickSynchronously(tickState, factoryController);
             case SEMI_SYNC -> submitSemiSyncWork(tickState, factoryController);
@@ -1675,7 +1721,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void applyControllerScreenText() {
-        if (currentRuntimeSnapshot().structure().formed()) {
+        if (runtime.currentStructureSnapshot().formed()) {
             ControllerScreenTextRegistry.apply(runtime.runtimeContext());
             runtime.screenText().flushReplacements();
         }
@@ -1815,7 +1861,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private FactoryTickResult tickFactoryRecipes() {
-        ControllerRuntimeSnapshot current = currentRuntimeSnapshot();
+        ControllerRuntimeSnapshot current = runtime.executionSnapshot();
         StructureSnapshot structure = current.structure();
         long maxParallelism = runtime.maxParallelism(structure.machine());
         List<MachineRecipe> candidates = recipesForMachine();
@@ -1962,7 +2008,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void invalidateForControllerRotation() {
-        StructureSnapshot structure = currentRuntimeSnapshot().structure();
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
         if (structure.facing() == null || level == null) return;
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         Direction rollFacing = getBlockState().getValue(MachineControllerBlock.ROLL_FACING);
@@ -2049,8 +2095,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public Optional<Machine> boundMachine() {
-        if (runtimeSnapshot().structure().configuredMachine() == null) bindDefaultMachine();
-        return Optional.ofNullable(runtimeSnapshot().structure().configuredMachine());
+        if (runtime.currentStructureSnapshot().configuredMachine() == null) bindDefaultMachine();
+        return Optional.ofNullable(runtime.currentStructureSnapshot().configuredMachine());
     }
 
     public BlockArray assemblyPattern(Machine candidate) {
@@ -2184,6 +2230,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     @Override
     public void preRemoveSideEffects(BlockPos pos, BlockState state) {
         super.preRemoveSideEffects(pos, state);
+        if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
         invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
         if (level != null && !level.isClientSide()) notifyPreviewReceiversCleared();
     }
@@ -3009,10 +3056,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void clearFoundModifiers() {
-        ControllerRuntimeSnapshot current = runtimeSnapshot();
-        if (current.foundModifiers().isEmpty()) return;
-        runtime.publishComponentState(runtime.components(), Map.of(), current.foundLevels(),
-                current.linkedPortPositions());
+        if (runtime.componentRuntime().foundModifiers().isEmpty()) return;
+        runtime.publishComponentState(runtime.components(), Map.of(), runtime.componentRuntime().foundLevels(),
+                runtime.componentRuntime().linkedPortPositions());
     }
 
     private void updateComponents(StructureSnapshot previousStructure, Machine matchedMachine,
@@ -3292,7 +3338,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private List<BlockPos> componentPositions() {
-        StructureSnapshot structure = runtimeSnapshot().structure();
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
         if (hasCompiledFacing(structure.compiledPattern(), structure.facing())) {
             return structure.compiledPattern().componentPositions(structure.facing());
         }
@@ -3456,12 +3502,34 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!hasActiveOperation()) runtime.clearOperationText();
         runtime.publishSnapshot();
         boolean next = isRuntimeActive();
-        if (next == syncedRuntimeActive) return;
-        syncedRuntimeActive = next;
-        setChanged();
-        if (level != null && !level.isClientSide()) {
-            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        if (next != syncedRuntimeActive) {
+            syncedRuntimeActive = next;
+            setChanged();
+            if (level != null && !level.isClientSide()) {
+                level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+            }
         }
+        if (discreteRuntimeStateChanged()) publishRuntimeState();
+    }
+
+    private boolean discreteRuntimeStateChanged() {
+        return broadcastRecipe != runtime.craftingRuntime().recipe()
+                || !Objects.equals(broadcastFailure, lastFailure)
+                || !Objects.equals(broadcastFactoryFailure, runtime.factoryRuntime().failure())
+                || broadcastActive != isRuntimeActive()
+                || broadcastPaused != redstonePaused
+                || broadcastFactoryActiveCount != runtime.factoryRuntime().activeLaneCount()
+                || broadcastFactoryLaneCount != runtime.factoryRuntime().laneCount();
+    }
+
+    private void rememberDiscreteRuntimeState() {
+        broadcastRecipe = runtime.craftingRuntime().recipe();
+        broadcastFailure = lastFailure;
+        broadcastFactoryFailure = runtime.factoryRuntime().failure();
+        broadcastActive = isRuntimeActive();
+        broadcastPaused = redstonePaused;
+        broadcastFactoryActiveCount = runtime.factoryRuntime().activeLaneCount();
+        broadcastFactoryLaneCount = runtime.factoryRuntime().laneCount();
     }
 
     void onDataStorageChanged(DataStorage storage) {
@@ -3529,6 +3597,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void pauseActiveForUnloadedStructure() {
+        if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
         stopFactoryController();
         if (!runtime.craftingRuntime().active()) {
             syncRuntimeStateIfChanged();
@@ -3590,7 +3659,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level instanceof ServerLevel serverLevel) {
             invalidateAsyncLifecycle(serverLevel);
         }
-        StructureSnapshot structure = runtimeSnapshot().structure();
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
         StructureWorkSnapshot work = structureWorkSnapshot();
         invalidateStructureScan(StructureMatcher.InvalidationReason.VERSION);
         ACTIVE_STRUCTURE_SCANS.remove(this);
@@ -3609,7 +3678,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         releaseStructureClaims();
         unbindSmartInterfaces();
         unbindDataStorages();
-        unlinkLinkedPorts();
+        unlinkLinkedPorts(structure, runtime.componentRuntime().linkedPortPositions());
         stopFactoryController();
         for (FactorySchedulerBlockEntity factory : factoryComponents()) factory.bindOwner(null);
         runtime.clearAllText();
@@ -3643,7 +3712,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void unbindSmartInterfaces() {
-        if (level == null || runtimeSnapshot().structure().pattern() == null) return;
+        if (level == null || runtime.currentStructureSnapshot().pattern() == null) return;
         List<SmartInterfaceBlockEntity> smartInterfaces = new ArrayList<>();
         for (BlockPos relativePos : componentPositions()) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof SmartInterfaceBlockEntity smartInterface) {
@@ -3665,7 +3734,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void unbindDataStorages() {
         DataStorageBindingCoordinator coordinator = new DataStorageBindingCoordinator();
-        coordinator.unbind(this, dataStorageComponents(runtimeSnapshot().structure()));
+        coordinator.unbind(this, dataStorageComponents(runtime.currentStructureSnapshot()));
         runtime.publishDataStorages(Map.of());
     }
 
@@ -3681,6 +3750,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void syncOpenFactoryControllerMenus() {
         if (!(level instanceof ServerLevel serverLevel)) return;
+        pruneMenuObservers();
+        if (menuObservers.values().stream().noneMatch(menu -> menu instanceof FactoryControllerMenu factory
+                && factory.uiServerSession() == null)) return;
         if (runtime.updateBatchActive()) {
             factoryMenuSyncPending = true;
             return;
@@ -3689,7 +3761,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot runtimeState = runtimeSnapshot();
         if (!SYNC_RUNTIME.factoryControllerPresent(runtimeState)) return;
         FactorySnapshot next = SYNC_RUNTIME.factoryState(runtimeState, currentRecipePoolId());
-        for (ServerPlayer player : serverLevel.players()) {
+        for (ServerPlayer player : menuObservers.keySet()) {
             if (hasActiveUiMenu(player)) continue;
             if (player.containerMenu instanceof FactoryControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos())) {
@@ -3703,8 +3775,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void syncOpenControllerScreenText() {
         if (!(level instanceof ServerLevel serverLevel)) return;
+        pruneMenuObservers();
+        if (menuObservers.isEmpty()) return;
         List<ServerPlayer> viewers = new ArrayList<>();
-        for (ServerPlayer player : serverLevel.players()) {
+        for (ServerPlayer player : menuObservers.keySet()) {
             if (hasActiveUiMenu(player)) continue;
             boolean ordinaryMenu = player.containerMenu instanceof MachineControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos());
@@ -3770,19 +3844,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void broadcastStateIfChanged() {
         if (!(level instanceof ServerLevel sl) || isRemoved()) return;
-        PktMachineStatePayload packet = machineStatePacket();
-        BlockPos pos = getBlockPos();
+        if (trackingObservers.isEmpty()) return;
         stateRecipients.clear();
-        List<ServerPlayer> players = sl.players();
-        for (int index = 0; index < players.size(); index++) {
-            ServerPlayer player = players.get(index);
-            if (sl.getChunkSource().chunkMap.isChunkTracked(player, pos.getX() >> 4, pos.getZ() >> 4)
-                    && (player.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D) < 64 * 64
-                    || (player.containerMenu instanceof MachineControllerMenu menu && menu.controllerPos().equals(pos)))) {
-                stateRecipients.add(player);
-            }
+        for (ServerPlayer player : trackingObservers) {
+            if (player.level() == sl) stateRecipients.add(player);
         }
-        broadcastState(stateRecipients, packet);
+        if (!stateRecipients.isEmpty()) broadcastState(stateRecipients, machineStatePacket());
         stateRecipients.clear();
     }
 
@@ -3822,13 +3889,33 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void sendClientStateBaseline(ServerPlayer player) {
         if (!(level instanceof ServerLevel) || isRemoved()) return;
+        trackingObservers.add(player);
+        ControllerSyncEvents.observeTracking(player, this);
         PktMachineStatePayload packet = machineStatePacket();
         player.connection.send(new ClientboundCustomPayloadPacket(packet));
         stateReceivers.put(player, packet);
     }
 
     public void forgetClientStateBaseline(ServerPlayer player) {
+        trackingObservers.remove(player);
+        ControllerSyncEvents.forgetTracking(player, this);
         stateReceivers.remove(player);
+    }
+
+    public void observeMenu(ServerPlayer player, AbstractContainerMenu menu) {
+        if (isRemoved() || player.level() != level || player.containerMenu != menu) return;
+        menuObservers.put(player, menu);
+    }
+
+    public void forgetMenu(ServerPlayer player, AbstractContainerMenu menu) {
+        menuObservers.remove(player, menu);
+    }
+
+    private void pruneMenuObservers() {
+        menuObservers.entrySet().removeIf(entry -> entry.getKey().level() != level
+                || entry.getKey().containerMenu != entry.getValue()
+                || entry.getValue() instanceof ControllerUiMenu menu && menu.uiServerSession() != null
+                && !menu.uiServerSession().active());
     }
 
     private boolean tryStartNewRecipe() {
@@ -3967,7 +4054,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void tickActiveRecipe() {
         if (!runtime.craftingRuntime().active()) return;
-        if (usesSharedIoCoordinator()) {
+        // A real SYNC round installs/consumes through the same RecipeThread BE boundary as unshared lanes.
+        // Keep an outstanding compatibility request as the sole owner until its Post completion.
+        if (usesSharedIoCoordinator() && (sharedTickPending || activeWorkMode() != MachineWorkMode.SYNC
+                || !(level instanceof ServerLevel serverLevel)
+                || SharedIoCoordinator.get(serverLevel).executionRoundId() == 0L)) {
             tickSharedRecipe();
             return;
         }
@@ -4302,11 +4393,30 @@ public class MachineControllerBlockEntity extends BlockEntity {
     @Override
     public void onLoad() {
         super.onLoad();
+        chunkUnloaded = false;
+        ControllerSyncEvents.onControllerLoaded(this);
         if (level != null && level.isClientSide()) clientLoadedListener.accept(this);
     }
 
     @Override
+    public void setLevel(Level level) {
+        if (this.level != null && this.level != level) {
+            if (this.level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
+            ControllerSyncEvents.forgetController(this);
+            trackingObservers.clear();
+            menuObservers.clear();
+            stateReceivers.clear();
+            clientStateBaseline = false;
+        }
+        super.setLevel(level);
+    }
+
+    @Override
     public void setRemoved() {
+        if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
+        ControllerSyncEvents.forgetController(this);
+        trackingObservers.clear();
+        menuObservers.clear();
         stateReceivers.clear();
         clientStateBaseline = false;
         invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
@@ -4323,6 +4433,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void onChunkUnloaded() {
+        if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
+        ControllerSyncEvents.forgetController(this);
+        trackingObservers.clear();
+        menuObservers.clear();
         stateReceivers.clear();
         clientStateBaseline = false;
         if (level != null && level.isClientSide()) clientRemovedListener.accept(this);
@@ -4351,7 +4465,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public List<MachineRecipe> recipesForMachine() {
-        StructureSnapshot structure = currentRuntimeSnapshot().structure();
+        StructureSnapshot structure = runtime.currentStructureSnapshot();
         Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         Identifier machineId = machine == null ? null : machine.registryName();
         Identifier recipePoolId = currentRecipePoolId();

@@ -28,6 +28,10 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * Server-authoritative resource snapshot for an open extended or combined port menu.
@@ -39,6 +43,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
     public static final int MAX_ENTRIES = 1024;
     public static final int MAX_TOTAL_PAYLOAD_BYTES = 1_048_576;
     private static final int MAX_KIND_LENGTH = 256;
+    private static final Map<IOPortBlockEntity, Set<ServerPlayer>> VIEWERS = new WeakHashMap<>();
 
     public static final Type<PktPortStorageSyncPayload> TYPE = new Type<>(MMCR.id("port_storage_sync"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PktPortStorageSyncPayload> STREAM_CODEC =
@@ -91,6 +96,10 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
 
     public static void sendTo(ServerPlayer player, IOPortBlockEntity port) {
         if (player == null || port == null) return;
+        // The existing menu-open baseline is also the observer registration boundary.
+        if (ownsMenu(player, port)) {
+            VIEWERS.computeIfAbsent(port, ignored -> Collections.newSetFromMap(new WeakHashMap<>())).add(player);
+        }
         PacketDistributor.sendToPlayer(player, from(port));
     }
 
@@ -100,12 +109,15 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
 
     public static void sendToViewers(IOPortBlockEntity port) {
         if (port == null || port.getLevel() == null || port.getLevel().isClientSide()) return;
-        List<ServerPlayer> viewers = port.getLevel().players().stream()
-                .filter(ServerPlayer.class::isInstance)
-                .map(ServerPlayer.class::cast)
-                .filter(player -> ownsMenu(player, port))
-                .toList();
-        if (viewers.isEmpty()) return;
+        Set<ServerPlayer> registered = VIEWERS.get(port);
+        if (registered == null) return;
+        registered.removeIf(player -> player.hasDisconnected() || player.level() != port.getLevel()
+                || !ownsMenu(player, port));
+        if (registered.isEmpty()) {
+            VIEWERS.remove(port);
+            return;
+        }
+        List<ServerPlayer> viewers = List.copyOf(registered);
         PktPortStorageSyncPayload payload = from(port);
         viewers.forEach(player -> PacketDistributor.sendToPlayer(player, payload));
     }

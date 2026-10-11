@@ -53,10 +53,22 @@ public final class GameTestRegistry {
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {
+        register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
+        register(event, "running_mixed_input_rollback", 20, RunningRecipeGameTest::mixedInputCommitRollsBackAfterEnergyChanges);
+        register(event, "running_retained_input_removed", 20, RunningRecipeGameTest::removedRetainedInputStopsContinuousPayment);
+        register(event, "running_final_paid_output_reload", 20, RunningRecipeGameTest::finalPaidTickSurvivesBlockedOutputReload);
+        register(event, "running_resource_paid_save_reentrance", 20, RunningRecipeGameTest::resourcePaidSaveReentranceRestoresPausedLedger);
+        register(event, "appflux_prefetch_port_nbt_restore", 20,
+                helper -> new AppliedFluxInterfaceGameTest().prefetchReservationRestoresWithActualPortNbt(helper));
+        register(event, "running_same_time_qualification", 20, RunningRecipeGameTest::sameGameTimeRoundsRequireFreshBlockEntityEligibility);
+        register(event, "controller_ui_committed_progress_baseline", 20, ControllerUiGameTest::reopenedSessionUsesCommittedProgressAndJadeRequest);
+        register(event, "mekanism_prepared_temperature_live_check", 20,
+                helper -> new MekanismPortGameTest().preparedTemperatureRechecksLivePortAndRollsBackEnergy(helper));
         register(event, "patchouli_guide_acquisition", 20,
                 PatchouliGuideGameTest::acquisitionMatchesOptionalInstallation);
         register(event, "controller_ui_menu_lifecycle", 20,
                 helper -> new ControllerUiGameTest().openMetadataAndLifecycle(helper));
+        register(event, "controller_ui_terminal_menu_lifecycle", 20, ControllerUiGameTest::terminalMenuLifecycle);
         register(event, "controller_ui_request_storage", 100, ControllerUiGameTest::requestStorage);
         register(event, "controller_ui_reopen_stale_request", 100, ControllerUiGameTest::reopenStaleRequest);
         register(event, "controller_ui_lane_removed", 100, ControllerUiGameTest::laneRemoved);
@@ -138,6 +150,8 @@ public final class GameTestRegistry {
                 helper -> new CombinedPortGameTest().combinedPortSupportsFluidContainerInteraction(helper));
         register(event, "extended_combined_long_transfer", 100,
                 helper -> new ExtendedPortGameTest().extendedCombinedPortTransfersBeyondIntegerRange(helper));
+        register(event, "port_storage_shared_viewer_baseline", 20,
+                PortStorageSyncGameTest::openingRegistersFreshBaselineAndViewersShareFinalPayload);
         register(event, "item_port_removal_drops_contents", 100,
                 helper -> new ExtendedPortGameTest().itemPortsDropStoredItemsWhenRemoved(helper));
         register(event, "large_item_port_bounded_drops", 100,
@@ -269,6 +283,7 @@ public final class GameTestRegistry {
         register(event, "mekanism_formed_port_reflects_texture_change", 100,
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
         if (ModList.get().isLoaded("ae2")) {
+            register(event, "ae2_pattern_atomic_admission", 20, RunningRecipeGameTest::patternAdmissionRollsBackRequestAndOrdinaryInput);
             register(event, "ae2_menu_host_routes", 40,
                     helper -> new InterfaceMenuGameTest().ae2HostsOpenAndReturnOwnTypes(helper));
             register(event, "ae2_menu_mirror_sync", 40,

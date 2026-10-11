@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -34,6 +35,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -55,15 +57,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Collections;
+import java.util.Set;
+import java.util.WeakHashMap;
 import org.jetbrains.annotations.Nullable;
 
 public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity implements MachineComponentTile, CapabilityHost {
     private static final String AUTO_IO_CAPABILITIES_KEY = "auto_io_capabilities";
+    private static final Map<ServerLevel, Set<IOPortBlockEntity>> DIRTY_PORTS = new WeakHashMap<>();
     private final Map<CapabilityType, AutoIOConfig> autoIOConfigs = new LinkedHashMap<>();
     private boolean autoIOCacheDirty = true;
     private boolean loadingAdditional;
     private final Map<CapabilityType, AutoIOState> autoIOStates = new LinkedHashMap<>();
     private final Map<AvailabilityKey, AvailabilityState> availabilityStates = new LinkedHashMap<>();
+    private long storageRevision;
+    private boolean storageChangesPending;
+    private boolean flushingStorageChanges;
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -108,16 +117,75 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     protected final void notifyStorageChanged() {
         if (loadingAdditional) return;
         setChanged();
-        sendStorageSnapshot();
-        notifyAvailabilityChanges();
+        storageRevision++;
+        storageChangesPending = true;
+        enqueueStorageChanges();
         for (BlockPos controllerPos : linkedControllerPositions()) {
             if (level != null && level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
-                controller.notifyCapabilityPresentationChanged(getBlockPos());
+                controller.componentRuntime().markCapabilitySourceChanged(getBlockPos());
+            }
+        }
+    }
+
+    /** Committed content revision; independent of structural capability/recipe versions. */
+    public long storageRevision() {
+        return storageRevision;
+    }
+
+    private void enqueueStorageChanges() {
+        if (level instanceof ServerLevel serverLevel && !isRemoved()) {
+            DIRTY_PORTS.computeIfAbsent(serverLevel,
+                    ignored -> Collections.newSetFromMap(new WeakHashMap<>())).add(this);
+        }
+    }
+
+    /** Flushes only ports changed in this level; callbacks may enqueue work for the next flush. */
+    public static void flushStorageChanges(ServerLevel level) {
+        Set<IOPortBlockEntity> dirty = DIRTY_PORTS.remove(level);
+        if (dirty == null) return;
+        for (IOPortBlockEntity port : new ArrayList<>(dirty)) {
+            if (port.level != level || port.isRemoved() || level.getBlockEntity(port.getBlockPos()) != port) continue;
+            try {
+                port.flushStorageChanges();
+            } catch (RuntimeException exception) {
+                MMCR.LOG.error("Failed to flush port storage at {}", port.getBlockPos(), exception);
+            }
+        }
+    }
+
+    /** Publishes the final committed contents once, retaining reentrant changes for a later flush. */
+    public void flushStorageChanges() {
+        if (!storageChangesPending || flushingStorageChanges || isRemoved()) return;
+        storageChangesPending = false;
+        flushingStorageChanges = true;
+        long revision = storageRevision;
+        boolean completed = false;
+        try {
+            RuntimeException failure = null;
+            try {
+                notifyAvailabilityChanges();
+            } catch (RuntimeException exception) {
+                failure = exception;
+            }
+            try {
+                sendStorageSnapshot();
+            } catch (RuntimeException exception) {
+                failure = collectStorageChangeFailure(failure, exception);
+            }
+            if (failure != null) throw failure;
+            completed = true;
+        } finally {
+            flushingStorageChanges = false;
+            if (!completed || storageRevision != revision) {
+                storageChangesPending = true;
+                enqueueStorageChanges();
             }
         }
     }
 
     private void notifyAvailabilityChanges() {
+        RuntimeException failure = null;
+        Map<AvailabilityKey, AvailabilityState> nextStates = new LinkedHashMap<>();
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             LongValueStorage valueStorage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             ResourceStorage<?> resourceStorage = CapabilityFactories.resourceStorage(capability);
@@ -141,8 +209,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     }
                 }
             }
-            AvailabilityState previous = availabilityStates.put(new AvailabilityKey(capability.type(), capability.directions()),
-                    new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots)));
+            AvailabilityKey key = new AvailabilityKey(capability.type(), capability.directions());
+            AvailabilityState previous = nextStates.get(key);
+            if (previous == null) previous = availabilityStates.get(key);
+            nextStates.put(key, new AvailabilityState(amount, List.copyOf(resources), List.copyOf(slots)));
             long previousAmount = previous == null ? 0L : previous.amount();
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
             boolean resourceChanged = previous != null && !resources.equals(previousResources);
@@ -150,11 +220,11 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 ResourceAvailabilityNotifier.Reason reason = valueStorage != null
                                 ? ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE
                                 : ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE;
-                for (Object available : resources) notifyControllers(reason, available);
+                for (Object available : resources) failure = notifyControllers(reason, available, failure);
             } else if (resourceChanged && capability.directions().supports(IOType.INPUT)) {
                 for (Object available : resources) {
                     if (!previousResources.contains(available)) {
-                        notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, available);
+                        failure = notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, available, failure);
                     }
                 }
             }
@@ -169,21 +239,36 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     boolean amountReleased = currentSlot.amount() < previousSlot.amount();
                     boolean resourceReleased = !Objects.equals(previousSlot.resource(), currentSlot.resource());
                     if ((amountReleased || resourceReleased) && notified.add(previousSlot.resource())) {
-                        notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY,
-                                previousSlot.resource());
+                        failure = notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY,
+                                previousSlot.resource(), failure);
                     }
                 }
             }
         }
+        // Keep the old batch baseline on failure so every undelivered availability fact can be retried.
+        if (failure != null) throw failure;
+        availabilityStates.putAll(nextStates);
     }
 
-    private void notifyControllers(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
-        if (level == null || level.isClientSide()) return;
+    private @Nullable RuntimeException notifyControllers(ResourceAvailabilityNotifier.Reason reason,
+                                                         @Nullable Object resource, @Nullable RuntimeException failure) {
+        if (level == null || level.isClientSide()) return failure;
         for (BlockPos controllerPos : linkedControllerPositions()) {
             if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
-                controller.notifyResourceAvailability(reason, resource, getBlockPos());
+                try {
+                    controller.notifyResourceAvailability(reason, resource, getBlockPos());
+                } catch (RuntimeException exception) {
+                    failure = collectStorageChangeFailure(failure, exception);
+                }
             }
         }
+        return failure;
+    }
+
+    private static RuntimeException collectStorageChangeFailure(@Nullable RuntimeException failure, RuntimeException exception) {
+        if (failure == null) return exception;
+        if (failure != exception) failure.addSuppressed(exception);
+        return failure;
     }
 
     private record AvailabilityState(long amount, List<Object> resources, List<SlotAvailability> slots) { }
@@ -202,9 +287,11 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     protected void notifyControllerOfInputChange() {
-        if (loadingAdditional || ioType() != IOType.INPUT || level == null || level.isClientSide() || linkedControllerPos() == null) return;
-        if (level.getBlockEntity(linkedControllerPos()) instanceof MachineControllerBlockEntity controller) {
-            controller.onRecipeInputsChanged(getBlockPos());
+        if (loadingAdditional || ioType() != IOType.INPUT || level == null || level.isClientSide()) return;
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+                controller.onRecipeInputsChanged(getBlockPos());
+            }
         }
     }
 

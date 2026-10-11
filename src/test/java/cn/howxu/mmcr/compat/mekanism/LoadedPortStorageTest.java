@@ -35,6 +35,8 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Verifies loaded Mekanism port storage restrictions and defaults.
@@ -61,6 +63,31 @@ class LoadedPortStorageTest {
         IChemicalTank tank = LoadedPortStorage.normalChemicalTank(64_000L, listener());
 
         assertThat(insert(tank, chemical("oxygen", false), 1_000)).isEqualTo(1_000);
+    }
+
+    @Test
+    void native_chemical_insertion_waits_for_the_callers_root_commit() {
+        AtomicInteger changes = new AtomicInteger();
+        IChemicalTank tank = LoadedPortStorage.normalChemicalTank(64_000L, changes::incrementAndGet);
+        ChemicalResource resource = chemical("transactional_oxygen", false);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            try (Transaction nested = Transaction.open(transaction)) {
+                assertThat(tank.insert(resource, 1_000, nested, AutomationType.INTERNAL)).isEqualTo(1_000);
+                nested.commit();
+            }
+            assertThat(tank.amountAsLong()).isEqualTo(1_000L);
+            assertThat(changes).hasValue(0);
+        }
+        assertThat(tank.amountAsLong()).isZero();
+        assertThat(changes).hasValue(0);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(tank.insert(resource, 1_000, transaction, AutomationType.INTERNAL)).isEqualTo(1_000);
+            transaction.commit();
+        }
+        assertThat(tank.amountAsLong()).isEqualTo(1_000L);
+        assertThat(changes).hasValue(1);
     }
 
     @Test

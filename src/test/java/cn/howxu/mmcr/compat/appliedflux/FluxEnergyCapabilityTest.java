@@ -17,6 +17,11 @@ import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyOutputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
@@ -32,6 +37,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
@@ -119,9 +125,14 @@ class FluxEnergyCapabilityTest {
 
     @Test
     void injectedPrefetchMarksLocalEnergyReservedOnlyAfterTransactionCommit() {
+        LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        network.setAmount(100L);
         FluxEnergyBuffer buffer = new FluxEnergyBuffer();
         FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
-                requested -> Optional.of(transaction -> CapabilityResult.successful()));
+                requested -> Optional.of(transaction -> {
+                    assertThat(network.extract(requested, transaction)).isEqualTo(requested);
+                    return CapabilityResult.successful();
+                }));
         var plan = capability.planPrefetch(25L).orElseThrow();
 
         try (Transaction transaction = Transaction.openRoot()) {
@@ -129,6 +140,7 @@ class FluxEnergyCapabilityTest {
         }
         assertThat(buffer.amount()).isZero();
         assertThat(buffer.reserved()).isZero();
+        assertThat(network.amount()).isEqualTo(100L);
 
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(plan.operation().commit(transaction).success()).isTrue();
@@ -136,6 +148,116 @@ class FluxEnergyCapabilityTest {
         }
         assertThat(buffer.amount()).isEqualTo(25L);
         assertThat(buffer.reserved()).isEqualTo(25L);
+        assertThat(network.amount()).isEqualTo(75L);
+    }
+
+    @Test
+    void failed_exact_prefetch_rolls_back_the_bridge_even_when_the_caller_commits() {
+        LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        network.setAmount(10L);
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
+                requested -> Optional.of(transaction -> {
+                    assertThat(network.extract(requested, transaction)).isEqualTo(10L);
+                    return CapabilityResult.failure(ExecutionStatus.blocked(
+                            BuiltinFailureReasons.MISSING_INPUT.id(), BuiltinFailureReasons.MISSING_INPUT.id(),
+                            FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT,
+                                    BuiltinFailureReasons.MISSING_INPUT.id(),
+                                    FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
+                }));
+        var plan = capability.planPrefetch(25L).orElseThrow();
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isFalse();
+            transaction.commit();
+        }
+
+        assertThat(network.amount()).isEqualTo(10L);
+        assertThat(buffer.amount()).isZero();
+        assertThat(buffer.reserved()).isZero();
+        assertThat(buffer.idleExcess()).isZero();
+    }
+
+    @Test
+    void prefetched_reservation_consumes_saves_restores_and_releases_without_network_reextraction() {
+        LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        network.setAmount(100L);
+        AtomicLong bridgeCalls = new AtomicLong();
+        FluxEnergyInputCapability.ExactPrefetchBridge bridge = requested -> Optional.of(transaction -> {
+            bridgeCalls.incrementAndGet();
+            assertThat(network.extract(requested, transaction)).isEqualTo(requested);
+            return CapabilityResult.successful();
+        });
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input", bridge);
+        var plan = capability.planPrefetch(30L).orElseThrow();
+        assertThat(network.amount()).isEqualTo(100L);
+        assertThat(buffer.reserved()).isZero();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(capability.consumeReservation(7L, transaction).success()).isTrue();
+            assertThat(buffer.reserved()).isEqualTo(23L);
+        }
+        assertThat(buffer.amount()).isEqualTo(30L);
+        assertThat(buffer.reserved()).isEqualTo(30L);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(capability.consumeReservation(7L, transaction).success()).isTrue();
+            transaction.commit();
+        }
+
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING,
+                HolderLookup.Provider.create(Stream.empty()));
+        capability.save(output);
+        FluxEnergyBuffer restoredBuffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability restored = new FluxEnergyInputCapability(restoredBuffer, "test-input", bridge);
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, HolderLookup.Provider.create(Stream.empty()),
+                output.buildResult()));
+        restored.restoreReservation(23L);
+        assertThat(restoredBuffer.amount()).isEqualTo(23L);
+        assertThat(restoredBuffer.reserved()).isEqualTo(23L);
+        assertThat(restoredBuffer.idleExcess()).isZero();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(restored.consumeReservation(7L, transaction).success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(restored.releaseReservation(16L)).isEqualTo(16L);
+        assertThat(restoredBuffer.amount()).isEqualTo(16L);
+        assertThat(restoredBuffer.reserved()).isZero();
+        assertThat(restoredBuffer.idleExcess()).isEqualTo(16L);
+        assertThat(restored.releaseReservation(16L)).isZero();
+        assertThat(network.amount()).isEqualTo(70L);
+        assertThat(bridgeCalls).hasValue(1L);
+    }
+
+    @Test
+    void reservation_group_failure_rolls_back_consumption_but_keeps_the_previous_ordinary_commit() {
+        LongValueStorage ordinary = new LongValueStorage(100L, 100L, null);
+        ordinary.setAmount(100L);
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
+                requested -> Optional.of(transaction -> CapabilityResult.successful()));
+        var plan = capability.planPrefetch(20L).orElseThrow();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(ordinary.extract(5L, transaction)).isEqualTo(5L);
+            transaction.commit();
+        }
+        FluxEnergyInputCapability missing = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "missing-input");
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(capability.consumeReservation(7L, transaction).success()).isTrue();
+            assertThat(missing.consumeReservation(1L, transaction).success()).isFalse();
+        }
+
+        assertThat(ordinary.amount()).isEqualTo(95L);
+        assertThat(buffer.amount()).isEqualTo(20L);
+        assertThat(buffer.reserved()).isEqualTo(20L);
+        assertThat(buffer.idleExcess()).isZero();
     }
 
     @Test

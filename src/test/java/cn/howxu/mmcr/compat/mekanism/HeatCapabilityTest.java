@@ -5,10 +5,12 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.heat.IHeatCapacitor;
+import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,75 @@ class HeatCapabilityTest {
         }
 
         assertThat(heat.get()).isEqualTo(1_050D);
+    }
+
+    @Test
+    void prepared_temperature_check_reads_live_heat_on_every_commit_without_consuming_it() throws Exception {
+        BasicHeatCapacitor capacitor = BasicHeatCapacitor.create(100D, () -> 10D, null);
+        HeatPortCapability capability = new HeatPortCapability(capacitor, IOType.INPUT);
+        AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+        AsyncCapabilitySnapshot.Heat snapshot = (AsyncCapabilitySnapshot.Heat) invoke(facet,
+                "captureSnapshotOnServerThread");
+        AsyncCapabilityPlanner planner = (AsyncCapabilityPlanner) invoke(facet, "workerPlannerOnServerThread");
+        AsyncCapabilityOperation operation = planner.plan(snapshot, new AsyncCapabilityRequest.Heat(
+                capability.type().id(), 4L, 9D, true, 9L)).orElseThrow();
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(invokeCommit(facet, operation, transaction)).isTrue();
+            transaction.commit();
+        }
+        assertThat(capacitor.getHeat()).isEqualTo(1_000D);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            capacitor.handleHeat(-200D, transaction);
+            transaction.commit();
+        }
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(invokeCommit(facet, operation, transaction)).isFalse();
+            transaction.commit();
+        }
+        assertThat(snapshot.temperature()).isEqualTo(10D);
+        assertThat(capacitor.getHeat()).isEqualTo(800D);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            capacitor.handleHeat(100D, transaction);
+            transaction.commit();
+        }
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(invokeCommit(facet, operation, transaction)).isTrue();
+            transaction.commit();
+        }
+        assertThat(capacitor.getHeat()).isEqualTo(900D);
+    }
+
+    @Test
+    void heat_output_and_energy_share_the_callers_transaction_rollback() throws Exception {
+        BasicHeatCapacitor capacitor = BasicHeatCapacitor.create(100D, () -> 10D, null);
+        HeatPortCapability capability = new HeatPortCapability(capacitor, IOType.OUTPUT);
+        AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+        AsyncCapabilityOperation operation = new AsyncCapabilityOperation.Heat(capability.type().id(),
+                50D, false, 50L);
+        LongValueStorage energy = new LongValueStorage(100L, 100L, null);
+        energy.setAmount(100L);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(energy.extract(7L, transaction)).isEqualTo(7L);
+            try (Transaction nested = Transaction.open(transaction)) {
+                assertThat(invokeCommit(facet, operation, nested)).isTrue();
+                nested.commit();
+            }
+            assertThat(capacitor.getHeat()).isEqualTo(1_050D);
+        }
+        assertThat(capacitor.getHeat()).isEqualTo(1_000D);
+        assertThat(energy.amount()).isEqualTo(100L);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(energy.extract(7L, transaction)).isEqualTo(7L);
+            assertThat(invokeCommit(facet, operation, transaction)).isTrue();
+            transaction.commit();
+        }
+        assertThat(capacitor.getHeat()).isEqualTo(1_050D);
+        assertThat(energy.amount()).isEqualTo(93L);
     }
 
     private static IHeatCapacitor capacitor(AtomicReference<Double> heat, double capacity) {

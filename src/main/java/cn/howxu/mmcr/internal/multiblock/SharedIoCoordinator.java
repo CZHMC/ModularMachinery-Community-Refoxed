@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.multiblock;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
@@ -9,15 +10,30 @@ import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
+import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.InstalledRecipeProgram;
+import cn.howxu.mmcr.internal.runtime.RecipeCommitLedger;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Acknowledgement;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,12 +60,29 @@ public final class SharedIoCoordinator {
     private final Map<BlockPos, Set<Request>> requestsByController = new HashMap<>();
     private final Map<DomainKey, ArrayDeque<TickWorkEntry>> pendingTickWork = new HashMap<>();
     private final Map<Long, TickWorkset> submittedTickWork = new HashMap<>();
+    private final Map<BlockPos, ControllerPermit> controllerPermits = new HashMap<>();
+    private final Map<LaneKey, LaneRecords> executionRecords = new HashMap<>();
+    private final Map<LaneKey, LaneRecords> laneBindings = new HashMap<>();
+    private final Map<CraftingRuntime, ExecutionSlot> activeExecutions = new IdentityHashMap<>();
+    private final Map<ExecutionIdentity, ExecutionSlot> receiptSlots = new HashMap<>();
+    private final Set<LaneRecords> retirementCandidates = new HashSet<>();
+    private final Map<BlockPos, Set<LaneRecords>> executionsByController = new HashMap<>();
+    private final Map<BlockPos, Integer> activeProgramsByController = new HashMap<>();
+    private final Map<BlockPos, Set<ExecutionSlot>> waitingByController = new HashMap<>();
+    private final Set<BlockPos> plannedSynchronousControllers = new HashSet<>();
+    private final NavigableMap<Long, Set<ExecutionSlot>> waitingExecutions = new TreeMap<>();
+    private long installedAttempts;
+    private boolean closed;
+    private int synchronousGrants;
     private final int requestBudget;
     private final int worksetEntries;
     private long budgetGameTime = Long.MIN_VALUE;
     private int remainingRequests;
     private DomainKey domainCursor;
     private long nextTickWorksetId;
+    private long executionRoundId;
+    private long executionGameTime = Long.MIN_VALUE;
+    private boolean executionRunning;
 
     public SharedIoCoordinator() {
         this(ServerConfig.asyncSharedIoRequestsPerLevelTick(), ServerConfig.asyncSharedIoWorksetEntries());
@@ -73,7 +106,707 @@ public final class SharedIoCoordinator {
     }
 
     public static synchronized void discard(ServerLevel level) {
-        COORDINATORS.remove(level);
+        SharedIoCoordinator coordinator = COORDINATORS.remove(level);
+        if (coordinator == null) return;
+        coordinator.closed = true;
+        for (ExecutionSlot slot : coordinator.activeExecutions.values()) slot.execution.cancel();
+        coordinator.executionRecords.clear();
+        coordinator.laneBindings.clear();
+        coordinator.activeExecutions.clear();
+        coordinator.receiptSlots.clear();
+        coordinator.retirementCandidates.clear();
+        coordinator.executionsByController.clear();
+        coordinator.activeProgramsByController.clear();
+        coordinator.waitingByController.clear();
+        coordinator.plannedSynchronousControllers.clear();
+        coordinator.waitingExecutions.clear();
+        coordinator.domains.clear();
+        coordinator.controllerPermits.values().forEach(ControllerPermit::invalidate);
+        coordinator.controllerPermits.clear();
+        coordinator.executionRoundId = 0L;
+        coordinator.executionGameTime = Long.MIN_VALUE;
+        coordinator.executionRunning = false;
+    }
+
+    public long beginExecutionRound(long gameTime, boolean running) {
+        long previousRound = executionRoundId;
+        executionRoundId++;
+        executionGameTime = gameTime;
+        executionRunning = running;
+        plannedSynchronousControllers.clear();
+        synchronousGrants = 0;
+        beginLevelTick(gameTime);
+        if (running) {
+            // Minecraft may advance gameTime after Pre. Readiness is provisional; actual time is gated below.
+            wakeDueExecutions(gameTime + 1L);
+            grantSynchronousRound(previousRound);
+        }
+        return executionRoundId;
+    }
+
+    /** Reserve a fair lane window before BE order can exhaust the shared budget. No resource is prepaid. */
+    private void grantSynchronousRound(long previousRound) {
+        NavigableMap<DomainKey, List<ExecutionSlot>> ready = new TreeMap<>();
+        domains.forEach((key, bucket) -> {
+            for (ExecutionSlot slot : bucket.installed.values()) {
+                InstalledRecipeProgram execution = slot.execution;
+                MachineControllerBlockEntity controller = execution.owner().controller();
+                ControllerPermit permit = controllerPermits.get(controller.getBlockPos());
+                if (controller.activeWorkMode() != MachineWorkMode.SYNC || permit != slot.permit
+                        || permit.eligibleRound != previousRound && permit.eligibleRound != executionRoundId
+                        || permit.controller == null || permit.controller.get() != controller) continue;
+                if (!(controller.getLevel() instanceof ServerLevel level) || !validExecution(slot, level)
+                        || controller.isRedstonePaused() || slot.waiting || slot.synchronousRound == executionRoundId
+                        || slot.retryAt > level.getGameTime() + 1L || slot.lane.lastAttemptRound == executionRoundId
+                        || execution.ledger().state().outputPaid()
+                        || execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
+                        || execution.owner().finishPending() && !execution.finishAttemptReady()) continue;
+                plannedSynchronousControllers.add(controller.getBlockPos());
+                ready.computeIfAbsent(key, ignored -> new ArrayList<>()).add(slot);
+            }
+        });
+        int available = Math.min(remainingRequests, requestBudget - synchronousGrants);
+        while (available-- > 0 && !ready.isEmpty()) {
+            DomainKey key = domainCursor == null ? ready.firstKey() : ready.higherKey(domainCursor);
+            if (key == null) key = ready.firstKey();
+            DomainBucket bucket = domains.get(key);
+            List<ExecutionSlot> lanes = ready.get(key);
+            ExecutionSlot slot = lanes.stream().min((first, second) ->
+                    bucket.laneOrder(first.lane.key, second.lane.key, RequestType.TICK)).orElseThrow();
+            slot.synchronousRound = executionRoundId;
+            synchronousGrants++;
+            domainCursor = key;
+            bucket.markAttempted(RequestType.TICK, slot.lane.key);
+            lanes.remove(slot);
+            if (lanes.isEmpty()) ready.remove(key);
+        }
+    }
+
+    public long executionRoundId() {
+        return executionRoundId;
+    }
+
+    public ControllerPermit controllerPermit(BlockPos controllerPos) {
+        return controllerPermits.computeIfAbsent(controllerPos.immutable(), ignored -> new ControllerPermit());
+    }
+
+    public void markControllerEligible(BlockPos controllerPos, long gameTime) {
+        if (executionRoundId == 0L || !executionRunning) return;
+        // ServerLevel advances gameTime between the Pre event and block-entity tickers.
+        executionGameTime = gameTime;
+        beginLevelTick(gameTime);
+        controllerPermit(controllerPos).markEligible(executionRoundId, gameTime);
+    }
+
+    public void markControllerEligible(MachineControllerBlockEntity controller, long gameTime) {
+        if (controller.isRemoved()) return;
+        BlockPos controllerPos = controller.getBlockPos();
+        ControllerPermit permit = controllerPermits.get(controllerPos);
+        if (permit == null || permit.controller == null || permit.controller.get() != controller) {
+            if (permit != null) permit.invalidate();
+            permit = new ControllerPermit();
+            permit.controller = new WeakReference<>(controller);
+            controllerPermits.put(controllerPos.immutable(), permit);
+        }
+        markControllerEligible(controllerPos, gameTime);
+        Set<ExecutionSlot> waiting = waitingByController.get(controllerPos);
+        if (waiting != null) for (ExecutionSlot slot : List.copyOf(waiting)) {
+            if (slot.execution != null && slot.execution.ledger().state().phase() != RecipeCommitLedger.Phase.ERROR_PAUSED
+                    && (slot.retryAt <= gameTime
+                    || slot.sourceRevision != controller.componentRuntime().capabilityContentRevision())) wakeExecution(slot);
+        }
+        // A returning ticker (including the first resumed round) had no previous-round hint.
+        if (controller.activeWorkMode() == MachineWorkMode.SYNC && executionRunning
+                && permit.eligible(executionRoundId, gameTime, true)
+                && plannedSynchronousControllers.add(controllerPos)) {
+            grantSynchronousRound(executionRoundId - 1L);
+        }
+    }
+
+    /** Reserves terminal delivery capacity BEFORE the caller starts its input transaction. */
+    public boolean reserveExecution(CraftingRuntime owner, String laneId) {
+        if (closed) return false;
+        ExecutionSlot active = activeExecutions.get(owner);
+        if (active != null && active.execution.current()) return true;
+        LaneKey key = new LaneKey(owner.controller().getBlockPos(), laneId);
+        Set<LaneRecords> controllerLanes = executionsByController.get(key.controllerPos());
+        if (controllerLanes != null) for (LaneRecords candidate : List.copyOf(controllerLanes)) {
+            if (candidate.controller != null && candidate.controller.get() != owner.controller()) {
+                candidate.retired = true;
+                laneBindings.remove(candidate.key, candidate);
+                for (ExecutionSlot slot : candidate.slots) {
+                    slot.reservedOwner = null;
+                    if (slot.acceptedOwner != null) terminateExecution(slot);
+                }
+                retireIfAcknowledged(candidate);
+            }
+        }
+        LaneRecords records = laneBindings.get(key);
+        if (records == null) {
+            // Reuse the lowest vacant logical lane, even while its terminal deliveries await ACK.
+            // Changing a thread name or replacing the BE at this position cannot buy new capacity.
+            int firstLane = laneId.equals("base") ? 0 : 1;
+            int laneEnd = laneId.equals("base") ? 1 : FactoryRuntime.MAX_LANES;
+            for (int lane = firstLane; lane < laneEnd; lane++) {
+                LaneKey logicalKey = new LaneKey(key.controllerPos(), Integer.toString(lane));
+                LaneRecords candidate = executionRecords.get(logicalKey);
+                if (candidate == null) {
+                    records = new LaneRecords(logicalKey, key);
+                    executionRecords.put(logicalKey, records);
+                    break;
+                }
+                if (candidate.retired) {
+                    records = candidate;
+                    break;
+                }
+            }
+            if (records == null) return false;
+        }
+        executionsByController.computeIfAbsent(key.controllerPos(), ignored -> new HashSet<>()).add(records);
+        for (ExecutionSlot slot : records.slots) if (slot.reservedOwner == owner) return true;
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.acceptedOwner != null) {
+                if (slot.pendingAcceptance) return slot.acceptedOwner == owner && !slot.cancelRequested;
+                if (slot.ledger.state().outputPaid() || slot.acceptedOwner.ledger() != slot.ledger
+                        || slot.acceptedOwner.activeRecipe() != slot.recipe
+                        || slot.acceptedOwner.controller().isRemoved()
+                        || slot.identity.lifecycleEpoch() != slot.acceptedOwner.controller().lifecycleEpoch()
+                        || slot.execution != null && !slot.execution.current()) terminateExecution(slot);
+                else if (slot.acceptedOwner == owner) return true;
+                else return false;
+            }
+        }
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.receipt == null && slot.reservedOwner == null) {
+                slot.resetExecutionState();
+                slot.reservedOwner = owner;
+                records.key = key;
+                records.retired = false;
+                records.controller = new WeakReference<>(owner.controller());
+                laneBindings.put(key, records);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void releaseExecutionReservation(CraftingRuntime owner, String laneId) {
+        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        if (records == null) return;
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.acceptedOwner == owner) terminateExecution(slot);
+            else if (slot.reservedOwner == owner) slot.reservedOwner = null;
+        }
+        retireIfAcknowledged(records);
+    }
+
+    public ExecutionIdentity acceptedIdentity(CraftingRuntime owner, String laneId) {
+        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        if (records == null) return null;
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.acceptedOwner == owner && slot.ledger == owner.ledger() && slot.recipe == owner.activeRecipe()) {
+                return slot.identity;
+            }
+        }
+        return null;
+    }
+
+    /** Binds paid-start facts in the caller's input transaction, before compilation can be queued. */
+    public boolean acceptExecution(CraftingRuntime owner, String laneId, ExecutionIdentity identity,
+                                   RecipeCommitLedger ledger, ActiveMachineRecipe recipe,
+                                   TransactionContext callerTransaction) {
+        if (closed || !(owner.controller().getLevel() instanceof ServerLevel level)) return false;
+        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        StructureClaimRegistry.ResourceDomain domain = owner.controller().resourceDomain();
+        if (records == null || domain == null) return false;
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.reservedOwner != owner) continue;
+            new SnapshotJournal<Boolean>() {
+                @Override protected Boolean createSnapshot() { return slot.cancelRequested; }
+                @Override protected void revertToSnapshot(Boolean snapshot) {
+                    slot.pendingAcceptance = false;
+                    closeExecution(slot);
+                    retireIfAcknowledged(records);
+                }
+                @Override protected void onRootCommit(Boolean snapshot) {
+                    slot.pendingAcceptance = false;
+                    if (slot.cancelRequested || owner.ledger() != ledger || owner.controller().isRemoved()
+                            || identity.lifecycleEpoch() != owner.controller().lifecycleEpoch()) terminateExecution(slot);
+                    else publishExecution(slot, false);
+                }
+            }.updateSnapshots(callerTransaction);
+            slot.reservedOwner = null;
+            slot.acceptedOwner = owner;
+            slot.identity = identity;
+            slot.ledger = ledger;
+            slot.recipe = recipe;
+            slot.domain = new DomainKey(domain.id(), domain.generation());
+            slot.receiptDomain = new MachineAsyncCoordinator.ExecutionDomain(domain.id(), domain.generation());
+            slot.level = new WeakReference<>(level);
+            slot.pendingAcceptance = true;
+            slot.cancelRequested = false;
+            slot.revision = ++records.revision;
+            records.latestIdentity = identity;
+            receiptSlots.put(identity, slot);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean install(InstalledRecipeProgram execution, ControllerPermit permit) {
+        if (closed) return false;
+        ExecutionSlot active = activeExecutions.get(execution.owner());
+        if (active != null && active.execution == execution) {
+            if (!(execution.owner().controller().getLevel() instanceof ServerLevel level)
+                    || !validExecution(active, level) || !currentPermit(execution.owner().controller(), permit, level)) return false;
+            active.permit = permit;
+            return true;
+        }
+        LaneRecords records = laneBindings.get(new LaneKey(execution.owner().controller().getBlockPos(),
+                execution.identity().laneId()));
+        return records != null && install(execution, permit, records.revision, records.commandSequence + 1L);
+    }
+
+    /** Worker command admission: expected revision and strictly monotonic lane command sequence. */
+    public boolean install(InstalledRecipeProgram execution, ControllerPermit permit,
+                           long expectedRevision, long commandSequence) {
+        if (closed) return false;
+        CraftingRuntime owner = execution.owner();
+        MachineControllerBlockEntity controller = owner.controller();
+        if (!(controller.getLevel() instanceof ServerLevel level) || !owner.active()
+                || owner.installedProgram() != execution || !currentPermit(controller, permit, level)) return false;
+        LaneKey key = new LaneKey(controller.getBlockPos(), execution.identity().laneId());
+        LaneRecords records = laneBindings.get(key);
+        if (records == null || records.revision != expectedRevision || commandSequence <= records.commandSequence
+                || !execution.current()) return false;
+        ExecutionIdentity previous = records.latestIdentity;
+        boolean accepted = execution.identity().equals(acceptedIdentity(owner, execution.identity().laneId()));
+        if (previous != null && previous.controllerInstance() == execution.identity().controllerInstance()
+                && (previous.lifecycleEpoch() > execution.identity().lifecycleEpoch()
+                || previous.lifecycleEpoch() == execution.identity().lifecycleEpoch()
+                && (previous.executionId() > execution.identity().executionId()
+                || previous.executionId() == execution.identity().executionId() && !accepted))) return false;
+        for (ExecutionSlot slot : records.slots) {
+            boolean restored = slot.reservedOwner == owner && slot.acceptedOwner == null;
+            if (!restored && (slot.acceptedOwner != owner || slot.pendingAcceptance || slot.cancelRequested
+                    || slot.execution != null || !execution.identity().equals(slot.identity)
+                    || slot.ledger != execution.ledger() || slot.recipe != owner.activeRecipe())) continue;
+            VersionStamp versions = execution.program().versions();
+            StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
+            if (domain == null || domain.id() != versions.domainId()
+                    || domain.generation() != versions.domainGeneration()) return false;
+            slot.reservedOwner = null;
+            slot.acceptedOwner = owner;
+            slot.identity = execution.identity();
+            slot.ledger = execution.ledger();
+            slot.recipe = owner.activeRecipe();
+            slot.execution = execution;
+            slot.permit = permit;
+            slot.domain = new DomainKey(domain.id(), domain.generation());
+            slot.receiptDomain = new MachineAsyncCoordinator.ExecutionDomain(domain.id(), domain.generation());
+            slot.level = new WeakReference<>(level);
+            slot.revision = ++records.revision;
+            records.commandSequence = commandSequence;
+            records.latestIdentity = execution.identity();
+            activeExecutions.put(owner, slot);
+            activeProgramsByController.merge(controller.getBlockPos(), 1, Integer::sum);
+            receiptSlots.put(execution.identity(), slot);
+            DomainBucket bucket = domains.computeIfAbsent(slot.domain, ignored -> new DomainBucket());
+            bucket.putInstalled(slot);
+            slot.synchronousRound = Long.MIN_VALUE;
+            publishExecution(slot, false);
+            if (controller.activeWorkMode() == MachineWorkMode.SYNC) grantSynchronousRound(executionRoundId);
+            return true;
+        }
+        return false;
+    }
+
+    /** Post arbitration includes legacy boundaries in the SAME original request budget. */
+    public int executeInstalled(ServerLevel level) {
+        long before = installedAttempts;
+        resolve(level);
+        return (int) (installedAttempts - before);
+    }
+
+    /** SYNC stays at the BE boundary and does not wait for receipt workers. */
+    public boolean executeInstalled(InstalledRecipeProgram execution, ServerLevel level) {
+        if (execution.owner().controller().activeWorkMode() != MachineWorkMode.SYNC) return false;
+        ExecutionSlot slot = activeExecutions.get(execution.owner());
+        return slot != null && slot.execution == execution && remainingRequests > 0
+                && eligibleExecution(slot, level, true) && attemptExecution(slot, level);
+    }
+
+    private boolean currentPermit(MachineControllerBlockEntity controller, ControllerPermit permit, ServerLevel level) {
+        return !controller.isRemoved() && controller.getLevel() == level
+                && level.getBlockEntity(controller.getBlockPos()) == controller && !controller.isRedstonePaused()
+                && controllerPermits.get(controller.getBlockPos()) == permit && permit.controller != null
+                && permit.controller.get() == controller && permit.eligible(executionRoundId, level.getGameTime(),
+                executionRunning && level.tickRateManager().runsNormally());
+    }
+
+    private boolean qualifiedRequest(Request request, ServerLevel level) {
+        // Direct legacy/debug fixtures have no Pre round. A real round always requires a real ticker.
+        if (executionRoundId == 0L) return true;
+        ControllerPermit permit = controllerPermits.get(request.laneKey().controllerPos());
+        MachineControllerBlockEntity controller = permit == null || permit.controller == null ? null : permit.controller.get();
+        return controller != null && currentPermit(controller, permit, level);
+    }
+
+    private boolean validExecution(ExecutionSlot slot, ServerLevel level) {
+        InstalledRecipeProgram execution = slot.execution;
+        if (execution == null) return false;
+        CraftingRuntime owner = execution.owner();
+        MachineControllerBlockEntity controller = owner.controller();
+        VersionStamp versions = execution.program().versions();
+        StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
+        return controller.getLevel() == level && !controller.isRemoved() && owner.active()
+                && execution.current() && controller.lifecycleEpoch() == execution.identity().lifecycleEpoch()
+                && controller.currentStructureSnapshot().formed() && controller.currentStructureSnapshot().structureAreaLoaded()
+                && controller.currentStructureSnapshot().version() == versions.structure()
+                && controller.componentRuntime().capabilityVersion() == versions.capability()
+                && owner.activeRecipe().effectiveExecutionRevision() == versions.effective()
+                && RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version() == versions.catalog()
+                && domain != null && domain.id() == slot.domain.id && domain.generation() == slot.domain.generation;
+    }
+
+    private boolean eligibleExecution(ExecutionSlot slot, ServerLevel level, boolean sync) {
+        if (!validExecution(slot, level)) {
+            terminateExecution(slot);
+            return false;
+        }
+        if (slot.execution.ledger().state().outputPaid()) {
+            terminateExecution(slot);
+            return false;
+        }
+        if (slot.execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED) return false;
+        if (slot.execution.owner().finishPending() && !slot.execution.finishAttemptReady()) return false;
+        LaneRecords lane = slot.lane;
+        return !slot.waiting && (slot.execution.owner().controller().activeWorkMode() == MachineWorkMode.SYNC) == sync
+                && (!sync || slot.synchronousRound == executionRoundId)
+                && level.getGameTime() >= slot.retryAt
+                && currentPermit(slot.execution.owner().controller(), slot.permit, level)
+                && lane.lastAttemptRound != executionRoundId && lane.lastAttemptTime != level.getGameTime();
+    }
+
+    private boolean attemptExecution(ExecutionSlot slot, ServerLevel level) {
+        InstalledRecipeProgram execution = slot.execution;
+        slot.lane.lastAttemptRound = executionRoundId;
+        slot.lane.lastAttemptTime = level.getGameTime();
+        if (!execution.tryAttempt(executionRoundId, level.getGameTime())) return false;
+        remainingRequests--;
+        installedAttempts++;
+        DomainBucket bucket = domains.get(slot.domain);
+        // SYNC cursors already advanced in grant order, independently of the actual BE order.
+        if (execution.owner().controller().activeWorkMode() != MachineWorkMode.SYNC) {
+            domainCursor = slot.domain;
+            if (bucket != null) bucket.markAttempted(RequestType.TICK, slot.lane.key);
+        }
+        long sourceRevision = execution.owner().controller().componentRuntime().capabilityContentRevision();
+        boolean advanced = false;
+        try {
+            advanced = execution.advance();
+        } catch (RuntimeException exception) {
+            // The runtime handles ordinary rejection itself. An escaped callback/notification error
+            // must neither abort other lanes nor replay an uncertain resource/lifecycle phase.
+            execution.ledger().pauseAfterCommitFailure();
+            MMCR.LOG.error("Installed execution paused after an unexpected boundary failure: identity={}",
+                    execution.identity(), exception);
+        } finally {
+            if (slot.execution == execution) {
+                boolean terminal = !execution.owner().active() || execution.ledger().state().outputPaid();
+                publishExecution(slot, terminal);
+                if (terminal) closeExecution(slot);
+            }
+        }
+        if (slot.execution == execution && !advanced && !execution.program().requiresMainThreadPreparation()) {
+            slot.sourceRevision = sourceRevision;
+            slot.waiting = true;
+            slot.retryAt = execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
+                    ? Long.MAX_VALUE : level.getGameTime() + 1L; // Preserve ordinary per-tick failure policy.
+            if (bucket != null) bucket.removeInstalled(slot);
+            waitingExecutions.computeIfAbsent(slot.retryAt, ignored -> new HashSet<>()).add(slot);
+            waitingByController.computeIfAbsent(slot.lane.key.controllerPos(), ignored -> new HashSet<>()).add(slot);
+            // Register then recheck: a commit notification may have changed the source while blocking.
+            if (execution.ledger().state().phase() != RecipeCommitLedger.Phase.ERROR_PAUSED
+                    && sourceRevision != execution.owner().controller().componentRuntime().capabilityContentRevision()) wakeExecution(slot);
+        }
+        return advanced;
+    }
+
+    private void wakeExecution(ExecutionSlot slot) {
+        if (!slot.waiting || slot.execution == null) return;
+        Set<ExecutionSlot> waiting = waitingExecutions.get(slot.retryAt);
+        if (waiting != null) {
+            waiting.remove(slot);
+            if (waiting.isEmpty()) waitingExecutions.remove(slot.retryAt);
+        }
+        slot.waiting = false;
+        removeWaitingOwner(slot);
+        DomainBucket bucket = domains.computeIfAbsent(slot.domain, ignored -> new DomainBucket());
+        bucket.putInstalled(slot);
+    }
+
+    private void wakeDueExecutions(long gameTime) {
+        while (!waitingExecutions.isEmpty() && waitingExecutions.firstKey() <= gameTime) {
+            Set<ExecutionSlot> due = waitingExecutions.pollFirstEntry().getValue();
+            for (ExecutionSlot slot : due) wakeExecution(slot);
+        }
+    }
+
+    private void removeWaitingOwner(ExecutionSlot slot) {
+        waitingByController.computeIfPresent(slot.lane.key.controllerPos(), (ignored, slots) -> {
+            slots.remove(slot);
+            return slots.isEmpty() ? null : slots;
+        });
+    }
+
+    private void publishExecution(ExecutionSlot slot, boolean terminal) {
+        RecipeCommitLedger.State state = slot.ledger.state();
+        boolean ownsCurrentState = slot.acceptedOwner.ledger() == slot.ledger;
+        ExecutionStatus failure = ownsCurrentState ? slot.acceptedOwner.failure()
+                : slot.receipt == null ? null : slot.receipt.failure();
+        slot.receipt = new Receipt(slot.identity, slot.revision,
+                slot.receipt == null ? 0L : slot.receipt.sequence() + 1L,
+                slot.recipe.getTick(),
+                state.paidAttempts(), terminal, failure);
+        ServerLevel level = slot.level.get();
+        if (level != null) MachineAsyncCoordinator.get(level).publishReceipt(slot.receiptDomain, slot.receipt);
+    }
+
+    private void terminateExecution(ExecutionSlot slot) {
+        if (slot.acceptedOwner == null) return;
+        if (slot.pendingAcceptance) {
+            slot.cancelRequested = true;
+            return;
+        }
+        // Record first: cancelling live bindings must not erase the old terminal facts.
+        publishExecution(slot, true);
+        if (slot.execution != null) slot.execution.cancel();
+        closeExecution(slot);
+    }
+
+    private void closeExecution(ExecutionSlot slot) {
+        if (slot.execution != null && activeExecutions.remove(slot.execution.owner(), slot)) {
+            activeProgramsByController.computeIfPresent(slot.lane.key.controllerPos(),
+                    (ignored, count) -> count == 1 ? null : count - 1);
+        }
+        DomainBucket bucket = domains.get(slot.domain);
+        if (bucket != null) bucket.removeInstalled(slot);
+        if (slot.waiting) {
+            Set<ExecutionSlot> waiting = waitingExecutions.get(slot.retryAt);
+            if (waiting != null) {
+                waiting.remove(slot);
+                if (waiting.isEmpty()) waitingExecutions.remove(slot.retryAt);
+            }
+        }
+        slot.waiting = false;
+        removeWaitingOwner(slot);
+        slot.execution = null;
+        if (slot.receipt == null && slot.identity != null) receiptSlots.remove(slot.identity, slot);
+        slot.reservedOwner = null;
+        slot.acceptedOwner = null;
+        slot.identity = null;
+        slot.ledger = null;
+        slot.cancelRequested = false;
+        slot.recipe = null;
+        slot.permit = null;
+        slot.resetExecutionState();
+    }
+
+    public boolean acknowledgeReceipt(Acknowledgement acknowledgement) {
+        ExecutionSlot slot = receiptSlots.get(acknowledgement.identity());
+        if (slot == null) return false;
+        Receipt receipt = slot.receipt;
+        if (receipt == null || !receipt.terminal() || receipt.installedRevision() != acknowledgement.installedRevision()
+                || receipt.sequence() != acknowledgement.sequence()) return false;
+        slot.receipt = null;
+        receiptSlots.remove(acknowledgement.identity(), slot);
+        retireIfAcknowledged(slot.lane);
+        return true;
+    }
+
+    public void forgetExecutionLane(CraftingRuntime owner, String laneId) {
+        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        if (records == null) return;
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.acceptedOwner != null && slot.acceptedOwner != owner
+                    || slot.reservedOwner != null && slot.reservedOwner != owner) return;
+        }
+        records.retired = true;
+        laneBindings.remove(records.key, records);
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.reservedOwner == owner) slot.reservedOwner = null;
+            if (slot.acceptedOwner == owner) terminateExecution(slot);
+        }
+        retireIfAcknowledged(records);
+    }
+
+    private void retireIfAcknowledged(LaneRecords records) {
+        MachineControllerBlockEntity controller = records.controller == null ? null : records.controller.get();
+        if (controller == null || controller.isRemoved()) records.retired = true;
+        if (!records.retired) return;
+        for (ExecutionSlot slot : records.slots) {
+            if (slot.receipt != null || slot.acceptedOwner != null || slot.reservedOwner != null) return;
+        }
+        // An ACK must not remove the lane's same-gameTime fence before a replacement starts.
+        if (records.lastAttemptTime != Long.MIN_VALUE && records.lastAttemptTime == executionGameTime) {
+            retirementCandidates.add(records);
+            return;
+        }
+        executionRecords.remove(records.logicalKey, records);
+        laneBindings.remove(records.key, records);
+        retirementCandidates.remove(records);
+        executionsByController.computeIfPresent(records.key.controllerPos(), (ignored, lanes) -> {
+            lanes.remove(records);
+            return lanes.isEmpty() ? null : lanes;
+        });
+    }
+
+    public long installedRevision(CraftingRuntime owner, String laneId) {
+        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        return records == null ? 0L : records.revision;
+    }
+
+    /** A delayed worker cancel cannot affect a replacement or already terminal execution. */
+    public boolean cancelExecution(ExecutionIdentity identity, long expectedRevision, long commandSequence) {
+        ExecutionSlot slot = receiptSlots.get(identity);
+        if (slot == null || slot.acceptedOwner == null || slot.revision != expectedRevision
+                || commandSequence <= slot.lane.commandSequence) return false;
+        slot.lane.commandSequence = commandSequence;
+        terminateExecution(slot);
+        return true;
+    }
+
+    /** Rule replacement keeps the same main-thread ledger and the original execution slot. */
+    public boolean replaceExecution(InstalledRecipeProgram execution, ControllerPermit permit,
+                                    long expectedRevision, long commandSequence) {
+        ExecutionSlot slot = receiptSlots.get(execution.identity());
+        if (slot == null || slot.execution == null || slot.revision != expectedRevision
+                || commandSequence <= slot.lane.commandSequence
+                || slot.execution.owner() != execution.owner() || slot.execution.ledger() != execution.ledger()
+                || slot.recipe != execution.owner().activeRecipe()
+                || execution.owner().installedProgram() != execution || !execution.current()
+                || !(execution.owner().controller().getLevel() instanceof ServerLevel level)
+                || !currentPermit(execution.owner().controller(), permit, level)) return false;
+        VersionStamp versions = execution.program().versions();
+        if (versions.domainId() != slot.domain.id || versions.domainGeneration() != slot.domain.generation
+                || execution.ledger().state().phase() == RecipeCommitLedger.Phase.RESOURCE_PAID) return false;
+        slot.execution.cancel();
+        slot.execution = execution;
+        slot.permit = permit;
+        slot.revision = ++slot.lane.revision;
+        slot.lane.commandSequence = commandSequence;
+        publishExecution(slot, false);
+        return true;
+    }
+
+    List<Receipt> receiptsForTesting(CraftingRuntime owner, String laneId) {
+        Set<LaneRecords> records = executionsByController.get(owner.controller().getBlockPos());
+        if (records == null) return List.of();
+        List<Receipt> result = new ArrayList<>(2);
+        for (LaneRecords lane : records) for (ExecutionSlot slot : lane.slots) {
+            if (slot.receipt != null && slot.receipt.identity().laneId().equals(laneId)) result.add(slot.receipt);
+        }
+        return List.copyOf(result);
+    }
+
+    public void drainReceiptAcknowledgements(ServerLevel level) {
+        Acknowledgement acknowledgement;
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        while ((acknowledgement = async.pollReceiptAcknowledgement()) != null) acknowledgeReceipt(acknowledgement);
+        for (LaneRecords records : List.copyOf(retirementCandidates)) {
+            retirementCandidates.remove(records);
+            retireIfAcknowledged(records);
+        }
+    }
+
+    /**
+     * Two delivery slots per stable controller-position/lane-number, including unacknowledged terminals.
+     * The current thread name is only a live binding; it does not define historical capacity.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class LaneRecords {
+        private final LaneKey logicalKey;
+        private LaneKey key;
+        private final ExecutionSlot[] slots = {new ExecutionSlot(this), new ExecutionSlot(this)};
+        private long revision;
+        private long commandSequence;
+        private boolean retired;
+        private WeakReference<MachineControllerBlockEntity> controller;
+        private ExecutionIdentity latestIdentity;
+        private long lastAttemptRound = Long.MIN_VALUE;
+        private long lastAttemptTime = Long.MIN_VALUE;
+
+        private LaneRecords(LaneKey logicalKey, LaneKey key) {
+            this.logicalKey = logicalKey;
+            this.key = key;
+        }
+    }
+
+    /**
+     * Main-thread live binding and its coalesced immutable delivery record.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ExecutionSlot {
+        private final LaneRecords lane;
+        private CraftingRuntime reservedOwner;
+        private CraftingRuntime acceptedOwner;
+        private ExecutionIdentity identity;
+        private RecipeCommitLedger ledger;
+        private boolean pendingAcceptance;
+        private boolean cancelRequested;
+        private InstalledRecipeProgram execution;
+        private ActiveMachineRecipe recipe;
+        private ControllerPermit permit;
+        private DomainKey domain;
+        private MachineAsyncCoordinator.ExecutionDomain receiptDomain;
+        private WeakReference<ServerLevel> level;
+        private long revision;
+        private Receipt receipt;
+        private boolean waiting;
+        private long retryAt;
+        private long sourceRevision;
+        private long synchronousRound = Long.MIN_VALUE;
+
+        private ExecutionSlot(LaneRecords lane) { this.lane = lane; }
+
+        private void resetExecutionState() {
+            waiting = false;
+            retryAt = 0L;
+            sourceRevision = 0L;
+            synchronousRound = Long.MIN_VALUE;
+            pendingAcceptance = false;
+            cancelRequested = false;
+            domain = null;
+            receiptDomain = null;
+            level = null;
+        }
+    }
+
+    /**
+     * Main-thread qualification granted only by a controller's real server ticker.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class ControllerPermit {
+        private long eligibleRound = Long.MIN_VALUE;
+        private long eligibleGameTime = Long.MIN_VALUE;
+        private WeakReference<MachineControllerBlockEntity> controller;
+
+        public void markEligible(long roundId, long gameTime) {
+            eligibleRound = roundId;
+            eligibleGameTime = gameTime;
+        }
+
+        public boolean eligible(long roundId, long gameTime, boolean running) {
+            return running && eligibleRound == roundId && eligibleGameTime == gameTime;
+        }
+
+        private void invalidate() {
+            eligibleRound = Long.MIN_VALUE;
+            eligibleGameTime = Long.MIN_VALUE;
+            controller = null;
+        }
     }
 
     public void enqueue(Request request) {
@@ -100,6 +833,18 @@ public final class SharedIoCoordinator {
 
     /** Discards every queued request owned by one controller. */
     public void cancel(BlockPos controllerPos) {
+        ControllerPermit permit = controllerPermits.remove(controllerPos);
+        if (permit != null) permit.invalidate();
+        Set<LaneRecords> executions = executionsByController.get(controllerPos);
+        if (executions != null) for (LaneRecords lane : List.copyOf(executions)) {
+            retirementCandidates.add(lane);
+            for (ExecutionSlot slot : lane.slots) {
+                slot.reservedOwner = null;
+                if (slot.acceptedOwner != null && slot.acceptedOwner.controller().isRemoved()) lane.retired = true;
+                terminateExecution(slot);
+            }
+            retireIfAcknowledged(lane);
+        }
         Set<Request> owned = requestsByController.get(controllerPos);
         if (owned != null) {
             for (Request request : List.copyOf(owned)) {
@@ -133,6 +878,8 @@ public final class SharedIoCoordinator {
     }
 
     public int resolve(ServerLevel level) {
+        if (closed) return 0;
+        wakeDueExecutions(level.getGameTime());
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains = new HashMap<>();
         for (Map.Entry<DomainKey, DomainBucket> entry : domains.entrySet()) {
@@ -149,7 +896,7 @@ public final class SharedIoCoordinator {
                     workset.entries().getFirst().laneTaskKey().controllerPos());
             if (domain != null) knownDomains.put(domain.id(), domain);
         }
-        return resolveKnownDomains(knownDomains, true);
+        return resolveKnownDomains(knownDomains, true, level);
     }
 
     public int resolve(StructureClaimRegistry.ResourceDomain domain) {
@@ -161,7 +908,12 @@ public final class SharedIoCoordinator {
     }
 
     private int resolveKnownDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains,
-                                    boolean discardUnknownDomains) {
+                                     boolean discardUnknownDomains) {
+        return resolveKnownDomains(knownDomains, discardUnknownDomains, null);
+    }
+
+    private int resolveKnownDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains,
+                                    boolean discardUnknownDomains, ServerLevel level) {
         discardStaleDomains(knownDomains, discardUnknownDomains);
         int progress = 0;
         Set<Request> attempted = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -172,13 +924,19 @@ public final class SharedIoCoordinator {
         });
         try (AsyncPlanningFacet.CaptureScope ignored = AsyncPlanningFacet.beginCaptureScope()) {
             while (remainingRequests > 0) {
-                DomainKey key = nextDomainWithWork(attempted, eligible);
+                DomainKey key = nextDomainWithWork(attempted, eligible, level);
                 if (key == null) break;
                 DomainBucket bucket = domains.get(key);
-                Request request = bucket.nextRequest(attempted, eligible);
+                Object next = bucket.nextWork(attempted, eligible, level, this);
+                if (next instanceof ExecutionSlot slot) {
+                    if (attemptExecution(slot, level)) progress++;
+                    continue;
+                }
+                Request request = (Request) next;
                 attempted.add(request);
                 remainingRequests--;
                 domainCursor = key;
+                if (level != null) bucket.markAttempted(requestType(request), request.laneKey());
                 boolean valid = request.isStillValid();
                 if (!valid || request.tryCommit()) {
                     if (valid) {
@@ -211,7 +969,7 @@ public final class SharedIoCoordinator {
         return requestsByController.size();
     }
 
-    private DomainKey nextDomainWithWork(Set<Request> attempted, Set<Request> eligible) {
+    private DomainKey nextDomainWithWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level) {
         int domainCount = domains.size();
         if (domainCount == 0) return null;
         DomainKey key = domainCursor == null ? domains.firstKey() : domains.higherKey(domainCursor);
@@ -219,7 +977,10 @@ public final class SharedIoCoordinator {
         // Selection invokes no callbacks. Re-read the live topology after each request instead
         // of retaining an iterator across commits, which may add/remove domains or resolve again.
         for (int offset = 0; offset < domainCount; offset++) {
-            if (domains.get(key).hasUnattempted(attempted, eligible)) return key;
+            DomainBucket bucket = domains.get(key);
+            if ((level == null ? bucket.hasUnattempted(attempted, eligible)
+                    : bucket.hasQualifiedRequest(attempted, eligible, level, this))
+                    || level != null && bucket.hasInstalled(level, this)) return key;
             key = domains.higherKey(key);
             if (key == null) key = domains.firstKey();
         }
@@ -242,6 +1003,7 @@ public final class SharedIoCoordinator {
             if (current != null && current.generation() == key.generation) continue;
             if (current == null && !discardUnknownDomains) continue;
             DomainBucket bucket = domains.remove(key);
+            if (bucket != null) for (ExecutionSlot slot : List.copyOf(bucket.installed.values())) terminateExecution(slot);
             if (bucket != null) for (Request request : bucket.allRequests()) {
                 request.discard();
                 removeOwnerIndex(request);
@@ -289,14 +1051,23 @@ public final class SharedIoCoordinator {
         private final EnumMap<RequestType, NavigableMap<LaneKey, ArrayDeque<Request>>> requests =
                 new EnumMap<>(RequestType.class);
         private final EnumMap<RequestType, LaneKey> cursors = new EnumMap<>(RequestType.class);
+        private final NavigableMap<LaneKey, ExecutionSlot> installed = new TreeMap<>();
+        private final NavigableMap<BlockPos, NavigableMap<String, ExecutionSlot>> installedByController =
+                new TreeMap<>(DomainBucket::compareControllers);
+        private final EnumMap<RequestType, Map<BlockPos, String>> controllerLaneCursors = new EnumMap<>(RequestType.class);
         private int nextType;
         private boolean worksetInFlight;
 
         private DomainBucket() {
-            for (RequestType type : RequestType.values()) requests.put(type, new TreeMap<>());
+            for (RequestType type : RequestType.values()) {
+                requests.put(type, new TreeMap<>());
+                controllerLaneCursors.put(type, new HashMap<>());
+            }
         }
 
-        private Request nextRequest(Set<Request> attempted, Set<Request> eligible) {
+        private Object nextWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
+                                SharedIoCoordinator coordinator) {
+            if (level != null) return nextLiveWork(attempted, eligible, level, coordinator);
             RequestType[] types = RequestType.values();
             for (int typeOffset = 0; typeOffset < types.length; typeOffset++) {
                 int typeIndex = (nextType + typeOffset) % types.length;
@@ -322,12 +1093,126 @@ public final class SharedIoCoordinator {
             return null;
         }
 
+        private Object nextLiveWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
+                                    SharedIoCoordinator coordinator) {
+            RequestType[] types = RequestType.values();
+            for (int offset = 0; offset < types.length; offset++) {
+                int index = (nextType + offset) % types.length;
+                RequestType type = types[index];
+                Request selected = null;
+                for (ArrayDeque<Request> queue : requests.get(type).values()) for (Request request : queue) {
+                    if (attempted.contains(request) || !eligible.contains(request) || !coordinator.qualifiedRequest(request, level)) continue;
+                    if (selected == null || laneOrder(request.laneKey(), selected.laneKey(), type) < 0) selected = request;
+                }
+                ExecutionSlot execution = type == RequestType.TICK ? nextInstalled(level, coordinator) : null;
+                if (selected == null && execution == null) continue;
+                nextType = (index + 1) % types.length;
+                return execution != null && (selected == null
+                        || laneOrder(execution.lane.key, selected.laneKey(), type) < 0) ? execution : selected;
+            }
+            return null;
+        }
+
+        private int laneOrder(LaneKey first, LaneKey second, RequestType type) {
+            LaneKey cursor = cursors.get(type);
+            int controllerOrder = compareControllers(first.controllerPos(), second.controllerPos());
+            if (controllerOrder != 0) {
+                if (cursor != null) {
+                    boolean firstWraps = compareControllers(first.controllerPos(), cursor.controllerPos()) <= 0;
+                    boolean secondWraps = compareControllers(second.controllerPos(), cursor.controllerPos()) <= 0;
+                    if (firstWraps != secondWraps) return firstWraps ? 1 : -1;
+                }
+                return controllerOrder;
+            }
+            String laneCursor = controllerLaneCursors.get(type).get(first.controllerPos());
+            if (laneCursor != null) {
+                boolean firstWraps = first.laneId().compareTo(laneCursor) <= 0;
+                boolean secondWraps = second.laneId().compareTo(laneCursor) <= 0;
+                if (firstWraps != secondWraps) return firstWraps ? 1 : -1;
+            }
+            return first.laneId().compareTo(second.laneId());
+        }
+
+        private static int compareControllers(BlockPos first, BlockPos second) {
+            int order = Integer.compare(first.getX(), second.getX());
+            if (order == 0) order = Integer.compare(first.getY(), second.getY());
+            return order == 0 ? Integer.compare(first.getZ(), second.getZ()) : order;
+        }
+
+        private void markAttempted(RequestType type, LaneKey lane) {
+            cursors.put(type, lane);
+            controllerLaneCursors.get(type).put(lane.controllerPos(), lane.laneId());
+        }
+
+        private void putInstalled(ExecutionSlot slot) {
+            LaneKey key = slot.lane.key;
+            installed.put(key, slot);
+            installedByController.computeIfAbsent(key.controllerPos(), ignored -> new TreeMap<>()).put(key.laneId(), slot);
+        }
+
+        private void removeInstalled(ExecutionSlot slot) {
+            LaneKey key = slot.lane.key;
+            installed.remove(key, slot);
+            NavigableMap<String, ExecutionSlot> lanes = installedByController.get(key.controllerPos());
+            if (lanes == null) return;
+            lanes.remove(key.laneId(), slot);
+            if (lanes.isEmpty()) installedByController.remove(key.controllerPos());
+        }
+
+        private ExecutionSlot nextInstalled(ServerLevel level, SharedIoCoordinator coordinator) {
+            if (installedByController.isEmpty()) return null;
+            LaneKey cursor = cursors.get(RequestType.TICK);
+            BlockPos controller = cursor == null ? installedByController.firstKey()
+                    : installedByController.higherKey(cursor.controllerPos());
+            if (controller == null) controller = installedByController.firstKey();
+            int controllerCount = installedByController.size();
+            for (int controllerOffset = 0; controllerOffset < controllerCount && controller != null; controllerOffset++) {
+                BlockPos nextController = installedByController.higherKey(controller);
+                NavigableMap<String, ExecutionSlot> lanes = installedByController.get(controller);
+                if (lanes != null && !lanes.isEmpty() && lanes.firstEntry().getValue().execution.owner()
+                        .controller().activeWorkMode() == MachineWorkMode.SYNC) {
+                    controller = nextController == null ? installedByController.firstKey() : nextController;
+                    continue;
+                }
+                if (lanes != null && !lanes.isEmpty()) {
+                    String laneCursor = controllerLaneCursors.get(RequestType.TICK).get(controller);
+                    String lane = laneCursor == null ? lanes.firstKey() : lanes.higherKey(laneCursor);
+                    if (lane == null) lane = lanes.firstKey();
+                    int laneCount = lanes.size();
+                    for (int laneOffset = 0; laneOffset < laneCount && lane != null; laneOffset++) {
+                        ExecutionSlot slot = lanes.get(lane);
+                        String nextLane = lanes.higherKey(lane);
+                        if (slot != null && coordinator.eligibleExecution(slot, level, false)) return slot;
+                        lane = nextLane == null && !lanes.isEmpty() ? lanes.firstKey() : nextLane;
+                    }
+                }
+                controller = nextController == null && !installedByController.isEmpty()
+                        ? installedByController.firstKey() : nextController;
+            }
+            return null;
+        }
+
+        private boolean hasInstalled(ServerLevel level, SharedIoCoordinator coordinator) {
+            return nextInstalled(level, coordinator) != null;
+        }
+
         private boolean hasUnattempted(Set<Request> attempted, Set<Request> eligible) {
             for (NavigableMap<LaneKey, ArrayDeque<Request>> lanes : requests.values()) {
                 for (ArrayDeque<Request> queue : lanes.values()) {
                     for (Request request : queue) {
                         if (!attempted.contains(request) && eligible.contains(request)) return true;
                     }
+                }
+            }
+            return false;
+        }
+
+        private boolean hasQualifiedRequest(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
+                                            SharedIoCoordinator coordinator) {
+            for (NavigableMap<LaneKey, ArrayDeque<Request>> lanes : requests.values()) {
+                for (ArrayDeque<Request> queue : lanes.values()) for (Request request : queue) {
+                    if (!attempted.contains(request) && eligible.contains(request)
+                            && coordinator.qualifiedRequest(request, level)) return true;
                 }
             }
             return false;
@@ -352,6 +1237,7 @@ public final class SharedIoCoordinator {
         }
 
         private BlockPos firstController() {
+            if (!installed.isEmpty()) return installed.firstKey().controllerPos();
             for (NavigableMap<LaneKey, ArrayDeque<Request>> lanes : requests.values()) {
                 if (!lanes.isEmpty()) return lanes.firstKey().controllerPos();
             }
@@ -359,7 +1245,7 @@ public final class SharedIoCoordinator {
         }
 
         private boolean isDisposable() {
-            return !worksetInFlight && cursors.isEmpty() && requests.values().stream().allMatch(Map::isEmpty);
+            return !worksetInFlight && installed.isEmpty() && cursors.isEmpty() && requests.values().stream().allMatch(Map::isEmpty);
         }
     }
 

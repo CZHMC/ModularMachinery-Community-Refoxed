@@ -15,11 +15,13 @@ public final class PatternStartBatchReservation implements AutoCloseable {
     public enum Status {
         UNAVAILABLE,
         RESERVED,
+        /** Every reservation is paid; cancelled lanes need not have activated. */
         COMMITTED
     }
 
     private final List<PatternStartReservation> reservations;
     private Status status;
+    private boolean committing;
 
     private PatternStartBatchReservation(Status status, List<PatternStartReservation> reservations) {
         this.status = status;
@@ -54,22 +56,36 @@ public final class PatternStartBatchReservation implements AutoCloseable {
 
     public boolean commit(Consumer<TransactionContext> transactionWrites) {
         Objects.requireNonNull(transactionWrites, "transactionWrites");
-        if (status != Status.RESERVED) return false;
-        try (Transaction transaction = Transaction.openRoot()) {
+        if (committing || status != Status.RESERVED) return false;
+        committing = true;
+        int acquired = 0;
+        try {
             for (PatternStartReservation reservation : reservations) {
-                if (reservation.commitPlan(transaction)) continue;
-                rollback();
-                return false;
+                if (!reservation.beginCommitAttempt()) return false;
+                acquired++;
             }
-            transactionWrites.accept(transaction);
-            transaction.commit();
-        } catch (RuntimeException exception) {
-            rollback();
-            return false;
+            boolean committed = false;
+            try (Transaction transaction = Transaction.openRoot()) {
+                for (PatternStartReservation reservation : reservations) {
+                    if (!reservation.commitPlan(transaction)) return false;
+                }
+                transactionWrites.accept(transaction);
+                transaction.commit();
+                committed = true;
+            } catch (RuntimeException exception) {
+                if (!reservations.stream().allMatch(PatternStartReservation::paid)) return false;
+                reservations.forEach(PatternStartReservation::pauseAfterNotificationFailure);
+                committed = true;
+            } finally {
+                if (!committed) rollback();
+            }
+            status = Status.COMMITTED;
+            reservations.forEach(PatternStartReservation::activate);
+            return true;
+        } finally {
+            for (int index = 0; index < acquired; index++) reservations.get(index).endCommitAttempt();
+            committing = false;
         }
-        reservations.forEach(PatternStartReservation::activate);
-        status = Status.COMMITTED;
-        return true;
     }
 
     public void rollback() {

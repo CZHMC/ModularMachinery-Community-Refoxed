@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -16,6 +17,7 @@ public final class PatternStartReservation implements AutoCloseable {
     public enum Status {
         UNAVAILABLE,
         RESERVED,
+        /** Resources are paid; a root notification may have cancelled activation. */
         COMMITTED
     }
 
@@ -24,8 +26,10 @@ public final class PatternStartReservation implements AutoCloseable {
     private final CraftingRuntime runtime;
     private final CraftingRuntime.PreparedStart preparedStart;
     private final Runnable release;
+    private RecipeCommitLedger payment;
     private Runnable afterCommit = () -> { };
     private boolean rolledBack;
+    private boolean committing;
     private Status status;
 
     private PatternStartReservation(Status status, MachineRecipe recipe, String laneId, CraftingRuntime runtime,
@@ -73,34 +77,71 @@ public final class PatternStartReservation implements AutoCloseable {
         return commit(ignored -> { });
     }
 
-    /** Commits the reserved start with additional storage mutations in the input transaction. */
+    /** Returns true once resources are paid, even if a root notification cancels activation. */
     public boolean commit(Consumer<TransactionContext> transactionWrites) {
         Objects.requireNonNull(transactionWrites, "transactionWrites");
-        if (status != Status.RESERVED || rolledBack) return false;
-        try (Transaction transaction = Transaction.openRoot()) {
-            if (!runtime.commitPatternPlan(preparedStart, transaction)) {
-                rollback();
-                return false;
+        if (!beginCommitAttempt()) return false;
+        try {
+            boolean committed = false;
+            try (Transaction transaction = Transaction.openRoot()) {
+                if (!commitPlan(transaction)) return false;
+                transactionWrites.accept(transaction);
+                transaction.commit();
+                committed = true;
+            } catch (RuntimeException exception) {
+                if (!paid()) return false;
+                pauseAfterNotificationFailure();
+                committed = true;
+            } finally {
+                if (!committed) rollback();
             }
-            transactionWrites.accept(transaction);
-            transaction.commit();
-        } catch (RuntimeException exception) {
-            rollback();
-            return false;
+            activate();
+            return true;
+        } finally {
+            endCommitAttempt();
         }
-        activate();
+    }
+
+    boolean beginCommitAttempt() {
+        if (committing || status != Status.RESERVED || rolledBack) return false;
+        committing = true;
         return true;
     }
 
+    void endCommitAttempt() {
+        committing = false;
+    }
+
     boolean commitPlan(TransactionContext transaction) {
-        return status == Status.RESERVED && !rolledBack && runtime.commitPatternPlan(preparedStart, transaction);
+        if (status != Status.RESERVED || rolledBack || !runtime.commitPatternPlan(preparedStart, transaction)) return false;
+        payment = runtime.patternStartPayment(preparedStart);
+        return true;
+    }
+
+    boolean paid() {
+        return payment != null && payment.state().paidAttempts() > 0L;
+    }
+
+    void pauseAfterNotificationFailure() {
+        if (paid()) payment.pauseAfterCommitFailure();
     }
 
     void activate() {
-        runtime.activatePatternStart(preparedStart);
-        release.run();
+        // COMMITTED describes payment, including a paid start cancelled by a root notification.
         status = Status.COMMITTED;
-        afterCommit.run();
+        rolledBack = false;
+        try {
+            boolean activated;
+            try {
+                activated = runtime.activatePatternStart(preparedStart);
+            } finally {
+                release.run();
+            }
+            if (activated) afterCommit.run();
+        } catch (RuntimeException exception) {
+            pauseAfterNotificationFailure();
+            MMCR.LOG.warn("Pattern start paid before activation callback failure: lane={}", laneId, exception);
+        }
     }
 
     public PatternStartReservation afterCommit(Runnable action) {
@@ -116,6 +157,7 @@ public final class PatternStartReservation implements AutoCloseable {
 
     public void rollback() {
         if (status != Status.RESERVED || rolledBack) return;
+        if (paid()) return;
         rolledBack = true;
         release.run();
     }

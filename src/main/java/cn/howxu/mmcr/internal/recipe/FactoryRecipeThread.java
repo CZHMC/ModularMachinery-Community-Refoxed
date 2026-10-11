@@ -89,6 +89,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 : baseThread ? "base" : coreThread ? "core-" + this.threadName
                 : this.threadName.startsWith("factory-") ? this.threadName : "factory";
         this.runtime.setScreenText(controller.recipeScreenText(this.laneId));
+        bindInstalledLane();
     }
 
     public static FactoryRecipeThread simple(MachineControllerBlockEntity controller) {
@@ -318,8 +319,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                                               long availableParallelism, long structureVersion, long capabilityVersion,
                                               long modifierVersion, long componentStateVersion) {
         if (!tryRestartEligibility(candidates, availableParallelism, structureVersion, capabilityVersion,
-                modifierVersion, componentStateVersion, context.catalogVersion())
-                || !canRestartNow(context, lastRecipe, structureVersion)) return false;
+                modifierVersion, componentStateVersion, context.catalogVersion())) return false;
         return enqueueAsyncFinishRestart(lastRecipe, availableParallelism, structureVersion, context);
     }
 
@@ -435,18 +435,9 @@ public final class FactoryRecipeThread extends RecipeThread {
                 && lastRecipeComponentStateVersion == componentStateVersion
                 && recipeBelongsToCurrentMachine(retryRecipe)
                 && candidatesFor(candidates, catalogVersion).contains(retryRecipe);
-        if (!canRestart || !canRestartNow(context, retryRecipe, structureVersion)) return false;
+        if (!canRestart) return false;
         failureCandidates = List.of(retryRecipe);
         return startRecipe(retryRecipe, availableParallelism, structureVersion, context);
-    }
-
-    private boolean canRestartNow(@Nullable FactorySearchContext context, MachineRecipe recipe, long structureVersion) {
-        if (context == null || recipe == null) return context == null;
-        SearchResult preflight = search(context, List.of(recipe), structureVersion);
-        RecipeSearchResult result = preflight.result();
-        if (preflight.failure() == null && result != null && result.success()) return true;
-        onStartSearchFailed(result == null ? null : result.failure());
-        return false;
     }
 
     private boolean tryRestartEligibility(List<MachineRecipe> candidates, long availableParallelism,
