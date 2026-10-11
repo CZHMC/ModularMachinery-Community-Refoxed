@@ -43,7 +43,6 @@ import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
 import cn.howxu.mmcr.api.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
-import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -612,7 +611,7 @@ public final class CraftingRuntime {
     }
 
     public CapabilityTickResult tickIdle() {
-        if (components.capabilities().stream().noneMatch(capability -> capability.facet(TickFacet.class).isPresent())) {
+        if (!components.hasTickFacets()) {
             return handleCapabilityTickResult(CapabilityTickResult.empty());
         }
         MachineBehaviorContext machineContext = behaviorContext();

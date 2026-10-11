@@ -636,6 +636,61 @@ class StructureMatcherTest {
     }
 
     @Test
+    void capture_reuses_unchanged_snapshots_but_resolves_suppliers_for_every_batch() {
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<Block> supplied = new AtomicReference<>(Blocks.STONE);
+        BlockPredicate deferred = new BlockPredicate.DeferredBlock(() -> {
+            calls.incrementAndGet();
+            return supplied.get();
+        });
+        BlockPredicate expected = new BlockPredicate.AnyOf(List.of(new BlockPredicate.AnyOf(List.of(deferred)), deferred));
+        Map<BlockPos, BlockPredicate> predicates = new LinkedHashMap<>();
+        Map<BlockPos, Block> blocks = new LinkedHashMap<>();
+        for (int index = 0; index < 3; index++) {
+            BlockPos pos = new BlockPos(index, 0, 0);
+            predicates.put(pos, expected);
+            blocks.put(pos, Blocks.STONE);
+        }
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(predicates), Map.of(), true,
+                StructureMatcher.ScanOptions.of(3, false, 0));
+        StructureMatcher.ScanBatch first = scan.capture(LevelStub.create(blocks), BlockPos.ZERO);
+        scan.apply(first.identity(), first.match());
+        StructureMatcher.ScanBatch second = scan.capture(LevelStub.create(blocks), BlockPos.ZERO);
+        assertThat(second.entries().getFirst().matchingExpected()).isSameAs(first.entries().getFirst().matchingExpected());
+        assertThat(calls.get()).isEqualTo(2);
+        scan.apply(second.identity(), second.match());
+        supplied.set(Blocks.DIRT);
+        blocks.replaceAll((pos, block) -> Blocks.DIRT);
+        StructureMatcher.ScanBatch third = scan.capture(LevelStub.create(blocks), BlockPos.ZERO);
+        assertThat(calls.get()).isEqualTo(3);
+        assertThat(third.entries().getFirst().matchingExpected()).isNotSameAs(first.entries().getFirst().matchingExpected());
+        assertThat(first.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        assertThat(third.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+    }
+
+    @Test
+    void capture_refreshes_mutable_children_between_batches_without_mutating_old_snapshots() {
+        List<BlockPredicate> children = new ArrayList<>(List.of(new BlockPredicate.OfBlock(Blocks.STONE)));
+        BlockPredicate expected = new BlockPredicate.AnyOf(children);
+        Map<BlockPos, BlockPredicate> predicates = new LinkedHashMap<>();
+        for (int index = 0; index < 3; index++) predicates.put(new BlockPos(index, 0, 0), expected);
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(predicates), Map.of(), true,
+                StructureMatcher.ScanOptions.of(3, false, 0));
+        StructureMatcher.ScanBatch first = scan.capture(LevelStub.create(Map.of(BlockPos.ZERO, Blocks.STONE)), BlockPos.ZERO);
+        scan.apply(first.identity(), first.match());
+        children.add(new BlockPredicate.OfBlock(Blocks.DIRT));
+        StructureMatcher.ScanBatch second = scan.capture(LevelStub.create(Map.of(new BlockPos(1, 0, 0), Blocks.DIRT)), BlockPos.ZERO);
+        scan.apply(second.identity(), second.match());
+        children.clear();
+        children.add(new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK));
+        StructureMatcher.ScanBatch third = scan.capture(LevelStub.create(Map.of(new BlockPos(2, 0, 0), Blocks.GOLD_BLOCK)), BlockPos.ZERO);
+        assertThat(first.entries().getFirst().matchingExpected().children()).hasSize(1);
+        assertThat(first.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        assertThat(second.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        assertThat(third.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+    }
+
+    @Test
     void capture_shared_replacements_match_only_their_configured_positions() {
         AtomicInteger calls = new AtomicInteger();
         BlockPredicate replacementPredicate = new BlockPredicate.AnyOf(List.of(new BlockPredicate.DeferredBlock(() -> {

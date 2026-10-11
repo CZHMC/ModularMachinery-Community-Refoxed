@@ -534,6 +534,20 @@ public final class MachineControllerRuntime {
         return structure.captureScan(level, controllerPos);
     }
 
+    void markStructureScanStepped(long gameTime) {
+        structure.setScanSteppedTick(gameTime);
+    }
+
+    void setStructureCheckActive(boolean active) {
+        structure.setCheckActive(active);
+    }
+
+    void scheduleStructureScanContinuation(long nextCheckTick, StructureRuntime.CheckReason reason) {
+        structure.setNextCheckTick(nextCheckTick);
+        structure.setCheckReason(reason == StructureRuntime.CheckReason.SAFETY_CHECK
+                ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION);
+    }
+
     void applyStructureScanResult(StructureMatcher.ScanIdentity identity, StructureMatcher.ScanResult result) {
         structure.applyScanResult(identity, result);
     }

@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.jetbrains.annotations.Nullable;
@@ -157,6 +158,7 @@ public final class StructureMatcher {
         private final boolean stateSensitive;
         private final ScanOptions options;
         private final int activeSentinelCount;
+        private final CapturePredicates capturePredicates = new CapturePredicates();
         private int sentinelCursor;
         private boolean sentinelsChecked;
         private int scanIndex;
@@ -225,9 +227,10 @@ public final class StructureMatcher {
                 return pendingBatch = new ScanBatch(identity, List.of(), sentinelCursor, sentinelsChecked, scanIndex,
                         ScanStatus.INVALIDATED, invalidated, stateSensitive);
             }
-            List<ScanEntry> entries = new java.util.ArrayList<>();
-            CapturePredicates memo = new CapturePredicates();
             int budget = batchSize();
+            List<ScanEntry> entries = new ArrayList<>(budget);
+            CapturePredicates memo = capturePredicates;
+            memo.beginBatch();
             int nextSentinelCursor = sentinelCursor;
             boolean nextSentinelsChecked = sentinelsChecked;
             int nextScanIndex = scanIndex;
@@ -295,23 +298,31 @@ public final class StructureMatcher {
                     && !(predicate instanceof BlockPredicate.DeferredBlock deferred && !deferred.networkInterface())) {
                 return predicate;
             }
-            BlockPredicate cached = memo.get(predicate);
-            if (cached != null) return cached;
+            CapturedPredicate cached = memo.get(predicate);
+            if (cached != null && cached.batch == memo.batch) return cached.snapshot;
             BlockPredicate snapshot = switch (predicate) {
-                case BlockPredicate.DeferredBlock deferred when !deferred.networkInterface() ->
-                        new BlockPredicate.OfBlock(deferred.supplier().get());
+                case BlockPredicate.DeferredBlock deferred when !deferred.networkInterface() -> {
+                    Block block = deferred.supplier().get();
+                    yield cached != null && cached.snapshot instanceof BlockPredicate.OfBlock previous
+                            && previous.block() == block ? previous : new BlockPredicate.OfBlock(block);
+                }
                 case BlockPredicate.AnyOf anyOf -> {
                     List<BlockPredicate> children = anyOf.children();
-                    List<BlockPredicate> snapshots = null;
+                    BlockPredicate.AnyOf previous = cached != null && cached.snapshot instanceof BlockPredicate.AnyOf value
+                            ? value : anyOf;
+                    List<BlockPredicate> previousChildren = previous.children();
+                    BlockPredicate[] snapshots = children.size() == previousChildren.size()
+                            ? null : children.toArray(BlockPredicate[]::new);
                     for (int index = 0; index < children.size(); index++) {
-                        BlockPredicate child = children.get(index);
-                        BlockPredicate childSnapshot = snapshotPredicate(child, memo);
-                        if (childSnapshot != child && snapshots == null) snapshots = new ArrayList<>(children);
-                        if (snapshots != null) snapshots.set(index, childSnapshot);
+                        BlockPredicate childSnapshot = snapshotPredicate(children.get(index), memo);
+                        if (snapshots == null && childSnapshot != previousChildren.get(index)) {
+                            snapshots = previousChildren.toArray(BlockPredicate[]::new);
+                        }
+                        if (snapshots != null) snapshots[index] = childSnapshot;
                     }
-                    if (snapshots != null) yield new BlockPredicate.AnyOf(List.copyOf(snapshots));
-                    List<BlockPredicate> immutableChildren = List.copyOf(children);
-                    yield immutableChildren == children ? anyOf : new BlockPredicate.AnyOf(immutableChildren);
+                    if (snapshots != null) yield new BlockPredicate.AnyOf(List.of(snapshots));
+                    List<BlockPredicate> immutableChildren = List.copyOf(previousChildren);
+                    yield immutableChildren == previousChildren ? previous : new BlockPredicate.AnyOf(immutableChildren);
                 }
                 default -> predicate;
             };
@@ -321,15 +332,35 @@ public final class StructureMatcher {
 
         /** @author howxu <dev@howxu.cn> */
         private static final class CapturePredicates {
-            private @Nullable IdentityHashMap<BlockPredicate, BlockPredicate> captured;
+            private @Nullable IdentityHashMap<BlockPredicate, CapturedPredicate> captured;
+            private long batch;
 
-            @Nullable BlockPredicate get(BlockPredicate predicate) {
+            void beginBatch() { batch++; }
+
+            @Nullable CapturedPredicate get(BlockPredicate predicate) {
                 return captured == null ? null : captured.get(predicate);
             }
 
             void put(BlockPredicate predicate, BlockPredicate snapshot) {
                 if (captured == null) captured = new IdentityHashMap<>();
-                captured.put(predicate, snapshot);
+                CapturedPredicate entry = captured.get(predicate);
+                if (entry == null) captured.put(predicate, new CapturedPredicate(batch, snapshot));
+                else {
+                    entry.batch = batch;
+                    entry.snapshot = snapshot;
+                }
+            }
+        }
+
+        /** Server-thread memo entry; only its immutable predicate snapshot reaches the worker.
+         * @author howxu <dev@howxu.cn> */
+        private static final class CapturedPredicate {
+            private long batch;
+            private BlockPredicate snapshot;
+
+            private CapturedPredicate(long batch, BlockPredicate snapshot) {
+                this.batch = batch;
+                this.snapshot = snapshot;
             }
         }
 
