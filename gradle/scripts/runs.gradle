@@ -41,5 +41,10 @@ runs {
 
     clientData {
         arguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        dependencies {
+            // modern ui
+            runtime("maven.modrinth:${mui_id}:${mui_version}")
+            
+        }
     }
 }
