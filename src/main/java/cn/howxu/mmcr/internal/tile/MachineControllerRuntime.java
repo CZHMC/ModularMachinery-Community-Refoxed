@@ -258,6 +258,10 @@ public final class MachineControllerRuntime {
         return workingSnapshot;
     }
 
+    boolean shouldCheckStructure(long gameTime) {
+        return structure.shouldCheck(gameTime);
+    }
+
     private Map<String, DataValue> currentDataStorageValues() {
         if (controller.getLevel() != null && controller.getLevel().isClientSide()) {
             return clientDataStorageValues;

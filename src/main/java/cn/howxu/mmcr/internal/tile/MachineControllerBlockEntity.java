@@ -1903,17 +1903,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean shouldCheckStructure() {
-        StructureSnapshot structure = currentRuntimeSnapshot().structure();
-        StructureWorkSnapshot work = structureWorkSnapshot();
-        if (structure.dirty()) return true;
-        if (!structure.formed() && work.nextCheckTick() < 0L) return true;
-        publishStructureWork(state -> state.withCheckCounter(work.checkCounter() + 1));
-        if (work.scan() != null && level.getGameTime() >= work.nextCheckTick()) return true;
-        if (structure.formed() && level.getGameTime() >= work.nextCheckTick()) {
-            publishStructureWork(state -> state.withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK));
-            return true;
-        }
-        return level.getGameTime() >= work.nextCheckTick();
+        return runtime.shouldCheckStructure(level.getGameTime());
     }
 
     private long nextStructureSafetyCheckTick(long gameTime) {
