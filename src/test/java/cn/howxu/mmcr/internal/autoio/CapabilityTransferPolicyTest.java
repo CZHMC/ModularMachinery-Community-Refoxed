@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
@@ -296,6 +297,22 @@ class CapabilityTransferPolicyTest {
     }
 
     @Test
+    void dynamic_transfer_declaration_is_rechecked_without_replacing_the_port_snapshot() {
+        OperationOnlyItemCapability capability = new OperationOnlyItemCapability();
+        OperationOnlyPort port = new OperationOnlyPort(capability);
+        CapabilitySnapshot snapshot = port.capabilitySnapshot();
+
+        assertThat(port.isAutoIOSideExposed(capability.type(), null)).isFalse();
+        capability.transferEnabled = true;
+        assertThat(CapabilityTransferPolicies.policyFor(capability)).isPresent();
+        assertThat(port.isAutoIOSideExposed(capability.type(), null)).isTrue();
+        capability.transferEnabled = false;
+        assertThat(CapabilityTransferPolicies.policyFor(capability)).isEmpty();
+        assertThat(port.isAutoIOSideExposed(capability.type(), null)).isFalse();
+        assertThat(port.capabilitySnapshot()).isSameAs(snapshot);
+    }
+
+    @Test
     void longValueStorageKeepsLongAmountsAndHonorsTransactionRollback() {
         LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, () -> {});
         long amount = (long) Integer.MAX_VALUE + 17L;
@@ -464,8 +481,9 @@ class CapabilityTransferPolicyTest {
         }
     }
 
-    private static final class OperationOnlyItemCapability implements MachineCapability, OperationFacet {
+    private static final class OperationOnlyItemCapability implements MachineCapability, OperationFacet, TransferFacet {
         private final AtomicInteger prepareCalls = new AtomicInteger();
+        private boolean transferEnabled;
 
         @Override
         public CapabilityType type() {
@@ -492,7 +510,7 @@ class CapabilityTransferPolicyTest {
 
                 @Override
                 public Set<Class<? extends CapabilityFacet>> facets() {
-                    return Set.of(OperationFacet.class);
+                    return transferEnabled ? Set.of(OperationFacet.class, TransferFacet.class) : Set.of(OperationFacet.class);
                 }
             };
         }
@@ -511,6 +529,10 @@ class CapabilityTransferPolicyTest {
         private int prepareCalls() {
             return prepareCalls.get();
         }
+
+        @Override public Level level() { return null; }
+        @Override public BlockPos position() { return BlockPos.ZERO; }
+        @Override public long transferLimit() { return 64L; }
     }
 
     @SuppressWarnings("unchecked")

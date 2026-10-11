@@ -54,6 +54,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
     private final IOType ioType;
     private final ResourceStorage<FluidResource> storage;
     private final CapabilityView view;
+    private final boolean exposeTransferFacet;
     private final AsyncPlanningFacet asyncPlanning;
 
     public FluidHatchCapability(ResourceStorage<FluidResource> storage, IOType ioType) {
@@ -71,6 +72,7 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
         this.port = port;
         this.ioType = ioType;
         this.storage = storage;
+        this.exposeTransferFacet = exposeTransferFacet;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override
             public Object planningIdentity() {
@@ -158,6 +160,9 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == TransferFacet.class) {
+            return exposeTransferFacet ? Optional.of(facetType.cast(this)) : Optional.empty();
+        }
         return MachineCapability.super.facet(facetType);
     }
 

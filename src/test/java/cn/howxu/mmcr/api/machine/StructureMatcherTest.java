@@ -29,6 +29,7 @@ import java.util.function.Supplier;
 
 import net.minecraft.resources.Identifier;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StructureMatcherTest {
 
@@ -867,5 +868,71 @@ class StructureMatcherTest {
 
         assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.INVALIDATED);
         assertThat(result.checkedEntries()).isZero();
+    }
+
+    @Test
+    void captured_diagnostic_keeps_observed_state_and_complete_identity_after_world_changes() {
+        BlockPos relative = new BlockPos(1, 2, 3);
+        BlockPos controller = new BlockPos(10, 64, -3);
+        BlockPos world = controller.offset(relative);
+        BlockPredicate expected = new BlockPredicate.OfBlock(Blocks.STONE);
+        BlockArray pattern = new BlockArray(Map.of(relative, expected));
+        Object identity = new Object();
+        Level level = LevelStub.create(Map.of(world, Blocks.DIRT));
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(7L, Direction.UP, Direction.WEST,
+                3, identity, pattern, Map.of(), true, StructureMatcher.ScanOptions.of(1, false, 0), null);
+        StructureMatcher.ScanBatch batch = scan.capture(level, controller);
+
+        level.setBlock(world, Blocks.STONE.defaultBlockState(), 3);
+        StructureMatcher.ScanResult result = batch.match();
+        StructureMatcher.Mismatch mismatch = result.mismatch().orElseThrow();
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
+        assertThat(mismatch.relativePos()).isEqualTo(relative);
+        assertThat(mismatch.worldPos()).isEqualTo(world);
+        assertThat(mismatch.actualState()).isSameAs(Blocks.DIRT.defaultBlockState());
+        assertThat(mismatch.expected()).isSameAs(expected);
+        assertThat(mismatch.structureVersion()).isEqualTo(7L);
+        assertThat(mismatch.frontFacing()).isEqualTo(Direction.UP);
+        assertThat(mismatch.rollFacing()).isEqualTo(Direction.WEST);
+        assertThat(mismatch.stageNumber()).isEqualTo(3);
+        assertThat(mismatch.patternIdentity()).isSameAs(identity);
+        assertThat(batch.entries().getFirst().mismatch()).isSameAs(mismatch);
+
+        StructureMatcher.ScanEntry legacy = new StructureMatcher.ScanEntry(mismatch, expected, List.of());
+        assertThat(legacy.mismatch()).isSameAs(mismatch);
+        assertThat(batch.entries().getFirst()).isEqualTo(legacy);
+        assertThat(legacy).isEqualTo(batch.entries().getFirst());
+        assertThat(legacy.hashCode()).isEqualTo(batch.entries().getFirst().hashCode());
+        assertThat(legacy.toString()).isEqualTo(batch.entries().getFirst().toString());
+    }
+
+    @Test
+    void successful_capture_matches_the_observation_after_the_world_changes() {
+        BlockPos controller = new BlockPos(10, 64, -3);
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
+        Level level = LevelStub.create(Map.of(controller, Blocks.STONE));
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(1, false, 0));
+        StructureMatcher.ScanBatch batch = scan.capture(level, controller);
+
+        level.setBlock(controller, Blocks.DIRT.defaultBlockState(), 3);
+        assertThat(batch.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+        assertThat(batch.match().mismatch()).isEmpty();
+        assertThatThrownBy(() -> batch.entries().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void scan_entry_preserves_nullable_diagnostics_and_record_deconstruction() {
+        BlockPredicate expected = new BlockPredicate.OfBlock(Blocks.STONE);
+        StructureMatcher.ScanEntry entry = new StructureMatcher.ScanEntry(null, expected, List.of());
+        Record record = entry;
+        assertThat(record).isSameAs(entry);
+        assertThat(entry.mismatch()).isNull();
+        assertThat(entry).isEqualTo(new StructureMatcher.ScanEntry(null, expected, List.of()));
+        if (entry instanceof StructureMatcher.ScanEntry(var mismatch, var matchingExpected, var replacements)) {
+            assertThat(mismatch).isNull();
+            assertThat(matchingExpected).isSameAs(expected);
+            assertThat(replacements).isEmpty();
+        }
     }
 }
