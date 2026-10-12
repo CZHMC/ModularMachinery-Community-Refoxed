@@ -83,6 +83,17 @@ public final class SharedIoCoordinator {
     private long executionRoundId;
     private long executionGameTime = Long.MIN_VALUE;
     private boolean executionRunning;
+    private long schedulingRevision;
+    private long postRound = Long.MIN_VALUE;
+    private long postGameTime = Long.MIN_VALUE;
+    private long postSchedulingRevision = Long.MIN_VALUE;
+    private long postTopologyRevision = Long.MIN_VALUE;
+    private final Set<DomainKey> changedExecutionDomains = new HashSet<>();
+    private final Set<DomainKey> changedRequestDomains = new HashSet<>();
+    private final Set<DomainKey> postDirtyDomains = new HashSet<>();
+    private final Set<ExecutionSlot> dirtyTerminations = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final NavigableMap<DomainKey, DomainBucket> postCandidates = new TreeMap<>();
+    private final Map<Long, StructureClaimRegistry.ResourceDomain> postKnownDomains = new HashMap<>();
 
     public SharedIoCoordinator() {
         this(ServerConfig.asyncSharedIoRequestsPerLevelTick(), ServerConfig.asyncSharedIoWorksetEntries());
@@ -121,6 +132,12 @@ public final class SharedIoCoordinator {
         coordinator.plannedSynchronousControllers.clear();
         coordinator.waitingExecutions.clear();
         coordinator.domains.clear();
+        coordinator.postCandidates.clear();
+        coordinator.postKnownDomains.clear();
+        coordinator.postDirtyDomains.clear();
+        coordinator.changedExecutionDomains.clear();
+        coordinator.changedRequestDomains.clear();
+        coordinator.dirtyTerminations.clear();
         coordinator.controllerPermits.values().forEach(ControllerPermit::invalidate);
         coordinator.controllerPermits.clear();
         coordinator.executionRoundId = 0L;
@@ -196,6 +213,16 @@ public final class SharedIoCoordinator {
         executionGameTime = gameTime;
         beginLevelTick(gameTime);
         controllerPermit(controllerPos).markEligible(executionRoundId, gameTime);
+        Set<LaneRecords> lanes = executionsByController.get(controllerPos);
+        if (lanes != null) for (LaneRecords lane : lanes) for (ExecutionSlot slot : lane.slots) {
+            DomainBucket bucket = slot.domain == null ? null : domains.get(slot.domain);
+            if (slot.execution != null && !slot.waiting && bucket != null) {
+                bucket.addPending(slot);
+                changedExecutionDomains.add(slot.domain);
+                postDirtyDomains.add(slot.domain);
+            }
+        }
+        schedulingRevision++;
     }
 
     public void markControllerEligible(MachineControllerBlockEntity controller, long gameTime) {
@@ -413,6 +440,9 @@ public final class SharedIoCoordinator {
             receiptSlots.put(execution.identity(), slot);
             DomainBucket bucket = domains.computeIfAbsent(slot.domain, ignored -> new DomainBucket());
             bucket.putInstalled(slot);
+            schedulingRevision++;
+            changedExecutionDomains.add(slot.domain);
+            postDirtyDomains.add(slot.domain);
             slot.synchronousRound = Long.MIN_VALUE;
             publishExecution(slot, false);
             if (controller.activeWorkMode() == MachineWorkMode.SYNC) grantSynchronousRound(executionRoundId);
@@ -500,6 +530,7 @@ public final class SharedIoCoordinator {
         remainingRequests--;
         installedAttempts++;
         DomainBucket bucket = domains.get(slot.domain);
+        if (bucket != null) bucket.removePending(slot);
         // SYNC cursors already advanced in grant order, independently of the actual BE order.
         if (execution.owner().controller().activeWorkMode() != MachineWorkMode.SYNC) {
             domainCursor = slot.domain;
@@ -548,6 +579,9 @@ public final class SharedIoCoordinator {
         removeWaitingOwner(slot);
         DomainBucket bucket = domains.computeIfAbsent(slot.domain, ignored -> new DomainBucket());
         bucket.putInstalled(slot);
+        schedulingRevision++;
+        changedExecutionDomains.add(slot.domain);
+        postDirtyDomains.add(slot.domain);
     }
 
     private void wakeDueExecutions(long gameTime) {
@@ -596,6 +630,10 @@ public final class SharedIoCoordinator {
         }
         DomainBucket bucket = domains.get(slot.domain);
         if (bucket != null) bucket.removeInstalled(slot);
+        if (bucket != null && bucket.isDisposable()) {
+            domains.remove(slot.domain, bucket);
+            postCandidates.remove(slot.domain);
+        }
         if (slot.waiting) {
             Set<ExecutionSlot> waiting = waitingExecutions.get(slot.retryAt);
             if (waiting != null) {
@@ -606,6 +644,7 @@ public final class SharedIoCoordinator {
         slot.waiting = false;
         removeWaitingOwner(slot);
         slot.execution = null;
+        dirtyTerminations.remove(slot);
         if (slot.receipt == null && slot.identity != null) receiptSlots.remove(slot.identity, slot);
         slot.reservedOwner = null;
         slot.acceptedOwner = null;
@@ -814,7 +853,10 @@ public final class SharedIoCoordinator {
     }
 
     public void enqueue(Request request) {
+        schedulingRevision++;
         DomainKey key = new DomainKey(request.domainId(), request.domainGeneration());
+        changedRequestDomains.add(key);
+        postDirtyDomains.add(key);
         DomainBucket bucket = domains.computeIfAbsent(key, ignored -> new DomainBucket());
         bucket.requests.get(requestType(request))
                 .computeIfAbsent(request.laneKey(), ignored -> new ArrayDeque<>()).add(request);
@@ -832,11 +874,14 @@ public final class SharedIoCoordinator {
         domains.computeIfAbsent(key, ignored -> new DomainBucket());
         pendingTickWork.computeIfAbsent(key, ignored -> new ArrayDeque<>())
                 .add(new TickWorkEntry(level, laneTaskKey, preparedPlan, committer, discard));
+        schedulingRevision++;
+        postDirtyDomains.add(key);
         return true;
     }
 
     /** Discards every queued request owned by one controller. */
     public void cancel(BlockPos controllerPos) {
+        schedulingRevision++;
         ControllerPermit permit = controllerPermits.remove(controllerPos);
         if (permit != null) permit.invalidate();
         Set<LaneRecords> executions = executionsByController.get(controllerPos);
@@ -884,6 +929,10 @@ public final class SharedIoCoordinator {
     public int resolve(ServerLevel level) {
         if (closed) return 0;
         wakeDueExecutions(level.getGameTime());
+        return resolveKnownDomains(collectKnownDomains(level), true, level);
+    }
+
+    private Map<Long, StructureClaimRegistry.ResourceDomain> collectKnownDomains(ServerLevel level) {
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains = new HashMap<>();
         for (Map.Entry<DomainKey, DomainBucket> entry : domains.entrySet()) {
@@ -900,7 +949,98 @@ public final class SharedIoCoordinator {
                     workset.entries().getFirst().laneTaskKey().controllerPos());
             if (domain != null) knownDomains.put(domain.id(), domain);
         }
-        return resolveKnownDomains(knownDomains, true, level);
+        for (ExecutionSlot slot : activeExecutions.values()) if (slot.waiting) {
+            StructureClaimRegistry.ResourceDomain domain = registry.domainFor(slot.lane.key.controllerPos());
+            if (domain != null) knownDomains.put(domain.id(), domain);
+        }
+        return knownDomains;
+    }
+
+    /** Reuses an unchanged Post drain while preserving newly admitted continuation work. */
+    public int resolvePost(ServerLevel level) {
+        if (closed) return 0;
+        long topology = StructureClaimRegistry.get(level).topologyRevision();
+        long gameTime = level.getGameTime();
+        boolean rebuild = postRound != executionRoundId || postGameTime != gameTime || postTopologyRevision != topology;
+        if (postRound == executionRoundId && postGameTime == gameTime
+                && postSchedulingRevision == schedulingRevision && postTopologyRevision == topology
+                && requestsByController.isEmpty() && pendingTickWork.isEmpty()
+                && dirtyTerminations.isEmpty()) return 0;
+        // Capture before callbacks: work admitted during a drain must reach the next continuation.
+        postRound = executionRoundId;
+        postGameTime = gameTime;
+        postSchedulingRevision = schedulingRevision;
+        postTopologyRevision = topology;
+        wakeDueExecutions(gameTime);
+        if (rebuild) {
+            postKnownDomains.clear();
+            postKnownDomains.putAll(collectKnownDomains(level));
+            discardStaleDomains(postKnownDomains, true);
+            reconcileExecutions(level);
+            postCandidates.clear();
+            postCandidates.putAll(domains);
+            domains.values().forEach(bucket -> bucket.preparePending(executionRoundId, gameTime));
+            postDirtyDomains.clear();
+        } else {
+            drainDirtyTerminations();
+            for (DomainKey key : List.copyOf(postDirtyDomains)) {
+                DomainBucket bucket = domains.get(key);
+                if (bucket == null) {
+                    postCandidates.remove(key);
+                    continue;
+                }
+                BlockPos controller = bucket.firstController();
+                if (controller == null) {
+                    ArrayDeque<TickWorkEntry> pending = pendingTickWork.get(key);
+                    if (pending != null && !pending.isEmpty()) controller = pending.getFirst().laneTaskKey().controllerPos();
+                }
+                StructureClaimRegistry.ResourceDomain domain = controller == null ? null
+                        : StructureClaimRegistry.get(level).domainFor(controller);
+                if (domain == null || domain.id() != key.id || domain.generation() != key.generation) continue;
+                postKnownDomains.put(domain.id(), domain);
+                bucket.preparePending(executionRoundId, gameTime);
+                postCandidates.put(key, bucket);
+            }
+            postDirtyDomains.clear();
+            // Boundary failures retain their existing retry opportunity on a later drain.
+            for (Set<Request> requests : requestsByController.values()) for (Request request : requests) {
+                DomainKey key = new DomainKey(request.domainId(), request.domainGeneration());
+                DomainBucket bucket = domains.get(key);
+                if (bucket != null) postCandidates.put(key, bucket);
+            }
+        }
+        return drainDomains(postKnownDomains, level, postCandidates);
+    }
+
+    /** Main-thread cancellation or committed terminal payment wakes Post without global polling. */
+    public static void executionChanged(InstalledRecipeProgram execution) {
+        if (!(execution.owner().controller().getLevel() instanceof ServerLevel level)) return;
+        SharedIoCoordinator coordinator = COORDINATORS.get(level);
+        if (coordinator == null) return;
+        ExecutionSlot slot = coordinator.activeExecutions.get(execution.owner());
+        if (slot != null && slot.execution == execution) {
+            coordinator.dirtyTerminations.add(slot);
+            coordinator.schedulingRevision++;
+        }
+    }
+
+    private void drainDirtyTerminations() {
+        for (ExecutionSlot slot : List.copyOf(dirtyTerminations)) {
+            if (slot.execution != null && (slot.execution.cancelled()
+                    || slot.execution.ledger().state().outputPaid())) terminateExecution(slot);
+        }
+        dirtyTerminations.clear();
+    }
+
+    private void reconcileExecutions(ServerLevel level) {
+        for (ExecutionSlot slot : List.copyOf(activeExecutions.values())) {
+            if (slot.execution == null || slot.execution.cancelled()
+                    || slot.execution.owner().installedProgram() != slot.execution
+                    || !slot.execution.owner().active() || slot.execution.ledger().state().outputPaid()) {
+                terminateExecution(slot);
+            }
+        }
+        drainDirtyTerminations();
     }
 
     public int resolve(StructureClaimRegistry.ResourceDomain domain) {
@@ -919,24 +1059,37 @@ public final class SharedIoCoordinator {
     private int resolveKnownDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains,
                                     boolean discardUnknownDomains, ServerLevel level) {
         discardStaleDomains(knownDomains, discardUnknownDomains);
+        if (level != null) {
+            reconcileExecutions(level);
+            for (DomainBucket bucket : domains.values()) {
+                bucket.preparePending(executionRoundId, level.getGameTime());
+            }
+        }
+        return drainDomains(knownDomains, level, new TreeMap<>(domains));
+    }
+
+    private int drainDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains, ServerLevel level,
+                             NavigableMap<DomainKey, DomainBucket> candidates) {
         int progress = 0;
         Set<Request> attempted = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<Request> eligible = Collections.newSetFromMap(new IdentityHashMap<>());
-        domains.forEach((key, bucket) -> {
+        candidates.forEach((key, bucket) -> {
             StructureClaimRegistry.ResourceDomain domain = knownDomains.get(key.id);
             if (domain != null && domain.generation() == key.generation) eligible.addAll(bucket.allRequests());
         });
         WorkSelection selection = new WorkSelection();
+        changedExecutionDomains.clear();
+        changedRequestDomains.clear();
         try (AsyncPlanningFacet.CaptureScope ignored = AsyncPlanningFacet.beginCaptureScope()) {
             while (remainingRequests > 0) {
-                if (!selectNextWork(attempted, eligible, level, selection)) break;
+                if (!selectNextWork(attempted, eligible, level, selection, candidates)) break;
                 DomainKey key = selection.domain;
-                DomainBucket bucket = domains.get(key);
                 Object next = selection.work;
                 if (next instanceof ExecutionSlot slot) {
                     if (attemptExecution(slot, level)) progress++;
                     continue;
                 }
+                DomainBucket bucket = domains.get(key);
                 Request request = (Request) next;
                 attempted.add(request);
                 remainingRequests--;
@@ -954,10 +1107,10 @@ public final class SharedIoCoordinator {
                 }
             }
         }
-        for (StructureClaimRegistry.ResourceDomain domain : knownDomains.values()) {
-            submitTickWorkset(domain, new DomainKey(domain.id(), domain.generation()));
+        for (DomainKey key : List.copyOf(pendingTickWork.keySet())) {
+            StructureClaimRegistry.ResourceDomain domain = knownDomains.get(key.id);
+            if (domain != null && domain.generation() == key.generation) submitTickWorkset(domain, key);
         }
-        removeEmptyBuckets();
         return progress;
     }
 
@@ -975,23 +1128,36 @@ public final class SharedIoCoordinator {
     }
 
     private boolean selectNextWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
-                                   WorkSelection selection) {
-        int domainCount = domains.size();
+                                   WorkSelection selection, NavigableMap<DomainKey, DomainBucket> candidates) {
+        for (DomainKey key : changedExecutionDomains) {
+            DomainBucket bucket = domains.get(key);
+            if (bucket != null) candidates.put(key, bucket);
+        }
+        changedExecutionDomains.clear();
+        // Only admissions can revive an exhausted domain; unqualified backlog cannot.
+        for (DomainKey key : changedRequestDomains) {
+            DomainBucket bucket = domains.get(key);
+            if (bucket != null) candidates.putIfAbsent(key, bucket);
+        }
+        changedRequestDomains.clear();
+        int domainCount = candidates.size();
         if (domainCount == 0) return false;
-        DomainKey key = domainCursor == null ? domains.firstKey() : domains.higherKey(domainCursor);
-        if (key == null) key = domains.firstKey();
+        DomainKey key = domainCursor == null ? candidates.firstKey() : candidates.higherKey(domainCursor);
+        if (key == null) key = candidates.firstKey();
         // Selection invokes no callbacks. Re-read the live topology after each request instead
         // of retaining an iterator across commits, which may add/remove domains or resolve again.
         for (int offset = 0; offset < domainCount; offset++) {
             DomainBucket bucket = domains.get(key);
-            Object work = bucket.nextWork(attempted, eligible, level, this);
+            Object work = bucket == null ? null : bucket.nextWork(attempted, eligible, level, this);
             if (work != null) {
                 selection.domain = key;
                 selection.work = work;
                 return true;
             }
-            key = domains.higherKey(key);
-            if (key == null) key = domains.firstKey();
+            candidates.remove(key);
+            if (candidates.isEmpty()) return false;
+            key = candidates.higherKey(key);
+            if (key == null) key = candidates.firstKey();
         }
         return false;
     }
@@ -1009,6 +1175,7 @@ public final class SharedIoCoordinator {
                 : request instanceof FinishRequest ? RequestType.START : null;
         if (successor == null) return;
         bucket.requests.get(successor).values().forEach(eligible::addAll);
+        changedRequestDomains.add(key);
     }
 
     private void discardStaleDomains(Map<Long, StructureClaimRegistry.ResourceDomain> knownDomains,
@@ -1018,7 +1185,10 @@ public final class SharedIoCoordinator {
             if (current != null && current.generation() == key.generation) continue;
             if (current == null && !discardUnknownDomains) continue;
             DomainBucket bucket = domains.remove(key);
-            if (bucket != null) for (ExecutionSlot slot : List.copyOf(bucket.installed.values())) terminateExecution(slot);
+            for (ExecutionSlot slot : List.copyOf(activeExecutions.values())) {
+                if (key.equals(slot.domain)) terminateExecution(slot);
+            }
+            postCandidates.remove(key);
             if (bucket != null) for (Request request : bucket.allRequests()) {
                 request.discard();
                 removeOwnerIndex(request);
@@ -1070,6 +1240,10 @@ public final class SharedIoCoordinator {
         private final NavigableMap<LaneKey, ExecutionSlot> installed = new TreeMap<>();
         private final NavigableMap<BlockPos, NavigableMap<String, ExecutionSlot>> installedByController =
                 new TreeMap<>(DomainBucket::compareControllers);
+        private final NavigableMap<BlockPos, NavigableMap<String, ExecutionSlot>> pendingInstalled =
+                new TreeMap<>(DomainBucket::compareControllers);
+        private long pendingRound = Long.MIN_VALUE;
+        private long pendingTime = Long.MIN_VALUE;
         private final EnumMap<RequestType, Map<BlockPos, String>> controllerLaneCursors = new EnumMap<>(RequestType.class);
         private int nextType;
         private boolean worksetInFlight;
@@ -1111,6 +1285,12 @@ public final class SharedIoCoordinator {
 
         private Object nextLiveWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
                                     SharedIoCoordinator coordinator) {
+            if (requests.get(RequestType.START).isEmpty() && requests.get(RequestType.TICK).isEmpty()
+                    && requests.get(RequestType.FINISH).isEmpty()) {
+                ExecutionSlot execution = nextInstalled(level, coordinator);
+                if (execution != null) nextType = (RequestType.TICK.ordinal() + 1) % REQUEST_TYPES.length;
+                return execution;
+            }
             RequestType[] types = REQUEST_TYPES;
             for (int offset = 0; offset < types.length; offset++) {
                 int index = (nextType + offset) % types.length;
@@ -1164,11 +1344,36 @@ public final class SharedIoCoordinator {
             LaneKey key = slot.lane.key;
             installed.put(key, slot);
             installedByController.computeIfAbsent(key.controllerPos(), ignored -> new TreeMap<>()).put(key.laneId(), slot);
+            addPending(slot);
+        }
+
+        private void preparePending(long round, long gameTime) {
+            if (pendingRound == round && pendingTime == gameTime) return;
+            pendingRound = round;
+            pendingTime = gameTime;
+            pendingInstalled.clear();
+            installedByController.forEach((controller, lanes) -> pendingInstalled.put(controller, new TreeMap<>(lanes)));
+        }
+
+        private void addPending(ExecutionSlot slot) {
+            LaneKey key = slot.lane.key;
+            if (pendingRound != Long.MIN_VALUE && (slot.lane.lastAttemptRound == pendingRound
+                    || slot.lane.lastAttemptTime == pendingTime)) return;
+            pendingInstalled.computeIfAbsent(key.controllerPos(), ignored -> new TreeMap<>()).put(key.laneId(), slot);
+        }
+
+        private void removePending(ExecutionSlot slot) {
+            LaneKey key = slot.lane.key;
+            NavigableMap<String, ExecutionSlot> lanes = pendingInstalled.get(key.controllerPos());
+            if (lanes == null) return;
+            lanes.remove(key.laneId(), slot);
+            if (lanes.isEmpty()) pendingInstalled.remove(key.controllerPos());
         }
 
         private void removeInstalled(ExecutionSlot slot) {
             LaneKey key = slot.lane.key;
             installed.remove(key, slot);
+            removePending(slot);
             NavigableMap<String, ExecutionSlot> lanes = installedByController.get(key.controllerPos());
             if (lanes == null) return;
             lanes.remove(key.laneId(), slot);
@@ -1176,18 +1381,19 @@ public final class SharedIoCoordinator {
         }
 
         private ExecutionSlot nextInstalled(ServerLevel level, SharedIoCoordinator coordinator) {
-            if (installedByController.isEmpty()) return null;
+            if (pendingInstalled.isEmpty()) return null;
             LaneKey cursor = cursors.get(RequestType.TICK);
-            BlockPos controller = cursor == null ? installedByController.firstKey()
-                    : installedByController.higherKey(cursor.controllerPos());
-            if (controller == null) controller = installedByController.firstKey();
-            int controllerCount = installedByController.size();
+            BlockPos controller = cursor == null ? pendingInstalled.firstKey()
+                    : pendingInstalled.higherKey(cursor.controllerPos());
+            if (controller == null) controller = pendingInstalled.firstKey();
+            int controllerCount = pendingInstalled.size();
             for (int controllerOffset = 0; controllerOffset < controllerCount && controller != null; controllerOffset++) {
-                BlockPos nextController = installedByController.higherKey(controller);
-                NavigableMap<String, ExecutionSlot> lanes = installedByController.get(controller);
+                BlockPos nextController = pendingInstalled.higherKey(controller);
+                NavigableMap<String, ExecutionSlot> lanes = pendingInstalled.get(controller);
                 if (lanes != null && !lanes.isEmpty() && lanes.firstEntry().getValue().execution.owner()
                         .controller().activeWorkMode() == MachineWorkMode.SYNC) {
-                    controller = nextController == null ? installedByController.firstKey() : nextController;
+                    pendingInstalled.remove(controller);
+                    controller = nextController == null && !pendingInstalled.isEmpty() ? pendingInstalled.firstKey() : nextController;
                     continue;
                 }
                 if (lanes != null && !lanes.isEmpty()) {
@@ -1199,11 +1405,12 @@ public final class SharedIoCoordinator {
                         ExecutionSlot slot = lanes.get(lane);
                         String nextLane = lanes.higherKey(lane);
                         if (slot != null && coordinator.eligibleExecution(slot, level, false)) return slot;
+                        if (slot != null) removePending(slot);
                         lane = nextLane == null && !lanes.isEmpty() ? lanes.firstKey() : nextLane;
                     }
                 }
-                controller = nextController == null && !installedByController.isEmpty()
-                        ? installedByController.firstKey() : nextController;
+                controller = nextController == null && !pendingInstalled.isEmpty()
+                        ? pendingInstalled.firstKey() : nextController;
             }
             return null;
         }

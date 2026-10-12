@@ -28,6 +28,9 @@ public final class StructureClaimRegistry {
     private @Nullable Set<BlockPos> cachedClaimedControllers;
     private long nextDomainId;
     private long nextGeneration;
+    private long topologyRevision;
+
+    public long topologyRevision() { return topologyRevision; }
 
     public static synchronized StructureClaimRegistry get(ServerLevel level) {
         return REGISTRIES.computeIfAbsent(level, ignored -> new StructureClaimRegistry());
@@ -102,6 +105,7 @@ public final class StructureClaimRegistry {
     }
 
     private void rebuildDomains() {
+        topologyRevision++;
         Map<Set<BlockPos>, ResourceDomain> existingDomains = new HashMap<>();
         for (ResourceDomain domain : domainsByController.values()) {
             existingDomains.put(domain.controllers(), domain);

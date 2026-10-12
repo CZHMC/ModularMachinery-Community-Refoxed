@@ -47,9 +47,9 @@ public final class SharedIoEvents {
         sharedIo.beginLevelTick(gameTime);
         async.beginLevelTick(gameTime);
         MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
-            async.completeTick(() -> sharedIo.resolve(level));
-            sharedIo.executeInstalled(level);
-            async.completeTick(() -> sharedIo.resolve(level));
+            async.completeTick(() -> sharedIo.resolvePost(level));
+            sharedIo.resolvePost(level);
+            async.completeTick(() -> sharedIo.resolvePost(level));
         });
         IOPortBlockEntity.flushStorageChanges(level);
         async.pumpReceiptDrains();

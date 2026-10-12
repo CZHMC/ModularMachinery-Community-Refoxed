@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
@@ -304,6 +305,139 @@ class InstalledRecipeProgramTest {
         assertThat(runtime.tickCount()).isZero();
         assertThat(energy.getEnergyStorage().amount()).isEqualTo(afterStart);
         assertThat(runtime.ledger().state()).isEqualTo(paid);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void cancellation_after_claim_rejects_both_advance_and_direct_resource_execution(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        energy.getEnergyStorage().setAmount(100L);
+        var controller = RuntimeTestFixtures.controller(MACHINE, energy);
+        var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe("installed_claim_cancel", 10, List.of(new EnergyRequirement(7L))), 1L)
+                .isCrafting()).isTrue();
+        var installed = runtime.ensureInstalledProgram();
+        LevelStub.setGameTime(controller.getLevel(), 1L);
+        if (mode != MachineWorkMode.SYNC) assertThat(runtime.prepareInstalledTick(1L)).isTrue();
+        assertThat(installed.tryAttempt(1L, 1L)).isTrue();
+        long before = energy.getEnergyStorage().amount();
+        var paid = installed.ledger().state();
+        runtime.cancelInstalledProgram();
+
+        assertThat(installed.advance()).isFalse();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(installed.executeContinuous(transaction)).isNotNull();
+            transaction.commit();
+        }
+        assertThat(energy.getEnergyStorage().amount()).isEqualTo(before);
+        assertThat(installed.ledger().state()).isEqualTo(paid);
+        assertThat(runtime.tickCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void capability_change_after_claim_rejects_payment_even_when_preparation_was_current(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        energy.getEnergyStorage().setAmount(100L);
+        var controller = RuntimeTestFixtures.controller(MACHINE, energy);
+        var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe("installed_claim_version", 10, List.of(new EnergyRequirement(7L))), 1L)
+                .isCrafting()).isTrue();
+        var installed = runtime.ensureInstalledProgram();
+        LevelStub.setGameTime(controller.getLevel(), 1L);
+        if (mode != MachineWorkMode.SYNC) assertThat(runtime.prepareInstalledTick(1L)).isTrue();
+        assertThat(installed.tryAttempt(1L, 1L)).isTrue();
+        long before = energy.getEnergyStorage().amount();
+        var paid = installed.ledger().state();
+        controller.componentRuntime().replaceComponents(List.of());
+
+        assertThat(installed.current()).isFalse();
+        assertThat(installed.advance()).isFalse();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(installed.executeContinuous(transaction)).isNotNull();
+            transaction.commit();
+        }
+        assertThat(energy.getEnergyStorage().amount()).isEqualTo(before);
+        assertThat(installed.ledger().state()).isEqualTo(paid);
+        assertThat(runtime.tickCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void recipe_tick_invalidation_prevents_payment_after_the_callback(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        for (boolean cancel : new boolean[] { true, false }) {
+            var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+            energy.getEnergyStorage().setAmount(100L);
+            var controller = RuntimeTestFixtures.controller(MACHINE, energy);
+            AtomicReference<Runnable> callback = new AtomicReference<>(() -> { });
+            AtomicBoolean invoked = new AtomicBoolean();
+            Machine original = controller.structureSnapshot().configuredMachine();
+            var behavior = RecipeBehavior.builder().recipeTick(context -> {
+                invoked.set(true);
+                callback.get().run();
+            }).build();
+            controller.setMachine(new Machine() {
+                public Identifier registryName() { return original.registryName(); }
+                public BlockArray pattern() { return original.pattern(); }
+                public MachineControllerSpec controller() { return original.controller(); }
+                public RecipeBehavior behavior() { return behavior; }
+            });
+            var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            assertThat(runtime.start(recipe("installed_callback_invalidation_" + cancel, 10,
+                    List.of(new EnergyRequirement(7L))), 1L).isCrafting()).isTrue();
+            var installed = runtime.ensureInstalledProgram();
+            long before = energy.getEnergyStorage().amount();
+            var paid = installed.ledger().state();
+            callback.set(cancel ? runtime::cancelInstalledProgram
+                    : () -> controller.componentRuntime().replaceComponents(List.of()));
+            LevelStub.setGameTime(controller.getLevel(), 1L);
+
+            if (mode == MachineWorkMode.SYNC) {
+                assertThat(installed.tryAttempt(1L, 1L)).isTrue();
+            } else {
+                assertThat(runtime.prepareInstalledTick(1L)).isFalse();
+                assertThat(installed.tryAttempt(1L, 1L)).isFalse();
+            }
+            assertThat(installed.advance()).isFalse();
+            assertThat(invoked).isTrue();
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(before);
+            assertThat(installed.ledger().state()).isEqualTo(paid);
+            assertThat(runtime.tickCount()).isZero();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void commit_notification_invalidation_keeps_paid_resources_without_advancing_or_replaying(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        for (boolean cancel : new boolean[] { true, false }) {
+            AtomicReference<Runnable> notification = new AtomicReference<>(() -> { });
+            var storage = storage(100L, 100L, 60L, () -> notification.get().run());
+            var runtime = runtimeWithCapabilities(List.of(input(storage)));
+            assertThat(runtime.start(recipe("installed_commit_invalidation_" + cancel, 10,
+                    List.of(new EnergyRequirement(7L))), 1L).isCrafting()).isTrue();
+            var installed = runtime.ensureInstalledProgram();
+            LevelStub.setGameTime(runtime.controller().getLevel(), 1L);
+            if (mode != MachineWorkMode.SYNC) assertThat(runtime.prepareInstalledTick(1L)).isTrue();
+            assertThat(installed.tryAttempt(1L, 1L)).isTrue();
+            long before = storage.amount();
+            long paidAttempts = installed.ledger().state().paidAttempts();
+            notification.set(cancel ? runtime::cancelInstalledProgram
+                    : () -> runtime.controller().componentRuntime().replaceComponents(List.of()));
+
+            assertThat(installed.advance()).isTrue();
+            assertThat(storage.amount()).isEqualTo(before - 7L);
+            assertThat(installed.ledger().state().paidAttempts()).isEqualTo(paidAttempts + 1L);
+            assertThat(installed.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.RESOURCE_PAID);
+            assertThat(runtime.tickCount()).isZero();
+            assertThat(installed.current()).isFalse();
+            assertThat(installed.advance()).isFalse();
+            assertThat(storage.amount()).isEqualTo(before - 7L);
+            assertThat(installed.ledger().state().paidAttempts()).isEqualTo(paidAttempts + 1L);
+        }
     }
 
     @Test

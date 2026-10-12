@@ -372,7 +372,8 @@ public final class CraftingRuntime {
         } else if (capabilityTickFailure != null) {
             handleCapabilityTickResult(CapabilityTickResult.empty());
         }
-        installedPreparationReady = execution.current() && attemptCurrent(tickAttempt);
+        // attemptCurrent includes the installed program's full live validation.
+        installedPreparationReady = tickAttempt != null && tickAttempt.installed() == execution && attemptCurrent(tickAttempt);
         return installedPreparationReady;
     }
 
@@ -404,13 +405,13 @@ public final class CraftingRuntime {
     }
 
     private boolean advanceInstalledAttempt(InstalledRecipeProgram execution) {
-        if (!execution.current() || errorPaused()) return false;
         if (finishPending()) {
             if (!execution.finishAttemptReady()) return false;
             finish();
             installedCompletion.run();
             return execution.ledger().state().outputPaid();
         }
+        if (!execution.current() || errorPaused()) return false;
         if (controller.activeWorkMode() == MachineWorkMode.SYNC) {
             long round = controller.getLevel() instanceof ServerLevel level
                     ? SharedIoCoordinator.get(level).executionRoundId() : 0L;
@@ -422,7 +423,9 @@ public final class CraftingRuntime {
         RecipeCommitLedger payment = execution.ledger();
         ActiveMachineRecipe recipe = activeRecipe;
         TickAttempt attempt = tickAttempt;
-        if (!attemptCurrent(attempt) || payment.state().phase() != RecipeCommitLedger.Phase.READY) return false;
+        // executeContinuous immediately checks live versions before any handler/storage operation.
+        if (!attemptBound(attempt) || attempt.installed() != execution
+                || payment.state().phase() != RecipeCommitLedger.Phase.READY) return false;
         long sequence = payment.state().sequence();
         try (Transaction transaction = Transaction.openRoot()) {
             ExecutionStatus rejected = execution.executeContinuous(transaction);
@@ -439,7 +442,8 @@ public final class CraftingRuntime {
         }
         installedPreparationReady = false;
         if (!attemptCurrent(attempt)) return true;
-        if (!consumePaidPrefetch(payment) || !attemptCurrent(attempt)) return false;
+        // A successful prefetch consumption already validated this attempt after its callbacks.
+        if (!consumePaidPrefetch(payment)) return false;
         completePaidTick(asyncTickPreparation, recipe, payment, attempt);
         flushAsyncScreenText();
         if (!attemptCurrent(attempt)) {
@@ -1521,9 +1525,14 @@ public final class CraftingRuntime {
     }
 
     private boolean attemptCurrent(@Nullable TickAttempt attempt) {
+        return attemptBound(attempt) && (attempt.installed() == null || attempt.installed().current());
+    }
+
+    /** Identity checks only; never substitutes for live validation across an execution boundary. */
+    private boolean attemptBound(@Nullable TickAttempt attempt) {
         return attempt != null && tickAttempt == attempt && activeRecipe == attempt.recipe() && ledger == attempt.payment()
                 && controller.lifecycleEpoch() == attempt.lifecycleEpoch() && !controller.isRemoved() && !errorPaused()
-                && installedProgram == attempt.installed() && (attempt.installed() == null || attempt.installed().current());
+                && installedProgram == attempt.installed();
     }
 
     public void pause() {

@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
@@ -54,6 +55,7 @@ public final class InstalledRecipeProgram {
         this.program = Objects.requireNonNull(program, "program");
         this.owner = Objects.requireNonNull(owner, "owner");
         ledger = owner.ledger();
+        ledger.bindInstalledProgram(this);
         planningContext = owner.bindInstalledPlanningContext();
         finishRequirements = owner.installedFinishRequirements();
         continuousRequirements = List.copyOf(owner.installedTickRequirements());
@@ -127,8 +129,8 @@ public final class InstalledRecipeProgram {
     @Nullable List<MachineRequirement> finishRequirements() { return finishRequirements; }
 
     public boolean tryAttempt(long roundId, long gameTime) {
-        if (!current() || ledger.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
-                || lastAttemptRound == roundId || lastAttemptGameTime == gameTime
+        if (lastAttemptRound == roundId || lastAttemptGameTime == gameTime
+                || ledger.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED || !current()
                 || !owner.finishPending() && owner.controller().activeWorkMode() != MachineWorkMode.SYNC
                 && !owner.installedPreparationCurrent(roundId, gameTime)
                 || !owner.claimInstalledAttempt(gameTime)) return false;
@@ -180,7 +182,12 @@ public final class InstalledRecipeProgram {
     /** One already-qualified, already-charged attempt; never calls tryAttempt again. */
     public boolean advance() { return !cancelled && owner.advanceInstalled(this); }
 
-    public void cancel() { cancelled = true; }
+    public void cancel() {
+        if (cancelled) return;
+        cancelled = true;
+        SharedIoCoordinator.executionChanged(this);
+        ledger.unbindInstalledProgram(this);
+    }
 
     /** Mutable attempt amounts remain main-thread local. @author howxu <dev@howxu.cn> */
     private record EnergyRule(int index, long required, boolean insert, boolean partial, int[] ids, long[] amounts) { }

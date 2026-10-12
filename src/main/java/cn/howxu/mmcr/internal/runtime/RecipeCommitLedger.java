@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import net.minecraft.nbt.ByteTag;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.LongTag;
@@ -23,6 +24,13 @@ public final class RecipeCommitLedger extends SnapshotJournal<RecipeCommitLedger
                         int tick, boolean finalTickPaid, boolean outputPaid) { }
 
     private State state = new State(Phase.READY, 0L, 0L, 0, false, false);
+    private InstalledRecipeProgram installedProgram;
+
+    void bindInstalledProgram(InstalledRecipeProgram program) { installedProgram = program; }
+
+    void unbindInstalledProgram(InstalledRecipeProgram program) {
+        if (installedProgram == program) installedProgram = null;
+    }
 
     public RecipeCommitLedger() {
     }
@@ -117,5 +125,13 @@ public final class RecipeCommitLedger extends SnapshotJournal<RecipeCommitLedger
     @Override
     protected void revertToSnapshot(State snapshot) {
         state = snapshot;
+    }
+
+    @Override
+    protected void onRootCommit(State originalState) {
+        if (state.outputPaid() && !originalState.outputPaid() && installedProgram != null) {
+            // Only a committed terminal fact wakes Post; an aborted output transaction does not.
+            SharedIoCoordinator.executionChanged(installedProgram);
+        }
     }
 }
