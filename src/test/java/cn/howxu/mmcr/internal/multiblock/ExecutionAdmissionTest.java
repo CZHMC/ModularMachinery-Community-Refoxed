@@ -16,6 +16,7 @@ import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Acknowledgement;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.ConfigTestSupport;
@@ -252,6 +253,51 @@ class ExecutionAdmissionTest {
         assertThat(shared.receiptsForTesting(runtime, "rollback")).isEmpty();
         assertThat(runtime.active()).isFalse();
         assertThat(shared.reserveExecution(runtime, "rollback")).isTrue();
+    }
+
+    @Test
+    void acknowledging_one_position_does_not_remove_the_same_lane_binding_at_another_position() {
+        CraftingRuntime first = RuntimeTestFixtures.craftingRuntime(controller);
+        assertThat(first.start(recipe, 1L).isCrafting()).isTrue();
+        assertThat(shared.install(first.ensureInstalledProgram(), shared.controllerPermit(controller.getBlockPos()))).isTrue();
+        var other = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), new BlockPos(31, -1, 0));
+        RuntimeTestFixtures.formStructure(other, new DynamicMachine(MMCR.id("test_cube"),
+                "position admission", new BlockArray(Map.of())));
+        ServerLevel temporaryLevel = (ServerLevel) other.getLevel();
+        RuntimeTestFixtures.attachLevel(other, level);
+        RuntimeTestFixtures.replaceBlockEntity(other, other);
+        other.componentRuntime().replaceComponents(controller.componentRuntime().components());
+        RuntimeTestFixtures.republish(other);
+        assertThat(StructureClaimRegistry.get(level).claim(other.getBlockPos(), List.of()).accepted()).isTrue();
+        shared.markControllerEligible(other, level.getGameTime());
+        try {
+            CraftingRuntime second = new CraftingRuntime(other, other.componentRuntime());
+            assertThat(second.start(recipe, 1L).isCrafting()).isTrue();
+            var program = second.ensureInstalledProgram();
+            assertThat(shared.install(program, shared.controllerPermit(other.getBlockPos()))).isTrue();
+            long revision = shared.installedRevision(second, "base");
+            shared.forgetExecutionLane(first, "base");
+            first.invalidate();
+            Receipt terminal = shared.receiptsForTesting(first, "base").getFirst();
+            assertThat(shared.acknowledgeReceipt(new Acknowledgement(terminal.identity(), terminal.installedRevision(),
+                    terminal.sequence()))).isTrue();
+
+            assertThat(shared.reserveExecution(second, "base")).isTrue();
+            assertThat(shared.install(program, shared.controllerPermit(other.getBlockPos()))).isTrue();
+            assertThat(shared.installedRevision(second, "base")).isEqualTo(revision);
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            shared.markControllerEligible(other, level.getGameTime());
+            assertThat(second.prepareInstalledTick(shared.executionRoundId())).isTrue();
+            long before = input.getEnergyStorage().amount();
+            assertThat(shared.resolvePost(level)).isEqualTo(1);
+            assertThat(second.tickCount()).isEqualTo(1);
+            assertThat(input.getEnergyStorage().amount()).isEqualTo(before - 7L);
+        } finally {
+            SharedIoCoordinator.discard(temporaryLevel);
+            MachineAsyncCoordinator.discard(temporaryLevel);
+            StructureClaimRegistry.discard(temporaryLevel);
+        }
     }
 
     @Test

@@ -564,7 +564,7 @@ public final class ControllerUiGameTest {
 
     private static List<Receipt> terminalCodecReceipts(Fixture fixture) {
         var shared = SharedIoCoordinator.get(fixture.helper.getLevel());
-        var records = (Set<?>) ((Map<?, ?>) snapshotField(shared, "executionsByController")).get(fixture.owner.getBlockPos());
+        var records = (Set<?>) ((Map<?, ?>) snapshotField(shared, "executionsByController")).get(fixture.owner.getBlockPos().asLong());
         if (records == null) return List.of();
         List<Receipt> receipts = new ArrayList<>();
         for (var record : records) {

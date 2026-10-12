@@ -617,22 +617,27 @@ public abstract class RecipeThread {
             SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
             if (coordinator.executionRoundId() != 0L) {
                 if (!qualifiedInstalledTick(level, coordinator)) return;
-                if (!runtime.versionsCurrent()) {
-                    boolean wasActive = runtime.active();
-                    runtime.invalidateForCatalogChange();
-                    completeIfFinished(wasActive);
-                    return;
+                InstalledRecipeProgram execution = runtime.installedProgram();
+                if (execution == null || !coordinator.refreshExecution(execution,
+                        coordinator.controllerPermit(controller.getBlockPos()))) {
+                    if (!runtime.versionsCurrent()) {
+                        boolean wasActive = runtime.active();
+                        runtime.invalidateForCatalogChange();
+                        completeIfFinished(wasActive);
+                        return;
+                    }
+                    if (tickPending) return;
+                    if (!runtime.finishPending() && usesFullAsyncContinuation() && runtime.installedProgram() == null
+                            && !runtime.restartProgramAuthorized()) {
+                        requestProgramCompilation(level);
+                        return;
+                    }
+                    execution = runtime.ensureInstalledProgram();
+                    if (execution == null) return;
+                    coordinator.reserveExecution(runtime, laneId());
+                    if (!coordinator.install(execution, coordinator.controllerPermit(controller.getBlockPos()))) return;
                 }
                 if (tickPending) return;
-                if (!runtime.finishPending() && usesFullAsyncContinuation() && runtime.installedProgram() == null
-                        && !runtime.restartProgramAuthorized()) {
-                    requestProgramCompilation(level);
-                    return;
-                }
-                InstalledRecipeProgram execution = runtime.ensureInstalledProgram();
-                if (execution == null) return;
-                coordinator.reserveExecution(runtime, laneId());
-                if (!coordinator.install(execution, coordinator.controllerPermit(controller.getBlockPos()))) return;
                 if (usesAsyncPlanning()) {
                     if (!runtime.finishPending()) runtime.prepareInstalledTick(coordinator.executionRoundId());
                 } else {

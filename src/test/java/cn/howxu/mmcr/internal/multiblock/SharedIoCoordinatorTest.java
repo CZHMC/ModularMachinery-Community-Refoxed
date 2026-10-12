@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
@@ -455,9 +456,9 @@ class SharedIoCoordinatorTest {
         Field field = SharedIoCoordinator.class.getDeclaredField("executionsByController");
         field.setAccessible(true);
         @SuppressWarnings("unchecked")
-        var controllers = (Map<BlockPos, Set<Object>>) field.get(fixture.shared());
-        var lanes = new CountingIterationSet<>(controllers.get(fixture.controller().getBlockPos()));
-        controllers.put(fixture.controller().getBlockPos(), lanes);
+        var controllers = (Long2ObjectOpenHashMap<Set<Object>>) field.get(fixture.shared());
+        var lanes = new CountingIterationSet<>(controllers.get(fixture.controller().getBlockPos().asLong()));
+        controllers.put(fixture.controller().getBlockPos().asLong(), lanes);
         RuntimeTestFixtures.advanceGameTime(fixture.level());
         RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
         fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
@@ -474,6 +475,69 @@ class SharedIoCoordinatorTest {
         assertThat(domains.lookups).hasValue(0);
         assertThat(fixture.runtime().tickCount()).isEqualTo(1);
         assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(after);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void stable_thread_tick_reuses_the_binding_without_repeating_admission_or_live_domain_queries(MachineWorkMode mode) throws Exception {
+        InstalledFixture fixture = installedFixture(mode, 40);
+        MachineRecipeThread thread = new MachineRecipeThread(fixture.controller(), fixture.runtime());
+        Field field = SharedIoCoordinator.class.getDeclaredField("executionsByController");
+        field.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        var controllers = (Long2ObjectOpenHashMap<Set<Object>>) field.get(fixture.shared());
+        var lanes = new CountingIterationSet<>(controllers.get(fixture.controller().getBlockPos().asLong()));
+        controllers.put(fixture.controller().getBlockPos().asLong(), lanes);
+        CountingDomainMap domains = countDomainLookups(StructureClaimRegistry.get(fixture.level()));
+        long revision = fixture.shared().installedRevision(fixture.runtime(), "base");
+        long afterStart = fixture.input().getEnergyStorage().amount();
+        for (int tick = 1; tick <= 5; tick++) {
+            RuntimeTestFixtures.advanceGameTime(fixture.level());
+            RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+            fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
+            domains.lookups.set(0);
+            thread.tick();
+            assertThat(domains.lookups.get()).isLessThanOrEqualTo(4);
+            assertThat(lanes.iterators).hasValue(0);
+            assertThat(fixture.shared().installedRevision(fixture.runtime(), "base")).isEqualTo(revision);
+            assertThat(fixture.shared().resolvePost(fixture.level())).isEqualTo(1);
+            assertThat(fixture.runtime().installedProgram()).isSameAs(fixture.program());
+            assertThat(fixture.runtime().tickCount()).isEqualTo(tick);
+            assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(afterStart - 7L * tick);
+        }
+    }
+
+    @Test
+    void refresh_only_accepts_a_live_existing_binding_and_the_original_controller_permit() {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        long revision = fixture.shared().installedRevision(fixture.runtime(), "base");
+        var permit = fixture.shared().controllerPermit(fixture.controller().getBlockPos());
+        assertThat(fixture.shared().refreshExecution(fixture.program(), permit)).isTrue();
+        assertThat(fixture.shared().installedRevision(fixture.runtime(), "base")).isEqualTo(revision);
+        assertThat(fixture.shared().refreshExecution(fixture.program(),
+                new SharedIoCoordinator().controllerPermit(fixture.controller().getBlockPos()))).isFalse();
+
+        CraftingRuntime lane = new CraftingRuntime(fixture.controller(), fixture.controller().componentRuntime());
+        lane.bindRecipeLane("uninstalled", () -> { });
+        assertThat(lane.start(fixture.recipe(), 1L).isCrafting()).isTrue();
+        assertThat(fixture.shared().refreshExecution(lane.ensureInstalledProgram(), permit)).isFalse();
+        fixture.controller().componentRuntime().replaceComponents(List.of());
+        long before = fixture.input().getEnergyStorage().amount();
+        assertThat(fixture.shared().refreshExecution(fixture.program(), permit)).isFalse();
+        assertThat(fixture.shared().executeInstalled(fixture.level())).isZero();
+        assertThat(fixture.runtime().tickCount()).isZero();
+        assertThat(fixture.input().getEnergyStorage().amount()).isEqualTo(before);
+    }
+
+    @Test
+    void finish_only_gate_rejects_a_running_lane_without_reading_live_domains() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        CountingDomainMap domains = countDomainLookups(StructureClaimRegistry.get(fixture.level()));
+        assertThat(fixture.program().finishAttemptReady()).isFalse();
+        assertThat(domains.lookups).hasValue(0);
+        // The live seam still sees invalidation; only the impossible finish phase was excluded.
+        fixture.controller().componentRuntime().replaceComponents(List.of());
+        assertThat(fixture.program().current()).isFalse();
     }
 
     @ParameterizedTest

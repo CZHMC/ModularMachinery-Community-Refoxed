@@ -343,8 +343,12 @@ public final class CraftingRuntime {
     }
 
     private boolean prepareInstalledTickAttempt(long roundId) {
-        InstalledRecipeProgram execution = ensureInstalledProgram();
-        if (execution == null || !execution.current() || finishPending()) return false;
+        InstalledRecipeProgram execution = installedProgram;
+        if (execution == null || !execution.current()) {
+            execution = ensureInstalledProgram();
+            if (execution == null || !execution.current()) return false;
+        }
+        if (finishPending()) return false;
         long gameTime = capabilityGameTime();
         if (preparedInstalledRound == roundId && preparedInstalledGameTime == gameTime) return installedPreparationReady;
         installedPreparationReady = false;
@@ -588,7 +592,8 @@ public final class CraftingRuntime {
 
     private void completePaidTick(@Nullable AsyncTickPreparation preparation, ActiveMachineRecipe recipe,
                                   RecipeCommitLedger payment, TickAttempt attempt) {
-        if (!attemptCurrent(attempt)) return;
+        // Both callers validated immediately before entering; no external operation intervenes.
+        if (!attemptBound(attempt)) return;
         if (preparation == null && components.hasTickFacets()) {
             preparation = prepareTick(controller.currentRuntimeSnapshot(), installedBehavior);
         }
@@ -613,7 +618,7 @@ public final class CraftingRuntime {
             }
             return;
         }
-        if (!attemptCurrent(attempt)) return;
+        if (preparation != null && !attemptCurrent(attempt)) return;
         if (finalTick) recipe.beginFinishCommit();
         settleGrant(recipe, payment);
         failure = null;

@@ -10,7 +10,6 @@ import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.async.MainThreadStep;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
@@ -64,11 +63,11 @@ public final class SharedIoCoordinator {
     private final Map<Long, TickWorkset> submittedTickWork = new HashMap<>();
     private final Long2ObjectOpenHashMap<ControllerPermit> controllerPermits = new Long2ObjectOpenHashMap<>();
     private final Map<LaneKey, LaneRecords> executionRecords = new HashMap<>();
-    private final Map<LaneKey, LaneRecords> laneBindings = new HashMap<>();
+    private final Long2ObjectOpenHashMap<Map<String, LaneRecords>> laneBindings = new Long2ObjectOpenHashMap<>();
     private final Map<CraftingRuntime, ExecutionSlot> activeExecutions = new IdentityHashMap<>();
     private final Map<ExecutionIdentity, ExecutionSlot> receiptSlots = new HashMap<>();
     private final Set<LaneRecords> retirementCandidates = new HashSet<>();
-    private final Map<BlockPos, Set<LaneRecords>> executionsByController = new HashMap<>();
+    private final Long2ObjectOpenHashMap<Set<LaneRecords>> executionsByController = new Long2ObjectOpenHashMap<>();
     private final Map<BlockPos, Integer> activeProgramsByController = new HashMap<>();
     private final Map<BlockPos, Set<ExecutionSlot>> waitingByController = new HashMap<>();
     private final Set<BlockPos> plannedSynchronousControllers = new HashSet<>();
@@ -227,7 +226,7 @@ public final class SharedIoCoordinator {
         // Ordinary BE ticks precede the round's candidate reset. Only a late ticker must
         // restore candidates that an earlier drain rejected for lacking real eligibility.
         if (!newlyEligible || lastDrainRound != executionRoundId || lastDrainTime != gameTime) return;
-        Set<LaneRecords> lanes = executionsByController.get(controllerPos);
+        Set<LaneRecords> lanes = executionsByController.get(controllerPos.asLong());
         if (lanes != null) for (LaneRecords lane : lanes) for (ExecutionSlot slot : lane.slots) {
             DomainBucket bucket = slot.domain == null ? null : domains.get(slot.domain);
             if (slot.execution != null && !slot.waiting && bucket != null) {
@@ -270,11 +269,11 @@ public final class SharedIoCoordinator {
         ExecutionSlot active = activeExecutions.get(owner);
         if (active != null && active.execution.current()) return true;
         LaneKey key = new LaneKey(owner.controller().getBlockPos(), laneId);
-        Set<LaneRecords> controllerLanes = executionsByController.get(key.controllerPos());
+        Set<LaneRecords> controllerLanes = executionsByController.get(key.controllerPos().asLong());
         if (controllerLanes != null) for (LaneRecords candidate : List.copyOf(controllerLanes)) {
             if (candidate.controller != null && candidate.controller.get() != owner.controller()) {
                 candidate.retired = true;
-                laneBindings.remove(candidate.key, candidate);
+                removeLaneBinding(candidate);
                 for (ExecutionSlot slot : candidate.slots) {
                     slot.reservedOwner = null;
                     if (slot.acceptedOwner != null) terminateExecution(slot);
@@ -282,7 +281,7 @@ public final class SharedIoCoordinator {
                 retireIfAcknowledged(candidate);
             }
         }
-        LaneRecords records = laneBindings.get(key);
+        LaneRecords records = laneBinding(key.controllerPos(), laneId);
         if (records == null) {
             // Reuse the lowest vacant logical lane, even while its terminal deliveries await ACK.
             // Changing a thread name or replacing the BE at this position cannot buy new capacity.
@@ -303,7 +302,7 @@ public final class SharedIoCoordinator {
             }
             if (records == null) return false;
         }
-        executionsByController.computeIfAbsent(key.controllerPos(), ignored -> new HashSet<>()).add(records);
+        executionsByController.computeIfAbsent(key.controllerPos().asLong(), ignored -> new HashSet<>()).add(records);
         for (ExecutionSlot slot : records.slots) if (slot.reservedOwner == owner) return true;
         for (ExecutionSlot slot : records.slots) {
             if (slot.acceptedOwner != null) {
@@ -324,7 +323,7 @@ public final class SharedIoCoordinator {
                 records.key = key;
                 records.retired = false;
                 records.controller = new WeakReference<>(owner.controller());
-                laneBindings.put(key, records);
+                laneBindings.computeIfAbsent(key.controllerPos().asLong(), ignored -> new HashMap<>()).put(laneId, records);
                 return true;
             }
         }
@@ -332,7 +331,7 @@ public final class SharedIoCoordinator {
     }
 
     public void releaseExecutionReservation(CraftingRuntime owner, String laneId) {
-        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        LaneRecords records = laneBinding(owner.controller().getBlockPos(), laneId);
         if (records == null) return;
         for (ExecutionSlot slot : records.slots) {
             if (slot.acceptedOwner == owner) terminateExecution(slot);
@@ -342,7 +341,7 @@ public final class SharedIoCoordinator {
     }
 
     public ExecutionIdentity acceptedIdentity(CraftingRuntime owner, String laneId) {
-        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        LaneRecords records = laneBinding(owner.controller().getBlockPos(), laneId);
         if (records == null) return null;
         for (ExecutionSlot slot : records.slots) {
             if (slot.acceptedOwner == owner && slot.ledger == owner.ledger() && slot.recipe == owner.activeRecipe()) {
@@ -357,7 +356,7 @@ public final class SharedIoCoordinator {
                                    RecipeCommitLedger ledger, ActiveMachineRecipe recipe,
                                    TransactionContext callerTransaction) {
         if (closed || !(owner.controller().getLevel() instanceof ServerLevel level)) return false;
-        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        LaneRecords records = laneBinding(owner.controller().getBlockPos(), laneId);
         StructureClaimRegistry.ResourceDomain domain = owner.controller().resourceDomain();
         if (records == null || domain == null) return false;
         for (ExecutionSlot slot : records.slots) {
@@ -394,17 +393,28 @@ public final class SharedIoCoordinator {
         return false;
     }
 
+    /** Refreshes a stable binding without reserving or installing another delivery slot. */
+    public boolean refreshExecution(InstalledRecipeProgram execution, ControllerPermit permit) {
+        if (closed) return false;
+        ExecutionSlot active = activeExecutions.get(execution.owner());
+        return active != null && active.execution == execution && refreshExecution(active, permit);
+    }
+
+    private boolean refreshExecution(ExecutionSlot active, ControllerPermit permit) {
+        MachineControllerBlockEntity controller = active.execution.owner().controller();
+        if (!(controller.getLevel() instanceof ServerLevel level)
+                || !currentPermit(controller, permit, level) || !validExecution(active, level)) return false;
+        active.permit = permit;
+        return true;
+    }
+
     public boolean install(InstalledRecipeProgram execution, ControllerPermit permit) {
         if (closed) return false;
         ExecutionSlot active = activeExecutions.get(execution.owner());
         if (active != null && active.execution == execution) {
-            if (!(execution.owner().controller().getLevel() instanceof ServerLevel level)
-                    || !validExecution(active, level) || !currentPermit(execution.owner().controller(), permit, level)) return false;
-            active.permit = permit;
-            return true;
+            return refreshExecution(active, permit);
         }
-        LaneRecords records = laneBindings.get(new LaneKey(execution.owner().controller().getBlockPos(),
-                execution.identity().laneId()));
+        LaneRecords records = laneBinding(execution.owner().controller().getBlockPos(), execution.identity().laneId());
         return records != null && install(execution, permit, records.revision, records.commandSequence + 1L);
     }
 
@@ -416,8 +426,7 @@ public final class SharedIoCoordinator {
         MachineControllerBlockEntity controller = owner.controller();
         if (!(controller.getLevel() instanceof ServerLevel level) || !owner.active()
                 || owner.installedProgram() != execution || !currentPermit(controller, permit, level)) return false;
-        LaneKey key = new LaneKey(controller.getBlockPos(), execution.identity().laneId());
-        LaneRecords records = laneBindings.get(key);
+        LaneRecords records = laneBinding(controller.getBlockPos(), execution.identity().laneId());
         if (records == null || records.revision != expectedRevision || commandSequence <= records.commandSequence
                 || !execution.current()) return false;
         ExecutionIdentity previous = records.latestIdentity;
@@ -502,15 +511,14 @@ public final class SharedIoCoordinator {
         CraftingRuntime owner = execution.owner();
         MachineControllerBlockEntity controller = owner.controller();
         VersionStamp versions = execution.program().versions();
-        StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         return controller.getLevel() == level && !controller.isRemoved() && owner.active()
                 && execution.current() && controller.lifecycleEpoch() == execution.identity().lifecycleEpoch()
                 && controller.currentStructureSnapshot().formed() && controller.currentStructureSnapshot().structureAreaLoaded()
                 && controller.currentStructureSnapshot().version() == versions.structure()
                 && controller.componentRuntime().capabilityVersion() == versions.capability()
                 && owner.activeRecipe().effectiveExecutionRevision() == versions.effective()
-                && RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version() == versions.catalog()
-                && domain != null && domain.id() == slot.domain.id && domain.generation() == slot.domain.generation;
+                // current() already checks the live recipe pool/catalog and captured resource domain.
+                && versions.domainId() == slot.domain.id && versions.domainGeneration() == slot.domain.generation;
     }
 
     private boolean eligibleExecution(ExecutionSlot slot, ServerLevel level, boolean sync) {
@@ -683,14 +691,14 @@ public final class SharedIoCoordinator {
     }
 
     public void forgetExecutionLane(CraftingRuntime owner, String laneId) {
-        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        LaneRecords records = laneBinding(owner.controller().getBlockPos(), laneId);
         if (records == null) return;
         for (ExecutionSlot slot : records.slots) {
             if (slot.acceptedOwner != null && slot.acceptedOwner != owner
                     || slot.reservedOwner != null && slot.reservedOwner != owner) return;
         }
         records.retired = true;
-        laneBindings.remove(records.key, records);
+        removeLaneBinding(records);
         for (ExecutionSlot slot : records.slots) {
             if (slot.reservedOwner == owner) slot.reservedOwner = null;
             if (slot.acceptedOwner == owner) terminateExecution(slot);
@@ -711,16 +719,29 @@ public final class SharedIoCoordinator {
             return;
         }
         executionRecords.remove(records.logicalKey, records);
-        laneBindings.remove(records.key, records);
+        removeLaneBinding(records);
         retirementCandidates.remove(records);
-        executionsByController.computeIfPresent(records.key.controllerPos(), (ignored, lanes) -> {
+        executionsByController.computeIfPresent(records.key.controllerPos().asLong(), (ignored, lanes) -> {
             lanes.remove(records);
             return lanes.isEmpty() ? null : lanes;
         });
     }
 
+    private LaneRecords laneBinding(BlockPos controllerPos, String laneId) {
+        Map<String, LaneRecords> lanes = laneBindings.get(controllerPos.asLong());
+        return lanes == null ? null : lanes.get(laneId);
+    }
+
+    private void removeLaneBinding(LaneRecords records) {
+        long position = records.key.controllerPos().asLong();
+        Map<String, LaneRecords> lanes = laneBindings.get(position);
+        if (lanes == null) return;
+        lanes.remove(records.key.laneId(), records);
+        if (lanes.isEmpty()) laneBindings.remove(position);
+    }
+
     public long installedRevision(CraftingRuntime owner, String laneId) {
-        LaneRecords records = laneBindings.get(new LaneKey(owner.controller().getBlockPos(), laneId));
+        LaneRecords records = laneBinding(owner.controller().getBlockPos(), laneId);
         return records == null ? 0L : records.revision;
     }
 
@@ -758,7 +779,7 @@ public final class SharedIoCoordinator {
     }
 
     List<Receipt> receiptsForTesting(CraftingRuntime owner, String laneId) {
-        Set<LaneRecords> records = executionsByController.get(owner.controller().getBlockPos());
+        Set<LaneRecords> records = executionsByController.get(owner.controller().getBlockPos().asLong());
         if (records == null) return List.of();
         List<Receipt> result = new ArrayList<>(2);
         for (LaneRecords lane : records) for (ExecutionSlot slot : lane.slots) {
@@ -903,7 +924,7 @@ public final class SharedIoCoordinator {
         schedulingRevision++;
         ControllerPermit permit = controllerPermits.remove(controllerPos.asLong());
         if (permit != null) permit.invalidate();
-        Set<LaneRecords> executions = executionsByController.get(controllerPos);
+        Set<LaneRecords> executions = executionsByController.get(controllerPos.asLong());
         if (executions != null) for (LaneRecords lane : List.copyOf(executions)) {
             retirementCandidates.add(lane);
             for (ExecutionSlot slot : lane.slots) {
@@ -1269,14 +1290,14 @@ public final class SharedIoCoordinator {
         private boolean pendingAdditions;
         private long pendingRound = Long.MIN_VALUE;
         private long pendingTime = Long.MIN_VALUE;
-        private final EnumMap<RequestType, Map<BlockPos, String>> controllerLaneCursors = new EnumMap<>(RequestType.class);
+        private final EnumMap<RequestType, Long2ObjectOpenHashMap<String>> controllerLaneCursors = new EnumMap<>(RequestType.class);
         private int nextType;
         private boolean worksetInFlight;
 
         private DomainBucket() {
             for (RequestType type : REQUEST_TYPES) {
                 requests.put(type, new TreeMap<>());
-                controllerLaneCursors.put(type, new HashMap<>());
+                controllerLaneCursors.put(type, new Long2ObjectOpenHashMap<>());
             }
         }
 
@@ -1345,7 +1366,7 @@ public final class SharedIoCoordinator {
                 }
                 return controllerOrder;
             }
-            String laneCursor = controllerLaneCursors.get(type).get(first.controllerPos());
+            String laneCursor = controllerLaneCursors.get(type).get(first.controllerPos().asLong());
             if (laneCursor != null) {
                 boolean firstWraps = first.laneId().compareTo(laneCursor) <= 0;
                 boolean secondWraps = second.laneId().compareTo(laneCursor) <= 0;
@@ -1362,7 +1383,7 @@ public final class SharedIoCoordinator {
 
         private void markAttempted(RequestType type, LaneKey lane) {
             cursors.put(type, lane);
-            controllerLaneCursors.get(type).put(lane.controllerPos(), lane.laneId());
+            controllerLaneCursors.get(type).put(lane.controllerPos().asLong(), lane.laneId());
         }
 
         private void putInstalled(ExecutionSlot slot) {
@@ -1451,7 +1472,7 @@ public final class SharedIoCoordinator {
             if (index < 0) index = pendingControllers.nextSetBit(0);
             while (index >= 0) {
                 ControllerCandidates controller = pendingInstalled.get(index);
-                int laneStart = controller.after(controllerLaneCursors.get(RequestType.TICK).get(controller.position));
+                int laneStart = controller.after(controllerLaneCursors.get(RequestType.TICK).get(controller.position.asLong()));
                 int laneIndex = controller.pending.nextSetBit(laneStart);
                 if (laneIndex < 0) laneIndex = controller.pending.nextSetBit(0);
                 while (laneIndex >= 0) {

@@ -119,8 +119,8 @@ public final class InstalledRecipeProgram {
 
     /** The coordinator may charge a finish-only attempt only after the existing retry gate opens. */
     public boolean finishAttemptReady() {
-        return finishReady() && ledger.state().phase() == RecipeCommitLedger.Phase.WAITING_FINISH
-                && ledger.state().finalTickPaid() && owner.finishPending() && owner.shouldRetryFinish();
+        return ledger.state().phase() == RecipeCommitLedger.Phase.WAITING_FINISH
+                && ledger.state().finalTickPaid() && owner.finishPending() && finishReady() && owner.shouldRetryFinish();
     }
 
     CraftingContext planningContext() { return planningContext; }
