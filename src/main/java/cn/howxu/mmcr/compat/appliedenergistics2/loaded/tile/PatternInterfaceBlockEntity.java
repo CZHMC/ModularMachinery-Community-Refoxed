@@ -88,8 +88,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final AtomicInteger nextPatternController = new AtomicInteger();
     private final OutputResourceStorage<ItemResource> itemOutputStorage;
     private final OutputResourceStorage<FluidResource> fluidOutputStorage;
-    private long observedReturnInventoryAmount;
-    private boolean returnInventorySnapshotPending;
+    private final CapabilitySnapshot capabilitySnapshot;
+    private boolean returnInventoryNotificationPending;
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -101,6 +101,9 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
                 IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
         fluidOutputStorage = AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv(), () -> null,
                 IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
+        capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
+                .map(this::createCapability)
+                .toList());
     }
 
     @Override
@@ -282,9 +285,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void saveChanges() {
-        observedReturnInventoryAmount = returnInventoryAmount();
         if (Transaction.getCurrentOpenedTransaction() != null) {
-            returnInventorySnapshotPending = true;
+            returnInventoryNotificationPending = true;
             return;
         }
         notifyStorageChanged();
@@ -344,27 +346,26 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     /** Notifies linked controllers after AE2's native return inventory drains. */
     public void onNativeReturnInventoryDrained() {
-        observedReturnInventoryAmount = returnInventoryAmount();
         notifyStorageChanged();
     }
 
     @Override
     protected void tick() {
         super.tick();
-        if (returnInventorySnapshotPending) {
-            returnInventorySnapshotPending = false;
+        if (returnInventoryNotificationPending) {
+            returnInventoryNotificationPending = false;
             notifyStorageChanged();
         }
-        long currentAmount = returnInventoryAmount();
-        if (currentAmount < observedReturnInventoryAmount) onNativeReturnInventoryDrained();
-        observedReturnInventoryAmount = currentAmount;
+    }
+
+    @Override
+    protected void runAutoIOCycle() {
+        // Pattern capabilities do not expose TransferFacet; AE2's native logic handles returns.
     }
 
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
-        return new CapabilitySnapshot(kind.definition().bindings().stream()
-                .map(this::createCapability)
-                .toList());
+        return capabilitySnapshot;
     }
 
     @Override
@@ -426,15 +427,5 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private MEStorage networkStorage() {
         IGrid grid = mainNode.getGrid();
         return grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
-    }
-
-    private long returnInventoryAmount() {
-        long amount = 0L;
-        for (int slot = 0; slot < logic.getReturnInv().size(); slot++) {
-            long slotAmount = logic.getReturnInv().getAmount(slot);
-            if (slotAmount > Long.MAX_VALUE - amount) return Long.MAX_VALUE;
-            amount += slotAmount;
-        }
-        return amount;
     }
 }

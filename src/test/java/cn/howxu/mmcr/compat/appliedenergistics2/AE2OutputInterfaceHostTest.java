@@ -177,7 +177,7 @@ class AE2OutputInterfaceHostTest {
     }
 
     @Test
-    void serverTickNotifiesLinkedOutputCapacitySearchesAfterNativeReturnInventoryDrain() {
+    void nativeReturnCallbackNotifiesLinkedOutputCapacitySearchesWithoutPolling() {
         PatternInterfaceBlockEntity host = PatternInterfaceKind.INSTANCE.entityFactory()
                 .create(new BlockPos(41, 20, 30), Blocks.IRON_BLOCK.defaultBlockState());
         RecordingController controller = new RecordingController(host.getBlockPos().offset(1, 0, 0),
@@ -212,7 +212,8 @@ class AE2OutputInterfaceHostTest {
             }
         }, IActionSource.empty(), ignored -> {})).isTrue();
 
-        host.serverTick();
+        // Unit tests do not apply mixins; GameTest verifies that native doWork invokes this callback.
+        host.onNativeReturnInventoryDrained();
 
         assertThat(controller.notifiedOutputResources).isEmpty();
         assertThat(controller.notifiedOutputSources).isEmpty();

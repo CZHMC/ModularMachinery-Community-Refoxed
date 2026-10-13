@@ -358,6 +358,8 @@ public final class GameTestRegistry {
                     helper -> new AE2PatternInterfaceGameTest().patternInterfaceMemoryCardRoundTrip(helper));
             register(event, "ae2_me_pattern_interface", 160,
                     helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
+            register(event, "ae2_me_pattern_native_return_notification", 100,
+                    helper -> new AE2PatternInterfaceGameTest().nativeReturnDrainNotifiesWithoutBlockEntityPolling(helper));
             register(event, "ae2_me_pattern_interface_request", 100,
                     helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
             // No need for this gameTest

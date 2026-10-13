@@ -10,15 +10,19 @@ import appeng.api.stacks.KeyCounter;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnResourceStorage;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -309,6 +313,52 @@ class PatternInterfaceResourceStorageTest {
         host.onNativeReturnInventoryDrained();
 
         assertThat(host.craftingMachine()).isNotNull();
+    }
+
+    @Test
+    void cachedPatternCapabilitiesKeepLiveReturnInventoryViews() {
+        for (IOPortKind kind : List.of(PatternInterfaceKind.INSTANCE, ExtendedPatternInterfaceKind.INSTANCE)) {
+            bindTestEntityType(kind);
+            var host = new PatternInterfaceBlockEntity(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(), kind);
+            var snapshot = host.capabilitySnapshot();
+            var items = CapabilityFactories.resourceStorage(snapshot.capabilities().getFirst(), ItemResource.class);
+            var fluids = CapabilityFactories.resourceStorage(snapshot.capabilities().get(1), FluidResource.class);
+            ItemResource iron = ItemResource.of(Items.IRON_INGOT);
+            FluidResource water = FluidResource.of(net.minecraft.world.level.material.Fluids.WATER);
+
+            assertThat(snapshot.facets(TransferFacet.class)).isEmpty();
+            host.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(iron), 3L));
+            host.getLogic().getReturnInv().setStack(1,
+                    new GenericStack(appeng.api.stacks.AEFluidKey.of(water), 500L));
+
+            assertThat(host.capabilitySnapshot()).isSameAs(snapshot);
+            assertThat(items.resource(0)).isEqualTo(iron);
+            assertThat(items.amount(0)).isEqualTo(3L);
+            assertThat(fluids.resource(1)).isEqualTo(water);
+            assertThat(fluids.amount(1)).isEqualTo(500L);
+            host.getLogic().getReturnInv().setStack(0, null);
+            assertThat(items.amount(0)).isZero();
+        }
+    }
+
+    @Test
+    void patternStorageNotificationsAreDeferredUntilTheTransactionCloses() {
+        bindTestEntityType(PatternInterfaceKind.INSTANCE);
+        var host = PatternInterfaceKind.INSTANCE.entityFactory()
+                .create(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState());
+        long before = host.storageRevision();
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            host.saveChanges();
+            host.saveChanges();
+            assertThat(host.storageRevision()).isEqualTo(before);
+            transaction.commit();
+        }
+
+        host.serverTick();
+        assertThat(host.storageRevision()).isEqualTo(before + 1L);
+        host.serverTick();
+        assertThat(host.storageRevision()).isEqualTo(before + 1L);
     }
 
     private static KeyCounter counter(AEKey firstKey, long firstAmount) {
