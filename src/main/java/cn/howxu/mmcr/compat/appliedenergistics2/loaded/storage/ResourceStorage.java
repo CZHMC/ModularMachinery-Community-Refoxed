@@ -54,10 +54,10 @@ public abstract class ResourceStorage<R> implements cn.howxu.mmcr.api.capability
     @Override
     public long capacity(int slot, @Nullable R resource) {
         checkSlot(slot);
-        if (resource == null) return inventory.getCapacity(adapter.keyType());
+        if (resource == null) return PatternReturnInventory.slotCapacity(inventory, slot, null, adapter.keyType());
         if (!adapter.resourceType().isInstance(resource)) return 0L;
         AEKey key = adapter.toKey(resource);
-        return key == null ? inventory.getCapacity(adapter.keyType()) : inventory.getMaxAmount(key);
+        return PatternReturnInventory.slotCapacity(inventory, slot, key, adapter.keyType());
     }
 
     @Override
@@ -77,7 +77,7 @@ public abstract class ResourceStorage<R> implements cn.howxu.mmcr.api.capability
         if (current != null && !current.equals(key)) return 0L;
 
         long currentAmount = inventory.getAmount(slot);
-        long maximum = inventory.getMaxAmount(key);
+        long maximum = PatternReturnInventory.slotCapacity(inventory, slot, key, adapter.keyType());
         long available = maximum <= currentAmount ? 0L : maximum - currentAmount;
         long inserted = Math.min(amount, available);
         if (inserted == 0L) return 0L;

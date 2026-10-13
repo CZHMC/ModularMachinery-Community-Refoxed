@@ -293,6 +293,18 @@ public final class GameTestRegistry {
         register(event, "mekanism_formed_port_reflects_texture_change", 100,
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
         if (ModList.get().isLoaded("ae2")) {
+            register(event, "ae2_pattern_return_long_balances", 40,
+                    helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));
+            register(event, "ae2_pattern_return_components_persistence", 40,
+                    helper -> new PatternReturnInventoryGameTest().componentKeysPersistenceAndTypeLimit(helper));
+            register(event, "ae2_pattern_return_transactions", 40,
+                    helper -> new PatternReturnInventoryGameTest().transactionalReturnsAndOutputPlanning(helper));
+            register(event, "ae2_pattern_return_old_save_menu_drops", 40,
+                    helper -> new PatternReturnInventoryGameTest().oldSaveMenuAndBoundedDrops(helper));
+            register(event, "ae2_pattern_return_large_cpu_execution", 160,
+                    helper -> new AE2PatternOutputComponentGameTest().craftingCpuSettlesLargeInputsOutputsAndLeftovers(helper));
+            register(event, "ae2_pattern_return_native_transfer_menu", 40,
+                    helper -> new PatternReturnInventoryGameTest().nativeTransferAndMenuInsertionConserveResources(helper));
             register(event, "ae2_pattern_atomic_admission", 20, RunningRecipeGameTest::patternAdmissionRollsBackRequestAndOrdinaryInput);
             register(event, "ae2_menu_host_routes", 40,
                     helper -> new InterfaceMenuGameTest().ae2HostsOpenAndReturnOwnTypes(helper));
@@ -315,6 +327,8 @@ public final class GameTestRegistry {
             register(event, "ae2_pattern_menu_terminal", 100,
                     helper -> new AE2PatternInterfaceGameTest().patternMenuStateAndTerminalVisibility(helper));
             if (ModList.get().isLoaded("extendedae")) {
+                register(event, "eae_pattern_return_long_balances", 40,
+                        helper -> new PatternReturnInventoryGameTest().extendedInterfaceUsesTheSameOverflow(helper));
                 register(event, "eae_menu_host_routes", 40,
                         helper -> new InterfaceMenuGameTest().extendedHostsOpenAndReturnOwnTypes(helper));
                 register(event, "eae_menu_page_semantics", 40,

@@ -5,6 +5,7 @@ import appeng.api.implementations.blockentities.ICraftingMachine;
 import appeng.api.implementations.blockentities.PatternContainerGroup;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.crafting.pattern.AEProcessingPattern;
@@ -24,6 +25,8 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Virtual AE2 crafting machine that forwards processing patterns to linked MMCR controllers.
@@ -49,9 +52,26 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     public long maxBatchSize(IPatternDetails patternDetails) {
         if (!(patternDetails instanceof AEProcessingPattern pattern) || !hasSupportedInputs(pattern)) return 0L;
+        List<MachineOutput> outputs = outputs(pattern);
+        if (outputs == null) return 0L;
         long machineCap = host.maxPatternBatchSize();
-        long recipeCap = host.maxRecipeBatchSize(outputs(pattern));
-        return Math.min(machineCap, recipeCap);
+        long recipeCap = host.maxRecipeBatchSize(outputs);
+        long resourceCap = Math.min(batchResourceLimit(pattern.getSparseInputs()), batchResourceLimit(pattern.getOutputs()));
+        return Math.min(resourceCap, Math.min(machineCap, recipeCap));
+    }
+
+    private static long batchResourceLimit(List<GenericStack> stacks) {
+        Map<AEKey, Long> amounts = new HashMap<>();
+        for (GenericStack stack : stacks) {
+            if (stack == null) continue;
+            if (stack.amount() <= 0L) return 0L;
+            long previous = amounts.getOrDefault(stack.what(), 0L);
+            if (stack.amount() > Long.MAX_VALUE - previous) return 0L;
+            amounts.put(stack.what(), previous + stack.amount());
+        }
+        long limit = Long.MAX_VALUE;
+        for (long amount : amounts.values()) limit = Math.min(limit, Long.MAX_VALUE / amount);
+        return limit;
     }
 
     public boolean pushBatchPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, long batchSize,
@@ -96,13 +116,26 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
             KeyCounter target = new KeyCounter();
             for (var entry : source) {
                 long amount = entry.getLongValue();
-                long scaled = Math.multiplyExact(amount, parallelism);
-                if (scaled % batchSize != 0L) throw new IllegalArgumentException("Pattern inputs cannot be split exactly");
-                target.add(entry.getKey(), scaled / batchSize);
+                if (amount < 0L || parallelism <= 0L || parallelism > batchSize) {
+                    throw new IllegalArgumentException("Invalid pattern input slice");
+                }
+                long divisor = greatestCommonDivisor(parallelism, batchSize);
+                long denominator = batchSize / divisor;
+                if (amount % denominator != 0L) throw new IllegalArgumentException("Pattern inputs cannot be split exactly");
+                target.add(entry.getKey(), Math.multiplyExact(amount / denominator, parallelism / divisor));
             }
             slice[index] = target;
         }
         return slice;
+    }
+
+    private static long greatestCommonDivisor(long first, long second) {
+        while (second != 0L) {
+            long remainder = first % second;
+            first = second;
+            second = remainder;
+        }
+        return first;
     }
 
     private record LaneRequest(PatternRequestResourceStorage<ItemResource> itemRequest,

@@ -6,6 +6,7 @@ import appeng.api.stacks.KeyCounter;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
@@ -126,16 +127,14 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
             return false;
         }
 
-        List<ReturnAllocation<R>> allocations = allocateReturns(returns);
-        if (allocations == null) {
+        boolean inserted;
+        try (Transaction nested = Transaction.open(transaction)) {
+            inserted = insertReturns(returns, nested);
+            if (inserted) nested.commit();
+        }
+        if (!inserted) {
             reject(transaction);
             return false;
-        }
-        for (ReturnAllocation<R> allocation : allocations) {
-            long inserted = returns.insert(allocation.slot(), allocation.resource(), allocation.amount(), transaction);
-            if (inserted != allocation.amount()) {
-                throw new IllegalStateException("Unable to insert exact pattern return amount");
-            }
         }
         updateSnapshots(transaction);
         state.accept(keys, transaction);
@@ -182,63 +181,18 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
         return AEKeyType.items().equals(keyType) || AEKeyType.fluids().equals(keyType);
     }
 
-    @Nullable
-    private List<ReturnAllocation<R>> allocateReturns(PatternReturnResourceStorage<R> returns) {
-        R[] reservedResources = newResourceArray(returns.size());
-        long[] reservedAmounts = new long[returns.size()];
-        List<ReturnAllocation<R>> allocations = new ArrayList<>();
+    private boolean insertReturns(PatternReturnResourceStorage<R> returns, TransactionContext transaction) {
         for (int requestSlot = 0; requestSlot < keys.size(); requestSlot++) {
             long remaining = amounts[requestSlot];
             if (remaining == 0L) continue;
             R resource = adapter.toResource(keys.get(requestSlot)).orElseThrow(() ->
                     new IllegalStateException("Pattern request key does not match its resource family"));
-            long capacity = 0L;
-            for (int returnSlot = 0; returnSlot < returns.size() && capacity < remaining; returnSlot++) {
-                if (reservedResources[returnSlot] != null && !reservedResources[returnSlot].equals(resource)
-                        || !returns.isValid(returnSlot, resource)) continue;
-                long current = returns.amount(returnSlot);
-                long maximum = returns.capacity(returnSlot, resource);
-                long reserved = reservedAmounts[returnSlot];
-                if (current < 0L || maximum < current) return null;
-                long occupied;
-                try {
-                    occupied = Math.addExact(current, reserved);
-                    capacity = Math.addExact(capacity, Math.max(0L, maximum - occupied));
-                } catch (ArithmeticException exception) {
-                    return null;
-                }
-                if (capacity > remaining) capacity = remaining;
-                long allocated = Math.min(remaining - allocationAmount(allocations, resource), maximum - occupied);
-                if (allocated <= 0L) continue;
-                try {
-                    reservedAmounts[returnSlot] = Math.addExact(reserved, allocated);
-                } catch (ArithmeticException exception) {
-                    return null;
-                }
-                reservedResources[returnSlot] = resource;
-                allocations.add(new ReturnAllocation<>(returnSlot, resource, allocated));
+            for (int returnSlot = 0; returnSlot < returns.size() && remaining > 0L; returnSlot++) {
+                remaining -= returns.insert(returnSlot, resource, remaining, transaction);
             }
-            if (capacity < remaining) return null;
+            if (remaining > 0L) return false;
         }
-        return allocations;
-    }
-
-    private long allocationAmount(List<ReturnAllocation<R>> allocations, R resource) {
-        long amount = 0L;
-        for (ReturnAllocation<R> allocation : allocations) {
-            if (!allocation.resource().equals(resource)) continue;
-            try {
-                amount = Math.addExact(amount, allocation.amount());
-            } catch (ArithmeticException exception) {
-                throw new IllegalStateException("Pattern return amount exceeds long range", exception);
-            }
-        }
-        return amount;
-    }
-
-    @SuppressWarnings("unchecked")
-    private R[] newResourceArray(int size) {
-        return (R[]) new Object[size];
+        return true;
     }
 
     private AEKey checkedKey(int slot, R resource, long amount) {
@@ -270,6 +224,4 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
     protected record Snapshot(long[] amounts, boolean active) {
     }
 
-    private record ReturnAllocation<R>(int slot, R resource, long amount) {
-    }
 }

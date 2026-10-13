@@ -98,11 +98,15 @@ public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResour
     public long outputCapacity(R resource) {
         AEKey key = keyOf(resource);
         MEStorage network = networkSupplier.get();
-        long capacity = network == null ? 0L : availableNetwork(network, key, Long.MAX_VALUE);
+        long networkCapacity = network == null ? 0L : availableNetwork(network, key, Long.MAX_VALUE);
+        long capacity = 0L;
         for (int slot = 0; slot < inventory.size(); slot++) {
             capacity = saturatingAdd(capacity, localAvailable(slot, key));
         }
-        return capacity;
+        if (inventory instanceof PatternReturnInventory returns) {
+            capacity = Math.min(capacity, returns.remainingCapacity(key));
+        }
+        return saturatingAdd(networkCapacity, capacity);
     }
 
     @Override
@@ -123,13 +127,15 @@ public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResour
         }
 
         long remaining = amount - networkAmount;
+        long keyBudget = remainingKeyCapacity(key, reservations);
         List<LocalPortion> localPortions = new ArrayList<>();
         for (int slot = 0; slot < inventory.size() && remaining > 0L; slot++) {
             long available = localAvailable(slot, key, reservations);
-            long portion = Math.min(remaining, available);
+            long portion = Math.min(remaining, Math.min(available, keyBudget));
             if (portion > 0L && reservations.reserveInsert(this, slot, resource, portion)) {
                 localPortions.add(new LocalPortion(slot, portion));
                 remaining -= portion;
+                keyBudget -= portion;
             }
         }
 
@@ -142,10 +148,10 @@ public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResour
     @Override
     public long capacity(int slot, @Nullable R resource) {
         checkSlot(slot);
-        if (resource == null) return inventory.getCapacity(adapter.keyType());
+        if (resource == null) return PatternReturnInventory.slotCapacity(inventory, slot, null, adapter.keyType());
         if (!adapter.resourceType().isInstance(resource)) return 0L;
         AEKey key = adapter.toKey(resource);
-        return key == null ? inventory.getCapacity(adapter.keyType()) : inventory.getMaxAmount(key);
+        return PatternReturnInventory.slotCapacity(inventory, slot, key, adapter.keyType());
     }
 
     @Override
@@ -344,7 +350,7 @@ public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResour
         if (!inventory.canInsert() || !inventory.isSupportedType(key.getType())
                 || current != null && !current.equals(key)) return 0L;
         long currentAmount = inventory.getAmount(slot);
-        long capacity = inventory.getMaxAmount(key);
+        long capacity = PatternReturnInventory.slotCapacity(inventory, slot, key, adapter.keyType());
         return capacity <= currentAmount ? 0L : capacity - currentAmount;
     }
 
@@ -369,6 +375,19 @@ public final class OutputResourceStorage<R> extends SnapshotJournal<OutputResour
         long simulated = network.insert(key, request, Actionable.SIMULATE, actionSource);
         if (simulated <= pending) return 0L;
         return Math.min(amount, simulated - pending);
+    }
+
+    private long remainingKeyCapacity(AEKey key, PlanningReservations reservations) {
+        if (!(inventory instanceof PatternReturnInventory)) return Long.MAX_VALUE;
+        long remaining = Long.MAX_VALUE;
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            Object resource = reservations.resource(this, slot);
+            if (adapter.resourceType().isInstance(resource)
+                    && key.equals(adapter.toKey(adapter.resourceType().cast(resource)))) {
+                remaining -= Math.min(remaining, reservations.amount(this, slot));
+            }
+        }
+        return remaining;
     }
 
     private void stageNetwork(MEStorage network, AEKey key, long amount, TransactionContext transaction) {
