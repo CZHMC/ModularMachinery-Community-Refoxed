@@ -236,15 +236,26 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
     @Override
     public int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
-                                         int tankIndex, TransactionContext transaction) {
+                                         int tankIndex, boolean extract, TransactionContext transaction) {
         if (!(menu instanceof ChemicalPortMenu chemical) || tankIndex != 0) return 0;
         ChemicalPortBlockEntity port = chemical.owner();
         if (!PktPortContainerTransferPayload.validTarget(player, menu, port)) return 0;
         ItemAccess access = ItemAccess.forPlayerCursor(player, menu);
         ResourceHandler<ChemicalResource> container = AutomatedResourceHandler.manual(
                 access.getCapability(Capabilities.CHEMICAL.item()));
-        return ContainerResourceTransfer.transfer(port.ioType(), container,
-                port.chemicalHandler(null), transaction);
+        return ContainerResourceTransfer.transfer(port.ioType() == IOType.OUTPUT || extract ? IOType.OUTPUT : IOType.INPUT, container,
+                ChemicalPortCapability.resourceHandler(port.chemicalTank(), AutomationType.MANUAL), transaction);
+    }
+
+    @Override
+    public int interactWithChemicalContainer(ItemAccess access, IOPortBlockEntity port,
+                                              TransactionContext transaction) {
+        if (!(port instanceof ChemicalPortBlockEntity chemical)) return 0;
+        ResourceHandler<ChemicalResource> container = AutomatedResourceHandler.manual(
+                access.getCapability(Capabilities.CHEMICAL.item()));
+        var result = ContainerResourceTransfer.interact(port.ioType(), container,
+                ChemicalPortCapability.resourceHandler(chemical.chemicalTank(), AutomationType.MANUAL), transaction);
+        return result == null ? 0 : result.amount();
     }
 
     private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,

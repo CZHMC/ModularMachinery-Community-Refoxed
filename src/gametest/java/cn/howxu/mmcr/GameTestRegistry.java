@@ -126,6 +126,10 @@ public final class GameTestRegistry {
                 helper -> new PortContainerTransferGameTest().stackedBucketsRespectInventoryCapacity(helper));
         register(event, "port_container_invalid_requests", 20,
                 helper -> new PortContainerTransferGameTest().invalidRequestsCannotMutateStorage(helper));
+        register(event, "port_container_world_buckets", 20,
+                helper -> new PortContainerTransferGameTest().worldBucketsUseExtractionFirstAndOneByOne(helper));
+        register(event, "port_container_world_combined", 20,
+                helper -> new PortContainerTransferGameTest().worldCombinedTransfersSelectCompatibleResources(helper));
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
         register(event, "item_bus_non_stackable_limit", 100,
                 ItemBusCapabilityGameTest::itemBusDoesNotStackNonStackableItems);
@@ -230,6 +234,10 @@ public final class GameTestRegistry {
                 helper -> new MekanismContainerTransferGameTest().fluidTankTransfersOnlyAvailableCapacity(helper));
         register(event, "port_container_mekanism_chemical_partial_mismatch", 20,
                 helper -> new MekanismContainerTransferGameTest().chemicalTankRetainsRemainderAndRejectsMismatch(helper));
+        register(event, "port_container_world_mekanism_chemical", 20,
+                helper -> new MekanismContainerTransferGameTest().worldChemicalTankUsesExtractionFirst(helper));
+        register(event, "port_container_world_mekanism_fluid", 20,
+                helper -> new MekanismContainerTransferGameTest().worldFluidTankUsesExtractionFirst(helper));
         register(event, "mekanism_single_tier_structure_constraints", 20,
                 helper -> new MekanismPortGameTest().singleTierStructureChecksFamilyAndDirection(helper));
         register(event, "mekanism_single_tier_structure_counts", 20,

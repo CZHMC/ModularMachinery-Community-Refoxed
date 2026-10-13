@@ -16,6 +16,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.transfer.access.ItemAccess;
@@ -55,7 +57,11 @@ public class MekanismContainerTransferGameTest {
         helper.assertTrue(cursorHandler.getAmountAsLong(0) == 0,
                 "Chemical cursor item lost exactly the amount inserted into the port");
         helper.assertTrue(click(player) == 0 && input.chemicalTank().amountAsLong() == 4_000,
-                "Chemical input cannot refill the empty carried tank");
+                "Ordinary chemical input click cannot refill the empty carried tank");
+        helper.assertTrue(click(player, true) == 4_000 && input.chemicalTank().amountAsLong() == 0,
+                "Shift click fills the carried chemical tank from an input port in manual mode");
+        helper.assertTrue(click(player, true) == 0 && input.chemicalTank().amountAsLong() == 0,
+                "Shift extraction cannot reverse into insertion when the input is empty");
         output.chemicalTank().setContents(oxygen, 4_000, null);
         player.setPos(output.getBlockPos().getCenter());
         player.containerMenu = new ChemicalPortMenu(18, player.getInventory(), output);
@@ -67,8 +73,81 @@ public class MekanismContainerTransferGameTest {
         helper.assertTrue(cursorHandler.getAmountAsLong(0) == 4_000
                         && cursorHandler.getResource(0).equals(oxygen),
                 "Chemical cursor item received exactly the amount and identity extracted");
-        helper.assertTrue(click(player) == 0 && output.chemicalTank().amountAsLong() == 0,
+        helper.assertTrue(click(player, false) == 0 && output.chemicalTank().amountAsLong() == 0,
                 "Chemical output cannot accept the now-filled carried tank");
+        helper.succeed();
+    }
+
+    public void worldChemicalTankUsesExtractionFirst(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
+        var port = helper.getBlockEntity(pos, ChemicalPortBlockEntity.class);
+        var oxygen = MekanismChemicals.OXYGEN.asResource();
+        port.chemicalTank().setContents(oxygen, 2_000, null);
+        ServerPlayer player = player(helper, port);
+        player.getAbilities().instabuild = false;
+        player.setItemInHand(InteractionHand.MAIN_HAND, oxygenTank(1_000));
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertTrue(port.chemicalHandler(null).extract(oxygen, 2_000, transaction) == 0,
+                    "External automation still cannot extract from a chemical input hatch");
+        }
+        helper.assertTrue(PortContainerTransferGameTest.useContainer(player, port, InteractionHand.MAIN_HAND)
+                        == InteractionResult.SUCCESS && port.chemicalTank().amountAsLong() == 0,
+                "World chemical interaction extracts first beyond the item automation rate");
+        var handler = ItemAccess.forPlayerInteraction(player, InteractionHand.MAIN_HAND)
+                .getCapability(Capabilities.CHEMICAL.item());
+        helper.assertTrue(handler.getAmountAsLong(0) == 3_000 && handler.getResource(0).equals(oxygen),
+                "Partly filled held chemical tank receives the exact extracted amount");
+        helper.assertTrue(PortContainerTransferGameTest.useContainer(player, port, InteractionHand.MAIN_HAND)
+                        == InteractionResult.SUCCESS && port.chemicalTank().amountAsLong() == 3_000,
+                "Empty chemical input falls back to receiving the held tank contents");
+        handler = ItemAccess.forPlayerInteraction(player, InteractionHand.MAIN_HAND)
+                .getCapability(Capabilities.CHEMICAL.item());
+        helper.assertTrue(handler.getAmountAsLong(0) == 0,
+                "Held tank loses exactly the contents inserted into the empty chemical input");
+        port.chemicalTank().setContents(MekanismChemicals.HYDROGEN.asResource(), 1_000, null);
+        player.setItemInHand(InteractionHand.MAIN_HAND, oxygenTank(1_000));
+        helper.assertTrue(PortContainerTransferGameTest.useContainer(player, port, InteractionHand.MAIN_HAND)
+                        == InteractionResult.TRY_WITH_EMPTY_HAND
+                        && port.chemicalTank().amountAsLong() == 1_000
+                        && port.chemicalTank().resource().equals(MekanismChemicals.HYDROGEN.asResource()),
+                "Both failed world directions preserve mismatched chemical identity");
+        handler = ItemAccess.forPlayerInteraction(player, InteractionHand.MAIN_HAND)
+                .getCapability(Capabilities.CHEMICAL.item());
+        helper.assertTrue(handler.getAmountAsLong(0) == 1_000 && handler.getResource(0).equals(oxygen),
+                "Rejected world interaction preserves the held chemical contents");
+        helper.succeed();
+    }
+
+    public void worldFluidTankUsesExtractionFirst(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
+        var port = helper.getBlockEntity(pos, FluidHatchBlockEntity.class);
+        var water = FluidResource.of(Fluids.WATER);
+        port.fluidStorage().setContents(water, 2_000);
+        ServerPlayer player = player(helper, port);
+        player.getAbilities().instabuild = false;
+        ItemStack tank = new ItemStack(MekanismBlocks.BASIC_FLUID_TANK.asItem());
+        var handler = AutomatedResourceHandler.manual(ItemAccess.forStack(tank).getCapability(Capabilities.FLUID.item()));
+        try (Transaction transaction = Transaction.openRoot()) {
+            handler.insert(water, 1_000, transaction);
+            transaction.commit();
+        }
+        player.setItemInHand(InteractionHand.MAIN_HAND, tank);
+        helper.assertTrue(PortContainerTransferGameTest.useContainer(player, port, InteractionHand.MAIN_HAND)
+                        == InteractionResult.SUCCESS && port.fluidStorage().amount(0) == 0,
+                "World fluid interaction fills a partly filled held tank before attempting insertion");
+        handler = ItemAccess.forPlayerInteraction(player, InteractionHand.MAIN_HAND)
+                .getCapability(Capabilities.FLUID.item());
+        helper.assertTrue(handler.getAmountAsLong(0) == 3_000 && handler.getResource(0).equals(water),
+                "Held fluid tank receives the exact amount without automatic rate limiting");
+        helper.assertTrue(PortContainerTransferGameTest.useContainer(player, port, InteractionHand.MAIN_HAND)
+                        == InteractionResult.SUCCESS && port.fluidStorage().amount(0) == 3_000,
+                "Empty fluid input receives the held tank contents on fallback");
+        handler = ItemAccess.forPlayerInteraction(player, InteractionHand.MAIN_HAND)
+                .getCapability(Capabilities.FLUID.item());
+        helper.assertTrue(handler.getAmountAsLong(0) == 0,
+                "Held fluid tank loses exactly the inserted contents");
         helper.succeed();
     }
 
@@ -116,7 +195,7 @@ public class MekanismContainerTransferGameTest {
                 .getCapability(Capabilities.FLUID.item());
         helper.assertTrue(handler.getAmountAsLong(0) == 4_000 && handler.getResource(0).equals(water),
                 "Output depletion and cursor fluid gain agree");
-        helper.assertTrue(click(player) == 0 && port.fluidStorage().amount(0) == 0,
+        helper.assertTrue(click(player, false) == 0 && port.fluidStorage().amount(0) == 0,
                 "Fluid output cannot accept the now-filled carried tank");
         helper.succeed();
     }
@@ -170,8 +249,12 @@ public class MekanismContainerTransferGameTest {
     }
 
     private static int click(ServerPlayer player) {
+        return click(player, false);
+    }
+
+    private static int click(ServerPlayer player, boolean extract) {
         return PktPortContainerTransferPayload.interactOnServer(player,
-                new PktPortContainerTransferPayload(player.containerMenu.containerId, 0));
+                new PktPortContainerTransferPayload(player.containerMenu.containerId, 0, extract));
     }
 
     private static ItemStack oxygenTank(int amount) {

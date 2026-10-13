@@ -30,7 +30,7 @@ class MekanismBridgeTest {
         var storage = new LongFluidStorage(4_000, () -> {});
         assertThat(bridge.manualFluidContainerHandler(storage)).isSameAs(storage);
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(bridge.transferChemicalContainer(null, null, 0, transaction)).isZero();
+            assertThat(bridge.transferChemicalContainer(null, null, 0, true, transaction)).isZero();
         }
         bridge.registerRecipeTypes(MMCR.id("mekanism_chemical"), MMCR.id("mekanism_heat_temperature"),
                 MMCR.id("mekanism_heat"));

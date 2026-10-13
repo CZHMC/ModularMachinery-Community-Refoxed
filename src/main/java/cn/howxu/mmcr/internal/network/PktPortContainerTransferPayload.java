@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.menu.MenuSupport;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.util.IOType;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -29,11 +30,12 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktPortContainerTransferPayload(int containerId, int tankIndex) implements CustomPacketPayload {
+public record PktPortContainerTransferPayload(int containerId, int tankIndex, boolean extract) implements CustomPacketPayload {
     public static final Type<PktPortContainerTransferPayload> TYPE = new Type<>(MMCR.id("port_container_transfer"));
     public static final StreamCodec<ByteBuf, PktPortContainerTransferPayload> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, PktPortContainerTransferPayload::containerId,
             ByteBufCodecs.VAR_INT, PktPortContainerTransferPayload::tankIndex,
+            ByteBufCodecs.BOOL, PktPortContainerTransferPayload::extract,
             PktPortContainerTransferPayload::new);
 
     @Override
@@ -60,7 +62,7 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex) im
                         || port.kind().fluidHatchSize().isEmpty()
                         || port.kind().extendedFluidHatchSize().isPresent()) return 0;
                 moved = transferFluid(player, menu, port, port.getResourceHandler(null),
-                        payload.tankIndex, transaction);
+                        payload.tankIndex, payload.extract, transaction);
             } else if (menu instanceof CombinedPortMenu combined) {
                 CombinedPortBlockEntity port = combined.owner();
                 if (!validTarget(player, menu, port)
@@ -68,10 +70,10 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex) im
                         || payload.tankIndex >= combined.fluidTankCount()
                         || payload.tankIndex >= port.fluidStorage().size()) return 0;
                 moved = transferFluid(player, menu, port, port.getResourceHandler(null),
-                        payload.tankIndex, transaction);
+                        payload.tankIndex, payload.extract, transaction);
             } else {
                 moved = MekanismBridge.get().transferChemicalContainer(player, menu,
-                        payload.tankIndex, transaction);
+                        payload.tankIndex, payload.extract, transaction);
             }
             if (moved > 0) transaction.commit();
         }
@@ -89,11 +91,11 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex) im
 
     private static int transferFluid(ServerPlayer player, AbstractContainerMenu menu,
                                      IOPortBlockEntity port, ResourceHandler<FluidResource> storage,
-                                     int tankIndex, TransactionContext transaction) {
+                                     int tankIndex, boolean extract, TransactionContext transaction) {
         ItemAccess access = ItemAccess.forPlayerCursor(player, menu);
         ResourceHandler<FluidResource> container = MekanismBridge.get()
                 .manualFluidContainerHandler(access.getCapability(Capabilities.Fluid.ITEM));
-        return ContainerResourceTransfer.transfer(port.ioType(), container,
+        return ContainerResourceTransfer.transfer(port.ioType() == IOType.OUTPUT || extract ? IOType.OUTPUT : IOType.INPUT, container,
                 RangedResourceHandler.ofSingleIndex(storage, tankIndex), transaction);
     }
 }

@@ -169,6 +169,86 @@ class ContainerResourceTransferTest {
     }
 
     @Test
+    void world_interaction_fills_a_partly_filled_container_without_reversing_after_success() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        var water = FluidResource.of(Fluids.WATER);
+        container.setContents(water, 3_000);
+        port.setContents(water, 2_000);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(ContainerResourceTransfer.interact(IOType.INPUT,
+                    container, port, transaction)).isEqualTo(new ContainerResourceTransfer.Interaction<>(water, 1_000, true));
+            transaction.commit();
+        }
+        assertThat(container.amount(0)).isEqualTo(4_000);
+        assertThat(port.amount(0)).isEqualTo(1_000);
+    }
+
+    @Test
+    void world_interaction_drains_a_full_container_when_extraction_fails() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        var water = FluidResource.of(Fluids.WATER);
+        container.setContents(water, 4_000);
+        port.setContents(water, 1_000);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(ContainerResourceTransfer.interact(IOType.INPUT,
+                    container, port, transaction)).isEqualTo(new ContainerResourceTransfer.Interaction<>(water, 3_000, false));
+            transaction.commit();
+        }
+        assertThat(container.amount(0)).isEqualTo(1_000);
+        assertThat(port.amount(0)).isEqualTo(4_000);
+    }
+
+    @Test
+    void world_interaction_with_an_empty_port_inserts_and_rolls_back_with_its_parent() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        var water = FluidResource.of(Fluids.WATER);
+        container.setContents(water, 2_000);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(ContainerResourceTransfer.interact(IOType.INPUT,
+                    container, port, transaction)).isEqualTo(new ContainerResourceTransfer.Interaction<>(water, 2_000, false));
+        }
+        assertThat(container.amount(0)).isEqualTo(2_000);
+        assertThat(container.resource(0)).isEqualTo(water);
+        assertThat(port.amount(0)).isZero();
+    }
+
+    @Test
+    void world_interaction_does_not_fall_back_to_inserting_into_an_output_port() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        container.setContents(FluidResource.of(Fluids.WATER), 2_000);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(ContainerResourceTransfer.interact(IOType.OUTPUT,
+                    container, port, transaction)).isNull();
+            transaction.commit();
+        }
+        assertThat(container.amount(0)).isEqualTo(2_000);
+        assertThat(port.amount(0)).isZero();
+    }
+
+    @Test
+    void world_interaction_preserves_incompatible_contents_on_both_attempts() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        var water = FluidResource.of(Fluids.WATER);
+        var lava = FluidResource.of(Fluids.LAVA);
+        container.setContents(water, 2_000);
+        port.setContents(lava, 1_000);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(ContainerResourceTransfer.interact(IOType.INPUT,
+                    container, port, transaction)).isNull();
+            transaction.commit();
+        }
+        assertThat(container.amount(0)).isEqualTo(2_000);
+        assertThat(container.resource(0)).isEqualTo(water);
+        assertThat(port.amount(0)).isEqualTo(1_000);
+        assertThat(port.resource(0)).isEqualTo(lava);
+    }
+
+    @Test
     void missing_direction_or_handler_leaves_existing_contents_unchanged() {
         var container = new LongFluidStorage(4_000, () -> {});
         var port = new LongFluidStorage(4_000, () -> {});

@@ -139,7 +139,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                 // MouseHandler records this press, but vanilla slot history was not updated.
                 suppressNextContainerDoubleClick = true;
                 ClientPacketDistributor.sendToServer(
-                        new PktPortContainerTransferPayload(menu.containerId, tankIndex));
+                        new PktPortContainerTransferPayload(menu.containerId, tankIndex,
+                                Minecraft.getInstance().hasShiftDown()));
                 return true;
             }
         }

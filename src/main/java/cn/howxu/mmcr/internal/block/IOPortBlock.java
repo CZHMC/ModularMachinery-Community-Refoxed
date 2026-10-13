@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.block;
 
+import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
@@ -48,6 +49,12 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.fluid.FluidUtil;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.access.ItemAccess;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.RootCommitJournal;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
@@ -99,13 +106,43 @@ public class IOPortBlock extends Block implements EntityBlock {
         if (AE2Bridge.get().useMemoryCard(stack, level, pos, player)) {
             return InteractionResult.SUCCESS;
         }
-        if (!ItemSpecialOperationUtil.isSpecialOperated(player) && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player)
+                && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
+            if (port.kind().fluidHatchSize().isPresent() && port.kind().extendedFluidHatchSize().isEmpty()
+                    || port.kind().combinedPortSize().isPresent() || MekanismBridge.get().isPort(port.kind().id())) {
+                return interactWithContainer(player, hand, port)
+                        ? InteractionResult.SUCCESS : InteractionResult.TRY_WITH_EMPTY_HAND;
+            }
             if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection(), null)) {
                 return InteractionResult.SUCCESS;
             }
         }
         return InteractionResult.TRY_WITH_EMPTY_HAND;
+    }
+
+    private static boolean interactWithContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
+        ItemAccess access = ItemAccess.forPlayerInteraction(player, hand).oneByOne();
+        try (Transaction transaction = Transaction.openRoot()) {
+            ResourceHandler<FluidResource> storage = port instanceof FluidHatchBlockEntity fluid
+                    ? fluid.getResourceHandler(null)
+                    : port instanceof CombinedPortBlockEntity combined ? combined.getResourceHandler(null) : null;
+            int moved;
+            if (storage != null) {
+                var container = MekanismBridge.get().manualFluidContainerHandler(
+                        access.getCapability(Capabilities.Fluid.ITEM));
+                var result = ContainerResourceTransfer.interact(port.ioType(), container, storage, transaction);
+                moved = result == null ? 0 : result.amount();
+                if (result != null) {
+                    new RootCommitJournal(() -> FluidUtil.triggerSoundAndGameEvent(result.resource(), player.level(),
+                            port.getBlockPos().getCenter(), player, result.extract())).updateSnapshots(transaction);
+                }
+            } else {
+                moved = MekanismBridge.get().interactWithChemicalContainer(access, port, transaction);
+            }
+            if (moved > 0) transaction.commit();
+            return moved > 0;
+        }
     }
 
     @Override
