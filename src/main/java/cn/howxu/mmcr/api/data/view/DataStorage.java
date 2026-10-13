@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.data.view;
 
+import com.google.common.collect.MapMaker;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -10,6 +11,9 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * @author howxu <dev@howxu.cn>
  */
 public final class DataStorage {
+    // Weak identity keys share conversions across views without retaining obsolete snapshots.
+    private static final Map<Map<String, cn.howxu.mmcr.api.data.DataValue>, Map<String, DataValue>> VALUES_CACHE =
+            new MapMaker().weakKeys().makeMap();
     private final cn.howxu.mmcr.api.data.DataStorage storage;
 
     private DataStorage(cn.howxu.mmcr.api.data.DataStorage storage) {
@@ -36,8 +40,12 @@ public final class DataStorage {
     public boolean contains(String key) { return storage.contains(key); }
 
     public Map<String, DataValue> values() {
+        return VALUES_CACHE.computeIfAbsent(storage.values(), DataStorage::convertValues);
+    }
+
+    private static Map<String, DataValue> convertValues(Map<String, cn.howxu.mmcr.api.data.DataValue> source) {
         Map<String, DataValue> values = new LinkedHashMap<>();
-        storage.values().forEach((key, value) -> values.put(key, DataValue.fromInternal(value)));
+        source.forEach((key, value) -> values.put(key, DataValue.fromInternal(value)));
         return Map.copyOf(values);
     }
 
