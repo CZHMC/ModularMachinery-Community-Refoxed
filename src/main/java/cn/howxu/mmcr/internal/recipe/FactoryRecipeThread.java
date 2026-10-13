@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureReport;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
@@ -29,6 +31,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,11 +54,9 @@ public final class FactoryRecipeThread extends RecipeThread {
     private int idleTicks;
     private long lastIdleGameTime = Long.MIN_VALUE;
     private @Nullable MachineRecipe lastRecipe;
-    private long lastRecipeStructureVersion = Long.MIN_VALUE;
-    private long lastRecipeCapabilityVersion = Long.MIN_VALUE;
-    private long lastRecipeModifierVersion = Long.MIN_VALUE;
-    private long lastRecipeComponentStateVersion = Long.MIN_VALUE;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
+    private boolean restartPending;
+    private Predicate<MachineRecipe> startEligibility = recipe -> true;
     private Runnable finishContinuation = () -> { };
     private int failureStreak;
     private long nextSearchTick = Long.MIN_VALUE;
@@ -63,7 +65,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private @Nullable Identifier searchFailureRecipePoolId;
     private @Nullable RecipeSearchContextKey currentSearchContextKey;
     private boolean resourceWakePending;
-    private long recipeSetVersion;
+    private volatile long recipeSetVersion;
     private long currentSearchGameTime;
     private boolean searchGameTimeSet;
     private Map<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> failureResourceMatchers = Map.of();
@@ -72,6 +74,12 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long filteredCandidateCatalogVersion = Long.MIN_VALUE;
     private long filteredCandidateRecipeSetVersion = Long.MIN_VALUE;
     private List<MachineRecipe> filteredCandidates = List.of();
+    private final long suppliedCandidateCatalogVersion;
+    private final @Nullable Identifier suppliedCandidatePool;
+    private boolean suppliedCandidateCatalogCurrent = true;
+    private long sourceCatalogVersion = Long.MIN_VALUE;
+    private Map<Identifier, MachineRecipe> catalogSources = Map.of();
+    private final Map<MachineRecipe, MachineRecipe> resolvedCandidateSources = new IdentityHashMap<>();
 
     private FactoryRecipeThread(MachineControllerBlockEntity controller,
                                   boolean coreThread, boolean baseThread, String threadName) {
@@ -89,6 +97,8 @@ public final class FactoryRecipeThread extends RecipeThread {
                 : baseThread ? "base" : coreThread ? "core-" + this.threadName
                 : this.threadName.startsWith("factory-") ? this.threadName : "factory";
         this.runtime.setScreenText(controller.recipeScreenText(this.laneId));
+        suppliedCandidatePool = currentRecipePoolId();
+        suppliedCandidateCatalogVersion = currentRecipeCatalog().version();
         bindInstalledLane();
     }
 
@@ -123,7 +133,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public List<MachineRecipe> candidatesFor(List<MachineRecipe> candidates, long catalogVersion) {
-        List<MachineRecipe> machineCandidates = candidatesForMachine(controller, candidates);
+        List<MachineRecipe> machineCandidates = candidatesForMachine(controller, candidates).stream()
+                .map(this::resolveSearchCandidate).filter(Objects::nonNull).distinct().toList();
         if (!coreThread || machineCandidates.isEmpty()) return machineCandidates;
         if (filteredCandidateSource.equals(machineCandidates)
                 && filteredCandidateCatalogVersion == catalogVersion
@@ -133,8 +144,33 @@ public final class FactoryRecipeThread extends RecipeThread {
         filteredCandidateSource = Collections.unmodifiableList(new ArrayList<>(machineCandidates));
         filteredCandidateCatalogVersion = catalogVersion;
         filteredCandidateRecipeSetVersion = recipeSetVersion;
-        filteredCandidates = machineCandidates.stream().filter(recipeSet::contains).toList();
+        Set<MachineRecipe> allowed = recipeSet.stream().map(this::resolveSearchCandidate)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        filteredCandidates = machineCandidates.stream().filter(allowed::contains).toList();
         return filteredCandidates;
+    }
+
+    private @Nullable MachineRecipe resolveSearchCandidate(MachineRecipe source) {
+        MachineRecipeCatalog catalog = currentRecipeCatalog();
+        if (catalog.version() != suppliedCandidateCatalogVersion) suppliedCandidateCatalogCurrent = false;
+        if (sourceCatalogVersion != catalog.version()) {
+            Map<Identifier, MachineRecipe> sources = new HashMap<>();
+            for (MachineRecipe recipe : catalog.recipes()) sources.put(recipe.id(), recipe);
+            catalogSources = Map.copyOf(sources);
+            resolvedCandidateSources.clear();
+            sourceCatalogVersion = catalog.version();
+        }
+        MachineRecipe current = catalogSources.get(source.id());
+        if (current == source) return source;
+        if (current != null) {
+            if (!resolvedCandidateSources.containsKey(source)) {
+                resolvedCandidateSources.put(source,
+                        ActiveMachineRecipe.sameDefinition(source, current, registryAccess()) ? current : null);
+            }
+            return resolvedCandidateSources.get(source);
+        }
+        return suppliedCandidateCatalogCurrent && catalog.version() == suppliedCandidateCatalogVersion
+                && Objects.equals(currentRecipePoolId(), suppliedCandidatePool) ? source : null;
     }
 
     public void replaceRecipeSet(Set<MachineRecipe> recipes) {
@@ -144,6 +180,12 @@ public final class FactoryRecipeThread extends RecipeThread {
         recipeSet.clear();
         recipeSet.addAll(replacement);
         recipeSetVersion++;
+        clearSearchFailure();
+        requestFullSearch();
+        if (lastRecipe != null && resolveCurrentLastRecipe(List.copyOf(replacement)) == null) {
+            clearLastRecipe();
+            restartPending = false;
+        }
     }
 
     public boolean isCoreThread() { return coreThread; }
@@ -154,8 +196,20 @@ public final class FactoryRecipeThread extends RecipeThread {
     @Override public String laneId() { return laneId; }
     public long coreRecipeSetVersion() { return recipeSetVersion; }
 
+    public void setStartEligibility(Predicate<MachineRecipe> eligibility) {
+        startEligibility = Objects.requireNonNull(eligibility, "eligibility");
+    }
+
+    @Override
+    protected boolean isStartCandidateEligible(MachineRecipe recipe) {
+        return super.isStartCandidateEligible(recipe)
+                && candidatesFor(List.of(recipe)).contains(recipe)
+                && AsyncRequirementPlanner.capturedRequirementFailure(controller.currentRuntimeSnapshot(), recipe) == null
+                && startEligibility.test(recipe);
+    }
+
     public boolean canSearch(long gameTime, RecipeSearchContextKey current) {
-        return searchFailureRecipePoolId == null || !searchFailureRecipePoolId.equals(currentRecipePoolId())
+        return hasFullSearchPending() || searchFailureRecipePoolId == null || !searchFailureRecipePoolId.equals(currentRecipePoolId())
                 || lastSearchFailureKey == null
                 || !lastSearchFailureKey.equals(current)
                 || gameTime >= nextSearchTick;
@@ -181,7 +235,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public boolean matchesAvailability(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
-        if (reason == null || !matchesFailureReason(reason)) return false;
+        if (reason == null) return false;
         if (resource == null) {
             return reason == ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY
                     && (BuiltinFailureReasons.MISSING_OUTPUT.id().equals(lastSearchFailureReason)
@@ -261,6 +315,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     @Override protected void onStarted() {
+        restartPending = false;
+        clearFullSearchRequest();
         idleTicks = 0;
         lastIdleGameTime = Long.MIN_VALUE;
         clearSearchFailure();
@@ -270,33 +326,17 @@ public final class FactoryRecipeThread extends RecipeThread {
         failureCandidates = List.of();
         MachineRecipe recipe = runtime.recipe();
         if (recipe != null) {
-            ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+            MachineRecipeCatalog catalog = currentRecipeCatalog();
+            if (catalog.version() != suppliedCandidateCatalogVersion) suppliedCandidateCatalogCurrent = false;
             lastRecipe = recipe;
-            lastRecipeStructureVersion = snapshot.structure().version();
-            lastRecipeCapabilityVersion = snapshot.capabilityVersion();
-            lastRecipeModifierVersion = snapshot.modifierVersion();
-            lastRecipeComponentStateVersion = snapshot.stateVersion();
-            lastRecipeCatalogVersion = currentRecipeCatalog().version();
+            lastRecipeCatalogVersion = catalog.version();
         }
     }
     @Override
     protected void onFinished() {
         idleTicks = 0;
         lastIdleGameTime = Long.MIN_VALUE;
-        if (lastRecipe != null && !recipeBelongsToCurrentMachine(lastRecipe)) {
-            clearLastRecipe();
-            return;
-        }
-        if (lastRecipe != null && lastRecipeCatalogVersion != Long.MIN_VALUE) {
-            MachineRecipeCatalog catalog = currentRecipeCatalog();
-            MachineRecipe current = catalog.recipes().stream()
-                    .filter(candidate -> lastRecipe.id().equals(candidate.id()))
-                    .findFirst().orElse(null);
-            if (lastRecipeCatalogVersion != catalog.version()
-                    && (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current, registryAccess()))) {
-                clearLastRecipe();
-            }
-        }
+        // The continuation may already own the next execution; validate at its next opportunity.
     }
 
     @Override
@@ -311,47 +351,92 @@ public final class FactoryRecipeThread extends RecipeThread {
         updateFailureResourceMatchers(failureCandidates);
     }
 
+    @Override
+    protected void onRecipeSearchFailed(RecipeSearchResult result) {
+        super.onRecipeSearchFailed(result);
+        updateFailureResourceMatchers(failureCandidates, result.failureReport());
+    }
+
+    @Override
+    protected void onStartAttemptResult(StartOrigin origin, StartResult result,
+                                        @Nullable RecipeSearchContextKey key) {
+        if (key != null && key.coreRecipeSetVersion() != recipeSetVersion) return;
+        if (origin == StartOrigin.LAST_RECIPE) reportLastRecipeStartResult(result);
+        else {
+            onFullSearchResult(result);
+            if (result == StartResult.FAILED) onStartFailed(key);
+        }
+    }
+
+    @Override
+    protected void onLastRecipeStartResult(StartResult result) {
+        switch (result) {
+            case STARTED -> restartPending = false;
+            case PENDING, DEFERRED -> { }
+            case NO_MATCH, FAILED -> {
+                restartPending = false;
+                clearSearchFailure();
+                requestFullSearch();
+            }
+            case CANCELLED -> restartPending = false;
+        }
+    }
+
     public void setFinishContinuation(Runnable finishContinuation) {
         this.finishContinuation = finishContinuation == null ? () -> { } : finishContinuation;
     }
 
-    public boolean prepareAsyncFinishRestart(FactorySearchContext context, List<MachineRecipe> candidates,
+    public StartResult prepareAsyncFinishRestart(FactorySearchContext context, List<MachineRecipe> candidates,
                                               long availableParallelism, long structureVersion, long capabilityVersion,
                                               long modifierVersion, long componentStateVersion) {
-        if (!tryRestartEligibility(candidates, availableParallelism, structureVersion, capabilityVersion,
-                modifierVersion, componentStateVersion, context.catalogVersion())) return false;
-        return enqueueAsyncFinishRestart(lastRecipe, availableParallelism, structureVersion, context);
+        if (!restartPending || hasFullSearchPending()) return StartResult.NO_MATCH;
+        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
+        setSearchContextKey(contextSearchContextKey(context));
+        setSearchGameTime(context.gameTime());
+        MachineRecipe candidate = restartCandidate(candidates, availableParallelism, context.catalogVersion());
+        if (candidate == null) {
+            reportLastRecipeStartResult(StartResult.NO_MATCH);
+            return StartResult.NO_MATCH;
+        }
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        return enqueueAsyncFinishRestart(candidate, availableParallelism, current.structure().version(), context,
+                StartOrigin.LAST_RECIPE);
     }
 
-    @Override protected void onRecipeFinished() {
+    @Override public void onRecipeFinished() {
+        restartPending = true;
         finishContinuation.run();
     }
 
     @Override
-    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
-        setSearchContextKey(null);
-        clearSearchGameTime();
-        List<MachineRecipe> filtered = candidatesFor(candidates);
-        failureCandidates = filtered.stream().filter(Objects::nonNull).toList();
-        boolean started = super.searchAndStartRecipe(filtered, availableParallelism, structureVersion);
-        if (!started && runtime.failure() == null) failureCandidates = List.of();
-        return started;
+    public StartResult searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
+        FactorySearchContext context = new FactorySearchContext(controller.currentRuntimeSnapshot(), List.of(),
+                controller.componentRuntime().capabilities(), controller.componentRuntime().modifierList(),
+                currentRecipeCatalog().version(), controller.resourceAvailabilityEpoch(), availableParallelism,
+                controller.getLevel() == null ? 0L : controller.getLevel().getGameTime());
+        return searchAndStartRecipe(context, candidates, structureVersion);
     }
 
-    public boolean searchAndStartRecipe(FactorySearchContext context, long structureVersion) {
+    public StartResult searchAndStartRecipe(FactorySearchContext context, long structureVersion) {
         return searchAndStartRecipe(context, context == null ? null : context.orderedCandidates(),
                 structureVersion);
     }
 
-    public boolean searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
+    public StartResult searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
                                          long structureVersion) {
-        if (context == null) return false;
+        if (context == null) return StartResult.NO_MATCH;
+        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
+        if (context.maxParallelism() <= 0L) return StartResult.NO_MATCH;
         setSearchContextKey(contextSearchContextKey(context));
         setSearchGameTime(context.gameTime());
         List<MachineRecipe> filtered = candidatesFor(candidates, context.catalogVersion());
         failureCandidates = filtered.stream().filter(Objects::nonNull).toList();
-        return startSearchResult(context, filtered, structureVersion,
-                search(context, filtered, structureVersion));
+        long epoch = controller.lifecycleEpoch();
+        long coreVersion = recipeSetVersion;
+        SearchResult result = search(context, filtered, structureVersion);
+        return epoch == controller.lifecycleEpoch() && coreVersion == recipeSetVersion
+                ? startSearchResult(context, filtered, structureVersion, result)
+                : StartResult.CANCELLED;
     }
 
     /** Computes an immutable factory-lane search result without accessing the lane runtime. */
@@ -365,33 +450,75 @@ public final class FactoryRecipeThread extends RecipeThread {
         Identifier recipePoolId = candidates == null ? null : candidates.stream()
                 .filter(Objects::nonNull).map(MachineRecipe::recipePoolId).findFirst().orElse(null);
         try {
-            return new SearchResult(new RecipeSearchTask(context.snapshot(), machineId,
-                    recipePoolId, structureVersion,
-                    context.maxParallelism(), candidates, context.capabilities(),
-                    MachineModifier.recipeModifiers(context.modifiers())).compute(),
-                    null, false);
+            List<MachineRecipe> eligible = new ArrayList<>();
+            List<MachineRecipe> rejected = new ArrayList<>();
+            List<RecipeSearchTask.PlanningValue> failures = new ArrayList<>();
+            for (MachineRecipe candidate : candidates == null ? List.<MachineRecipe>of() : candidates) {
+                int stage = Math.max(1, context.snapshot().structure().matchedStage());
+                FailureReason failure = candidate.stageRequirements().stream()
+                        .anyMatch(requirement -> stage < requirement.minStage())
+                        ? BuiltinFailureReasons.STAGE_INSUFFICIENT : null;
+                if (failure == null) eligible.add(candidate);
+                else {
+                    rejected.add(candidate);
+                    failures.add(RecipeSearchTask.PlanningValue.failure(candidate.id(), failure, 0, false));
+                }
+            }
+            RecipeSearchResult result = new RecipeSearchTask(context.snapshot(), machineId, recipePoolId, structureVersion,
+                    context.maxParallelism(), eligible, context.capabilities(),
+                    MachineModifier.recipeModifiers(context.modifiers())).compute();
+            if (!result.success() && !rejected.isEmpty()) {
+                FailureReport report = result.failureReport();
+                RecipeSearchResult staticResult = RecipeSearchTask.forPlanningValues(context.snapshot(), machineId,
+                        structureVersion, context.maxParallelism(), rejected, failures).compute();
+                for (FailureReport.Candidate failure : staticResult.failureReport().candidates()) {
+                    report = report.plus(failure.status(), failure.validity());
+                }
+                ExecutionStatus primary = report.primary();
+                float validity = 0F;
+                for (FailureReport.Candidate failure : report.candidates()) {
+                    if (failure.status() == primary) validity = failure.validity();
+                }
+                result = RecipeSearchResult.failure(machineId, structureVersion, context.snapshot().capabilityVersion(),
+                        context.snapshot().modifierVersion(), report, validity);
+            }
+            return new SearchResult(result, null, false);
         } catch (RuntimeException exception) {
             return new SearchResult(null, exception, false);
         }
     }
 
     /** Applies a worker search result on the main thread and begins the normal lane start lifecycle. */
-    public boolean startSearchResult(FactorySearchContext context, List<MachineRecipe> candidates,
+    public StartResult startSearchResult(FactorySearchContext context, List<MachineRecipe> candidates,
                                      long structureVersion, SearchResult searchResult) {
-        if (context == null || searchResult == null) return false;
+        if (context == null || searchResult == null) return StartResult.NO_MATCH;
+        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
         setSearchContextKey(contextSearchContextKey(context));
         setSearchGameTime(context.gameTime());
-        failureCandidates = candidates.stream().filter(Objects::nonNull).toList();
+        List<MachineRecipe> filtered = candidatesFor(candidates, context.catalogVersion());
+        failureCandidates = filtered;
+        long epoch = controller.lifecycleEpoch();
+        long coreVersion = recipeSetVersion;
         SearchResult resolved = searchResult.requiresMainThreadReplan()
-                ? search(context, candidates, structureVersion) : searchResult;
+                ? search(context, filtered, structureVersion) : searchResult;
+        if (epoch != controller.lifecycleEpoch() || coreVersion != recipeSetVersion) return StartResult.CANCELLED;
         RecipeSearchResult result = resolved.result();
         if (resolved.failure() != null || result == null || !result.success()) {
             controller.clearPendingConflictStart();
-            onStartSearchFailed(result == null ? null : result.failure());
-            return false;
+            if (result == null) onStartSearchFailed(null);
+            else onRecipeSearchFailed(result);
+            StartResult failure = resolved.failure() != null || result == null ? StartResult.FAILED : StartResult.NO_MATCH;
+            onFullSearchResult(failure);
+            return failure;
         }
-        if (controller.shouldDelayConflictProneStart(result)) return false;
-        return startRecipe(result.recipe(), context.maxParallelism(), structureVersion, context);
+        if (!filtered.contains(result.recipe())) {
+            onFullSearchResult(StartResult.NO_MATCH);
+            return StartResult.NO_MATCH;
+        }
+        if (controller.shouldDelayConflictProneStart(result)) return StartResult.DEFERRED;
+        StartResult started = startRecipe(result.recipe(), context.maxParallelism(), structureVersion, context);
+        if (epoch == controller.lifecycleEpoch() && coreVersion == recipeSetVersion) onFullSearchResult(started);
+        return started;
     }
 
     /** Immutable outcome of a worker-side factory recipe search. */
@@ -399,7 +526,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                                boolean requiresMainThreadReplan) {
     }
 
-    public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
+    public StartResult tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                         long structureVersion, long capabilityVersion,
                                         long modifierVersion, long componentStateVersion) {
         setSearchContextKey(null);
@@ -408,7 +535,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 modifierVersion, componentStateVersion, Long.MIN_VALUE, null);
     }
 
-    public boolean tryRestartLastRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
+    public StartResult tryRestartLastRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
                                          long availableParallelism, long structureVersion, long capabilityVersion,
                                         long modifierVersion, long componentStateVersion) {
         if (context != null) {
@@ -423,33 +550,49 @@ public final class FactoryRecipeThread extends RecipeThread {
                 context == null ? Long.MIN_VALUE : context.catalogVersion(), context);
     }
 
-    private boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
+    private StartResult tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                           long structureVersion, long capabilityVersion,
                                           long modifierVersion, long componentStateVersion,
                                           long catalogVersion, @Nullable FactorySearchContext context) {
-        MachineRecipe retryRecipe = lastRecipe;
-        boolean canRestart = retryRecipe != null && availableParallelism > 0
-                && lastRecipeStructureVersion == structureVersion
-                && lastRecipeCapabilityVersion == capabilityVersion
-                && lastRecipeModifierVersion == modifierVersion
-                && lastRecipeComponentStateVersion == componentStateVersion
-                && recipeBelongsToCurrentMachine(retryRecipe)
-                && candidatesFor(candidates, catalogVersion).contains(retryRecipe);
-        if (!canRestart) return false;
-        failureCandidates = List.of(retryRecipe);
-        return startRecipe(retryRecipe, availableParallelism, structureVersion, context);
+        if (!restartPending || hasFullSearchPending()) return StartResult.NO_MATCH;
+        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
+        MachineRecipe candidate = restartCandidate(candidates, availableParallelism, catalogVersion);
+        if (candidate == null) {
+            reportLastRecipeStartResult(StartResult.NO_MATCH);
+            return StartResult.NO_MATCH;
+        }
+        return startRecipe(candidate, availableParallelism, controller.currentRuntimeSnapshot().structure().version(),
+                context, StartOrigin.LAST_RECIPE);
     }
 
-    private boolean tryRestartEligibility(List<MachineRecipe> candidates, long availableParallelism,
-                                          long structureVersion, long capabilityVersion, long modifierVersion,
-                                          long componentStateVersion, long catalogVersion) {
-        return lastRecipe != null && availableParallelism > 0
-                && lastRecipeStructureVersion == structureVersion
-                && lastRecipeCapabilityVersion == capabilityVersion
-                && lastRecipeModifierVersion == modifierVersion
-                && lastRecipeComponentStateVersion == componentStateVersion
-                && recipeBelongsToCurrentMachine(lastRecipe)
-                && candidatesFor(candidates, catalogVersion).contains(lastRecipe);
+    private @Nullable MachineRecipe restartCandidate(List<MachineRecipe> candidates, long availableParallelism,
+                                                     long catalogVersion) {
+        MachineRecipe candidate = resolveCurrentLastRecipe(candidatesFor(candidates, catalogVersion));
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        return candidate != null && availableParallelism > 0L
+                && current.structure().formed() && current.structure().structureAreaLoaded()
+                && current.moduleConnectionStatus().canRunRecipe(candidate.requiredHostIds())
+                && AsyncRequirementPlanner.capturedRequirementFailure(current, candidate) == null ? candidate : null;
+    }
+
+    private @Nullable MachineRecipe resolveCurrentLastRecipe(List<MachineRecipe> candidates) {
+        if (lastRecipe == null) return null;
+        if (!recipeBelongsToCurrentMachine(lastRecipe)) {
+            clearLastRecipe();
+            return null;
+        }
+        MachineRecipeCatalog catalog = currentRecipeCatalog();
+        if (lastRecipeCatalogVersion != catalog.version()) {
+            MachineRecipe current = catalog.recipes().stream()
+                    .filter(recipe -> lastRecipe.id().equals(recipe.id())).findFirst().orElse(null);
+            if (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current, registryAccess())) {
+                clearLastRecipe();
+                return null;
+            }
+            lastRecipe = current;
+            lastRecipeCatalogVersion = catalog.version();
+        }
+        return candidates.contains(lastRecipe) ? lastRecipe : null;
     }
 
     @Override
@@ -467,15 +610,12 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private void clearLastRecipe() {
         lastRecipe = null;
-        lastRecipeStructureVersion = Long.MIN_VALUE;
-        lastRecipeCapabilityVersion = Long.MIN_VALUE;
-        lastRecipeModifierVersion = Long.MIN_VALUE;
-        lastRecipeComponentStateVersion = Long.MIN_VALUE;
         lastRecipeCatalogVersion = Long.MIN_VALUE;
     }
 
     @Override
     protected void onRecipeFailure() {
+        restartPending = false;
         List<MachineRecipe> candidates = lastRecipe == null ? failureCandidates : List.of(lastRecipe);
         armSearchFailureFromLiveContext();
         updateFailureResourceMatchers(candidates);
@@ -505,42 +645,42 @@ public final class FactoryRecipeThread extends RecipeThread {
                 ? null : runtime.failure().reason().id();
     }
 
-    private boolean matchesFailureReason(ResourceAvailabilityNotifier.Reason reason) {
-        if (lastSearchFailureReason == null) return false;
-        if (reason == ResourceAvailabilityNotifier.Reason.MODULE_CONNECTION) {
-            return BuiltinFailureReasons.MODULE_CONNECTION.id().equals(lastSearchFailureReason);
-        }
-        for (MachineRecipe recipe : failureCandidates) {
-            for (MachineRequirement requirement : recipe.runtimeRequirements()) {
-                for (RequirementHandler.ResourceWakeup wakeup
-                        : RequirementHandlerRegistry.resourceWakeupsFor(requirement)) {
-                    if (reason.name().equals(wakeup.reason().name())
-                            && wakeup.failureReasonIds().contains(lastSearchFailureReason)) return true;
-                }
-            }
-        }
-        return false;
+    private void updateFailureResourceMatchers(List<MachineRecipe> candidates) {
+        updateFailureResourceMatchers(candidates, null);
     }
 
-    private void updateFailureResourceMatchers(List<MachineRecipe> candidates) {
+    private void updateFailureResourceMatchers(List<MachineRecipe> candidates, @Nullable FailureReport report) {
         EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers =
                 new EnumMap<>(ResourceAvailabilityNotifier.Reason.class);
-        if (lastSearchFailureReason == null) {
-            failureResourceMatchers = Map.of();
-            return;
-        }
-        if (BuiltinFailureReasons.MODULE_CONNECTION.id().equals(lastSearchFailureReason)) {
-            matchers.put(ResourceAvailabilityNotifier.Reason.MODULE_CONNECTION,
-                    List.of(resource -> resource instanceof ModuleConnectionStatus));
-        }
-        for (MachineRecipe recipe : candidates) {
-            for (MachineRequirement requirement : recipe.runtimeRequirements()) {
-                addRequirementMatchers(matchers, requirement, lastSearchFailureReason);
+        if (report == null) {
+            if (lastSearchFailureReason != null) {
+                for (MachineRecipe recipe : candidates) addRecipeMatchers(matchers, recipe, lastSearchFailureReason);
+            }
+        } else {
+            for (FailureReport.Candidate failure : report.candidates()) {
+                ExecutionStatus status = failure.status();
+                if (status.reason() == null || status.failure() == null) continue;
+                Set<Identifier> ids = status.failure().trace().frames().stream()
+                        .map(frame -> frame.recipeId()).filter(Objects::nonNull).collect(Collectors.toSet());
+                for (MachineRecipe recipe : candidates) {
+                    if (ids.contains(recipe.id())) addRecipeMatchers(matchers, recipe, status.reason().id());
+                }
             }
         }
         failureResourceMatchers = matchers.entrySet().stream()
                 .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey,
                         entry -> List.copyOf(entry.getValue())));
+    }
+
+    private static void addRecipeMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
+                                          MachineRecipe recipe, Identifier reason) {
+        if (BuiltinFailureReasons.MODULE_CONNECTION.id().equals(reason)) {
+            addMatcher(matchers, ResourceAvailabilityNotifier.Reason.MODULE_CONNECTION,
+                    resource -> resource instanceof ModuleConnectionStatus);
+        }
+        for (MachineRequirement requirement : recipe.runtimeRequirements()) {
+            addRequirementMatchers(matchers, requirement, reason);
+        }
     }
 
     static void addRequirementMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
@@ -590,18 +730,28 @@ public final class FactoryRecipeThread extends RecipeThread {
     public void rebindCurrentVersions() {
         if (lastRecipe != null && !recipeBelongsToCurrentMachine(lastRecipe)) {
             clearLastRecipe();
+            restartPending = false;
+            clearFullSearchRequest();
             clearSearchFailure();
         }
         if (searchFailureRecipePoolId != null && !searchFailureRecipePoolId.equals(currentRecipePoolId())) {
             clearSearchFailure();
         }
         runtime.rebindCurrentVersions();
-        if (lastRecipe == null) return;
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        lastRecipeStructureVersion = snapshot.structure().version();
-        lastRecipeCapabilityVersion = snapshot.capabilityVersion();
-        lastRecipeModifierVersion = snapshot.modifierVersion();
-        lastRecipeComponentStateVersion = snapshot.stateVersion();
+    }
+
+    @Override
+    protected void onDiscardedForRecipePoolChange() {
+        clearLastRecipe();
+        restartPending = false;
+        clearSearchFailure();
+        clearFullSearchRequest();
+    }
+
+    @Override
+    public void invalidate() {
+        super.invalidate();
+        onDiscardedForRecipePoolChange();
     }
 
     public void save(ValueOutput output) {
@@ -614,11 +764,6 @@ public final class FactoryRecipeThread extends RecipeThread {
         output.putBoolean("has_last", lastRecipe != null);
         if (lastRecipe != null) {
             output.putString("last_recipe", lastRecipe.id().toString());
-            output.putLong("last_structure_version", lastRecipeStructureVersion);
-            output.putLong("last_capability_version", lastRecipeCapabilityVersion);
-            output.putLong("last_modifier_version", lastRecipeModifierVersion);
-            output.putLong("last_component_state_version", lastRecipeComponentStateVersion);
-            output.putLong("last_catalog_version", lastRecipeCatalogVersion);
         }
         output.putInt("search_failure_streak", failureStreak);
         long remaining = lastSearchFailureKey == null || nextSearchTick == Long.MIN_VALUE
@@ -672,13 +817,8 @@ public final class FactoryRecipeThread extends RecipeThread {
                     .filter(candidate -> candidate != null && recipeId.equals(candidate.id()))
                     .findFirst().orElse(null);
             if (thread.lastRecipe != null) {
-                thread.lastRecipeStructureVersion = input.getLongOr("last_structure_version", Long.MIN_VALUE);
-                thread.lastRecipeCapabilityVersion = input.getLongOr("last_capability_version", Long.MIN_VALUE);
-                thread.lastRecipeModifierVersion = input.getLongOr("last_modifier_version", Long.MIN_VALUE);
-                thread.lastRecipeComponentStateVersion = input.getLongOr("last_component_state_version", Long.MIN_VALUE);
-                thread.lastRecipeCatalogVersion = input.getLongOr("last_catalog_version",
-                        thread.currentRecipeCatalog().version());
-            }
+                thread.lastRecipeCatalogVersion = thread.currentRecipeCatalog().version();
+            } else thread.requestFullSearch();
         }
         thread.runtime.load(input.childOrEmpty("runtime"), controller.resourceDomain());
         MachineRecipe activeRecipe = thread.runtime.recipe();
@@ -697,7 +837,11 @@ public final class FactoryRecipeThread extends RecipeThread {
         String restoredPoolName = input.getStringOr("search_failure_pool", "");
         Identifier restoredPool = restoredPoolName.isEmpty()
                 ? thread.currentRecipePoolId() : Identifier.parse(restoredPoolName);
-        if (!thread.coreThread && restoredStreak > 0 && restoredKey != null
+        if (restoredStreak > 0 && Objects.equals(restoredPool, thread.currentRecipePoolId())
+                && thread.candidatesFor(availableCandidates).size() != 1) {
+            thread.clearSearchFailure();
+            thread.requestFullSearch();
+        } else if (restoredStreak > 0 && restoredKey != null
                 && restoredKey.equals(thread.currentSearchContextKey())
                 && Objects.equals(restoredPool, thread.currentRecipePoolId()) && restoredReason != null) {
             thread.failureStreak = restoredStreak;
@@ -706,12 +850,13 @@ public final class FactoryRecipeThread extends RecipeThread {
             thread.lastSearchFailureReason = restoredReason;
             thread.lastSearchFailureKey = restoredKey;
             thread.searchFailureRecipePoolId = restoredPool;
-            thread.failureCandidates = thread.lastRecipe == null
-                    ? List.copyOf(availableCandidates) : List.of(thread.lastRecipe);
+            thread.failureCandidates = thread.candidatesFor(availableCandidates);
             thread.updateFailureResourceMatchers(thread.failureCandidates);
         } else {
             thread.clearSearchFailure();
         }
+        thread.restartPending = thread.lastRecipe != null && thread.isIdle()
+                && thread.searchFailureKey() == null && !thread.hasFullSearchPending();
         return thread;
     }
 
