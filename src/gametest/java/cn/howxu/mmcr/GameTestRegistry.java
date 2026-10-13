@@ -88,6 +88,8 @@ public final class GameTestRegistry {
                 RuntimeContentSyncGameTest::finalDatapackSyncIncludesLateRecipes);
         register(event, "item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().outputResolvesPlainJsonEnchantments(helper));
+        register(event, "pattern_output_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().patternOutputsMatchResolvedComponentsStrictly(helper));
         register(event, "recipe_serializer_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().recipeSerializerPreservesEnchantmentComponents(helper));
         register(event, "async_item_output_enchantment_components", 20,
@@ -362,6 +364,8 @@ public final class GameTestRegistry {
                     helper -> new AE2PatternInterfaceGameTest().nativeReturnDrainNotifiesWithoutBlockEntityPolling(helper));
             register(event, "ae2_me_pattern_interface_request", 100,
                     helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
+            register(event, "ae2_me_pattern_cpu_output_components", 100,
+                    helper -> new AE2PatternOutputComponentGameTest().craftingCpuPushesResolvedEnchantmentOutput(helper));
             // No need for this gameTest
             // register(event, "ae2_cpu_factory_pattern_batch", 180,
             //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
