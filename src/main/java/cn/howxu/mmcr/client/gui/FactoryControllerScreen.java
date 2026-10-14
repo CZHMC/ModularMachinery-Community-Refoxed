@@ -7,6 +7,7 @@ import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.network.PktControllerStructureCheckPayload;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
@@ -15,6 +16,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,8 +56,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int DETAIL_X = 115;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
-    static final int RECIPE_POOL_BUTTON_X = 258;
-    static final int RECIPE_POOL_BUTTON_Y = 9;
+    private static final int ACTION_BUTTON_SIZE = 24;
+    private static final int ACTION_BUTTON_GAP = 3;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
     private static final Identifier SELECTED_ELEMENTS = MMCR.id("textures/gui/guifactoryelements_selected.png");
@@ -64,6 +66,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
     private StyledButton recipePoolButton;
+    private StyledButton structureCheckButton;
     private final Supplier<ControllerUiSnapshot> snapshot;
     private String selectedLaneId;
 
@@ -82,26 +85,43 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     @Override
     protected void init() {
         super.init();
+        int buttonX = leftPos + imageWidth + ACTION_BUTTON_GAP;
         recipePoolButton = addRenderableWidget(new StyledButton(
-                leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
-                Component.literal("M"), button -> {
+                buttonX, topPos, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                Component.translatable("gui.mmcr.recipe_pool.button"), button -> {
                     ControllerUiSnapshot value = snapshot.get();
                     minecraft.setScreen(new RecipePoolScreen(this, value.controllerPos(), value.recipePoolIds(),
                             value.currentRecipePoolId().orElse(null)));
                 }));
         recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
-        updateRecipePoolButton();
+        structureCheckButton = addRenderableWidget(new StyledButton(
+                buttonX, topPos, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                Component.translatable("gui.mmcr.controller.check_structure.button"), button -> {
+                    ClientPacketDistributor.sendToServer(new PktControllerStructureCheckPayload(snapshot.get().controllerPos()));
+                    button.setFocused(false);
+                }));
+        structureCheckButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.controller.check_structure")));
+        updateControllerButtons();
     }
 
     @Override
     protected void containerTick() {
         super.containerTick();
-        updateRecipePoolButton();
+        updateControllerButtons();
     }
 
-    private void updateRecipePoolButton() {
-        List<Identifier> recipePoolIds = snapshot.get().recipePoolIds();
-        if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
+    private void updateControllerButtons() {
+        boolean showRecipePools = snapshot.get().recipePoolIds().size() > 1;
+        int buttonX = leftPos + imageWidth + ACTION_BUTTON_GAP;
+        if (recipePoolButton != null) {
+            recipePoolButton.visible = showRecipePools;
+            recipePoolButton.active = showRecipePools;
+            recipePoolButton.setPosition(buttonX, topPos);
+        }
+        if (structureCheckButton != null) {
+            structureCheckButton.setPosition(buttonX,
+                    topPos + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
+        }
     }
 
     @Override

@@ -59,9 +59,9 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private static final int AUTO_IO_TOGGLE_BUTTON_WIDTH = 69;
     private static final int AUTO_IO_TOGGLE_BUTTON_HEIGHT = 20;
     private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
-    private static final int TEXT_UI_PAGE_BUTTON_OFFSET_X = -6;
-    private static final int TEXT_UI_PAGE_BUTTON_OFFSET_Y = 5;
-    private static final int AUTO_IO_PAGE_BUTTON_STEP = 14;
+    private static final int AUTO_IO_PAGE_BUTTON_SIZE = 24;
+    private static final int AUTO_IO_PAGE_BUTTON_GAP = 3;
+    private static final int AUTO_IO_PAGE_BUTTON_STEP = AUTO_IO_PAGE_BUTTON_SIZE + AUTO_IO_PAGE_BUTTON_GAP;
     protected static final float TEXT_DETAIL_SCALE = 0.85F;
     protected static final int TEXT_DETAIL_LINE_SPACING = 10;
     protected static final int TEXT_VIEW_X = 9;
@@ -214,12 +214,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     private void initAutoIOButtons() {
         if (!supportsAutoIOControlPage()) return;
-        int autoIOPageButtonX = leftPos + imageWidth - 16;
-        int autoIOPageButtonY = topPos + 4;
-        if (isTextUi()) {
-            autoIOPageButtonX += TEXT_UI_PAGE_BUTTON_OFFSET_X;
-            autoIOPageButtonY += TEXT_UI_PAGE_BUTTON_OFFSET_Y;
-        }
+        int autoIOPageButtonX = leftPos - AUTO_IO_PAGE_BUTTON_SIZE - AUTO_IO_PAGE_BUTTON_GAP;
+        int autoIOPageButtonY = topPos;
         List<Identifier> capabilityIds = supportedCapabilityIds();
         autoIOPageButton = createAutoIOPageButton(autoIOPageButtonX, autoIOPageButtonY, capabilityIds.getFirst());
         if (capabilityIds.size() > 1) {
@@ -268,7 +264,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private Button createAutoIOPageButton(int x, int y, Identifier capabilityId) {
-        return addRenderableWidget(new StyledButton(x, y, 12, 12, Component.translatable("mmcr.auto_io.page"), button -> {
+        return addRenderableWidget(new StyledButton(x, y, AUTO_IO_PAGE_BUTTON_SIZE, AUTO_IO_PAGE_BUTTON_SIZE,
+                Component.translatable("mmcr.auto_io.page"), button -> {
             if (autoIOPage) {
                 autoIOPage = false;
             } else {

@@ -23,6 +23,7 @@ import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktBlueprintStageUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.network.PktControllerSpecsPayload;
+import cn.howxu.mmcr.internal.network.PktControllerStructureCheckPayload;
 import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.network.PktFactoryControllerStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineAppearancePayload;
@@ -200,6 +201,7 @@ class ModEventRegistrationTest {
                   PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                    PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
+                   PacketFlow.SERVERBOUND,
                    PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                    PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
@@ -223,6 +225,7 @@ class ModEventRegistrationTest {
                  PktPortContainerTransferPayload.TYPE,
                    PktBlueprintStageUpdatePayload.TYPE,
                    PktRecipePoolSelectPayload.TYPE,
+                   PktControllerStructureCheckPayload.TYPE,
                    PktTerminalActionPayload.TYPE,
                    PktControllerUiSnapshotPayload.TYPE, PktControllerUiProgressPayload.TYPE,
                    PktControllerUiResponsePayload.TYPE, PktControllerUiCustomStatePayload.TYPE,
@@ -232,7 +235,7 @@ class ModEventRegistrationTest {
 
     @Test
     void production_payload_protocol_version_tracks_the_current_packet_layout() {
-        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("11");
+        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("12");
     }
 
     @Test

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -27,10 +28,50 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
     private int textScrollOffset;
     private boolean frameActive;
     private List<ControllerScreenTextComposer.VisualLine> frameLines;
+    private boolean sidebarButtonGesture;
 
     protected AbstractScrollableTextScreen(M menu, Inventory inventory,
                                            Component title, int imageWidth, int imageHeight) {
         super(menu, inventory, title, imageWidth, imageHeight);
+    }
+
+    @Override
+    protected void init() {
+        sidebarButtonGesture = false;
+        super.init();
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() != 0) return super.mouseClicked(event, doubleClick);
+        // A subpage may have received the previous release instead of this screen.
+        sidebarButtonGesture = false;
+        boolean sidebarButton = hasClickedOutside(event.x(), event.y(), leftPos, topPos)
+                && getChildAt(event.x(), event.y()).orElse(null) instanceof StyledButton;
+        boolean handled = super.mouseClicked(event, doubleClick);
+        if (sidebarButton && handled) {
+            sidebarButtonGesture = true;
+            // Vanilla assigns focus after onPress, so callback-only clearing is too early.
+            setFocused(null);
+            setDragging(false);
+        }
+        return handled;
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        if (event.button() == 0 && sidebarButtonGesture) return true;
+        return super.mouseDragged(event, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0 && sidebarButtonGesture) {
+            sidebarButtonGesture = false;
+            // AbstractContainerScreen ignores child release consumption and still clicks slots.
+            return true;
+        }
+        return super.mouseReleased(event);
     }
 
     static int visibleLineCount(int viewportHeight, float scale, int lineSpacing, int fontLineHeight) {
