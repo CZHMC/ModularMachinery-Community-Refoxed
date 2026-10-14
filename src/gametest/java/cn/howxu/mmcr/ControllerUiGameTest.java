@@ -297,12 +297,31 @@ public final class ControllerUiGameTest {
                                         && !(boolean) snapshotField(failedWork, "dirty")
                                         && (long) snapshotField(failedWork, "nextCheckTick") > gameTime,
                                 "An actual failed unformed check schedules a future normal check interval");
-                        level.setBlock(factoryPos, factoryState, 3);
                         var provider = owner.getBlockState().getMenuProvider(level, pos);
                         helper.assertTrue(provider != null && player.openMenu(provider).isPresent()
                                         && player.containerMenu instanceof MachineControllerMenu
                                         && ((ControllerUiMenu) player.containerMenu).uiServerSession().validate(),
                                 "The actual machine provider opens a valid normal menu after factory formation is lost");
+                        int[] diagnostics = {0};
+                        owner.setStructureDiagnosticCallbackForTesting(() -> diagnostics[0]++);
+                        try {
+                            matches = owner.matcherInvocationCountForTesting();
+                            helper.assertTrue(requestStructureCheck(player, request),
+                                    "An unformed controller menu authorizes C while the structure is still incomplete");
+                            Object requestedWork = manualStructureCheckWork(owner);
+                            helper.assertTrue(owner.isStructureDiagnosticRequestedForTesting()
+                                            && player.getUUID().equals(snapshotField(requestedWork, "diagnosticPlayerId"))
+                                            && level.dimension().equals(snapshotField(requestedWork, "diagnosticDimension")),
+                                    "C binds failure feedback to the requesting player and dimension");
+                            owner.tickStructure(level, pos);
+                            helper.assertTrue(owner.matcherInvocationCountForTesting() > matches
+                                            && !owner.structureSnapshot().formed() && diagnostics[0] == 1
+                                            && !owner.isStructureDiagnosticRequestedForTesting(),
+                                    "An incomplete structure runs real matching and emits one mismatch diagnostic before the interval");
+                        } finally {
+                            owner.setStructureDiagnosticCallbackForTesting(null);
+                        }
+                        level.setBlock(factoryPos, factoryState, 3);
                         matches = owner.matcherInvocationCountForTesting();
                         owner.tickStructure(level, pos);
                         helper.assertTrue(owner.matcherInvocationCountForTesting() == matches

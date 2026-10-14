@@ -59,8 +59,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private static final int AUTO_IO_TOGGLE_BUTTON_WIDTH = 69;
     private static final int AUTO_IO_TOGGLE_BUTTON_HEIGHT = 20;
     private static final float AUTO_IO_TOGGLE_TEXT_SCALE = 0.85F;
-    private static final int AUTO_IO_PAGE_BUTTON_SIZE = 24;
-    private static final int AUTO_IO_PAGE_BUTTON_GAP = 3;
+    private static final int AUTO_IO_PAGE_BUTTON_SIZE = 16;
+    private static final int AUTO_IO_PAGE_BUTTON_GAP = 2;
     private static final int AUTO_IO_PAGE_BUTTON_STEP = AUTO_IO_PAGE_BUTTON_SIZE + AUTO_IO_PAGE_BUTTON_GAP;
     protected static final float TEXT_DETAIL_SCALE = 0.85F;
     protected static final int TEXT_DETAIL_LINE_SPACING = 10;
@@ -215,7 +215,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private void initAutoIOButtons() {
         if (!supportsAutoIOControlPage()) return;
         int autoIOPageButtonX = leftPos - AUTO_IO_PAGE_BUTTON_SIZE - AUTO_IO_PAGE_BUTTON_GAP;
-        int autoIOPageButtonY = topPos;
+        int autoIOPageButtonY = topPos + 1;
         List<Identifier> capabilityIds = supportedCapabilityIds();
         autoIOPageButton = createAutoIOPageButton(autoIOPageButtonX, autoIOPageButtonY, capabilityIds.getFirst());
         if (capabilityIds.size() > 1) {

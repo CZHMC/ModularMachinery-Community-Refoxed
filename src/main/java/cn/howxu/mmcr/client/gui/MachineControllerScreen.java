@@ -40,8 +40,8 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
     private static final float DETAIL_SCALE = 0.85F;
     private static final int DETAIL_LINE_SPACING = 10;
-    private static final int ACTION_BUTTON_SIZE = 24;
-    private static final int ACTION_BUTTON_GAP = 3;
+    private static final int ACTION_BUTTON_SIZE = 16;
+    private static final int ACTION_BUTTON_GAP = 2;
     private StyledButton recipePoolButton;
     private StyledButton structureCheckButton;
     private final Supplier<ControllerUiSnapshot> snapshot;
@@ -64,7 +64,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         super.init();
         int buttonX = leftPos + imageWidth + ACTION_BUTTON_GAP;
         recipePoolButton = addRenderableWidget(new StyledButton(
-                buttonX, topPos, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                buttonX, topPos + 1, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
                 Component.translatable("gui.mmcr.recipe_pool.button"), button -> {
                     ControllerUiSnapshot value = snapshot.get();
                     minecraft.setScreen(new RecipePoolScreen(this, value.controllerPos(), value.recipePoolIds(),
@@ -72,7 +72,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                 }));
         recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
         structureCheckButton = addRenderableWidget(new StyledButton(
-                buttonX, topPos, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                buttonX, topPos + 1, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
                 Component.translatable("gui.mmcr.controller.check_structure.button"), button -> {
                     ClientPacketDistributor.sendToServer(new PktControllerStructureCheckPayload(snapshot.get().controllerPos()));
                     button.setFocused(false);
@@ -93,11 +93,11 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         if (recipePoolButton != null) {
             recipePoolButton.visible = showRecipePools;
             recipePoolButton.active = showRecipePools;
-            recipePoolButton.setPosition(buttonX, topPos);
+            recipePoolButton.setPosition(buttonX, topPos + 1);
         }
         if (structureCheckButton != null) {
             structureCheckButton.setPosition(buttonX,
-                    topPos + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
+                    topPos + 1 + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
         }
     }
 

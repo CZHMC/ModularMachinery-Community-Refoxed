@@ -43,7 +43,7 @@ public record PktControllerStructureCheckPayload(BlockPos controllerPos) impleme
         if (!(player.level().getBlockEntity(payload.controllerPos()) instanceof MachineControllerBlockEntity controller)
                 || !MenuSupport.stillValidWithin(player, payload.controllerPos())
                 || !hasAccessToMenu(player, controller, payload.controllerPos())) return false;
-        controller.requestImmediateStructureCheck();
+        controller.requestImmediateStructureCheck(player);
         return true;
     }
 

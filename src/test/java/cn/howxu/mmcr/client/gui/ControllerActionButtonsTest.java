@@ -43,8 +43,8 @@ class ControllerActionButtonsTest {
             var current = new AtomicReference<ControllerUiSnapshot>();
             Supplier<ControllerUiSnapshot> snapshots = current::get;
             unsafe.putObject(screen, unsafe.objectFieldOffset(type.getDeclaredField("snapshot")), snapshots);
-            var poolButton = new StyledButton(0, 0, 24, 24, Component.empty(), button -> {});
-            var checkButton = new StyledButton(0, 0, 24, 24, Component.empty(), button -> {});
+            var poolButton = new StyledButton(0, 0, 16, 16, Component.empty(), button -> {});
+            var checkButton = new StyledButton(0, 0, 16, 16, Component.empty(), button -> {});
             setField(screen, "recipePoolButton", poolButton);
             setField(screen, "structureCheckButton", checkButton);
             setField(screen, "leftPos", 50);
@@ -66,10 +66,10 @@ class ControllerActionButtonsTest {
                 assertThat(checkButton.visible).isTrue();
                 assertThat(checkButton.active).isTrue();
                 assertThat(checkButton.getX()).isEqualTo(poolButton.getX());
-                assertThat(checkButton.getX()).isEqualTo(50 + backgroundWidth + 3);
-                assertThat(poolButton.getY()).isEqualTo(40);
+                assertThat(checkButton.getX()).isEqualTo(50 + backgroundWidth + 2);
+                assertThat(poolButton.getY()).isEqualTo(41);
                 if (showPools) {
-                    assertThat(checkButton.getY()).isEqualTo(poolButton.getY() + poolButton.getHeight() + 3);
+                    assertThat(checkButton.getY()).isEqualTo(poolButton.getY() + poolButton.getHeight() + 2);
                 } else {
                     assertThat(checkButton.getY()).isEqualTo(poolButton.getY());
                 }

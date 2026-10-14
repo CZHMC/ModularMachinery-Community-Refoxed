@@ -79,8 +79,8 @@ class SideButtonInputTest {
     @Test
     void sidebar_press_drag_and_release_preserve_carried_items_and_slots() throws Exception {
         // Port navigation on the left; normal/factory M and C rows on the right.
-        for (int[] layout : List.of(new int[]{176, -27, 0}, new int[]{176, 179, 0},
-                new int[]{176, 179, 27}, new int[]{280, 283, 0}, new int[]{280, 283, 27})) {
+        for (int[] layout : List.of(new int[]{176, -18, 1}, new int[]{176, 178, 1},
+                new int[]{176, 178, 19}, new int[]{280, 282, 1}, new int[]{280, 282, 19})) {
             FixtureScreen screen = screen(layout[0]);
             var presses = new AtomicInteger();
             StyledButton sidebar = screen.addButton(50 + layout[1], 40 + layout[2], button -> {
@@ -115,16 +115,16 @@ class SideButtonInputTest {
     @Test
     void hiding_the_pressed_navigation_button_does_not_release_into_the_container() throws Exception {
         FixtureScreen screen = screen(176);
-        StyledButton sidebar = screen.addButton(23, 67, button -> {
+        StyledButton sidebar = screen.addButton(32, 59, button -> {
             button.visible = false;
             button.active = false;
         });
 
-        assertThat(screen.mouseClicked(mouse(28, 72), false)).isTrue();
+        assertThat(screen.mouseClicked(mouse(37, 64), false)).isTrue();
         assertThat(sidebar.visible).isFalse();
         assertThat(screen.getFocused()).isNull();
         assertThat(sidebar.isFocused()).isFalse();
-        assertThat(screen.mouseDragged(mouse(65, 125), 37, 53)).isTrue();
+        assertThat(screen.mouseDragged(mouse(65, 125), 28, 61)).isTrue();
         assertThat(screen.mouseReleased(mouse(65, 125))).isTrue();
         assertThat(screen.clicks).isEmpty();
         assertNormalSlotGesture(screen);
@@ -294,7 +294,7 @@ class SideButtonInputTest {
     /** @author howxu <dev@howxu.cn> */
     private static final class SilentStyledButton extends StyledButton {
         private SilentStyledButton(int x, int y, OnPress action) {
-            super(x, y, 24, 24, Component.empty(), action);
+            super(x, y, 16, 16, Component.empty(), action);
         }
 
         @Override
