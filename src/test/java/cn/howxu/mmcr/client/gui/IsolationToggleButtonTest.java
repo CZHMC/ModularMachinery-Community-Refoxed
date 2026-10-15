@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.ActiveTextCollector;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -55,18 +56,22 @@ class IsolationToggleButtonTest {
         assertThat(button.visible).isTrue();
         assertThat(button.active).isTrue();
         assertThat(tooltipMessage(button)).isEqualTo(Component.translatable("mmcr.input_isolation.port.tooltip",
-                Component.translatable("mmcr.input_isolation.port.disabled")));
+                Component.translatable("mmcr.input_isolation.port.disabled",
+                        Component.translatable("mmcr.input_isolation.disabled").withStyle(ChatFormatting.RED))));
         state.dataSlot().set(3);
         button.updateState(state, false);
         assertThat(tooltipMessage(button)).isEqualTo(Component.translatable("mmcr.input_isolation.port.tooltip",
-                Component.translatable("mmcr.input_isolation.port.enabled")));
+                Component.translatable("mmcr.input_isolation.port.enabled",
+                        Component.translatable("mmcr.input_isolation.enabled").withStyle(ChatFormatting.GREEN))));
         button.updateState(state, true);
         assertThat(tooltipMessage(button)).isEqualTo(Component.translatable("mmcr.input_isolation.full.tooltip",
-                Component.translatable("mmcr.input_isolation.full.enabled")));
+                Component.translatable("mmcr.input_isolation.full.enabled",
+                        Component.translatable("mmcr.input_isolation.enabled").withStyle(ChatFormatting.GREEN))));
         state.dataSlot().set(1);
         button.updateState(state, true);
         assertThat(tooltipMessage(button)).isEqualTo(Component.translatable("mmcr.input_isolation.full.tooltip",
-                Component.translatable("mmcr.input_isolation.full.disabled")));
+                Component.translatable("mmcr.input_isolation.full.disabled",
+                        Component.translatable("mmcr.input_isolation.disabled").withStyle(ChatFormatting.RED))));
     }
 
     private static Component tooltipMessage(RecordingButton button) throws Exception {
