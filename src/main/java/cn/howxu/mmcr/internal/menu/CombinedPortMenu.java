@@ -55,6 +55,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         this.fluidTankLayouts = layouts(fluidTankCount);
         addItemSlots(owner);
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(owner));
         if (owner == null) {
             this.itemEntries = List.of();
             this.fluidEntries = List.of();
@@ -80,6 +81,7 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
         this.fluidTankLayouts = layouts(fluidTankCount);
         addItemSlots(null);
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(null));
         this.itemEntries = List.of();
         this.fluidEntries = List.of();
         this.displayEntries = List.of();

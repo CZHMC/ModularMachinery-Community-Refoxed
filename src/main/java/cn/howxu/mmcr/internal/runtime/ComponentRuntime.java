@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
@@ -31,6 +32,8 @@ import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.MMCR;
@@ -79,6 +82,12 @@ public final class ComponentRuntime {
     private long capabilityVersion;
     private long modifierVersion;
     private long stateVersion;
+    private long inputIsolationChangeVersion;
+    private InputRoutingFacet inputRouting = new InputRoutingFacet(0L, List.of(), List.of());
+    private Map<BlockPos, Boolean> inputIsolationSettings = Map.of();
+    private Map<BlockPos, IOPortBlockEntity> inputPortHosts = Map.of();
+    private Set<BlockPos> legacyCapabilitySources = Set.of();
+    private boolean fullyInputIsolated;
     private long componentPresentationEpoch;
     private long capabilityPresentationEpoch;
     private long capabilityContentRevision;
@@ -109,6 +118,16 @@ public final class ComponentRuntime {
         List<CapabilityIdentity> nextIdentity = capabilityState.identity();
         boolean componentsChanged = !this.components.equals(nextComponents);
         boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
+        Map<BlockPos, IOPortBlockEntity> nextInputPorts = new LinkedHashMap<>();
+        Set<BlockPos> nextLegacySources = new LinkedHashSet<>();
+        for (ProcessingComponent component : nextComponents) {
+            BlockPos position = component.getPos().immutable();
+            if (component.getContainer() instanceof IOPortBlockEntity port) {
+                if (port.supportsInputIsolation()) nextInputPorts.put(position, port);
+            } else {
+                nextLegacySources.add(position);
+            }
+        }
         List<CapabilityPresentationSegment> nextSegments = new ArrayList<>(capabilityState.segments());
         boolean presentationsChanged = nextSegments.size() != capabilityPresentationSegments.size();
         Map<BlockPos, List<Integer>> nextSources = new LinkedHashMap<>();
@@ -140,6 +159,8 @@ public final class ComponentRuntime {
             componentPresentationEpoch++;
         }
         this.capabilities = nextCapabilities;
+        inputPortHosts = immutableMap(nextInputPorts);
+        legacyCapabilitySources = Set.copyOf(nextLegacySources);
         // These closed built-in capabilities cannot expose TickFacet. Custom facet queries may change dynamically.
         tickFacetCandidates = nextCapabilities.stream().filter(capability -> capability.getClass() != ItemBusCapability.class
                 && capability.getClass() != FluidHatchCapability.class
@@ -162,6 +183,7 @@ public final class ComponentRuntime {
         if (capabilitiesChanged) {
             capabilityVersion++;
         }
+        refreshInputRouting();
         return componentsChanged;
     }
 
@@ -171,6 +193,53 @@ public final class ComponentRuntime {
 
     public List<MachineCapability> capabilities() {
         return capabilities;
+    }
+
+    public CapabilitySnapshot capabilitySnapshot() {
+        return new CapabilitySnapshot(capabilities, List.of(inputRouting));
+    }
+
+    public long inputRoutingRevision() {
+        return inputRouting.revision();
+    }
+
+    public long inputIsolationChangeVersion() {
+        return inputIsolationChangeVersion;
+    }
+
+    /** Updates only routing/search state; paid executions retain their capability identity. */
+    public void refreshInputRouting() {
+        refreshInputRouting(fullyInputIsolated);
+    }
+
+    /** Applies this controller's policy without mutating any shared port's local setting. */
+    public void refreshInputRouting(boolean fullyIsolated) {
+        List<InputRoutingFacet.Source> sources = new ArrayList<>(capabilities.size());
+        Map<BlockPos, Boolean> localSettings = new LinkedHashMap<>();
+        inputPortHosts.forEach((position, port) -> localSettings.put(position, port.isInputIsolated()));
+        Map<BlockPos, Boolean> effectiveSettings = new LinkedHashMap<>();
+        localSettings.forEach((position, isolated) -> effectiveSettings.put(position, fullyIsolated || isolated));
+        for (int index = 0; index < capabilityPresentationSegments.size(); index++) {
+            CapabilityPresentationSegment segment = capabilityPresentationSegments.get(index);
+            sources.add(new InputRoutingFacet.Source(index, segment.sourcePos));
+            MachineCapability capability = segment.capability;
+            if (legacyCapabilitySources.contains(segment.sourcePos) && capability.type() != null
+                    && capability.view().directions().supports(IOType.INPUT)
+                    && RequirementPlanner.isMaterialInput(IOType.INPUT, capability.type().id())) {
+                effectiveSettings.putIfAbsent(segment.sourcePos, false);
+            }
+        }
+        List<InputRoutingFacet.Port> ports = effectiveSettings.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(ComponentRuntime::comparePositions))
+                .map(entry -> new InputRoutingFacet.Port(entry.getKey(), entry.getValue())).toList();
+        boolean routingChanged = !inputRouting.sources().equals(sources) || !inputRouting.inputPorts().equals(ports);
+        boolean configurationChanged = fullyInputIsolated != fullyIsolated || !inputIsolationSettings.equals(localSettings);
+        if (!routingChanged && !configurationChanged) return;
+        fullyInputIsolated = fullyIsolated;
+        inputIsolationSettings = immutableMap(localSettings);
+        if (routingChanged) inputRouting = new InputRoutingFacet(inputRouting.revision() + 1L, sources, ports);
+        if (configurationChanged) inputIsolationChangeVersion++;
+        stateVersion++;
     }
 
     /** Candidate membership is refreshed on every replacement; custom facets are queried live. */

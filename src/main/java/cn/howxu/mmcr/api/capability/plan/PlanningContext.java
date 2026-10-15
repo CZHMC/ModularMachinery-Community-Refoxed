@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import java.util.Map;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Provides recipe position and requested parallelism to a requirement handler.
@@ -14,7 +18,25 @@ import java.util.Map;
  */
 public record PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
                                PlanningReservations reservations,
-                               Map<Integer, OutputPolicy> outputPolicies) {
+                               Map<Integer, OutputPolicy> outputPolicies,
+                               @Nullable InputRoutingFacet inputRouting, @Nullable InputScope inputScope,
+                               @Nullable Sampling sampling) {
+    public PlanningContext(long requestedParallelism, int requirementIndex, boolean allowPartialOutputs,
+                           PlanningReservations reservations, Map<Integer, OutputPolicy> outputPolicies) {
+        this(requestedParallelism, requirementIndex, allowPartialOutputs, reservations, outputPolicies,
+                null, null, null);
+    }
+
+    public PlanningContext forRequirement(int index, PlanningReservations reservations) {
+        return new PlanningContext(requestedParallelism, index, allowPartialOutputs, reservations,
+                outputPolicies, inputRouting, inputScope, sampling);
+    }
+
+    public PlanningContext forScope(InputScope scope, @Nullable Sampling sampling) {
+        return new PlanningContext(requestedParallelism, requirementIndex, allowPartialOutputs,
+                reservations.copy(), outputPolicies, inputRouting, scope, sampling);
+    }
+
     public PlanningContext(long requestedParallelism, int requirementIndex) {
         this(requestedParallelism, requirementIndex, false, new PlanningReservations(), Map.of());
     }

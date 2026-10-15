@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
@@ -21,12 +25,14 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.IntStream;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -50,6 +56,42 @@ public final class RequirementPlanner {
                                List<MachineCapability> capabilities,
                                PlanningContext context,
                                List<Integer> requirementIndexes) {
+        return planScoped(requirements, capabilities, context, requirementIndexes, false);
+    }
+
+    private PlanningResult planScoped(List<MachineRequirement> requirements, List<MachineCapability> capabilities,
+                                      PlanningContext context, List<Integer> indexes, boolean fixed) {
+        if (requirements == null || capabilities == null || context == null
+                || indexes == null || indexes.size() != requirements.size()) {
+            throw new IllegalArgumentException("requirements, capabilities, context and matching indexes are required");
+        }
+        if (context.inputScope() != null || context.inputRouting() == null) {
+            return fixed ? planFixedSingle(requirements, capabilities, context, indexes)
+                    : planSingle(requirements, capabilities, context, indexes);
+        }
+        boolean materialInputs = requirements.stream().anyMatch(requirement -> requirement.type().capabilityIds()
+                .stream().anyMatch(id -> isMaterialInput(IOType.valueOf(requirement.io().name()), id)));
+        List<InputScope> scopes = context.inputRouting().scopes(materialInputs);
+        Sampling sampling = scopes.size() > 1 ? new Sampling() : null;
+        PlanningResult bestFailure = null;
+        int completed = -1;
+        for (InputScope scope : scopes) {
+            PlanningContext scoped = context.forScope(scope, sampling);
+            PlanningResult result = fixed ? planFixedSingle(requirements, capabilities, scoped, indexes)
+                    : planSingle(requirements, capabilities, scoped, indexes);
+            if (result.successful()) return result;
+            int progress = result.failureRequirementIndex() == null ? -1 : indexes.indexOf(result.failureRequirementIndex());
+            if (bestFailure == null || progress > completed) {
+                bestFailure = result;
+                completed = progress;
+            }
+        }
+        return bestFailure;
+    }
+
+    private PlanningResult planSingle(List<MachineRequirement> requirements,
+                                      List<MachineCapability> capabilities, PlanningContext context,
+                                      List<Integer> requirementIndexes) {
         if (requirements == null || capabilities == null || context == null) {
             throw new IllegalArgumentException("requirements, capabilities and context must not be null");
         }
@@ -67,10 +109,10 @@ public final class RequirementPlanner {
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             RequirementHandler<MachineRequirement> handler = handler(requirement.type());
-            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities);
+            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities,
+                    context.inputRouting(), context.inputScope());
             RequirementPlan requirementPlan = handler.plan(requirement, matching,
-                    new PlanningContext(context.requestedParallelism(), requirementIndexes.get(index),
-                            context.allowPartialOutputs(), context.reservations(), context.outputPolicies()));
+                    context.forRequirement(requirementIndexes.get(index), context.reservations()));
             if (!requirementPlan.successful()) {
                 return failed(requirementPlan.failure(), requirementIndexes.get(index), plans, requirementPlan);
             }
@@ -120,7 +162,7 @@ public final class RequirementPlanner {
             materialized.add(resolved);
             directions.put(requirementIndexes.get(index), requirements.get(index).io());
         }
-        return new PlanningResult(new CraftingPlan(materialized, selectedParallelism, directions), null);
+        return new PlanningResult(craftingPlan(materialized, selectedParallelism, directions, context), null);
     }
 
     /** Resolves one atomic requirement set at the requested parallelism, without reducing it. */
@@ -128,6 +170,12 @@ public final class RequirementPlanner {
                                     List<MachineCapability> capabilities,
                                     PlanningContext context,
                                     List<Integer> requirementIndexes) {
+        return planScoped(requirements, capabilities, context, requirementIndexes, true);
+    }
+
+    private PlanningResult planFixedSingle(List<MachineRequirement> requirements,
+                                           List<MachineCapability> capabilities, PlanningContext context,
+                                           List<Integer> requirementIndexes) {
         if (requirements == null || capabilities == null || context == null) {
             throw new IllegalArgumentException("requirements, capabilities and context must not be null");
         }
@@ -141,9 +189,9 @@ public final class RequirementPlanner {
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             int originalIndex = requirementIndexes.get(index);
-            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities);
-            PlanningContext requirementContext = new PlanningContext(selected, originalIndex,
-                    context.allowPartialOutputs(), feasibilityReservations, context.outputPolicies());
+            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities,
+                    context.inputRouting(), context.inputScope());
+            PlanningContext requirementContext = context.forRequirement(originalIndex, feasibilityReservations);
             // Include every preceding callback's budget, but exclude this requirement's own reservation.
             // Its factory may reserve again, or may only create operations; neither changes feasibility.
             materializationBases.add(feasibilityReservations.copy());
@@ -192,7 +240,14 @@ public final class RequirementPlanner {
             materialized.add(resolved);
             directions.put(originalIndex, requirements.get(index).io());
         }
-        return new PlanningResult(new CraftingPlan(materialized, selected, directions), null);
+        return new PlanningResult(craftingPlan(materialized, selected, directions, context), null);
+    }
+
+    private static CraftingPlan craftingPlan(List<RequirementPlan> plans, long parallelism,
+                                             Map<Integer, RecipeModifier.IOType> directions, PlanningContext context) {
+        return new CraftingPlan(plans, parallelism, directions,
+                context.inputScope() == null ? InputScope.legacy() : context.inputScope(),
+                context.inputRouting() == null ? -1L : context.inputRouting().revision());
     }
 
     private static ReservationAttempt reserveCandidate(List<RequirementPlan> plans,
@@ -236,9 +291,24 @@ public final class RequirementPlanner {
 
     public static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
                                                                   List<MachineCapability> capabilities) {
+        return matchingCapabilities(requirement, capabilities, null, null);
+    }
+
+    public static boolean isMaterialInput(IOType direction, Identifier capabilityId) {
+        return direction == IOType.INPUT && (BuiltinCapabilityDefinitions.ITEM_TYPE.id().equals(capabilityId)
+                || BuiltinCapabilityDefinitions.FLUID_TYPE.id().equals(capabilityId)
+                || MekanismPortFamilies.CHEMICAL.equals(capabilityId));
+    }
+
+    public static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
+            List<MachineCapability> capabilities, @Nullable InputRoutingFacet routing, @Nullable InputScope scope) {
         var capabilityIds = requirement.type().capabilityIds();
         IOType direction = IOType.valueOf(requirement.io().name());
-        return capabilities.stream()
+        return IntStream.range(0, capabilities.size())
+                .filter(index -> !isMaterialInput(direction, capabilities.get(index).view().type().id())
+                        || scope == null || scope.kind() == InputScope.Kind.LEGACY
+                        || routing != null && routing.allows(scope, index))
+                .mapToObj(capabilities::get)
                 .filter(capability -> capabilityIds.contains(capability.view().type().id())
                         || MekanismPortFamilies.HEAT_TEMPERATURE.equals(requirement.type().id())
                         && MekanismPortFamilies.HEAT.equals(capability.view().type().id()))

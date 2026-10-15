@@ -10,6 +10,8 @@ import appeng.client.gui.widgets.SettingToggleButton;
 import appeng.core.definitions.AEItems;
 import appeng.util.Icon;
 import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.InputIsolationButton;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.InterfaceAmountButton;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.InterfaceMenuSlots;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
@@ -18,6 +20,7 @@ import com.glodblock.github.extendedae.network.EAENetworkHandler;
 import com.glodblock.github.extendedae.network.packet.CUpdatePage;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 
@@ -34,6 +37,8 @@ public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInt
     private final List<InterfaceAmountButton> amountButtons = new ArrayList<>();
     private final ActionEPPButton nextPage;
     private final ActionEPPButton previousPage;
+    private final InputIsolationButton isolationButton;
+    private int isolationGestureButton = -1;
 
     public ExtendedInterfaceScreen(ExtendedInterfaceMenu menu, Inventory inventory, Component title, ScreenStyle style) {
         super(menu, inventory, title, style);
@@ -47,6 +52,12 @@ public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInt
         addToLeftToolbar(fuzzyMode);
         addToLeftToolbar(nextPage);
         addToLeftToolbar(previousPage);
+        isolationButton = addToLeftToolbar(new InputIsolationButton(enabled -> {
+            if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId,
+                    enabled ? InputIsolationMenuState.ENABLE : InputIsolationMenuState.DISABLE);
+            setFocused(null);
+        }));
+        isolationButton.updateState(menu.inputIsolation());
         widgets.addOpenPriorityButton();
         var configSlots = menu.getConfigSlots();
         for (int i = 0; i < configSlots.size(); i++) {
@@ -59,8 +70,44 @@ public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInt
     }
 
     @Override
+    protected void init() {
+        isolationGestureButton = -1;
+        super.init();
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        isolationGestureButton = -1;
+        boolean isolationClick = (event.button() == 0 || event.button() == 1)
+                && isolationButton.isMouseOver(event.x(), event.y());
+        boolean handled = super.mouseClicked(event, doubleClick);
+        if (isolationClick && handled) {
+            isolationGestureButton = event.button();
+            setFocused(null);
+            setDragging(false);
+        }
+        return handled;
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (event.button() == isolationGestureButton) return true;
+        return super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == isolationGestureButton) {
+            isolationGestureButton = -1;
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
     protected void updateBeforeRender() {
         super.updateBeforeRender();
+        isolationButton.updateState(menu.inputIsolation());
         menu.showPage(menu.getPage());
         fuzzyMode.set(menu.getFuzzyMode());
         fuzzyMode.setVisibility(menu.hasUpgrade(AEItems.FUZZY_CARD));

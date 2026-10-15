@@ -84,7 +84,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         List<MachineCapability> plannedCapabilities = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
         if (requirement.io() == RecipeModifier.IOType.OUTPUT
-                && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
+                && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.item() == null) {
@@ -113,7 +113,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
             return new RequirementPlan(context.requirementIndex(), maximum, List.of(), null);
         }
         RequirementHandlerSupport.ConsumeProfile consumed = requirement.io() == RecipeModifier.IOType.INPUT
-                ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), parallelism) : null;
+                ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), parallelism, context) : null;
         IOType direction = IOType.valueOf(requirement.io().name());
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, plannedCapabilities, finalParallelism,

@@ -16,6 +16,7 @@ import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeThread.StartResult;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.internal.runtime.RecipeCommitLedger;
 import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
 import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Acknowledgement;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -27,6 +28,8 @@ import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +40,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -246,11 +250,15 @@ class ExecutionAdmissionTest {
         var prepared = runtime.preparePatternStart(recipe, 1L, List.of());
         assertThat(prepared).isNotNull();
         assertThat(runtime.reservePatternStart()).isTrue();
+        RecipeCommitLedger payment = runtime.ledger();
         assertThatThrownBy(() -> runtime.commitPatternStart(prepared, transaction -> {
+            assertThat(payment.state().paidAttempts()).isEqualTo(1L);
             shared.cancel(controller.getBlockPos());
+            assertThat(shared.receiptsForTesting(runtime, "rollback")).isEmpty();
             throw new IllegalStateException("abort input transaction");
         })).isInstanceOf(IllegalStateException.class);
         assertThat(input.getEnergyStorage().amount()).isEqualTo(1_000L);
+        assertThat(payment.state().paidAttempts()).isZero();
         assertThat(shared.receiptsForTesting(runtime, "rollback")).isEmpty();
         assertThat(runtime.active()).isFalse();
         assertThat(shared.reserveExecution(runtime, "rollback")).isTrue();
@@ -302,17 +310,61 @@ class ExecutionAdmissionTest {
     }
 
     @Test
-    void cancel_during_input_commit_keeps_paid_terminal_even_before_runtime_activation() {
+    void cancel_before_root_commit_rolls_back_provisional_payment_without_terminal_receipt() {
+        CraftingRuntime runtime = lane("unpaid-cancel");
+        var prepared = runtime.preparePatternStart(recipe, 1L, List.of());
+        assertThat(prepared).isNotNull();
+        assertThat(runtime.reservePatternStart()).isTrue();
+        RecipeCommitLedger payment = runtime.ledger();
+        assertThat(runtime.commitPatternStart(prepared, transaction -> {
+            assertThat(Transaction.getLifecycle()).isEqualTo(Transaction.Lifecycle.OPEN);
+            assertThat(payment.state().paidAttempts()).isEqualTo(1L);
+            assertThat(input.getEnergyStorage().amount()).isEqualTo(993L);
+            shared.cancel(controller.getBlockPos());
+            runtime.invalidate();
+            assertThat(shared.receiptsForTesting(runtime, "unpaid-cancel")).isEmpty();
+        })).isFalse();
+        assertThat(runtime.active()).isFalse();
+        assertThat(input.getEnergyStorage().amount()).isEqualTo(1_000L);
+        assertThat(payment.state().paidAttempts()).isZero();
+        assertThat(payment.state().sequence()).isZero();
+        assertThat(runtime.ledger()).isNotSameAs(payment);
+        assertThat(shared.receiptsForTesting(runtime, "unpaid-cancel")).isEmpty();
+        drainWorkersAndAcks();
+        assertThat(shared.receiptsForTesting(runtime, "unpaid-cancel")).isEmpty();
+        assertThat(shared.reserveExecution(runtime, "unpaid-cancel")).isTrue();
+    }
+
+    @Test
+    void cancel_in_root_commit_notification_keeps_paid_terminal_even_before_runtime_activation() {
         CraftingRuntime runtime = lane("commit-cancel");
         var prepared = runtime.preparePatternStart(recipe, 1L, List.of());
         assertThat(prepared).isNotNull();
         assertThat(runtime.reservePatternStart()).isTrue();
-        assertThat(runtime.commitPatternStart(prepared, transaction -> {
-            shared.cancel(controller.getBlockPos());
-            runtime.invalidate();
-        })).isFalse();
+        RecipeCommitLedger payment = runtime.ledger();
+        AtomicInteger notifications = new AtomicInteger();
+        // This journal notifies only after the root has successfully closed, before runtime activation.
+        assertThat(runtime.commitPatternStart(prepared, transaction -> new SnapshotJournal<Boolean>() {
+            @Override protected Boolean createSnapshot() { return Boolean.TRUE; }
+            @Override protected void revertToSnapshot(Boolean snapshot) { }
+            @Override protected void onRootCommit(Boolean snapshot) {
+                notifications.incrementAndGet();
+                assertThat(Transaction.getLifecycle()).isEqualTo(Transaction.Lifecycle.ROOT_CLOSING);
+                assertThat(runtime.active()).isFalse();
+                assertThat(input.getEnergyStorage().amount()).isEqualTo(993L);
+                assertThat(payment.state().paidAttempts()).isEqualTo(1L);
+                assertThat(shared.receiptsForTesting(runtime, "commit-cancel")).singleElement().satisfies(receipt -> {
+                    assertThat(receipt.terminal()).isFalse();
+                    assertThat(receipt.paidAttempts()).isEqualTo(1L);
+                });
+                shared.cancel(controller.getBlockPos());
+                runtime.invalidate();
+            }
+        }.updateSnapshots(transaction))).isFalse();
+        assertThat(notifications).hasValue(1);
         assertThat(runtime.active()).isFalse();
         assertThat(input.getEnergyStorage().amount()).isEqualTo(993L);
+        assertThat(payment.state().paidAttempts()).isEqualTo(1L);
         assertThat(shared.receiptsForTesting(runtime, "commit-cancel")).singleElement().satisfies(receipt -> {
             assertThat(receipt.terminal()).isTrue();
             assertThat(receipt.paidAttempts()).isEqualTo(1L);

@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
@@ -29,6 +30,7 @@ import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -68,6 +70,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private final Map<CapabilityType, AutoIOConfig> autoIOConfigs = new LinkedHashMap<>();
     private boolean autoIOCacheDirty = true;
     private boolean loadingAdditional;
+    private boolean inputIsolated;
     private final Map<CapabilityType, AutoIOState> autoIOStates = new LinkedHashMap<>();
     private final Map<AvailabilityKey, AvailabilityState> availabilityStates = new LinkedHashMap<>();
     private long storageRevision;
@@ -108,6 +111,31 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public abstract IOType ioType();
 
     public abstract IOPortKind kind();
+
+    public boolean supportsInputIsolation() {
+        return ioType() == IOType.INPUT && kind().families().stream().anyMatch(family ->
+                family.ioType() == IOType.INPUT && (family.familyId().equals(PortFamilyIds.ITEM)
+                        || family.familyId().equals(PortFamilyIds.FLUID)
+                        || family.familyId().equals(MekanismPortFamilies.CHEMICAL)
+                        || family.familyId().equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL)));
+    }
+
+    public boolean isInputIsolated() {
+        return inputIsolated;
+    }
+
+    public void setInputIsolated(boolean enabled) {
+        if (!supportsInputIsolation() || inputIsolated == enabled) return;
+        inputIsolated = enabled;
+        setChanged();
+        if (level == null || level.isClientSide()) return;
+        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        for (BlockPos controllerPos : linkedControllerPositions()) {
+            if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+                controller.onInputIsolationChanged();
+            }
+        }
+    }
 
     @Override
     public void setChanged() {
@@ -690,6 +718,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        output.putBoolean("input_isolation", inputIsolated);
         ValueOutput profiles = null;
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             if (transferPolicy(capability).isEmpty()) continue;
@@ -701,6 +730,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
+        inputIsolated = supportsInputIsolation() && input.getBooleanOr("input_isolation", false);
         autoIOConfigs.clear();
         Optional<ValueInput> profiles = input.child(AUTO_IO_CAPABILITIES_KEY);
         if (profiles.isPresent()) {

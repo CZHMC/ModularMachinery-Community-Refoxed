@@ -86,6 +86,7 @@ public final class PatternStartReservation implements AutoCloseable {
             try (Transaction transaction = Transaction.openRoot()) {
                 if (!commitPlan(transaction)) return false;
                 transactionWrites.accept(transaction);
+                if (!currentBeforeRootCommit()) return false;
                 transaction.commit();
                 committed = true;
             } catch (RuntimeException exception) {
@@ -120,6 +121,11 @@ public final class PatternStartReservation implements AutoCloseable {
 
     boolean paid() {
         return payment != null && payment.state().paidAttempts() > 0L;
+    }
+
+    boolean currentBeforeRootCommit() {
+        return status == Status.RESERVED && !rolledBack
+                && runtime.patternStartCurrentBeforeRootCommit(preparedStart, payment);
     }
 
     void pauseAfterNotificationFailure() {

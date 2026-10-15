@@ -16,6 +16,8 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerListener;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -74,6 +76,31 @@ class ItemBusMenuTest {
         ItemBusMenu clientMenu = clientMenuFromServer(serverMenu);
 
         assertLayoutMatches(serverMenu, clientMenu);
+    }
+
+    @Test
+    void isolation_flags_follow_native_menu_data_sync_without_a_client_owner() {
+        var owner = new ItemInputBusBlockEntity(BlockPos.ZERO,
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        var server = new ItemBusMenu(1, emptyInventory(), owner);
+        var client = clientMenuFromServer(server);
+        server.addSlotListener(new ContainerListener() {
+            @Override public void slotChanged(AbstractContainerMenu menu, int slot, ItemStack stack) {}
+            @Override public void dataChanged(AbstractContainerMenu menu, int id, int value) {
+                client.setData(id, value);
+            }
+        });
+        server.broadcastChanges();
+        assertThat(client.inputIsolation().supported()).isTrue();
+        assertThat(client.inputIsolation().enabled()).isFalse();
+        assertThat(client.clickMenuButton(null, InputIsolationMenuState.ENABLE)).isFalse();
+        assertThat(client.inputIsolation().enabled()).isFalse();
+        owner.setInputIsolated(true);
+        server.broadcastChanges();
+        assertThat(client.inputIsolation().enabled()).isTrue();
+        owner.setInputIsolated(false);
+        server.broadcastChanges();
+        assertThat(client.inputIsolation().enabled()).isFalse();
     }
 
     @Test

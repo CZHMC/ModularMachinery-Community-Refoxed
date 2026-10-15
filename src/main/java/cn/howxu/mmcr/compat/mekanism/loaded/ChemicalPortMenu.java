@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.mekanism.loaded;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.internal.menu.LongDataSlot;
 import cn.howxu.mmcr.internal.menu.MenuSupport;
 import cn.howxu.mmcr.registry.ModUIs;
@@ -42,6 +43,7 @@ public final class ChemicalPortMenu extends AbstractMachineMenu {
                 : new LongDataSlot(() -> owner.chemicalHandler(null)
                         .getCapacityAsLong(0, ChemicalResource.EMPTY)));
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(owner));
     }
 
     public ChemicalPortMenu(int containerId, Inventory playerInv, BlockPos pos) {
@@ -52,6 +54,7 @@ public final class ChemicalPortMenu extends AbstractMachineMenu {
         this.amount = addLongDataSlot(LongDataSlot.standalone());
         this.capacity = addLongDataSlot(LongDataSlot.standalone());
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(null));
     }
 
     public static ChemicalPortMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {

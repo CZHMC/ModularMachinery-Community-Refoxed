@@ -83,6 +83,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -663,8 +664,20 @@ public final class RunningRecipeGameTest {
         var ordinary = helper.getBlockEntity(new BlockPos(1, 2, 0), ItemInputBusBlockEntity.class);
         insert(ordinary.itemStorage(), 0, ItemResource.of(Items.COAL), 1);
         port.linkControllerAppearance(controller.getBlockPos(), null);
+        var components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(new MachineComponent(port.kind(), port.ioType()), port, port.getBlockPos(),
+                port.getBlockPos().subtract(controller.getBlockPos()), List.of()));
+        controller.componentRuntime().replaceComponents(components);
+        var linkedPorts = new HashSet<>(controller.componentRuntime().linkedPortPositions());
+        linkedPorts.add(port.getBlockPos());
+        controller.componentRuntime().replaceLinkedPortPositions(linkedPorts);
         var runtime = attachedRuntime(controller);
         try {
+            helper.assertTrue(runtime.controller() == controller && runtime == attachedRuntime(controller)
+                            && helper.getLevel().getBlockEntity(port.getBlockPos()) == port
+                            && port.linkedControllerPositions().contains(controller.getBlockPos())
+                            && controller.currentRuntimeSnapshot().linkedPortPositions().contains(port.getBlockPos()),
+                    "Attached runtime and current registered host have matching bidirectional fixture links");
             var recipe = MachineRecipe.fromCanonical(MMCR.id("running_pattern_atomic_start"), controller.currentRecipePoolId(),
                     1, List.of(itemInput(1, 1F),
                             new ItemRequirement(IOType.INPUT, Ingredient.of(Items.COAL), 1, ItemStack.EMPTY),
@@ -687,12 +700,15 @@ public final class RunningRecipeGameTest {
             helper.assertTrue(CapabilityFactories.resourceStorage(requestCapabilities.getFirst(), ItemResource.class) == request
                             && request.amount(0) == 3 && holder.get(iron) == 3,
                     "Typed INPUT capability binds the real provider request holder, not the ordinary bus");
-            var capabilities = new ArrayList<>(controller.componentRuntime().capabilities());
-            capabilities.addAll(requestCapabilities);
-            var planned = new CraftingContext(new CapabilitySnapshot(capabilities)).planInputs(recipe, 1);
+            var patternContext = new CraftingContext(controller.componentRuntime().capabilitySnapshot())
+                    .forPatternStart(requestCapabilities, port.getBlockPos());
+            helper.assertTrue(patternContext.inputRouting().inputPorts().stream()
+                            .anyMatch(source -> source.position().equals(port.getBlockPos()) && !source.isolated()),
+                    "Actual registered pattern host participates in the controller's ordinary input routing");
+            var planned = patternContext.planInputs(recipe, 1);
             helper.assertTrue(planned.successful() && planned.plan() != null,
                     "Actual request plus ordinary input is feasible: failure=" + planned.failure());
-            var prepared = runtime.preparePatternStart(recipe, 1, requestCapabilities);
+            var prepared = runtime.preparePatternStart(recipe, 1, requestCapabilities, port.getBlockPos());
             helper.assertTrue(prepared != null, "Attached runtime prepares actual pattern request storage: failure=" + runtime.failure()
                     + " pool=" + controller.currentRecipePoolId() + " module=" + controller.currentRuntimeSnapshot().moduleConnectionStatus());
             helper.assertTrue(prepared.plan().hasOperations(0) && prepared.plan().hasOperations(1),
@@ -711,7 +727,7 @@ public final class RunningRecipeGameTest {
                             && port.getLogic().getReturnInv().isEmpty() && ordinary.itemStorage().amount(0) == 0,
                     "Failed admission restores request extraction and native return inventory, preserving external coal removal");
             insert(ordinary.itemStorage(), 0, ItemResource.of(Items.COAL), 1);
-            prepared = runtime.preparePatternStart(recipe, 1, requestCapabilities);
+            prepared = runtime.preparePatternStart(recipe, 1, requestCapabilities, port.getBlockPos());
             helper.assertTrue(prepared != null && runtime.reservePatternStart(), "Rejected start releases its reservation for retry");
             helper.assertTrue(runtime.commitPatternStart(prepared, transaction -> helper.assertTrue(
                             request.accept(port.itemReturnStorage(), transaction), "Native return inventory accepts unconsumed request remainder")),

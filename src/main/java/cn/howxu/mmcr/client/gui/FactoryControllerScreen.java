@@ -7,6 +7,7 @@ import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.internal.network.PktControllerStructureCheckPayload;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -67,6 +68,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private int scrollbarDragOffsetY;
     private StyledButton recipePoolButton;
     private StyledButton structureCheckButton;
+    private IsolationToggleButton isolationButton;
     private final Supplier<ControllerUiSnapshot> snapshot;
     private String selectedLaneId;
 
@@ -101,6 +103,12 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                     button.setFocused(false);
                 }));
         structureCheckButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.controller.check_structure")));
+        isolationButton = addRenderableWidget(new IsolationToggleButton(buttonX, topPos + 1,
+                Component.translatable("mmcr.input_isolation.button"), menu.inputIsolation()::enabled, button -> {
+            if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId,
+                    menu.inputIsolation().enabled() ? InputIsolationMenuState.DISABLE : InputIsolationMenuState.ENABLE);
+            button.setFocused(false);
+        }));
         updateControllerButtons();
     }
 
@@ -121,6 +129,10 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         if (structureCheckButton != null) {
             structureCheckButton.setPosition(buttonX,
                     topPos + 1 + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
+        }
+        if (isolationButton != null) {
+            isolationButton.updateState(menu.inputIsolation(), true);
+            isolationButton.setPosition(buttonX, topPos + 1 + (showRecipePools ? 2 : 1) * 18);
         }
     }
 

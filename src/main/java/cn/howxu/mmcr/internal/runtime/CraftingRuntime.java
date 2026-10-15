@@ -22,6 +22,9 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -61,6 +64,7 @@ import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.SaturatingLong;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.LongTag;
@@ -130,6 +134,7 @@ public final class CraftingRuntime {
     private @Nullable ControllerScreenText screenText;
     private @Nullable ActiveMachineRecipe activeRecipe;
     private @Nullable CraftingPlan startPlan;
+    private @Nullable InputScope activeInputScope;
     private @Nullable CraftingPlan finishPlan;
     private List<MachineRequirement> effectiveRequirements = List.of();
     private List<MachineOutput> effectiveOutputs = List.of();
@@ -168,6 +173,9 @@ public final class CraftingRuntime {
     private CraftingStatus status = CraftingStatus.IDLE;
     private boolean patternStartReserved;
     private @Nullable PreparedStart pendingPatternStart;
+    private @Nullable BlockPos pendingPatternSource;
+    private @Nullable StructureClaimRegistry.ResourceDomain pendingPatternDomain;
+    private long pendingPatternLifecycle;
     private @Nullable PreparedStart pendingPaymentStart;
     private @Nullable PendingPrefetchStart pendingPrefetchStart;
     private @Nullable ExecutionStatus capabilityTickFailure;
@@ -283,8 +291,14 @@ public final class CraftingRuntime {
                 ? SharedIoCoordinator.get(level).acceptedIdentity(this, laneId) : null;
         pendingCompilationIdentity = admitted != null ? admitted
                 : new ExecutionIdentity(controllerIdentity, controller.lifecycleEpoch(), laneId, NEXT_EXECUTION_ID.incrementAndGet());
-        return new ProgramCompilation(pendingCompilationIdentity, activeRecipe.getRecipe().id(), totalTick(), parallelism(), versions, start, tick, finish,
+        return new ProgramCompilation(pendingCompilationIdentity, activeRecipe.getRecipe().id(), totalTick(), parallelism(), versions,
+                scopedStage(start), scopedStage(tick), scopedStage(finish),
                 installedBehavior.hasRecipeTick() || components.hasTickFacets());
+    }
+
+    private Stage scopedStage(Stage stage) {
+        return new Stage(stage.requirements(), stage.fallbackIndices(), stage.outputPolicies(),
+                activeInputScope == null ? InputScope.legacy() : activeInputScope);
     }
 
     public @Nullable InstalledRecipeProgram installCompiledProgram(ExecutionIdentity identity, CompiledRecipeProgram program) {
@@ -292,6 +306,7 @@ public final class CraftingRuntime {
                 || identity.lifecycleEpoch() != controller.lifecycleEpoch() || !identity.laneId().equals(laneId)
                 || installedProgram != null || !program.recipeId().equals(activeRecipe.getRecipe().id())
                 || program.parallelism() != parallelism() || program.duration() != totalTick()
+                || !program.tick().inputScope().equals(activeInputScope)
                 || program.versions().effective() != activeRecipe.effectiveExecutionRevision()
                 || program.versions().catalog() != catalogVersion(activeRecipe.getRecipe().recipePoolId())
                 || program.versions().structure() != structureVersion || program.versions().capability() != capabilityVersion) return null;
@@ -640,10 +655,22 @@ public final class CraftingRuntime {
     /** Prepares a pattern start without consuming resources or occupying this runtime. */
     public @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
                                                        List<MachineCapability> requestCapabilities) {
+        return preparePatternStart(recipe, requestedParallelism, requestCapabilities, null);
+    }
+
+    public @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                       List<MachineCapability> requestCapabilities,
+                                                       @Nullable BlockPos requestSource) {
         if (recipe == null || requestedParallelism <= 0 || active() || patternStartReserved
-                || pendingPatternStart != null) return null;
+                || pendingPatternStart != null || !patternOwnerCurrent()) return null;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        long lifecycle = controller.lifecycleEpoch();
+        RecipeCommitLedger originalLedger = ledger;
+        long isolationChangeVersion = components.inputIsolationChangeVersion();
+        long catalogVersion = catalogVersion(recipe.recipePoolId());
+        StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (!recipeBelongsToMachine(recipe)
+                || requestSource != null && !runtime.linkedPortPositions().contains(requestSource)
                 || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return null;
@@ -672,18 +699,45 @@ public final class CraftingRuntime {
             effective = new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
                     MachineRequirement.copyList(recipeRequirements), outputs);
         }
+        if (!startAttemptCurrent(lifecycle, originalLedger) || !patternOwnerCurrent()
+                || pendingPatternStart != null || pendingPaymentStart != null) return null;
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        if (current.structure().version() != runtime.structure().version()
+                || current.capabilityVersion() != runtime.capabilityVersion()
+                || current.modifierVersion() != runtime.modifierVersion()
+                || current.upgradeContentRevision() != runtime.upgradeContentRevision()
+                || current.stateVersion() - runtime.stateVersion()
+                != components.inputIsolationChangeVersion() - isolationChangeVersion
+                || catalogVersion != catalogVersion(recipe.recipePoolId())
+                || !Objects.equals(domain, controller.resourceDomain())
+                || !recipeBelongsToMachine(recipe)
+                || !current.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
+                || requestSource != null && !current.linkedPortPositions().contains(requestSource)) return null;
+        runtime = current;
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList();
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
-        PlanningResult result = context(runtime, requestCapabilities).planInputs(startRequirements(requirements, facets), effectiveParallelism,
+        CraftingContext patternContext = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime));
+        if (requestSource == null) {
+            if (requestCapabilities != null && !requestCapabilities.isEmpty()) {
+                if (patternContext.inputRouting() != null) return null;
+                patternContext = legacyPatternContext(runtime, requestCapabilities);
+            }
+        } else {
+            if (patternContext.inputRouting() != null && patternContext.inputRouting().inputPorts().stream()
+                    .noneMatch(port -> port.position().equals(requestSource))) return null;
+            patternContext = patternContext.forPatternStart(requestCapabilities, requestSource);
+        }
+        PlanningResult result = patternContext.planInputs(startRequirements(requirements, facets), effectiveParallelism,
                 Set.of(), Set.of());
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) return null;
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return null;
-        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime,
-                catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan,
-                prefetches);
+        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches);
+        pendingPatternSource = requestSource == null ? null : requestSource.immutable();
+        pendingPatternDomain = domain;
+        pendingPatternLifecycle = lifecycle;
         ledger = new RecipeCommitLedger();
         return pendingPatternStart;
     }
@@ -698,6 +752,8 @@ public final class CraftingRuntime {
         PreparedStart prepared = pendingPatternStart;
         PendingPrefetchStart payment = pendingPrefetchStart;
         pendingPatternStart = null;
+        pendingPatternSource = null;
+        pendingPatternDomain = null;
         pendingPaymentStart = null;
         patternStartReserved = false;
         releaseStartSlot();
@@ -739,6 +795,7 @@ public final class CraftingRuntime {
                 return false;
             }
             transactionWrites.accept(transaction);
+            if (!patternStartCurrentBeforeRootCommit(prepared, payment)) return false;
             transaction.commit();
             committed = true;
         } catch (RuntimeException exception) {
@@ -775,6 +832,15 @@ public final class CraftingRuntime {
     @Nullable RecipeCommitLedger patternStartPayment(PreparedStart prepared) {
         PendingPrefetchStart payment = pendingPrefetchStart;
         return payment != null && payment.prepared() == prepared ? payment.payment() : null;
+    }
+
+    /** Payment is still provisional here: root commit, rather than markResourcePaid, ends the unpaid fence. */
+    boolean patternStartCurrentBeforeRootCommit(PreparedStart prepared, @Nullable RecipeCommitLedger payment) {
+        PendingPrefetchStart pending = pendingPrefetchStart;
+        return patternStartReserved && prepared != null && prepared == pendingPatternStart
+                && pendingPaymentStart == prepared && pending != null && pending.prepared() == prepared
+                && pending.payment() == payment && startAttemptCurrent(pending.lifecycle(), payment)
+                && preparedStartCurrent(prepared);
     }
 
     void releasePreparedPrefetches(PreparedStart prepared) {
@@ -822,10 +888,23 @@ public final class CraftingRuntime {
     private boolean preparedStartCurrent(PreparedStart prepared) {
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         return prepared.runtime().structure().version() == current.structure().version()
+                && (prepared != pendingPatternStart || patternOwnerCurrent()
+                && pendingPatternLifecycle == controller.lifecycleEpoch()
+                && Objects.equals(pendingPatternDomain, controller.resourceDomain())
+                && (pendingPatternSource == null || current.linkedPortPositions().contains(pendingPatternSource)))
                 && prepared.runtime().capabilityVersion() == current.capabilityVersion()
                 && prepared.runtime().modifierVersion() == current.modifierVersion()
                 && prepared.runtime().stateVersion() == current.stateVersion()
+                && (prepared.plan().inputRoutingRevision() < 0L
+                || prepared.plan().inputRoutingRevision() == components.inputRoutingRevision())
+                && recipeBelongsToMachine(prepared.recipe().source())
+                && current.moduleConnectionStatus().canRunRecipe(prepared.recipe().source().requiredHostIds())
                 && prepared.catalogVersion() == catalogVersion(prepared.recipe().source().recipePoolId());
+    }
+
+    private boolean patternOwnerCurrent() {
+        return !controller.isRemoved() && (!(controller.getLevel() instanceof ServerLevel level)
+                || level.getBlockEntity(controller.getBlockPos()) == controller);
     }
 
     private static long catalogVersion(Identifier recipePoolId) {
@@ -845,6 +924,7 @@ public final class CraftingRuntime {
         activeRecipe = acceptedRecipe;
         activeRecipe.setParallelism(prepared.plan().parallelism());
         startPlan = prepared.plan();
+        activeInputScope = prepared.plan().inputScope();
         finishPlan = null;
         effectiveRequirements = MachineRequirement.copyList(prepared.effective().requirements().stream()
                 .map(MachineRequirement::copyOf).toList());
@@ -854,6 +934,8 @@ public final class CraftingRuntime {
         captureInputState(effectiveRequirements, prepared.plan(), !prepared.prefetches().isEmpty());
         captureVersions(prepared.runtime());
         pendingPatternStart = null;
+        pendingPatternSource = null;
+        pendingPatternDomain = null;
         patternStartReserved = false;
         releaseStartSlot();
         status = CraftingStatus.working();
@@ -1035,6 +1117,7 @@ public final class CraftingRuntime {
                 releaseStartSlot();
                 return status;
             }
+            runtime = controller.currentRuntimeSnapshot();
             EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
             long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
                     effectiveRecipe.parallelismLimit()));
@@ -1109,6 +1192,7 @@ public final class CraftingRuntime {
         activeRecipe = acceptedRecipe;
         activeRecipe.setParallelism(plan.parallelism());
         startPlan = plan;
+        activeInputScope = plan.inputScope();
         finishPlan = null;
         effectiveRequirements = executionRequirements;
         effectiveOutputs = executionOutputs;
@@ -1277,19 +1361,26 @@ public final class CraftingRuntime {
         }
         if (!preparationCurrent(preparation)) return null;
         List<MachineRequirement> requirements = perTickRequirements();
-        if (requirements.isEmpty()) return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of());
-        // Scalar-only ticks are cheaper to plan against live storage during shared-IO arbitration.
-        if (requirements.stream().allMatch(requirement -> requirement instanceof EnergyRequirement
-                || requirement instanceof LoadedHeatRequirement)) {
-            return new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(),
-                    IntStream.range(0, requirements.size()).boxed().toList());
+        CraftingContext context = context(preparation.runtime());
+        AsyncRequirementPlanner.PreparedPlan prepared;
+        if (requirements.isEmpty()) {
+            prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), List.of(),
+                    context.inputRouting(), activeInputScope);
         }
-        AsyncRequirementPlanner.PreparedPlan prepared = context(preparation.runtime())
-                .planAsync(requirements, activeRecipe.getParallelism());
+        // Scalar-only ticks are cheaper to plan against live storage during shared-IO arbitration.
+        else if (requirements.stream().allMatch(requirement -> requirement instanceof EnergyRequirement
+                || requirement instanceof LoadedHeatRequirement)) {
+            prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(),
+                    IntStream.range(0, requirements.size()).boxed().toList(), context.inputRouting(), activeInputScope);
+        } else {
+            prepared = context.planAsync(requirements, activeRecipe.getParallelism());
+        }
         if (!preparationCurrent(preparation)) return null;
+        preparation.plan = prepared;
         // A known fallback replans the entire tick, so worker operations would be discarded.
         return prepared.initialMainThreadRequirements().isEmpty() ? prepared
-                : new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), prepared.initialMainThreadRequirements());
+                : new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(), prepared.initialMainThreadRequirements(),
+                        prepared.routing(), prepared.inputScope());
     }
 
     /** Flushes recipe behavior screen text after its callback has run on the server thread. */
@@ -1505,6 +1596,7 @@ public final class CraftingRuntime {
         if (activeRecipe != null) activeRecipe.applyTickGrant(true, true, currentGameTime());
         releaseActivePrefetches();
         activeRecipe = null;
+        activeInputScope = null;
         startPlan = null;
         finishPlan = null;
         preparedAsyncFinishContext = null;
@@ -1875,6 +1967,7 @@ public final class CraftingRuntime {
         MachineRecipe recipe = activeRecipe.getRecipe();
         return structureVersion == structure.version()
                 && capabilityVersion == components.capabilityVersion()
+                && inputScopeSourcesCurrent()
                 && recipeBelongsToMachine(recipe)
                 && components.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds());
     }
@@ -1893,6 +1986,7 @@ public final class CraftingRuntime {
         releasePatternStart();
         releaseActivePrefetches();
         activeRecipe = null;
+        activeInputScope = null;
         startPlan = null;
         finishPlan = null;
         preparedAsyncFinishContext = null;
@@ -1906,7 +2000,9 @@ public final class CraftingRuntime {
     }
 
     public void invalidateForSmartInterfaceChange() {
-        if (!active()) releasePatternStart();
+        if (!active() && (pendingPrefetchStart == null || pendingPrefetchStart.payment().state().paidAttempts() == 0L)) {
+            releasePatternStart();
+        }
     }
 
     public void invalidateForCatalogChange() {
@@ -1951,6 +2047,7 @@ public final class CraftingRuntime {
             return;
         }
         activeRecipe = restored;
+        activeInputScope = InputScope.legacy();
         cancelInstalledProgram();
         ledger = new RecipeCommitLedger();
         ledger.settleTick(restored.getTick(), restored.isFinishPending());
@@ -1989,7 +2086,7 @@ public final class CraftingRuntime {
     public void rebindCurrentVersions() {
         if (!active()) return;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(activeRecipe.getRecipe())) {
+        if (!recipeBelongsToMachine(activeRecipe.getRecipe()) || !inputScopeSourcesCurrent()) {
             invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
             return;
         }
@@ -1998,7 +2095,7 @@ public final class CraftingRuntime {
     }
 
     public void save(ValueOutput output) {
-        if (pendingPaymentStart != null && ledger.state().phase() == RecipeCommitLedger.Phase.RESOURCE_PAID) {
+        if (pendingPaymentStart != null && ledger.state().paidAttempts() > 0L) {
             savePaidStart(output, pendingPaymentStart);
             return;
         }
@@ -2013,6 +2110,7 @@ public final class CraftingRuntime {
             output.putLong("component_state_version", componentStateVersion);
             output.putLong("upgrade_content_revision", upgradeContentRevision);
             savePrefetchAllocations();
+            saveInputScope(output, activeInputScope);
             activeRecipe.serialize(output.child("recipe"), registryAccess());
         }
     }
@@ -2022,6 +2120,11 @@ public final class CraftingRuntime {
         if (!active) {
             invalidate();
             restoreFailure(readFailure(input, null));
+            return;
+        }
+        InputScope restoredScope = readInputScope(input);
+        if (restoredScope == null) {
+            failLoad();
             return;
         }
         Identifier recipePoolId = controller.currentRecipePoolId();
@@ -2052,6 +2155,7 @@ public final class CraftingRuntime {
                 input.getLongOr("modifier_version", Long.MIN_VALUE),
                 input.getLongOr("component_state_version", Long.MIN_VALUE));
         if (active()) {
+            activeInputScope = restoredScope;
             ledger = restoredLedger;
             if (restoredUpgradeContentRevision != Long.MIN_VALUE) {
                 upgradeContentRevision = restoredUpgradeContentRevision;
@@ -2068,6 +2172,44 @@ public final class CraftingRuntime {
         if (failureInput.isPresent()) return FailureStatusCodec.read(failureInput.get());
         if (!input.getBooleanOr("has_failure", false)) return null;
         return FailureStatusMigration.craftingFailure(input.getStringOr("failure_reason", ""), recipeId);
+    }
+
+    public @Nullable InputScope activeInputScope() {
+        return activeInputScope != null ? activeInputScope
+                : pendingPaymentStart != null && ledger.state().paidAttempts() > 0L
+                ? pendingPaymentStart.plan().inputScope() : null;
+    }
+
+    private static void saveInputScope(ValueOutput output, @Nullable InputScope scope) {
+        if (scope == null) return;
+        ValueOutput node = output.child("input_scope");
+        node.putInt("version", 1);
+        node.putString("kind", scope.kind().name());
+        node.store("sources", BlockPos.CODEC.listOf(), scope.sources());
+    }
+
+    private static @Nullable InputScope readInputScope(ValueInput input) {
+        if (!input.keySet().contains("input_scope")) return InputScope.legacy();
+        ValueInput node = input.child("input_scope").orElse(null);
+        if (node == null || node.getIntOr("version", -1) != 1) return null;
+        List<BlockPos> positions = node.read("sources", BlockPos.CODEC.listOf()).orElse(null);
+        if (positions == null || new HashSet<>(positions).size() != positions.size()) return null;
+        try {
+            InputScope.Kind kind = InputScope.Kind.valueOf(node.getStringOr("kind", ""));
+            if (kind == InputScope.Kind.LEGACY && !positions.isEmpty()
+                    || kind == InputScope.Kind.ISOLATED && positions.size() != 1) return null;
+            return new InputScope(kind, positions);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private boolean inputScopeSourcesCurrent() {
+        if (activeInputScope == null || activeInputScope.kind() == InputScope.Kind.LEGACY) return true;
+        InputRoutingFacet routing = components.capabilitySnapshot().facets(InputRoutingFacet.class).stream()
+                .findFirst().orElse(null);
+        return routing != null && activeInputScope.sources().stream().allMatch(position ->
+                routing.inputPorts().stream().anyMatch(port -> port.position().equals(position)));
     }
 
     private void failLoad() {
@@ -2090,6 +2232,7 @@ public final class CraftingRuntime {
             cancelInstalledProgram();
             releaseActivePrefetches();
             activeRecipe = null;
+            activeInputScope = null;
             startPlan = null;
             finishPlan = null;
             clearEffectiveRecipe();
@@ -2111,6 +2254,7 @@ public final class CraftingRuntime {
         failure = failure(reason, phase, Map.of());
         releaseActivePrefetches();
         activeRecipe = null;
+        activeInputScope = null;
         startPlan = null;
         finishPlan = null;
         preparedAsyncFinishContext = null;
@@ -2149,10 +2293,12 @@ public final class CraftingRuntime {
     }
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime) {
-        return new CraftingContext(new CapabilitySnapshot(components.capabilities()), contextModifiers(runtime));
+        return activeInputScope == null
+                ? new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime))
+                : new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime), activeInputScope);
     }
 
-    private CraftingContext context(ControllerRuntimeSnapshot runtime, List<MachineCapability> requestCapabilities) {
+    private CraftingContext legacyPatternContext(ControllerRuntimeSnapshot runtime, List<MachineCapability> requestCapabilities) {
         List<MachineCapability> capabilities = new ArrayList<>(components.capabilities());
         if (requestCapabilities != null) capabilities.addAll(requestCapabilities);
         return new CraftingContext(new CapabilitySnapshot(capabilities), contextModifiers(runtime));
@@ -2209,6 +2355,11 @@ public final class CraftingRuntime {
     }
 
     private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared, TransactionContext transaction) {
+        if (!preparedStartCurrent(prepared)) {
+            return failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RECIPE_START, Map.of());
+        }
+        long lifecycle = controller.lifecycleEpoch();
+        RecipeCommitLedger payment = ledger;
         if (!prepared.plan().commitInputs(transaction)) {
             ExecutionStatus failure = prepared.plan().failure();
             return failure == null ? missingInputStatus() : failure;
@@ -2218,6 +2369,9 @@ public final class CraftingRuntime {
             if (result == null || !result.success()) {
                 return result == null || result.status() == null ? missingInputStatus() : result.status();
             }
+        }
+        if (!preparedStartCurrent(prepared) || !startAttemptCurrent(lifecycle, payment)) {
+            return failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RECIPE_START, Map.of());
         }
         pendingPrefetchStart = new PendingPrefetchStart(prepared, ledger, controller.lifecycleEpoch());
         ledger.markResourcePaid(0, false, transaction);
@@ -2276,6 +2430,7 @@ public final class CraftingRuntime {
             saved.getDataCompound().put(PREFETCH_ALLOCATIONS_KEY, tags);
         }
         output.putBoolean("active", true);
+        saveInputScope(output, prepared.plan().inputScope());
         ledger.save(output);
         FailureStatusCodec.write(output.child("failure"), failure);
         output.putLong("structure_version", prepared.runtime().structure().version());
@@ -2483,7 +2638,7 @@ public final class CraftingRuntime {
                                         ControllerRuntimeSnapshot runtime) {
         TickAttempt attempt = tickAttempt;
         if (!attemptCurrent(attempt) || ledger.state().phase() != RecipeCommitLedger.Phase.READY) return false;
-        if (planned == null || !planned.mainThreadRequirements().isEmpty()) {
+        if (planned == null || !planned.mainThreadRequirements().isEmpty() || !asyncOperationsInScope(planned)) {
             PlanningResult fallback = planPerTick(context(runtime));
             if (!attemptCurrent(attempt)) return false;
             CraftingPlan plan = fallback.plan();
@@ -2496,12 +2651,16 @@ public final class CraftingRuntime {
         RecipeCommitLedger payment = ledger;
         ActiveMachineRecipe recipe = activeRecipe;
         long sequence = payment.state().sequence();
-        List<AsyncPlanningFacet> facets = components.capabilities().stream()
-                .map(capability -> capability.facet(AsyncPlanningFacet.class).orElse(null))
-                .filter(Objects::nonNull).toList();
+        List<AsyncPlanningFacet> facets = asyncTickPreparation != null && asyncTickPreparation.plan != null
+                ? asyncTickPreparation.plan.capabilities().stream().map(capability ->
+                        capability.sourceCapabilityIndex() < 0 || capability.sourceCapabilityIndex() >= components.capabilities().size()
+                                ? null : components.capabilities().get(capability.sourceCapabilityIndex())
+                                .facet(AsyncPlanningFacet.class).orElse(null)).toList()
+                : components.capabilities().stream().map(capability -> capability.facet(AsyncPlanningFacet.class).orElse(null))
+                        .filter(Objects::nonNull).toList();
         try (Transaction transaction = Transaction.openRoot()) {
             for (AsyncRequirementPlanner.PlannedOperation operation : planned.operations()) {
-                if (operation.capabilityIndex() >= facets.size()) {
+                if (operation.capabilityIndex() >= facets.size() || facets.get(operation.capabilityIndex()) == null) {
                     waiting(failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.PER_TICK, Map.of()));
                     return false;
                 }
@@ -2521,6 +2680,32 @@ public final class CraftingRuntime {
             return false;
         }
         return attemptCurrent(attempt) && consumePaidPrefetch(payment) && attemptCurrent(attempt);
+    }
+
+    private boolean asyncOperationsInScope(AsyncRequirementPlanner.PlanResult planned) {
+        AsyncRequirementPlanner.PreparedPlan prepared = asyncTickPreparation == null ? null : asyncTickPreparation.plan;
+        if (prepared == null) return activeInputScope == null || activeInputScope.kind() == InputScope.Kind.LEGACY;
+        List<MachineCapability> capabilities = components.capabilities();
+        List<MachineRequirement> requirements = perTickRequirements();
+        InputRoutingFacet routing = components.capabilitySnapshot().facets(InputRoutingFacet.class).stream()
+                .findFirst().orElse(null);
+        for (AsyncRequirementPlanner.PlannedOperation operation : planned.operations()) {
+            if (operation.capabilityIndex() >= prepared.capabilities().size()
+                    || operation.requirementIndex() >= requirements.size()) return false;
+            int sourceIndex = prepared.capabilities().get(operation.capabilityIndex()).sourceCapabilityIndex();
+            if (sourceIndex < 0 || sourceIndex >= capabilities.size()) return false;
+            MachineRequirement requirement = requirements.get(operation.requirementIndex());
+            if (activeInputScope != null && activeInputScope.kind() != InputScope.Kind.LEGACY
+                    && RequirementPlanner.isMaterialInput(requirement.io() == IOType.INPUT
+                    ? cn.howxu.mmcr.util.IOType.INPUT : cn.howxu.mmcr.util.IOType.OUTPUT,
+                    operation.operation().capabilityId())) {
+                if (routing == null || routing.sources().stream().noneMatch(source ->
+                        source.capabilityIndex() == sourceIndex && activeInputScope.sources().contains(source.position()))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private List<MachineRequirement> perTickRequirements() {
@@ -2725,6 +2910,7 @@ public final class CraftingRuntime {
         private final ActiveMachineRecipe recipe;
         private final long lifecycleEpoch;
         private final TickAttempt attempt;
+        private @Nullable AsyncRequirementPlanner.PreparedPlan plan;
         private @Nullable RecipeTickContext tickContext;
         private boolean afterInputsAttempted;
         private boolean afterInputsPassed;

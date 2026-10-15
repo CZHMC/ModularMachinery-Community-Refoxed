@@ -61,6 +61,7 @@ import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
@@ -100,6 +101,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import net.neoforged.neoforge.network.connection.ConnectionType;
+import net.neoforged.neoforge.network.registration.ChannelAttributes;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -913,10 +916,17 @@ public class AE2InterfaceGameTest {
         private final List<Packet<?>> packets = new ArrayList<>();
 
         private RecordingConnection(MinecraftServer server, ServerPlayer player) {
-            super(server, new Connection(PacketFlow.CLIENTBOUND), player,
+            super(server, connected(), player,
                     CommonListenerCookie.createInitial(new GameProfile(UUID.nameUUIDFromBytes(
                             "mmcr-ae2-interface-recording".getBytes(StandardCharsets.UTF_8)),
                             "mmcr-ae2-interface-recording"), false));
+        }
+
+        private static Connection connected() {
+            var connection = new Connection(PacketFlow.SERVERBOUND);
+            new EmbeddedChannel(connection);
+            ChannelAttributes.setConnectionType(connection, ConnectionType.NEOFORGE);
+            return connection;
         }
 
         @Override
