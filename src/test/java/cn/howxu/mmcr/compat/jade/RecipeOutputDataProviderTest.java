@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jade;
 
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -13,6 +14,7 @@ import snownee.jade.api.BlockAccessor;
 
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -85,6 +87,7 @@ class RecipeOutputDataProviderTest {
                 BlockAccessor.class.getClassLoader(), new Class<?>[]{BlockAccessor.class},
                 (proxy, method, args) -> {
                     if ("getTarget".equals(method.getName())) return target;
+                    if ("getLevel".equals(method.getName())) return LevelStub.create(Map.of());
                     throw new UnsupportedOperationException(method.getName());
                 });
     }

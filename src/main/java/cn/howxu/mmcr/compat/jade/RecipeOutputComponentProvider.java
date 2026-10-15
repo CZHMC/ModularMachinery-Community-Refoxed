@@ -8,6 +8,7 @@ import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.Identifier;
@@ -48,7 +49,8 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
 
     @Override
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-        List<MachineOutputAmount> outputs = RecipeOutputCodec.read(accessor.getServerData());
+        List<MachineOutputAmount> outputs = RecipeOutputCodec.read(accessor.getServerData(),
+                accessor.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE));
         boolean labelAdded = false;
         for (MachineOutputAmount output : outputs) {
             MachineOutput owned = output.output();

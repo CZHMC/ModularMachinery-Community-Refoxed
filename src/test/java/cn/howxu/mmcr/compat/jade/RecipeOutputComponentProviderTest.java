@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jade;
 
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
@@ -11,6 +12,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.Lifecycle;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import mekanism.api.MekanismAPI;
 import mekanism.api.chemical.Chemical;
@@ -20,13 +22,22 @@ import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.locale.Language;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -72,6 +83,39 @@ class RecipeOutputComponentProviderTest {
         List<Object> calls = collect(data);
         assertThat(calls.getFirst()).isInstanceOf(Component.class);
         assertThat(((Component) calls.getFirst()).getString()).contains("Recipe Output");
+    }
+
+    @Test
+    void rendersEnchantedParallelOutputUsingTheClientRegistryContext() throws Exception {
+        var serverRegistries = outputRegistryAccess();
+        var clientRegistries = outputRegistryAccess();
+        var serverOps = serverRegistries.createSerializationContext(NbtOps.INSTANCE);
+        var clientOps = clientRegistries.createSerializationContext(NbtOps.INSTANCE);
+        ItemStack diamond = new ItemStack(Items.DIAMOND, 9);
+        diamond.set(DataComponents.CUSTOM_NAME, Component.literal("What a magic recipe"));
+        diamond.enchant(serverRegistries.lookupOrThrow(Registries.ENCHANTMENT)
+                .getOrThrow(Enchantments.SHARPNESS), 4);
+        CompoundTag data = new CompoundTag();
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(
+                new MachineOutput.ItemOutput(diamond, 1F), 36L)), serverOps);
+
+        assertThat(RecipeOutputCodec.read(data, clientOps)).singleElement().satisfies(output -> {
+            ItemStack stack = ((MachineOutput.ItemOutput) output.output()).resolvedStack();
+            assertThat(stack.getItem()).isSameAs(Items.DIAMOND);
+            assertThat(stack.getCount()).isEqualTo(1);
+            assertThat(stack.getHoverName()).isEqualTo(diamond.getHoverName());
+            assertThat(stack.get(DataComponents.ENCHANTMENTS).getLevel(clientRegistries
+                    .lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SHARPNESS))).isEqualTo(4);
+            assertThat(output.amount()).isEqualTo(36L);
+        });
+        assertThat(RecipeOutputCodec.read(data)).isEmpty();
+        Level level = LevelStub.create(Map.of());
+        var registryAccess = Level.class.getDeclaredField("registryAccess");
+        registryAccess.setAccessible(true);
+        registryAccess.set(level, clientRegistries);
+        assertThat(collectCalls(data, level).stream().map(TooltipCall::value).toList())
+                .contains(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
+        assertThat(diamond.getCount()).isEqualTo(9);
     }
 
     @Test
@@ -142,10 +186,15 @@ class RecipeOutputComponentProviderTest {
     }
 
     private static List<TooltipCall> collectCalls(CompoundTag data) {
+        return collectCalls(data, LevelStub.create(Map.of()));
+    }
+
+    private static List<TooltipCall> collectCalls(CompoundTag data, Level level) {
         BlockAccessor accessor = (BlockAccessor) Proxy.newProxyInstance(
                 BlockAccessor.class.getClassLoader(), new Class<?>[]{BlockAccessor.class},
                 (_, method, _) -> {
                     if ("getServerData".equals(method.getName())) return data;
+                    if ("getLevel".equals(method.getName())) return level;
                     throw new UnsupportedOperationException(method.getName());
                 });
         List<TooltipCall> calls = new ArrayList<>();
@@ -170,6 +219,18 @@ class RecipeOutputComponentProviderTest {
     }
 
     private record TooltipCall(String method, Object value) {}
+
+    private static RegistryAccess outputRegistryAccess() {
+        MappedRegistry<Enchantment> enchantments = new MappedRegistry<>(Registries.ENCHANTMENT, Lifecycle.stable());
+        VanillaRegistries.createLookup().lookupOrThrow(Registries.ENCHANTMENT).listElements()
+                .forEach(holder -> Registry.register(enchantments, holder.key().identifier(), holder.value()));
+        enchantments.freeze();
+        List<Registry<?>> registries = new ArrayList<>();
+        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)
+                .registries().forEach(entry -> registries.add(entry.value()));
+        registries.add(enchantments);
+        return new RegistryAccess.ImmutableRegistryAccess(registries);
+    }
 
     /** @author howxu <dev@howxu.cn> */
     private record CountingOutput(long amount, float chance) implements MachineOutput {
