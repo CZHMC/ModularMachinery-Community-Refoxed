@@ -26,6 +26,9 @@ runs {
             runtime("curse.maven:${jec_id}:${jec_version}")
             // CustomSkinLoader
             runtime("curse.maven:${csl_id}:${csl_version}")
+            // xaero map
+            runtime("curse.maven:${minimap_id}:${minimap_version}")
+            runtime("curse.maven:${worldmap_id}:${worldmap_version}")
         }
     }
 

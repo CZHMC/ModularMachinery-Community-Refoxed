@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.material.MapColor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -34,7 +35,8 @@ public final class ModBlocks {
     public static final LinkedHashMap<String, DeferredHolder<Block, Block>> BLOCKS = new LinkedHashMap<>();
 
     static {
-        BLOCKS.put("basic_casing", REGISTER.registerBlock("basic_casing", MachineCasingBlock::new));
+        BLOCKS.put("basic_casing", REGISTER.registerBlock("basic_casing", MachineCasingBlock::new,
+                properties -> properties.mapColor(MapColor.METAL)));
         PortKinds.all().forEach(ModBlocks::registerIoPort);
         PortDefinitionRegistry.freeze();
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
@@ -60,7 +62,8 @@ public final class ModBlocks {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
         if (BLOCKS.containsKey(name)) return;
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new MachineControllerBlock(machineId, properties)));
+                properties -> new MachineControllerBlock(machineId, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     public static DeferredHolder<Block, Block> controllerFor(Identifier machineId) {
@@ -94,7 +97,8 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier =
                 () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new IOPortBlock(kind, beTypeSupplier, properties)));
+                properties -> new IOPortBlock(kind, beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     private static void registerParallelController(ParallelTier tier) {
@@ -102,7 +106,8 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier =
                 () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new ParallelControllerBlock(tier, beTypeSupplier, properties)));
+                properties -> new ParallelControllerBlock(tier, beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     private static void registerFactoryController() {
@@ -110,42 +115,48 @@ public final class ModBlocks {
         Supplier<? extends BlockEntityType<?>> beTypeSupplier =
                 () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new FactorySchedulerBlock(beTypeSupplier, properties)));
+                properties -> new FactorySchedulerBlock(beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     private static void registerSmartInterface() {
         String name = "smart_interface";
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.SMART_INTERFACE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new SmartInterfaceBlock(beTypeSupplier, properties)));
+                properties -> new SmartInterfaceBlock(beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     private static void registerDataStorage() {
         String name = "data_storage";
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.DATA_STORAGE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new DataStorageBlock(beTypeSupplier, properties)));
+                properties -> new DataStorageBlock(beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     private static void registerNetworkInterface() {
         String name = "network_interface";
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.NETWORK_INTERFACE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new NetworkInterfaceBlock(beTypeSupplier, properties)));
+                properties -> new NetworkInterfaceBlock(beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     private static void registerModuleCoupler() {
         String name = "module_bridge";
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = ModBlockEntities.MODULE_BRIDGE;
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new ModuleCouplerBlock(beTypeSupplier, properties)));
+                properties -> new ModuleCouplerBlock(beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     private static void registerUpgradeBus(UpgradeBusSize size) {
         String name = "upgrade_bus_" + size.id();
         Supplier<? extends BlockEntityType<?>> beTypeSupplier = () -> ModBlockEntities.BES.get(name).get();
         BLOCKS.put(name, REGISTER.registerBlock(name,
-                properties -> new UpgradeBusBlock(size, beTypeSupplier, properties)));
+                properties -> new UpgradeBusBlock(size, beTypeSupplier, properties),
+                properties -> properties.mapColor(MapColor.METAL)));
     }
 
     public static void register(IEventBus bus) {
