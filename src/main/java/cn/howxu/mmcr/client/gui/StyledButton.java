@@ -2,7 +2,10 @@ package cn.howxu.mmcr.client.gui;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Shared button presentation for MMCR screens.
@@ -10,14 +13,26 @@ import net.minecraft.network.chat.Component;
  * @author howxu <dev@howxu.cn>
  */
 public class StyledButton extends Button {
+    @Nullable
+    private Identifier icon;
+
     public StyledButton(int x, int y, int width, int height, Component message, OnPress onPress) {
         super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
+    }
+
+    public void setIcon(Identifier icon) {
+        this.icon = icon;
     }
 
     @Override
     protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         drawBackground(graphics);
-        extractDefaultLabel(graphics.textRendererForWidget(this, GuiGraphicsExtractor.HoveredTextEffects.NONE));
+        if (icon != null) {
+            graphics.blit(RenderPipelines.GUI_TEXTURED, icon, getX(), getY(), 0, 0,
+                    getWidth(), getHeight(), 16, 16, 16, 16);
+        } else {
+            extractDefaultLabel(graphics.textRendererForWidget(this, GuiGraphicsExtractor.HoveredTextEffects.NONE));
+        }
     }
 
     protected void drawBackground(GuiGraphicsExtractor graphics) {

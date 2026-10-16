@@ -72,6 +72,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                     minecraft.setScreen(new RecipePoolScreen(this, value.controllerPos(), value.recipePoolIds(),
                             value.currentRecipePoolId().orElse(null)));
                 }));
+        recipePoolButton.setIcon(MMCR.id("textures/gui/button/mode.png"));
         recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
         structureCheckButton = addRenderableWidget(new StyledButton(
                 buttonX, topPos + 1, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
@@ -79,6 +80,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                     ClientPacketDistributor.sendToServer(new PktControllerStructureCheckPayload(snapshot.get().controllerPos()));
                     button.setFocused(false);
                 }));
+        structureCheckButton.setIcon(MMCR.id("textures/gui/button/check.png"));
         structureCheckButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.controller.check_structure")));
         isolationButton = addRenderableWidget(new IsolationToggleButton(buttonX, topPos + 1,
                 Component.translatable("mmcr.input_isolation.button"), menu.inputIsolation()::enabled, button -> {
@@ -86,6 +88,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                     menu.inputIsolation().enabled() ? InputIsolationMenuState.DISABLE : InputIsolationMenuState.ENABLE);
             button.setFocused(false);
         }));
+        isolationButton.setIcon(MMCR.id("textures/gui/button/isolation.png"));
         updateControllerButtons();
     }
 
