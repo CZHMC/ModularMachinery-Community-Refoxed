@@ -38,8 +38,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -441,14 +441,15 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public record AdjacentSide(Direction side, BlockState state, ItemStack icon, Component name) {
     }
 
-    public AdjacentSide adjacentSide(Direction side) {
+    public AdjacentSide adjacentSide(Direction side, Player player) {
         BlockState adjacentState = level == null || side == null
                 ? Blocks.AIR.defaultBlockState()
                 : level.getBlockState(worldPosition.relative(side));
-        ItemStack icon = adjacentState.getBlock().asItem() == Items.AIR
+        ItemStack icon = adjacentState.isAir()
                 ? ItemStack.EMPTY
-                : adjacentState.getBlock().asItem().getDefaultInstance();
-        return new AdjacentSide(side, adjacentState, icon, adjacentState.getBlock().getName());
+                : adjacentState.getCloneItemStack(worldPosition.relative(side), level, false, player);
+        return new AdjacentSide(side, adjacentState, icon,
+                icon.isEmpty() ? adjacentState.getBlock().getName() : icon.getHoverName());
     }
 
     public void setAutoIOEnabled(boolean enabled) {
