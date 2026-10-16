@@ -1,12 +1,9 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
 
-import appeng.api.networking.IGridNode;
-import appeng.api.networking.energy.IEnergySource;
-import appeng.api.networking.security.IActionHost;
+import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.MEStorage;
-import appeng.api.storage.StorageHelper;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -35,18 +32,17 @@ public final class AsyncOutputService {
     }
 
     /**
-     * Attempts to move accumulated units into the supplied network using
-     * {@link StorageHelper#poweredInsert}. Successful portions are removed
+     * Attempts to move accumulated units directly into the supplied network,
+     * without a powered transfer or interface return inventory. Successful portions are removed
      * from the queue; failed or partially accepted amounts remain.
      *
      * @param storage       the network storage to receive outputs
-     * @param source        the action source used for the powered insert
+     * @param source        the action source used for the network insert
      * @param maxOperations the maximum number of distinct keys to attempt this call
      * @return {@code true} if at least one key was accepted by the network
      */
     public synchronized boolean drainTo(MEStorage storage, IActionSource source, int maxOperations) {
         if (storage == null || pending.isEmpty() || maxOperations <= 0) return false;
-        IEnergySource energy = energySource(source);
         int processed = 0;
         for (Iterator<Map.Entry<AEKey, Long>> iterator = pending.entrySet().iterator();
              iterator.hasNext() && processed < maxOperations; ) {
@@ -57,7 +53,7 @@ public final class AsyncOutputService {
                 iterator.remove();
                 continue;
             }
-            long accepted = StorageHelper.poweredInsert(energy, storage, key, amount, source);
+            long accepted = storage.insert(key, amount, Actionable.MODULATE, source);
             accepted = Math.clamp(accepted, 0L, amount);
             if (accepted > 0L) {
                 long acceptedAmount = accepted;
@@ -85,14 +81,6 @@ public final class AsyncOutputService {
      */
     public boolean isEmpty() {
         return pending.isEmpty();
-    }
-
-    private static IEnergySource energySource(IActionSource source) {
-        return source.machine()
-                .map(IActionHost::getActionableNode)
-                .map(IGridNode::getGrid)
-                .map(grid -> (IEnergySource) grid.getEnergyService())
-                .orElseGet(IEnergySource::empty);
     }
 
     private static long saturatingAdd(long first, long second) {

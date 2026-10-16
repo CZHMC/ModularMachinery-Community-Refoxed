@@ -5,6 +5,7 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.energy.IEnergyService;
 import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
@@ -12,6 +13,7 @@ import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
 import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.AsyncOutputResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AsyncOutputService;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
@@ -21,10 +23,14 @@ import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
@@ -65,6 +71,56 @@ class AE2AsyncOutputServiceTest {
         assertThat(drained).isTrue();
         assertThat(service.isEmpty()).isTrue();
         assertThat(network.amount(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(8L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {4_095L, 4_096L, 4_097L, 2_147_487_743L})
+    void committedItemsDrainDirectlyWithoutTransferEnergy(long amount) {
+        AEKey key = AEItemKey.of(Items.IRON_INGOT);
+        FakeMEStorage network = new FakeMEStorage(key, amount);
+        AsyncOutputService service = new AsyncOutputService();
+        AsyncOutputResourceStorage<ItemResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, ItemResourceStorage.adapter(), service, IActionSource.empty(), () -> {});
+        var plan = storage.planOutput(ItemResource.of(Items.IRON_INGOT), amount,
+                new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(amount);
+        assertThat(plan.operation()).isNotNull();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(network.amount(key)).isZero();
+        assertThat(service.isEmpty()).isFalse();
+
+        assertThat(service.drainTo(network, IActionSource.empty(), 1)).isTrue();
+        assertThat(network.amount(key)).isEqualTo(amount);
+        assertThat(service.isEmpty()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {4_095L, 4_096L, 4_097L, 2_147_487_743L})
+    void committedFluidsDrainDirectlyWithoutTransferEnergy(long amount) {
+        AEKey key = AEFluidKey.of(Fluids.WATER);
+        FakeMEStorage network = new FakeMEStorage(key, amount);
+        AsyncOutputService service = new AsyncOutputService();
+        AsyncOutputResourceStorage<FluidResource> storage = new AsyncOutputResourceStorage<>(
+                () -> network, FluidResourceStorage.adapter(), service, IActionSource.empty(), () -> {});
+        var plan = storage.planOutput(FluidResource.of(Fluids.WATER), amount,
+                new PlanningReservations(), true);
+
+        assertThat(plan.accepted()).isEqualTo(amount);
+        assertThat(plan.operation()).isNotNull();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(network.amount(key)).isZero();
+        assertThat(service.isEmpty()).isFalse();
+
+        assertThat(service.drainTo(network, IActionSource.empty(), 1)).isTrue();
+        assertThat(network.amount(key)).isEqualTo(amount);
+        assertThat(service.isEmpty()).isTrue();
     }
 
     @Test

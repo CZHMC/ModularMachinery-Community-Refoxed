@@ -49,8 +49,8 @@ import java.lang.reflect.Method;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2AsyncOutputInterfaceGameTest {
-    private static final long ITEM_AMOUNT = 32L;
-    private static final long FLUID_AMOUNT = 2_000L;
+    private static final long ITEM_AMOUNT = 4_097L;
+    private static final long FLUID_AMOUNT = 8_192L;
 
     public void asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(GameTestHelper helper) {
         helper.assertTrue(AE2Bridge.get().available(),
