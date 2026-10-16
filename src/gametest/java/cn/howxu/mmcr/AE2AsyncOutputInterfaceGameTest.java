@@ -15,12 +15,16 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.recipe.ItemOutput;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -42,6 +46,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * End-to-end GameTest coverage for the AE2 async output interface MMCR integration.
@@ -49,7 +54,7 @@ import java.lang.reflect.Method;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2AsyncOutputInterfaceGameTest {
-    private static final long ITEM_AMOUNT = 4_097L;
+    private static final long ITEM_AMOUNT = 114_514L;
     private static final long FLUID_AMOUNT = 8_192L;
 
     public void asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(GameTestHelper helper) {
@@ -72,7 +77,7 @@ public class AE2AsyncOutputInterfaceGameTest {
         MEChestBlockEntity fluidChest = helper.getBlockEntity(fluidChestPos, MEChestBlockEntity.class);
         CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos,
                 CreativeEnergyCellBlockEntity.class);
-        itemChest.setCell(AEItems.ITEM_CELL_1K.stack());
+        itemChest.setCell(AEItems.ITEM_CELL_64K.stack());
         fluidChest.setCell(AEItems.FLUID_CELL_1K.stack());
 
         helper.runAtTickTime(2, () -> {
@@ -136,34 +141,37 @@ public class AE2AsyncOutputInterfaceGameTest {
         });
 
         helper.runAtTickTime(4, () -> {
-            PlanningReservations reservations = new PlanningReservations();
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            OutputResourceStorage.OutputPlan itemPlan = ((OutputResourceStorage) port.itemStorage())
-                    .planOutput(ItemResource.of(Items.IRON_INGOT), ITEM_AMOUNT, reservations, true);
-            helper.assertTrue(itemPlan.accepted() == ITEM_AMOUNT,
-                    "Async output item plan accepts the requested amount");
+            var requirements = List.of(ItemRequirement.output(new ItemOutput(Items.COPPER_INGOT, (int) ITEM_AMOUNT)));
+            RequirementPlanner planner = new RequirementPlanner();
+            var itemPlan = planner.plan(List.copyOf(requirements), port.capabilitySnapshot().capabilities(),
+                    new PlanningContext(1L, 0));
+            helper.assertTrue(itemPlan.successful(),
+                    "The recipe planner accepts 114514 copper through the network-only output view");
             @SuppressWarnings({"unchecked", "rawtypes"})
             OutputResourceStorage.OutputPlan fluidPlan = ((OutputResourceStorage) port.fluidStorage())
                     .planOutput(FluidResource.of(Fluids.WATER), FLUID_AMOUNT, new PlanningReservations(), true);
             helper.assertTrue(fluidPlan.accepted() == FLUID_AMOUNT,
                     "Async output fluid plan accepts the requested amount");
             try (Transaction transaction = Transaction.openRoot()) {
-                if (itemPlan.operation() != null) {
-                    itemPlan.operation().commit(transaction);
-                }
+                helper.assertTrue(itemPlan.plan().commit(transaction), "Copper output commits into the async queue");
                 if (fluidPlan.operation() != null) {
                     fluidPlan.operation().commit(transaction);
                 }
                 transaction.commit();
             }
+            helper.assertTrue(port.itemStorage().outputCapacity(ItemResource.of(Items.COPPER_INGOT))
+                            == port.getMainNode().getGrid().getStorageService().getInventory()
+                            .insert(AEItemKey.of(Items.COPPER_INGOT), Long.MAX_VALUE,
+                                    Actionable.SIMULATE, IActionSource.ofMachine(port)) - ITEM_AMOUNT,
+                    "The next planning round deducts the entire undelivered copper queue");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
                     "Async output interface storage stays empty immediately after planning");
         });
 
         helper.runAtTickTime(20, () -> {
-            helper.assertTrue(itemChest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT),
+            helper.assertTrue(itemChest.getInventory().extract(AEItemKey.of(Items.COPPER_INGOT),
                             ITEM_AMOUNT, Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT,
-                    "Async ticker drains the queued iron into the ME Chest");
+                    "Async ticker delivers all 114514 copper into the ME Chest");
             helper.assertTrue(fluidChest.getInventory().extract(AEFluidKey.of(Fluids.WATER),
                             FLUID_AMOUNT, Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT,
                     "Async ticker drains the queued water into the ME Chest");

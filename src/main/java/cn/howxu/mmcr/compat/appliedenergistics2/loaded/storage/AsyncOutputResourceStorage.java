@@ -1,12 +1,16 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
-import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.MEStorage;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AsyncOutputService;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
@@ -14,7 +18,8 @@ import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -29,14 +34,14 @@ import java.util.function.Supplier;
  * @param <R> resource type exposed by the view
  * @author howxu <dev@howxu.cn>
  */
-public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEKey, Long>>
+public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Integer>
         implements OutputResourceStorage<R> {
     private final Supplier<@Nullable MEStorage> networkSupplier;
     private final AE2KeyAdapter<R> adapter;
     private final AsyncOutputService service;
     private final IActionSource actionSource;
     private final Runnable wakeCallback;
-    private final Map<AEKey, Long> pending = new HashMap<>();
+    private final List<AsyncOutputService.Reservation> pending = new ArrayList<>();
 
     public AsyncOutputResourceStorage(Supplier<@Nullable MEStorage> networkSupplier,
                                       AE2KeyAdapter<R> adapter,
@@ -99,9 +104,11 @@ public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEK
     public long outputCapacity(R resource) {
         AEKey key = keyOf(resource);
         MEStorage network = networkSupplier.get();
-        if (network == null) return 0L;
-        long simulated = network.insert(key, Long.MAX_VALUE, Actionable.SIMULATE, actionSource);
-        return Math.max(0L, simulated);
+        if (network == null) {
+            service.bindNetwork(null);
+            return 0L;
+        }
+        return service.outputCapacity(network, key, actionSource);
     }
 
     @Override
@@ -118,36 +125,40 @@ public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEK
         }
 
         MEStorage network = networkSupplier.get();
-        if (network == null) return new OutputPlan(0L, null);
+        if (network == null) {
+            service.bindNetwork(null);
+            return new OutputPlan(0L, null);
+        }
 
-        long simulated = network.insert(key, amount, Actionable.SIMULATE, actionSource);
+        long simulated = service.outputCapacity(network, key, actionSource);
         long available = simulated <= 0L ? 0L : reservations.outputAvailable(network, key, simulated);
         long accepted = Math.clamp(available, 0L, amount);
         if (accepted == 0L) return new OutputPlan(0L, null);
         if (!reservations.reserveOutput(network, key, accepted)) return new OutputPlan(0L, null);
 
         CapabilityOperation operation = materialize
-                ? new AsyncOutputOperation(key, accepted) : null;
+                ? new AsyncOutputOperation(network, key, accepted) : null;
         return new OutputPlan(accepted, operation);
     }
 
     @Override
-    protected Map<AEKey, Long> createSnapshot() {
-        return new HashMap<>(pending);
+    protected Integer createSnapshot() {
+        return pending.size();
     }
 
     @Override
-    protected void revertToSnapshot(Map<AEKey, Long> snapshot) {
-        pending.clear();
-        pending.putAll(snapshot);
+    protected void revertToSnapshot(Integer snapshot) {
+        var reverted = pending.subList(snapshot, pending.size());
+        reverted.forEach(service::release);
+        reverted.clear();
     }
 
     @Override
-    protected void onRootCommit(Map<AEKey, Long> originalState) {
+    protected void onRootCommit(Integer originalState) {
         if (pending.isEmpty()) return;
-        Map<AEKey, Long> committed = new HashMap<>(pending);
+        var committed = List.copyOf(pending);
         pending.clear();
-        committed.forEach(service::submit);
+        committed.forEach(service::submitReserved);
         wakeCallback.run();
     }
 
@@ -161,10 +172,12 @@ public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEK
     }
 
     private final class AsyncOutputOperation implements CapabilityOperation {
+        private final MEStorage plannedNetwork;
         private final AEKey key;
         private final long amount;
 
-        private AsyncOutputOperation(AEKey key, long amount) {
+        private AsyncOutputOperation(MEStorage plannedNetwork, AEKey key, long amount) {
+            this.plannedNetwork = plannedNetwork;
             this.key = key;
             this.amount = amount;
         }
@@ -172,12 +185,16 @@ public final class AsyncOutputResourceStorage<R> extends SnapshotJournal<Map<AEK
         @Override
         public CapabilityResult commit(TransactionContext transaction) {
             updateSnapshots(transaction);
-            pending.merge(key, amount, AsyncOutputResourceStorage::saturatingAdd);
+            var reservation = networkSupplier.get() == plannedNetwork
+                    ? service.reserve(plannedNetwork, key, amount, actionSource) : null;
+            if (reservation == null) {
+                var id = MMCR.id("ae2_async_output");
+                return CapabilityResult.failure(ExecutionStatus.blocked(id, id,
+                        FailureOccurrence.at(BuiltinFailureReasons.MISSING_OUTPUT, id,
+                                FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
+            }
+            pending.add(reservation);
             return CapabilityResult.successful();
         }
-    }
-
-    private static long saturatingAdd(long first, long second) {
-        return second > Long.MAX_VALUE - first ? Long.MAX_VALUE : first + second;
     }
 }

@@ -69,6 +69,7 @@ public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBl
     @Override
     protected void onNetworkChanged() {
         super.onNetworkChanged();
+        service.bindNetwork(networkStorage());
         wakeAsyncTicker();
     }
 
