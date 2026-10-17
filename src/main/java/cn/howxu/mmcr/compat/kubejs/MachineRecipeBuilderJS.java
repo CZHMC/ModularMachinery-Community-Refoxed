@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
@@ -422,6 +424,27 @@ public class MachineRecipeBuilderJS {
     public MachineRecipeBuilderJS heatOutput(double heat) {
         return custom(MekanismPortFamilies.HEAT.toString(), IOType.OUTPUT,
                 MachineRecipeBuilder.heatOutputPayload(heat));
+    }
+
+    /** Consumes lightning once per parallel recipe using an AE2LT resource ID. */
+    public MachineRecipeBuilderJS lightningInput(String tierId, long amount) {
+        return addRequirement(LightningRequirement.input(LightningTier.fromId(Identifier.parse(tierId)), amount));
+    }
+
+    /** Produces lightning with guaranteed output using an AE2LT resource ID. */
+    public MachineRecipeBuilderJS lightningOutput(String tierId, long amount) {
+        return lightningOutput(tierId, amount, 1D);
+    }
+
+    /** Produces lightning with the canonical output chance and amount clamping. */
+    public MachineRecipeBuilderJS lightningOutput(String tierId, long amount, double chance) {
+        return addRequirement(LightningRequirement.output(LightningTier.fromId(Identifier.parse(tierId)),
+                amount, (float) chance));
+    }
+
+    /** Named chance variant shared with the standard KubeJS recipe schema. */
+    public MachineRecipeBuilderJS lightningOutputChance(String tierId, long amount, double chance) {
+        return lightningOutput(tierId, amount, chance);
     }
 
     private static Identifier requireChemicalId(String value, String name) {

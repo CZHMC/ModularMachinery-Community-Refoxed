@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -14,6 +15,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
@@ -114,6 +116,9 @@ public final class MachineRecipeBuilder {
     }
     public MachineRecipeBuilder inputEnergy(long fePerTick) { return requirement(new EnergyRequirement(IOType.INPUT, new EnergyInput(fePerTick).fePerTick())); }
     public MachineRecipeBuilder outputEnergy(long fePerTick) { return requirement(new EnergyRequirement(IOType.OUTPUT, new EnergyInput(fePerTick).fePerTick())); }
+    public MachineRecipeBuilder lightningInput(LightningTier tier, long amount) { return requirement(LightningRequirement.input(tier, amount)); }
+    public MachineRecipeBuilder lightningOutput(LightningTier tier, long amount) { return lightningOutput(tier, amount, 1F); }
+    public MachineRecipeBuilder lightningOutput(LightningTier tier, long amount, float chance) { return requirement(LightningRequirement.output(tier, amount, chance)); }
 
     /**
      * Alias for {@link #inputEnergy(long)} measured in FE per tick.
