@@ -90,6 +90,43 @@ class LightningRecipeDisplayTest {
     }
 
     @Test
+    void hoveringEachLightningOutputShowsItsOwnChanceWithoutChangingLabels() {
+        var display = display(List.of(
+                LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 200L, 0.5F),
+                LightningRequirement.input(LightningTier.HIGH_VOLTAGE, 1000L),
+                LightningRequirement.output(LightningTier.EXTREME_HIGH_VOLTAGE, 20L, 0.25F)), Set.of());
+        var layout = MachineRecipeLayout.forDisplay(display, 4);
+        int x = layout.durationTextX();
+        int y = layout.lightningTextY(display);
+
+        assertThat(MachineRecipeCategory.lightningTooltip(display, layout, x, y)).isEmpty();
+        var high = MachineRecipeCategory.lightningTooltip(display, layout, x, y + 10).orElseThrow();
+        var extreme = MachineRecipeCategory.lightningTooltip(display, layout, x, y + 20).orElseThrow();
+        assertThat(((TranslatableContents) high.getContents()).getKey()).isEqualTo("jei.mmcr.machine_recipe.output_chance");
+        assertThat(((TranslatableContents) high.getContents()).getArgs()).containsExactly("50%");
+        assertThat(((TranslatableContents) extreme.getContents()).getArgs()).containsExactly("25%");
+        assertThat(MachineRecipeCategory.lightningTooltip(display, layout, x - 1, y + 10)).isEmpty();
+        assertThat(MachineRecipeCategory.lightningTooltip(display, layout, layout.width() - x, y + 10)).isEmpty();
+        assertThat(MachineRecipeCategory.lightningTooltip(display, layout, x, y - 1)).isEmpty();
+        assertThat(MachineRecipeCategory.lightningTooltip(display, layout, x, y + 30)).isEmpty();
+    }
+
+    @Test
+    void lightningChanceTooltipDistinguishesGuaranteedAndDisabledOutput() {
+        var display = display(List.of(
+                LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 200L, 1F),
+                LightningRequirement.output(LightningTier.EXTREME_HIGH_VOLTAGE, 20L, 0F)), Set.of());
+        var layout = MachineRecipeLayout.forDisplay(display, 4);
+        int x = layout.durationTextX();
+        int y = layout.lightningTextY(display);
+
+        var guaranteed = MachineRecipeCategory.lightningTooltip(display, layout, x, y).orElseThrow();
+        var disabled = MachineRecipeCategory.lightningTooltip(display, layout, x, y + 10).orElseThrow();
+        assertThat(((TranslatableContents) guaranteed.getContents()).getArgs()).containsExactly("100%");
+        assertThat(((TranslatableContents) disabled.getContents()).getArgs()).containsExactly("0%");
+    }
+
+    @Test
     void distinguishesDirectionInCompleteLabelsForBothTiers() {
         for (var tier : LightningTier.values()) {
             String prefix = tier == LightningTier.HIGH_VOLTAGE ? "high_voltage" : "extreme_high_voltage";

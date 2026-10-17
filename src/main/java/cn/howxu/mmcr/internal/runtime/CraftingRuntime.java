@@ -55,6 +55,7 @@ import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
 import cn.howxu.mmcr.internal.recipe.RecipeProgramCompiler;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -2067,7 +2068,7 @@ public final class CraftingRuntime {
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()))
+                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
                     || requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (restored.inputConsumptionPlan().consumedBatches(index) > 0) consumed.add(index);
             else retained.add(index);
@@ -2410,7 +2411,8 @@ public final class CraftingRuntime {
             boolean prefetched = !prepared.prefetches().isEmpty() && requirement instanceof EnergyRequirement
                     && requirement.io() == IOType.INPUT;
             boolean input = requirement.io() == IOType.INPUT && (ItemRequirement.TYPE.equals(requirement.type())
-                    || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type()));
+                    || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type())
+                    || requirement instanceof LightningRequirement);
             consumed.add(input && prepared.plan().hasOperations(planIndex) ? 1 : 0);
             if (!prefetched) planIndex++;
         }
@@ -2836,7 +2838,7 @@ public final class CraftingRuntime {
                     && requirement.io() == RecipeModifier.IOType.INPUT;
             if (!(ItemRequirement.TYPE.equals(requirement.type())
                     || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()))
+                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
                     || requirement.io() != RecipeModifier.IOType.INPUT) {
                 if (!prefetchedEnergy) planIndex++;
                 continue;

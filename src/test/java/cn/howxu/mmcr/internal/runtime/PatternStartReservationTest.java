@@ -27,6 +27,12 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -51,6 +57,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -63,6 +71,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.util.ProblemReporter;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -74,6 +83,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -160,6 +170,63 @@ class PatternStartReservationTest {
         assertThat(runtime.commitPatternStart(prepared)).isFalse();
         assertThat(runtime.active()).isFalse();
         assertThat(requested.amount(0)).isEqualTo(1L);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "true, true"})
+    void paid_pattern_lightning_is_not_requested_again_during_execution_or_reload(boolean reload, boolean saveDuringCommit) {
+        try (var requirements = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
+            LightningBridgeBootstrap.installForTesting(LightningBridgeBootstrap.selectForTesting(true));
+            LightningRecipeTypes.register();
+            var host = RuntimeTestFixtures.itemInput(PATTERN_PORT);
+            var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
+            controller.componentRuntime().replaceLinkedPortPositions(Set.of(PATTERN_PORT));
+            var lightning = new LongResourceStorage<>(LightningTier.class, 2, 2000L, ignored -> false, null);
+            lightning.setContents(0, LightningTier.HIGH_VOLTAGE, 1000L);
+            lightning.setContents(1, LightningTier.EXTREME_HIGH_VOLTAGE, 100L);
+            var items = new LongResourceStorage<>(ItemResource.class, 1, 64L, ItemResource::isEmpty, null);
+            setItem(items, 0, stack(Items.IRON_INGOT, 1));
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("paid_lightning_pattern"), MMCR.id("test_cube"), 20,
+                    List.of(input(Items.IRON_INGOT, 1),
+                            LightningRequirement.input(LightningTier.HIGH_VOLTAGE, 1000L),
+                            LightningRequirement.input(LightningTier.EXTREME_HIGH_VOLTAGE, 100L)),
+                    List.of(), List.of(), 0, 1, false, false, false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+            var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            var prepared = runtime.preparePatternStart(recipe, 1L, List.of(
+                    new ItemBusCapability(items, IOType.INPUT), new LightningCapability(lightning, IOType.INPUT)), PATTERN_PORT);
+            assertThat(prepared).isNotNull();
+            assertThat(runtime.reservePatternStart()).isTrue();
+            var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+            var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+            var admitting = runtime;
+            assertThat(runtime.commitPatternStart(prepared, transaction -> {
+                if (saveDuringCommit) admitting.save(saved);
+            })).isTrue();
+            assertThat(lightning.amount(0)).isZero();
+            assertThat(lightning.amount(1)).isZero();
+            assertThat(items.amount(0)).isZero();
+            assertThat(runtime.activeRecipe().inputConsumptionPlan().isValidFor(recipe.runtimeRequirements())).isTrue();
+            if (reload) {
+                if (!saveDuringCommit) runtime.save(saved);
+                runtime = new CraftingRuntime(controller, controller.componentRuntime());
+                runtime.load(TagValueInput.create(ProblemReporter.DISCARDING, lookup, saved.buildResult()), controller.resourceDomain());
+                assertThat(runtime.active()).isTrue();
+            }
+            assertThat(runtime.installedTickRequirements()).isEmpty();
+            if (saveDuringCommit) {
+                assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+                assertThat(runtime.tick().isCrafting()).isFalse();
+                assertThat(runtime.tickCount()).isZero();
+                assertThat(runtime.failure()).isNotNull();
+            } else {
+                assertThat(runtime.tick().isCrafting()).isTrue();
+                assertThat(runtime.tickCount()).isEqualTo(1);
+                assertThat(runtime.failure()).isNull();
+            }
+        } finally {
+            LightningBridgeBootstrap.resetForTesting();
+        }
     }
 
     static Stream<Arguments> patternCallbackChanges() {

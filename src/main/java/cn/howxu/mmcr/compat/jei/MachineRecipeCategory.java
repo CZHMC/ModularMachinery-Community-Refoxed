@@ -275,6 +275,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     public void getTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, double mouseX, double mouseY) {
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
         smartInterfaceTooltip(recipe, layout, mouseX, mouseY).ifPresent(tooltip::add);
+        lightningTooltip(recipe, layout, mouseX, mouseY).ifPresent(tooltip::add);
     }
 
     @Override
@@ -776,6 +777,22 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             tooltip.add(Component.translatable("jei.mmcr.machine_recipe.consume_chance",
                     Math.round(consumeChance * 100F) + "%"));
         }
+    }
+
+    static Optional<Component> lightningTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+                                               double mouseX, double mouseY) {
+        if (mouseX < layout.durationTextX() || mouseX >= layout.width() - layout.durationTextX()) {
+            return Optional.empty();
+        }
+        int y = layout.lightningTextY(recipe);
+        for (LightningRequirement lightning : LightningJeiDisplay.requirements(recipe)) {
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING && !lightning.io().isInput()) {
+                return Optional.of(Component.translatable("jei.mmcr.machine_recipe.output_chance",
+                        Math.round(lightning.chance() * 100F) + "%"));
+            }
+            y += TEXT_LINE_SPACING;
+        }
+        return Optional.empty();
     }
 
     private static Optional<Component> smartInterfaceTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,

@@ -34,6 +34,10 @@ requiredMods=["kubejs"]
 config="mixins/extras/mmcr.ae2.mixins.json"
 requiredMods=["ae2"]
 
+[[mixins]]
+config="mixins/extras/mmcr.ae2lt.jei.mixins.json"
+requiredMods=["ae2", "ae2lt", "jei"]
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
