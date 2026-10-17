@@ -1,10 +1,10 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
 import appeng.api.stacks.AEKey;
-import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.KeyCounter;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -41,7 +41,7 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
         List<AEKey> selectedKeys = new ArrayList<>();
         List<Long> selectedAmounts = new ArrayList<>();
         for (Map.Entry<AEKey, Long> entry : totals.entrySet()) {
-            if (adapter.keyType().equals(entry.getKey().getType())) {
+            if (adapter.toResource(entry.getKey()).isPresent()) {
                 selectedKeys.add(entry.getKey());
                 selectedAmounts.add(entry.getValue());
             }
@@ -177,8 +177,7 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
     }
 
     private static boolean isSupportedKey(AEKey key) {
-        AEKeyType keyType = key.getType();
-        return AEKeyType.items().equals(keyType) || AEKeyType.fluids().equals(keyType);
+        return AE2ResourceFamilies.supportsKey(key);
     }
 
     private boolean insertReturns(PatternReturnResourceStorage<R> returns, TransactionContext transaction) {

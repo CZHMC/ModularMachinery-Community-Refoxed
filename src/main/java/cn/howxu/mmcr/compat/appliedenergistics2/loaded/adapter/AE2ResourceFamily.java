@@ -77,6 +77,11 @@ public final class AE2ResourceFamily<R> {
         return inventoryViewFactory.apply(inventory);
     }
 
+    public MachineCapability capabilityView(IOPortBlockEntity host, ResourceStorage<R> storage,
+                                           IOType direction, boolean exposeTransferFacet) {
+        return capabilityViewFactory.create(host, storage, direction, exposeTransferFacet);
+    }
+
     public NetworkResourceStorage<R> stockingInputView(MEStorage storage, List<AEKey> keys) {
         return networkViewFactory.apply(storage, keys);
     }
@@ -151,7 +156,7 @@ public final class AE2ResourceFamily<R> {
             if (!(context.host() instanceof IOPortBlockEntity host)) {
                 throw new IllegalStateException("AE2 resource family host is not an IO port");
             }
-            return capabilityViewFactory.create(host, storageFactory.apply(host), viewDirection, exposeTransferFacet);
+            return capabilityView(host, storageFactory.apply(host), viewDirection, exposeTransferFacet);
         }, (_, _) -> true, externalExposure);
     }
 

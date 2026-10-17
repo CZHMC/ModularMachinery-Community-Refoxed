@@ -4,10 +4,22 @@ import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.GenericStack;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.FluidNetworkResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.ItemNetworkResourceStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -21,9 +33,10 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
- * The two AE2 resource families supported by MMCR interfaces.
+ * The startup-stable resource families supported by MMCR's AE2 interfaces.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -98,18 +111,89 @@ public final class AE2ResourceFamilies {
     }
 
     public static List<AE2ResourceFamily<?>> all() {
-        return List.of(ITEM, FLUID);
+        return Stream.concat(Stream.<AE2ResourceFamily<?>>of(ITEM, FLUID),
+                LightningBridge.get().resourceFamilies().stream()).toList();
     }
 
     public static List<PortFamilyDescriptor> inputFamilies() {
-        return List.of(ITEM.inputFamily(), FLUID.inputFamily());
+        return all().stream().map(AE2ResourceFamily::inputFamily).toList();
     }
 
     public static List<PortFamilyDescriptor> outputFamilies() {
-        return List.of(ITEM.outputFamily(), FLUID.outputFamily());
+        return all().stream().map(AE2ResourceFamily::outputFamily).toList();
     }
 
     public static List<PortFamilyDescriptor> patternFamilies() {
-        return List.of(ITEM.inputFamily(), FLUID.inputFamily(), ITEM.outputFamily(), FLUID.outputFamily());
+        return Stream.concat(inputFamilies().stream(), outputFamilies().stream()).toList();
+    }
+
+    public static boolean supportsKey(AEKey key) {
+        return key != null && all().stream().anyMatch(family -> family.adapter().toResource(key).isPresent());
+    }
+
+    public static List<CapabilityBinding> inputBindings() {
+        return all().stream().map(AE2ResourceFamilies::inputBinding).toList();
+    }
+
+    private static <R> CapabilityBinding inputBinding(AE2ResourceFamily<R> family) {
+        return transportBinding(family, family.inputBinding(host -> ((InputInterfaceBlockEntity) host).resourceStorage(family), false));
+    }
+
+    public static List<CapabilityBinding> stockingInputBindings() {
+        return all().stream().map(AE2ResourceFamilies::stockingInputBinding).toList();
+    }
+
+    private static <R> CapabilityBinding stockingInputBinding(AE2ResourceFamily<R> family) {
+        return transportBinding(family, family.inputBinding(host -> ((StockingInterfaceBlockEntity) host).resourceStorage(family), false));
+    }
+
+    /** Item/fluid retain their existing external exposure declarations in each output kind. */
+    public static List<CapabilityBinding> additionalOutputBindings() {
+        return all().stream().filter(family -> family != ITEM && family != FLUID)
+                .map(AE2ResourceFamilies::outputBinding).toList();
+    }
+
+    private static <R> CapabilityBinding outputBinding(AE2ResourceFamily<R> family) {
+        return transportBinding(family, family.outputBinding(host -> ((OutputInterfaceBlockEntity) host).resourceStorage(family), false));
+    }
+
+    public static List<CapabilityBinding> asyncOutputBindings() {
+        return all().stream().map(AE2ResourceFamilies::asyncOutputBinding).toList();
+    }
+
+    private static <R> CapabilityBinding asyncOutputBinding(AE2ResourceFamily<R> family) {
+        return transportBinding(family, family.outputBinding(host -> ((AsyncOutputInterfaceBlockEntity) host).resourceStorage(family), false));
+    }
+
+    public static List<CapabilityBinding> patternBindings() {
+        return all().stream().map(AE2ResourceFamilies::patternBinding).toList();
+    }
+
+    private static <R> CapabilityBinding patternBinding(AE2ResourceFamily<R> family) {
+        return transportBinding(family, family.binding(IOType.OUTPUT, CapabilityDirections.bidirectional(),
+                host -> ((PatternInterfaceBlockEntity) host).resourceStorage(family), false, null));
+    }
+
+    private static CapabilityBinding transportBinding(AE2ResourceFamily<?> family, CapabilityBinding binding) {
+        if (family == ITEM || family == FLUID) return binding;
+        return CapabilityBinding.internalOnly(binding.type(), binding.directions(), binding.factory(), binding.tierPolicy());
+    }
+
+    public static Optional<MachineOutput> patternOutput(GenericStack stack) {
+        if (stack == null || stack.amount() <= 0L || stack.amount() > Integer.MAX_VALUE) return Optional.empty();
+        int amount = (int) stack.amount();
+        if (stack.what() instanceof AEItemKey item) {
+            return Optional.of(new MachineOutput.ItemOutput(item.toStack(amount), 1F));
+        }
+        if (stack.what() instanceof AEFluidKey fluid) {
+            return Optional.of(new MachineOutput.FluidOutput(fluid.toStack(amount), 1F));
+        }
+        for (AE2ResourceFamily<?> family : all()) {
+            Object resource = family.adapter().toResource(stack.what()).orElse(null);
+            if (resource instanceof LightningTier tier) {
+                return Optional.of(new LightningOutput(tier, stack.amount(), 1F));
+            }
+        }
+        return Optional.empty();
     }
 }

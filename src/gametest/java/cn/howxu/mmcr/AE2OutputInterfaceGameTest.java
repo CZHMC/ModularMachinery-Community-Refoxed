@@ -26,6 +26,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
@@ -136,14 +137,15 @@ public class AE2OutputInterfaceGameTest {
                     "Output interface exposes an external fluid handler");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == 2,
-                    "Output interface exposes exactly item and fluid MMCR capabilities");
+            helper.assertTrue(snapshot.capabilities().size() == AE2ResourceFamilies.all().size(),
+                    "Output interface exposes one MMCR capability per supported family");
             for (MachineCapability capability : snapshot.capabilities()) {
-                helper.assertTrue(capability.type().id().equals(PortFamilyIds.ITEM)
-                                || capability.type().id().equals(PortFamilyIds.FLUID),
-                        "Output capability is bound to the item or fluid family");
-                helper.assertTrue(capability.facet(TransferFacet.class).isPresent(),
-                        "Output capability exposes TransferFacet for external extraction");
+                helper.assertTrue(AE2ResourceFamilies.all().stream().anyMatch(family -> family.capabilityType().equals(capability.type())),
+                        "Output capability belongs to a supported family");
+                boolean external = capability.type().id().equals(PortFamilyIds.ITEM)
+                        || capability.type().id().equals(PortFamilyIds.FLUID);
+                helper.assertTrue(capability.facet(TransferFacet.class).isPresent() == external,
+                        "Only existing item/fluid outputs expose TransferFacet for external extraction");
             }
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0) == null
                             && port.getInterfaceLogic().getConfig().getKey(1) == null,

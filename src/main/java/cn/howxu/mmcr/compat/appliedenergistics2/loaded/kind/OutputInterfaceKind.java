@@ -16,6 +16,7 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * AE2 interface-backed output port kind with a bounded local cache.
@@ -28,7 +29,7 @@ public final class OutputInterfaceKind implements InterfaceLogicKind {
 
     public static final OutputInterfaceKind INSTANCE = new OutputInterfaceKind();
 
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), Stream.concat(Stream.of(
             AE2ResourceFamilies.ITEM.binding(IOType.OUTPUT, CapabilityDirections.output(),
                     host -> ((OutputInterfaceBlockEntity) host).itemStorage(), true,
                     new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(),
@@ -40,7 +41,8 @@ public final class OutputInterfaceKind implements InterfaceLogicKind {
                     new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(),
                             ResourceHandler.asClass(),
                             (host, _, _) -> ModCapabilities.resourceStorageHandler(
-                                    ((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))));
+                                    ((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))),
+            AE2ResourceFamilies.additionalOutputBindings().stream()).toList());
 
     private OutputInterfaceKind() {}
 

@@ -20,9 +20,9 @@ import cn.howxu.mmcr.api.recipe.ItemOutput;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
-import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -116,12 +116,12 @@ public class AE2AsyncOutputInterfaceGameTest {
                     "Async output interface does not expose an external fluid handler");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == 2,
-                    "Async output interface exposes exactly item and fluid MMCR capabilities");
+            helper.assertTrue(snapshot.capabilities().size() == AE2ResourceFamilies.all().size(),
+                    "Async output interface exposes one MMCR capability per supported family");
             for (MachineCapability capability : snapshot.capabilities()) {
                 Identifier id = capability.type().id();
-                helper.assertTrue(id.equals(PortFamilyIds.ITEM) || id.equals(PortFamilyIds.FLUID),
-                        "Async output capability is bound to the item or fluid family");
+                helper.assertTrue(AE2ResourceFamilies.all().stream().anyMatch(family -> family.capabilityType().id().equals(id)),
+                        "Async output capability belongs to a supported family");
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "Async output capability does not expose TransferFacet");
             }

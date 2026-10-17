@@ -34,6 +34,7 @@ import appeng.menu.implementations.UpgradeableMenu;
 import appeng.items.tools.NetworkToolItem;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2InterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
@@ -57,7 +58,6 @@ import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import io.netty.channel.ChannelFutureListener;
@@ -200,13 +200,12 @@ public class AE2InterfaceGameTest {
 
             CapabilitySnapshot snapshot = entity.capabilitySnapshot();
             List<MachineCapability> capabilities = snapshot.capabilities();
-            helper.assertTrue(capabilities.size() == 2,
-                    "MMCR AE2 input interface exposes exactly two capabilities");
+            helper.assertTrue(capabilities.size() == AE2ResourceFamilies.all().size(),
+                    "MMCR AE2 input interface exposes one capability per supported family");
             helper.assertTrue(capabilities.stream()
                             .map(MachineCapability::type)
-                            .allMatch(type -> type.id().equals(PortFamilyIds.ITEM)
-                                    || type.id().equals(PortFamilyIds.FLUID)),
-                    "MMCR AE2 input interface capabilities cover ITEM and FLUID families");
+                            .allMatch(type -> AE2ResourceFamilies.all().stream().anyMatch(family -> family.capabilityType().equals(type))),
+                    "MMCR AE2 input interface capabilities cover only supported families");
             for (MachineCapability capability : capabilities) {
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "MMCR AE2 input interface capability does not expose TransferFacet");

@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -216,6 +217,7 @@ public record MachineRecipeDisplay(
                         && !(requirement instanceof LoadedHeatRequirement)
                         && !(requirement instanceof SmartInterfaceRequirement)
                         && !(requirement instanceof LevelRequirement)
+                        && !(requirement instanceof LightningRequirement)
                         && !(requirement instanceof StageRequirement))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT

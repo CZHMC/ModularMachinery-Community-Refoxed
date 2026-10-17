@@ -63,6 +63,13 @@ ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
+modId="ae2lt"
+type="optional"
+versionRange="[1.0.1alpha,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
 modId="extendedae"
 type="optional"
 versionRange="[26.1-1.0.3-neoforge,)"

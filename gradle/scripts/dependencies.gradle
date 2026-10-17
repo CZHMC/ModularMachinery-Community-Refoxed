@@ -41,6 +41,9 @@ dependencies {
     // patchouli
     localRuntime "maven.modrinth:${patchouli_id}:${patchouli_version}"
 
+    // ae2lt
+    implementation "maven.modrinth:${ae2lt_id}:${ae2lt_version}"
+
     // modern ui
     compileOnly "maven.modrinth:${mui_id}:${mui_version}"
 

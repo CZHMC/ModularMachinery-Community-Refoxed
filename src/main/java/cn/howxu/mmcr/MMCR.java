@@ -2,6 +2,9 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -35,7 +38,10 @@ public class MMCR {
         BuiltinFailureReasons.register();
         MekanismBridgeBootstrap.bootstrap();
         MekanismRecipeTypes.register();
+        LightningBridgeBootstrap.bootstrap();
+        LightningRecipeTypes.register();
         PublicApiBootstrap.begin();
+        LightningBridge.get().registerCapabilityDefinitions();
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.bootstrapBuiltins();
         MekanismBridge.get().registerTransferPolicies();

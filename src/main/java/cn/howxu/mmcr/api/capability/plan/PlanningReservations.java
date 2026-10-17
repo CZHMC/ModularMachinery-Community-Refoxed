@@ -15,7 +15,7 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class PlanningReservations {
-    private Map<Object, Map<Integer, ResourceReservation>> resources;
+    private Map<Object, Map<Object, ResourceReservation>> resources;
     private Map<Object, Map<Object, Long>> outputReservations;
     private Map<LongValueStorage, Long> values;
 
@@ -155,9 +155,9 @@ public final class PlanningReservations {
         PlanningReservations copy = new PlanningReservations();
         if (resources != null) {
             copy.resources = new IdentityHashMap<>();
-            for (Map.Entry<Object, Map<Integer, ResourceReservation>> entry : resources.entrySet()) {
-                Map<Integer, ResourceReservation> copiedSlots = new HashMap<>();
-                for (Map.Entry<Integer, ResourceReservation> slot : entry.getValue().entrySet()) {
+            for (Map.Entry<Object, Map<Object, ResourceReservation>> entry : resources.entrySet()) {
+                Map<Object, ResourceReservation> copiedSlots = new HashMap<>();
+                for (Map.Entry<Object, ResourceReservation> slot : entry.getValue().entrySet()) {
                     ResourceReservation source = slot.getValue();
                     ResourceReservation copied = new ResourceReservation();
                     copied.extracted = source.extracted;
@@ -191,17 +191,18 @@ public final class PlanningReservations {
 
     private ResourceReservation reservation(ResourceStorage<?> storage, int slot, boolean create) {
         Object identity = storage.reservationIdentity();
-        Map<Integer, ResourceReservation> bySlot = resources == null ? null : resources.get(identity);
+        Object address = storage.reservationSlot(slot);
+        Map<Object, ResourceReservation> bySlot = resources == null ? null : resources.get(identity);
         if (bySlot == null) {
             if (!create) return null;
             if (resources == null) resources = new IdentityHashMap<>();
             bySlot = new HashMap<>();
             resources.put(identity, bySlot);
         }
-        ResourceReservation reservation = bySlot.get(slot);
+        ResourceReservation reservation = bySlot.get(address);
         if (reservation == null && create) {
             reservation = new ResourceReservation();
-            bySlot.put(slot, reservation);
+            bySlot.put(address, reservation);
         }
         return reservation;
     }

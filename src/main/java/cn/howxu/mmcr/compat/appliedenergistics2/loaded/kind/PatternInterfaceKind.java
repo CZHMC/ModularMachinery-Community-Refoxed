@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
@@ -22,11 +21,7 @@ public final class PatternInterfaceKind implements PatternLogicKind {
 
     public static final PatternInterfaceKind INSTANCE = new PatternInterfaceKind();
 
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
-            AE2ResourceFamilies.ITEM.binding(IOType.OUTPUT, CapabilityDirections.bidirectional(),
-                    host -> ((PatternInterfaceBlockEntity) host).itemOutputStorage(), false, null),
-            AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.bidirectional(),
-                    host -> ((PatternInterfaceBlockEntity) host).fluidOutputStorage(), false, null)));
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), AE2ResourceFamilies.patternBindings());
 
     private PatternInterfaceKind() {
     }

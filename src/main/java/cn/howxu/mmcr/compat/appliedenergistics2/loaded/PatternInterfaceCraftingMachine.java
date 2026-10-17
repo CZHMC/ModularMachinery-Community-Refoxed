@@ -3,8 +3,6 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.implementations.blockentities.ICraftingMachine;
 import appeng.api.implementations.blockentities.PatternContainerGroup;
-import appeng.api.stacks.AEFluidKey;
-import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
@@ -12,16 +10,15 @@ import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestState;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -83,13 +80,15 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         try {
             PatternRequestState originalRequest = new PatternRequestState(inputHolders, 1);
             List<LaneRequest> laneRequests = new ArrayList<>();
+            List<AE2ResourceFamily<?>> families = AE2ResourceFamilies.all();
             PatternStartBatchReservation reservation = host.reservePatternStarts(outputs, batchSize, parallelism -> {
-                PatternRequestState requestState = new PatternRequestState(slice(inputHolders, parallelism, batchSize), 2);
-                PatternRequestResourceStorage<ItemResource> itemRequest = AE2ResourceFamilies.ITEM.patternRequestView(requestState);
-                PatternRequestResourceStorage<FluidResource> fluidRequest = AE2ResourceFamilies.FLUID.patternRequestView(requestState);
-                laneRequests.add(new LaneRequest(itemRequest, fluidRequest));
-                return List.of(new ItemBusCapability(itemRequest, IOType.INPUT),
-                        new FluidHatchCapability(fluidRequest, IOType.INPUT));
+                PatternRequestState requestState = new PatternRequestState(
+                        slice(inputHolders, parallelism, batchSize), families.size());
+                List<RequestView<?>> views = new ArrayList<>();
+                List<MachineCapability> capabilities = new ArrayList<>();
+                for (var family : families) addRequestView(family, requestState, views, capabilities);
+                laneRequests.add(new LaneRequest(views));
+                return List.copyOf(capabilities);
             });
             if (reservation.status() != PatternStartBatchReservation.Status.RESERVED
                     || reservation.parallelism() != batchSize) return false;
@@ -97,9 +96,9 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
             try (reservation) {
                 return reservation.commit(transaction -> {
                     for (LaneRequest request : laneRequests) {
-                        boolean itemsAccepted = request.itemRequest().accept(host.itemReturnStorage(), transaction);
-                        boolean fluidsAccepted = request.fluidRequest().accept(host.fluidReturnStorage(), transaction);
-                        if (!itemsAccepted || !fluidsAccepted) throw ReturnCapacityException.INSTANCE;
+                        for (RequestView<?> view : request.views()) {
+                            if (!view.accept(host, transaction)) throw ReturnCapacityException.INSTANCE;
+                        }
                     }
                     originalRequest.acceptAll(transaction);
                 });
@@ -138,8 +137,22 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         return first;
     }
 
-    private record LaneRequest(PatternRequestResourceStorage<ItemResource> itemRequest,
-                               PatternRequestResourceStorage<FluidResource> fluidRequest) {
+    private <R> void addRequestView(AE2ResourceFamily<R> family, PatternRequestState state,
+                                    List<RequestView<?>> views, List<MachineCapability> capabilities) {
+        PatternRequestResourceStorage<R> request = family.patternRequestView(state);
+        views.add(new RequestView<>(family, request));
+        capabilities.add(family.capabilityView(host, request, IOType.INPUT, false));
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record LaneRequest(List<RequestView<?>> views) {
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record RequestView<R>(AE2ResourceFamily<R> family, PatternRequestResourceStorage<R> request) {
+        boolean accept(PatternInterfaceBlockEntity host, TransactionContext transaction) {
+            return request.accept(host.returnStorage(family), transaction);
+        }
     }
 
     @Override
@@ -149,21 +162,21 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     private static boolean hasSupportedInputs(AEProcessingPattern pattern) {
         return pattern.getSparseInputs().stream().filter(stack -> stack != null).allMatch(stack ->
-                stack.amount() > 0L && (stack.what() instanceof AEItemKey || stack.what() instanceof AEFluidKey));
+                stack.amount() > 0L && AE2ResourceFamilies.supportsKey(stack.what()));
     }
 
     private static List<MachineOutput> outputs(AEProcessingPattern pattern) {
         List<MachineOutput> outputs = new ArrayList<>();
+        Map<AEKey, Long> lightningAmounts = new HashMap<>();
         for (GenericStack stack : pattern.getOutputs()) {
-            if (stack.amount() <= 0L || stack.amount() > Integer.MAX_VALUE) return null;
-            int amount = (int) stack.amount();
-            if (stack.what() instanceof AEItemKey item) {
-                outputs.add(new MachineOutput.ItemOutput(item.toStack(amount), 1F));
-            } else if (stack.what() instanceof AEFluidKey fluid) {
-                outputs.add(new MachineOutput.FluidOutput(fluid.toStack(amount), 1F));
-            } else {
-                return null;
+            MachineOutput output = AE2ResourceFamilies.patternOutput(stack).orElse(null);
+            if (output == null) return null;
+            if (output instanceof LightningOutput) {
+                long combined = lightningAmounts.getOrDefault(stack.what(), 0L) + stack.amount();
+                if (combined > Integer.MAX_VALUE) return null;
+                lightningAmounts.put(stack.what(), combined);
             }
+            outputs.add(output);
         }
         return List.copyOf(outputs);
     }

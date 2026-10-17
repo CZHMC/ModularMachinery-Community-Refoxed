@@ -17,9 +17,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 /** @author howxu <dev@howxu.cn> */
 public final class ExtendedInputInterfaceKind implements InterfaceLogicKind {
     public static final ExtendedInputInterfaceKind INSTANCE = new ExtendedInputInterfaceKind();
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(
-            AE2ResourceFamilies.ITEM.inputBinding(host -> host.itemStorage(), false),
-            AE2ResourceFamilies.FLUID.inputBinding(host -> host.fluidStorage(), false)));
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), AE2ResourceFamilies.inputBindings());
     private ExtendedInputInterfaceKind() {}
     @Override public String id() { return "eae_me_extended_input_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }

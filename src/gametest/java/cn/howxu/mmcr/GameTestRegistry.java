@@ -315,6 +315,18 @@ public final class GameTestRegistry {
         register(event, "mekanism_formed_port_reflects_texture_change", 100,
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
         if (ModList.get().isLoaded("ae2")) {
+            if (ModList.get().isLoaded("ae2lt")) {
+                register(event, "ae2lt_stocking_rebind_watcher_transaction", 160,
+                        helper -> new LightningInterfaceGameTest().stockingRebindWatcherAndTransaction(helper));
+                register(event, "ae2lt_output_budget_async_lifecycle", 160,
+                        helper -> new LightningInterfaceGameTest().outputBudgetAndAsyncLifecycle(helper));
+                register(event, "ae2lt_local_interface_native_persistence", 40,
+                        helper -> new LightningInterfaceGameTest().localInterfacesPersistNativeKeys(helper));
+                register(event, "ae2lt_native_pattern_admission_persistence", 160,
+                        helper -> new LightningPatternGameTest().nativePatternAdmissionAndPersistence(helper));
+                register(event, "ae2lt_mixed_lane_long_return", 40,
+                        helper -> new LightningPatternGameTest().mixedLaneRollbackLongPersistenceAndNativeReturn(helper));
+            }
             register(event, "ae2_pattern_return_long_balances", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));
             register(event, "ae2_pattern_return_components_persistence", 40,

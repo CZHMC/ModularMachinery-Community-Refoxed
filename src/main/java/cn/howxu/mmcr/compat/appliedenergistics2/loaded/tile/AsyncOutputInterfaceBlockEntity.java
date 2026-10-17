@@ -11,6 +11,7 @@ import appeng.core.settings.TickRates;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.AsyncOutputResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AsyncOutputService;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -19,6 +20,8 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Supplier;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Async AE2 interface output host backed by a transient in-memory service.
@@ -32,8 +35,7 @@ import java.util.function.Supplier;
  */
 public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEntity {
     private final AsyncOutputService service = new AsyncOutputService();
-    private final AsyncOutputResourceStorage<ItemResource> itemStorage;
-    private final AsyncOutputResourceStorage<FluidResource> fluidStorage;
+    private final Map<AE2ResourceFamily<?>, AsyncOutputResourceStorage<?>> resourceStorages = new LinkedHashMap<>();
     final AsyncOutputTicker asyncTicker;
 
     public AsyncOutputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
@@ -50,20 +52,25 @@ public final class AsyncOutputInterfaceBlockEntity extends OutputInterfaceBaseBl
                 ? IActionSource.ofMachine(this) : actionSource;
         asyncTicker = new AsyncOutputTicker();
         mainNode.addService(IGridTickable.class, asyncTicker);
-        itemStorage = AE2ResourceFamilies.ITEM.asyncOutputView(effectiveNetworkSupplier,
-                service, effectiveActionSource, this::wakeAsyncTicker);
-        fluidStorage = AE2ResourceFamilies.FLUID.asyncOutputView(effectiveNetworkSupplier,
-                service, effectiveActionSource, this::wakeAsyncTicker);
+        for (var family : AE2ResourceFamilies.all()) {
+            resourceStorages.put(family, family.asyncOutputView(effectiveNetworkSupplier,
+                    service, effectiveActionSource, this::wakeAsyncTicker));
+        }
     }
 
     @Override
     public AsyncOutputResourceStorage<ItemResource> itemStorage() {
-        return itemStorage;
+        return resourceStorage(AE2ResourceFamilies.ITEM);
     }
 
     @Override
     public AsyncOutputResourceStorage<FluidResource> fluidStorage() {
-        return fluidStorage;
+        return resourceStorage(AE2ResourceFamilies.FLUID);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <R> AsyncOutputResourceStorage<R> resourceStorage(AE2ResourceFamily<R> family) {
+        return (AsyncOutputResourceStorage<R>) resourceStorages.get(family);
     }
 
     @Override

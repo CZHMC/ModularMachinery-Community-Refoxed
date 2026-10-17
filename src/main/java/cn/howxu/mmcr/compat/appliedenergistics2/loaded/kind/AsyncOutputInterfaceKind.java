@@ -21,9 +21,7 @@ public final class AsyncOutputInterfaceKind implements InterfaceLogicKind {
 
     public static final AsyncOutputInterfaceKind INSTANCE = new AsyncOutputInterfaceKind();
 
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), List.of(
-            AE2ResourceFamilies.ITEM.outputBinding(host -> ((AsyncOutputInterfaceBlockEntity) host).itemStorage(), false),
-            AE2ResourceFamilies.FLUID.outputBinding(host -> ((AsyncOutputInterfaceBlockEntity) host).fluidStorage(), false)));
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), AE2ResourceFamilies.asyncOutputBindings());
 
     private AsyncOutputInterfaceKind() {}
 

@@ -21,6 +21,15 @@ public interface ResourceStorage<R> extends CapabilityStorage {
     }
 
     /**
+     * Stable address within {@link #reservationIdentity()}, compared by equality.
+     * Views that reorder or filter the same storage must return the underlying address,
+     * rather than their local slot index.
+     */
+    default Object reservationSlot(int slot) {
+        return slot;
+    }
+
+    /**
      * Returns the resource in a slot, or {@code null} for an empty slot.
      */
     @Nullable

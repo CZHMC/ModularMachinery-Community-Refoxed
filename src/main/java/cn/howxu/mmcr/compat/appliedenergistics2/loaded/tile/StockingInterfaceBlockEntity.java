@@ -10,7 +10,6 @@ import appeng.api.networking.IStackWatcher;
 import appeng.api.networking.storage.IStorageWatcherNode;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEFluidKey;
-import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import appeng.api.util.AECableType;
 import appeng.api.storage.MEStorage;
@@ -27,6 +26,7 @@ import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
@@ -54,6 +54,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * MMCR host for an AE2 stocking interface.
@@ -88,8 +90,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
 
                 @Override
                 public void onStackChange(AEKey what, long amount) {
-                    itemStorage.onStackChange(what, amount);
-                    fluidStorage.onStackChange(what, amount);
+                    resourceStorages.values().forEach(storage -> storage.onStackChange(what, amount));
                     updateStorageMirror(what, amount);
                     notifyStorageChanged();
                     notifyControllerOfInputChange();
@@ -97,10 +98,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
             });
     private final IManagedGridNode uiNode = GridHelper.createManagedNode(this, UI_NODE_LISTENER);
     private final InterfaceLogic logic;
-    private final LiveResourceStorage<ItemResource> itemStorage = new LiveResourceStorage<>(
-            AE2ResourceFamilies.ITEM.stockingInputView(NullInventory.of(), List.of()));
-    private final LiveResourceStorage<FluidResource> fluidStorage = new LiveResourceStorage<>(
-            AE2ResourceFamilies.FLUID.stockingInputView(NullInventory.of(), List.of()));
+    private final Map<AE2ResourceFamily<?>, LiveResourceStorage<?>> resourceStorages = new LinkedHashMap<>();
     @Nullable
     private IStackWatcher storageWatcher;
     private long storageMirrorRefreshes;
@@ -112,6 +110,10 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         this.kind = kind;
         InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
         logic = logicKind.createInterfaceLogic(uiNode, this, AEBlocks.INTERFACE.asItem());
+        for (var family : AE2ResourceFamilies.all()) {
+            resourceStorages.put(family, new LiveResourceStorage<>(
+                    family.stockingInputView(NullInventory.of(), List.of())));
+        }
         configureStorageMirrorCapacity();
     }
 
@@ -194,12 +196,17 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public ResourceStorage<ItemResource> itemStorage() {
-        return itemStorage;
+        return resourceStorage(AE2ResourceFamilies.ITEM);
     }
 
     @Override
     public ResourceStorage<FluidResource> fluidStorage() {
-        return fluidStorage;
+        return resourceStorage(AE2ResourceFamilies.FLUID);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <R> ResourceStorage<R> resourceStorage(AE2ResourceFamily<R> family) {
+        return (ResourceStorage<R>) resourceStorages.get(family);
     }
 
     @Override
@@ -280,8 +287,9 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         if (storage instanceof ConfigInventoryAccessor accessor) {
             accessor.mmcr$setAllowOverstacking(true);
         }
-        storage.setCapacity(AEKeyType.items(), Long.MAX_VALUE);
-        storage.setCapacity(AEKeyType.fluids(), Long.MAX_VALUE);
+        for (var family : AE2ResourceFamilies.all()) {
+            storage.setCapacity(family.adapter().keyType(), Long.MAX_VALUE);
+        }
     }
 
     private void clearNetworkWatcher() {
@@ -293,8 +301,12 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         IGrid grid = mainNode.getGrid();
         MEStorage storage = grid == null ? NullInventory.of() : grid.getStorageService().getInventory();
         List<AEKey> keys = configuredKeys();
-        itemStorage.rebind(AE2ResourceFamilies.ITEM.stockingInputView(storage, keys));
-        fluidStorage.rebind(AE2ResourceFamilies.FLUID.stockingInputView(storage, keys));
+        for (var family : AE2ResourceFamilies.all()) rebind(family, storage, keys);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> void rebind(AE2ResourceFamily<R> family, MEStorage storage, List<AEKey> keys) {
+        ((LiveResourceStorage<R>) resourceStorages.get(family)).rebind(family.stockingInputView(storage, keys));
     }
 
     private List<AEKey> configuredKeys() {
@@ -334,8 +346,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
                 AEKey key = logic.getConfig().getKey(slot);
                 long amount = reportAmounts && key != null ? cachedInventory.get(key) : 0L;
                 if (key != null) {
-                    itemStorage.onStackChange(key, amount);
-                    fluidStorage.onStackChange(key, amount);
+                    resourceStorages.values().forEach(view -> view.onStackChange(key, amount));
                 }
                 storage.setStack(slot, key == null || amount <= 0L ? null : new GenericStack(key, amount));
             }
@@ -409,6 +420,11 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         @Override
         public Object reservationIdentity() {
             return delegate.reservationIdentity();
+        }
+
+        @Override
+        public Object reservationSlot(int slot) {
+            return delegate.reservationSlot(slot);
         }
 
         @Override

@@ -7,6 +7,8 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.AEKeyTypesInternal;
+import appeng.api.stacks.GenericStack;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import appeng.me.storage.NullInventory;
@@ -75,6 +77,25 @@ class AE2ResourceFamilyTest {
                 .contains(fluid);
         assertThat(ItemResourceStorage.adapter()).isSameAs(AE2ResourceFamilies.ITEM.adapter());
         assertThat(FluidResourceStorage.adapter()).isSameAs(AE2ResourceFamilies.FLUID.adapter());
+    }
+
+    @Test
+    void supportedPatternKeysPreserveExistingItemAndFluidOutputAmounts() {
+        var item = AEItemKey.of(Items.IRON_INGOT);
+        var fluid = AEFluidKey.of(Fluids.WATER);
+        assertThat(AE2ResourceFamilies.supportsKey(item)).isTrue();
+        assertThat(AE2ResourceFamilies.supportsKey(fluid)).isTrue();
+        assertThat(AE2ResourceFamilies.patternOutput(new GenericStack(item, 7L))).get()
+                .isInstanceOfSatisfying(MachineOutput.ItemOutput.class, output -> {
+                    assertThat(output.stack().getItem()).isEqualTo(Items.IRON_INGOT);
+                    assertThat(output.stack().getCount()).isEqualTo(7);
+                });
+        assertThat(AE2ResourceFamilies.patternOutput(new GenericStack(fluid, 2_000L))).get()
+                .isInstanceOfSatisfying(MachineOutput.FluidOutput.class, output -> {
+                    assertThat(output.stack().getFluid()).isEqualTo(Fluids.WATER);
+                    assertThat(output.stack().getAmount()).isEqualTo(2_000);
+                });
+        assertThat(AE2ResourceFamilies.patternOutput(new GenericStack(item, 2_147_483_648L))).isEmpty();
     }
 
     @Test

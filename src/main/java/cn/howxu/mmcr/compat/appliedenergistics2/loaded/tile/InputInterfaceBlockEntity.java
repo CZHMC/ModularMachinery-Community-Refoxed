@@ -18,6 +18,7 @@ import appeng.menu.locator.MenuHostLocator;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
@@ -43,6 +44,8 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * MMCR host for one AE2 interface logic storage.
@@ -67,8 +70,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
             .setInWorldNode(true);
     private final InterfaceLogic logic;
     private final GenericStack[] networkOwned;
-    private final ResourceStorage<ItemResource> itemStorage;
-    private final ResourceStorage<FluidResource> fluidStorage;
+    private final Map<AE2ResourceFamily<?>, ResourceStorage<?>> resourceStorages = new LinkedHashMap<>();
     private CapabilitySnapshot capabilitySnapshot;
     private boolean loadingProvenance;
     private int interfaceMenuPage;
@@ -79,8 +81,9 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
         logic = logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
         networkOwned = new GenericStack[logic.getStorage().size()];
-        itemStorage = AE2ResourceFamilies.ITEM.standardInputView(logic.getStorage());
-        fluidStorage = AE2ResourceFamilies.FLUID.standardInputView(logic.getStorage());
+        for (var family : AE2ResourceFamilies.all()) {
+            resourceStorages.put(family, family.standardInputView(logic.getStorage()));
+        }
     }
 
     @Override
@@ -199,12 +202,17 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public ResourceStorage<ItemResource> itemStorage() {
-        return itemStorage;
+        return resourceStorage(AE2ResourceFamilies.ITEM);
     }
 
     @Override
     public ResourceStorage<FluidResource> fluidStorage() {
-        return fluidStorage;
+        return resourceStorage(AE2ResourceFamilies.FLUID);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <R> ResourceStorage<R> resourceStorage(AE2ResourceFamily<R> family) {
+        return (ResourceStorage<R>) resourceStorages.get(family);
     }
 
     @Override

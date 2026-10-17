@@ -29,6 +29,7 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.OutputResourceStorage;
@@ -62,6 +63,8 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongFunction;
 
@@ -86,8 +89,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final PatternProviderLogic logic;
     private final PatternInterfaceCraftingMachine craftingMachine = new PatternInterfaceCraftingMachine(this);
     private final AtomicInteger nextPatternController = new AtomicInteger();
-    private final OutputResourceStorage<ItemResource> itemOutputStorage;
-    private final OutputResourceStorage<FluidResource> fluidOutputStorage;
+    private final Map<AE2ResourceFamily<?>, OutputResourceStorage<?>> outputStorages = new LinkedHashMap<>();
+    private final Map<AE2ResourceFamily<?>, PatternReturnResourceStorage<?>> returnStorages = new LinkedHashMap<>();
     private final CapabilitySnapshot capabilitySnapshot;
     private boolean returnInventoryNotificationPending;
 
@@ -97,10 +100,11 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         PatternLogicKind logicKind = (PatternLogicKind) kind;
         logic = logicKind.createPatternLogic(mainNode, this);
         // PatternProviderLogic must return completed pattern outputs to the grid itself so AE2 can settle the craft.
-        itemOutputStorage = AE2ResourceFamilies.ITEM.patternOutputView(logic.getReturnInv(), () -> null,
-                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
-        fluidOutputStorage = AE2ResourceFamilies.FLUID.patternOutputView(logic.getReturnInv(), () -> null,
-                IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained);
+        for (var family : AE2ResourceFamilies.all()) {
+            outputStorages.put(family, family.patternOutputView(logic.getReturnInv(), () -> null,
+                    IActionSource.ofMachine(this), this::onNativeReturnInventoryDrained));
+            returnStorages.put(family, family.patternReturnView(logic.getReturnInv()));
+        }
         capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
                 .map(this::createCapability)
                 .toList());
@@ -334,19 +338,29 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     public OutputResourceStorage<ItemResource> itemOutputStorage() {
-        return itemOutputStorage;
+        return resourceStorage(AE2ResourceFamilies.ITEM);
     }
 
     public OutputResourceStorage<FluidResource> fluidOutputStorage() {
-        return fluidOutputStorage;
+        return resourceStorage(AE2ResourceFamilies.FLUID);
     }
 
     public PatternReturnResourceStorage<ItemResource> itemReturnStorage() {
-        return AE2ResourceFamilies.ITEM.patternReturnView(logic.getReturnInv());
+        return returnStorage(AE2ResourceFamilies.ITEM);
     }
 
     public PatternReturnResourceStorage<FluidResource> fluidReturnStorage() {
-        return AE2ResourceFamilies.FLUID.patternReturnView(logic.getReturnInv());
+        return returnStorage(AE2ResourceFamilies.FLUID);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <R> OutputResourceStorage<R> resourceStorage(AE2ResourceFamily<R> family) {
+        return (OutputResourceStorage<R>) outputStorages.get(family);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <R> PatternReturnResourceStorage<R> returnStorage(AE2ResourceFamily<R> family) {
+        return (PatternReturnResourceStorage<R>) returnStorages.get(family);
     }
 
     /** Notifies linked controllers after AE2's native return inventory drains. */

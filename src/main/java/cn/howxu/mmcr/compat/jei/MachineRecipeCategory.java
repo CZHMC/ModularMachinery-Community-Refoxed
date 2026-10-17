@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
@@ -142,6 +144,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         addRegion(builder, recipe, layout.outputs(), false);
         addLevelRequirementSlots(builder, layout, recipe, Minecraft.getInstance().font::width);
         addTransferSlots(builder, recipe);
+        LightningJeiDisplay.addInvisibleIngredients(builder, recipe);
         builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
     }
 
@@ -192,6 +195,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         if (recipe.outputHeat().isPresent()) {
             drawHeatLine(MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
                     guiGraphics, textX, (int) (y / TEXT_SCALE));
+            y += TEXT_LINE_SPACING;
+        }
+        y = layout.lightningTextY(recipe);
+        int lightningWidth = (int) ((getWidth() - layout.durationTextX() * 2) / TEXT_SCALE);
+        for (LightningRequirement lightning : LightningJeiDisplay.requirements(recipe)) {
+            LightningJeiDisplay.drawLine(guiGraphics, lightning, textX, (int) (y / TEXT_SCALE), lightningWidth);
             y += TEXT_LINE_SPACING;
         }
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);

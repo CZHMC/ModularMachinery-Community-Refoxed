@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -1330,7 +1331,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         for (CraftingRuntime lane : factory.activeRuntimes()) {
             for (MachineOutputAmount output : scaleOutputs(lane.activeOutputs(), lane.parallelism())) {
                 MachineOutput owned = output.output();
-                MachineOutput.AggregationKey key = MachineOutput.aggregationKey(owned);
+                MachineOutput.AggregationKey key = owned instanceof LightningOutput
+                        ? new MachineOutput.AggregationKey(owned.outputType(), null, null)
+                        : MachineOutput.aggregationKey(owned);
                 aggregates.computeIfAbsent(key, k -> new Aggregate(owned))
                         .absorb(owned, output.amount());
             }
@@ -4780,6 +4783,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private static boolean samePatternOutput(MachineOutput expected, MachineOutput actual) {
+        if (expected instanceof LightningOutput expectedLightning && actual instanceof LightningOutput actualLightning) {
+            return expectedLightning.outputType() == actualLightning.outputType()
+                    && expectedLightning.tier() == actualLightning.tier()
+                    && expectedLightning.amount() == actualLightning.amount();
+        }
         if (expected instanceof MachineOutput.ItemOutput expectedItem
                 && actual instanceof MachineOutput.ItemOutput actualItem) {
             ItemStack expectedStack = expectedItem.resolvedStack();

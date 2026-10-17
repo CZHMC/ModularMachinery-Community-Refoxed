@@ -15,6 +15,7 @@ import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
+import java.util.stream.Stream;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -23,9 +24,9 @@ import net.neoforged.neoforge.transfer.ResourceHandler;
 /** @author howxu <dev@howxu.cn> */
 public final class OversizeOutputInterfaceKind implements InterfaceLogicKind {
     public static final OversizeOutputInterfaceKind INSTANCE = new OversizeOutputInterfaceKind();
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), List.of(
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), Stream.concat(Stream.of(
             AE2ResourceFamilies.ITEM.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).itemStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).itemStorage(), false, true))),
-            AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).fluidStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))));
+            AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).fluidStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))), AE2ResourceFamilies.additionalOutputBindings().stream()).toList());
     private OversizeOutputInterfaceKind() {}
     @Override public String id() { return "eae_me_oversize_output_interface"; }
     @Override public IOType ioType() { return IOType.OUTPUT; }

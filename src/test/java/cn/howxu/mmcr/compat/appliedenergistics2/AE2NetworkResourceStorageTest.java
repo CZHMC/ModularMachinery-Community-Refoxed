@@ -8,6 +8,7 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.FluidNetworkResourceStorage;
@@ -309,6 +310,51 @@ class AE2NetworkResourceStorageTest {
         }
         assertThat(network.amount(ironKey)).isZero();
         assertThat(network.modulateExtractCalls()).isEqualTo(2);
+    }
+
+    @Test
+    void itemAndFluidViewsAtTheSameLocalSlotReserveIndependentNetworkKeys() {
+        var iron = ItemResource.of(Items.IRON_INGOT);
+        var water = FluidResource.of(Fluids.WATER);
+        var ironKey = AEItemKey.of(iron);
+        var waterKey = AEFluidKey.of(water);
+        var network = new FakeMEStorage(ironKey, 5L);
+        network.setAmount(waterKey, 8L);
+        var items = new ItemNetworkResourceStorage(network, List.of(ironKey));
+        var fluids = new FluidNetworkResourceStorage(network, List.of(waterKey));
+        items.onStackChange(ironKey, 5L);
+        fluids.onStackChange(waterKey, 8L);
+        var reservations = new PlanningReservations();
+        assertThat(reservations.reserveExtract(items, 0, iron, 5L)).isTrue();
+        assertThat(reservations.reserveExtract(fluids, 0, water, 8L)).isTrue();
+        try (var transaction = Transaction.openRoot()) {
+            assertThat(items.extract(0, iron, 5L, transaction)).isEqualTo(5L);
+            assertThat(fluids.extract(0, water, 8L, transaction)).isEqualTo(8L);
+            assertThat(network.amount(ironKey)).isEqualTo(5L);
+            assertThat(network.amount(waterKey)).isEqualTo(8L);
+            transaction.commit();
+        }
+        assertThat(network.amount(ironKey)).isZero();
+        assertThat(network.amount(waterKey)).isZero();
+    }
+
+    @Test
+    void reorderedAndDuplicateItemSlotsShareOneReservationBudget() {
+        var iron = ItemResource.of(Items.IRON_INGOT);
+        var ironKey = AEItemKey.of(iron);
+        var network = new FakeMEStorage(ironKey, 60L);
+        var first = new ItemNetworkResourceStorage(network, List.of(ironKey, ironKey));
+        var second = new ItemNetworkResourceStorage(network, List.of(AEItemKey.of(Items.GOLD_INGOT), ironKey));
+        first.onStackChange(ironKey, 60L);
+        second.onStackChange(ironKey, 60L);
+        var reservations = new PlanningReservations();
+        assertThat(reservations.reserveExtract(first, 0, iron, 40L)).isTrue();
+        assertThat(reservations.amount(first, 1)).isEqualTo(20L);
+        assertThat(reservations.amount(second, 1)).isEqualTo(20L);
+        assertThat(reservations.reserveExtract(second, 1, iron, 40L)).isFalse();
+        assertThat(reservations.reserveExtract(first, 1, iron, 20L)).isTrue();
+        assertThat(reservations.amount(second, 1)).isZero();
+        assertThat(network.amount(ironKey)).isEqualTo(60L);
     }
 
     /**

@@ -30,6 +30,7 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
@@ -99,6 +100,7 @@ public class AE2StockingInterfaceGameTest {
         port.getInterfaceLogic().getConfig().setStack(1,
                 new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L));
         List<IGridConnection> connections = new ArrayList<>();
+        AtomicLong refreshesAfterCommittedExtraction = new AtomicLong();
 
         helper.runAtTickTime(2, () -> {
             helper.assertTrue(port.getMainNode().getNode() != null,
@@ -194,12 +196,11 @@ public class AE2StockingInterfaceGameTest {
             menu.setCarried(ItemStack.EMPTY);
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == 2,
-                    "Stocking interface exposes item and fluid MMCR capabilities");
+            helper.assertTrue(snapshot.capabilities().size() == AE2ResourceFamilies.all().size(),
+                    "Stocking interface exposes one MMCR capability per supported family");
             for (MachineCapability capability : snapshot.capabilities()) {
-                helper.assertTrue(capability.type().id().equals(PortFamilyIds.ITEM)
-                                || capability.type().id().equals(PortFamilyIds.FLUID),
-                        "Stocking capability has an item or fluid family");
+                helper.assertTrue(AE2ResourceFamilies.all().stream().anyMatch(family -> family.capabilityType().equals(capability.type())),
+                        "Stocking capability belongs to a supported family");
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "Stocking capability does not expose TransferFacet");
             }
@@ -261,17 +262,23 @@ public class AE2StockingInterfaceGameTest {
                                 Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT - 1_000L,
                         "Fluid MEStorage quantity is deducted after transaction commit");
             }
+            refreshesAfterCommittedExtraction.set(port.storageMirrorRefreshes());
         });
 
         helper.runAtTickTime(12, () -> {
-            helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(0)).amount() == ITEM_AMOUNT - 3L,
-                    "Item watcher display updates on the next tick without a full scan");
-            helper.assertTrue(Objects.requireNonNull(port.getInterfaceLogic().getStorage().getStack(1)).amount() == FLUID_AMOUNT - 1_000L,
-                    "Fluid watcher display updates on the next tick without a full scan");
             var items = port.itemStorage();
             var fluids = port.fluidStorage();
             Object originalNetwork = items.reservationIdentity();
             helper.startSequence()
+                    .thenWaitUntil(() -> {
+                        var mirror = port.getInterfaceLogic().getStorage();
+                        helper.assertTrue(mirror.getAmount(0) == ITEM_AMOUNT - 3L && mirror.getAmount(1) == FLUID_AMOUNT - 1_000L
+                                        && items.amount(0) == ITEM_AMOUNT - 3L && fluids.amount(1) == FLUID_AMOUNT - 1_000L,
+                                "Server-end watcher updates both delegates and mirror; mirror=" + mirror.getAmount(0)
+                                        + "/" + mirror.getAmount(1) + ", views=" + items.amount(0) + "/" + fluids.amount(1));
+                    })
+                    .thenExecute(() -> helper.assertTrue(port.storageMirrorRefreshes() == refreshesAfterCommittedExtraction.get(),
+                            "Committed extraction reaches the mirror through incremental watchers, not a full scan"))
                     .thenExecute(() -> {
                         port.getInterfaceLogic().getConfig().setStack(0,
                                 new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L));
