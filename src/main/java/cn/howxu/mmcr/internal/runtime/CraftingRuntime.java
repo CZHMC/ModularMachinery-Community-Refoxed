@@ -88,6 +88,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
 import java.util.stream.IntStream;
 
 /**
@@ -662,6 +663,21 @@ public final class CraftingRuntime {
     public @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
                                                        List<MachineCapability> requestCapabilities,
                                                        @Nullable BlockPos requestSource) {
+        return preparePatternStart(recipe, requestedParallelism, requestCapabilities, requestSource, null);
+    }
+
+    /** Rebuilds transient inputs at most at q, the admitted p, and finally one copy. */
+    public @Nullable PreparedStart preparePendingPatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                              LongFunction<List<MachineCapability>> capabilitiesForParallelism,
+                                                              @Nullable BlockPos requestSource) {
+        if (capabilitiesForParallelism == null) return null;
+        return preparePatternStart(recipe, requestedParallelism, null, requestSource, capabilitiesForParallelism);
+    }
+
+    private @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                        List<MachineCapability> requestCapabilities,
+                                                        @Nullable BlockPos requestSource,
+                                                        @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
         if (recipe == null || requestedParallelism <= 0 || active() || patternStartReserved
                 || pendingPatternStart != null || !patternOwnerCurrent()) return null;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
@@ -717,30 +733,58 @@ public final class CraftingRuntime {
         runtime = current;
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList();
-        List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
-        CraftingContext patternContext = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime));
-        if (requestSource == null) {
-            if (requestCapabilities != null && !requestCapabilities.isEmpty()) {
-                if (patternContext.inputRouting() != null) return null;
-                patternContext = legacyPatternContext(runtime, requestCapabilities);
+        long viewParallelism = effectiveParallelism;
+        for (int attempt = 0; attempt < (capabilitiesForParallelism == null ? 1 : 3); attempt++) {
+            if (capabilitiesForParallelism != null) {
+                requestCapabilities = capabilitiesForParallelism.apply(viewParallelism);
+                if (requestCapabilities == null) return null;
             }
-        } else {
-            if (patternContext.inputRouting() != null && patternContext.inputRouting().inputPorts().stream()
-                    .noneMatch(port -> port.position().equals(requestSource))) return null;
-            patternContext = patternContext.forPatternStart(requestCapabilities, requestSource);
+            List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
+            CraftingContext patternContext = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime));
+            if (requestSource == null) {
+                if (requestCapabilities != null && !requestCapabilities.isEmpty()) {
+                    if (patternContext.inputRouting() != null) return null;
+                    patternContext = legacyPatternContext(runtime, requestCapabilities);
+                }
+            } else {
+                if (patternContext.inputRouting() != null && patternContext.inputRouting().inputPorts().stream()
+                        .noneMatch(port -> port.position().equals(requestSource))) return null;
+                patternContext = patternContext.forPatternStart(requestCapabilities, requestSource);
+            }
+            PlanningResult result = patternContext.planInputs(startRequirements(requirements, facets), viewParallelism,
+                    Set.of(), Set.of());
+            CraftingPlan plan = result.plan();
+            if (capabilitiesForParallelism != null
+                    && (!result.successful() || plan == null || plan.parallelism() != viewParallelism)) {
+                if (viewParallelism == 1L) return null;
+                viewParallelism = attempt == 0 && result.successful() && plan != null
+                        && plan.parallelism() > 0L && plan.parallelism() < viewParallelism ? plan.parallelism() : 1L;
+                continue;
+            }
+            if (!result.successful() || plan == null) return null;
+            List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
+            if (prefetches == null) {
+                if (capabilitiesForParallelism == null || viewParallelism == 1L || attempt >= 2) return null;
+                viewParallelism = 1L;
+                continue;
+            }
+            PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches);
+            if (capabilitiesForParallelism != null && (!startAttemptCurrent(lifecycle, originalLedger)
+                    || !patternOwnerCurrent() || pendingPatternStart != null || pendingPaymentStart != null
+                    || patternStartReserved || !Objects.equals(domain, controller.resourceDomain())
+                    || !preparedStartCurrent(prepared)
+                    || requestSource != null && !controller.currentRuntimeSnapshot().linkedPortPositions().contains(requestSource))) {
+                releaseUnpaidPrefetches(prefetches);
+                return null;
+            }
+            pendingPatternStart = prepared;
+            pendingPatternSource = requestSource == null ? null : requestSource.immutable();
+            pendingPatternDomain = domain;
+            pendingPatternLifecycle = lifecycle;
+            ledger = new RecipeCommitLedger();
+            return pendingPatternStart;
         }
-        PlanningResult result = patternContext.planInputs(startRequirements(requirements, facets), effectiveParallelism,
-                Set.of(), Set.of());
-        CraftingPlan plan = result.plan();
-        if (!result.successful() || plan == null) return null;
-        List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
-        if (prefetches == null) return null;
-        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches);
-        pendingPatternSource = requestSource == null ? null : requestSource.immutable();
-        pendingPatternDomain = domain;
-        pendingPatternLifecycle = lifecycle;
-        ledger = new RecipeCommitLedger();
-        return pendingPatternStart;
+        return null;
     }
 
     public boolean reservePatternStart() {
@@ -2809,6 +2853,17 @@ public final class CraftingRuntime {
     /** Returns outputs using the same runtime modifier context as pattern-start preparation. */
     public List<MachineOutput> runtimeMachineOutputs(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
         return recipe.runtimeMachineOutputs(contextModifiers(runtime));
+    }
+
+    /** Resolves candidate limits and duration without beforeStart, planning, or reserving a slot. */
+    public @Nullable EffectiveRecipe effectivePatternRecipe(MachineRecipe recipe) {
+        if (recipe == null || !patternOwnerCurrent() || !recipeBelongsToMachine(recipe)) return null;
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        if (!runtime.structure().formed() || !runtime.structure().structureAreaLoaded() || controller.isRedstonePaused()
+                || recipeBehavior(runtime) == null
+                || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
+                || !controller.recipesForMachine().contains(recipe)) return null;
+        return resolve(recipe, runtime);
     }
 
     private @Nullable HolderLookup.Provider registryAccess() {

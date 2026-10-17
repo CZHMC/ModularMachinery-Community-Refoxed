@@ -66,6 +66,11 @@ public final class PatternStartReservation implements AutoCloseable {
     }
 
     long preparedParallelism() {
+        return parallelism();
+    }
+
+    /** Actual copies admitted by the prepared plan, or zero when unavailable. */
+    public long parallelism() {
         return preparedStart == null ? 0L : preparedStart.plan().parallelism();
     }
 

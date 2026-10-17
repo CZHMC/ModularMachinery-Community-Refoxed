@@ -18,6 +18,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.PatternInterfaceMenu;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue.OfferLimits;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -51,6 +52,59 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author howxu <dev@howxu.cn>
  */
 public class PatternReturnInventoryGameTest {
+    public void pendingQueueLongBalancesRollbackAndPersistence(GameTestHelper helper) {
+        var host = place(helper);
+        var queue = host.pendingPatterns();
+        AEItemKey iron = variant(helper, 700);
+        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
+        KeyCounter items = new KeyCounter();
+        items.add(iron, Long.MAX_VALUE / 2L);
+        items.add(gold, Long.MAX_VALUE / 2L);
+        KeyCounter[] inputs = {items};
+        var definition = AEItemKey.of(Items.PAPER);
+        var outputs = List.of(new GenericStack(AEItemKey.of(Items.DIAMOND), 1L));
+        var limits = new OfferLimits(3L, 3L);
+        long now = helper.getLevel().getGameTime();
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertTrue(queue.offer(definition, outputs, inputs, limits, now, transaction),
+                    "An exact long template is provisionally admitted");
+        }
+        helper.assertTrue(queue.isEmpty() && queue.committedRevision() == 0L,
+                "Root rollback restores queue ownership without emitting a committed admission");
+        for (int copy = 0; copy < 2; copy++) {
+            try (Transaction transaction = Transaction.openRoot()) {
+                helper.assertTrue(queue.offer(definition, outputs, inputs, limits, now, transaction),
+                        "Each complete key independently fits its long budget");
+                transaction.commit();
+            }
+        }
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertTrue(!queue.offer(definition, outputs, inputs, limits, now, transaction),
+                    "Per-key multiplication overflow rejects a third copy before changing queue state");
+            transaction.commit();
+        }
+        items.add(iron, 1L);
+        helper.assertTrue(queue.totalCopies() == 2L && queue.groups().size() == 1
+                        && queue.groups().getFirst().inputs(2L)[0].get(iron) == Long.MAX_VALUE - 1L
+                        && queue.groups().getFirst().inputs(2L)[0].get(gold) == Long.MAX_VALUE - 1L
+                        && host.getLogic().getReturnInv().isEmpty(),
+                "Compressed private ownership is independent of caller mutations and cross-resource totals");
+        var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+        host.saveAdditional(saved);
+        var restored = PatternInterfaceKind.INSTANCE.entityFactory().create(helper.absolutePos(new BlockPos(2, 0, 0)),
+                host.getBlockState());
+        restored.setLevel(helper.getLevel());
+        restored.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING,
+                helper.getLevel().registryAccess(), saved.buildResult()));
+        var restoredInputs = restored.pendingPatterns().groups().getFirst().inputs(2L)[0];
+        helper.assertTrue(restored.pendingPatterns().totalCopies() == 2L
+                        && restoredInputs.get(iron) == Long.MAX_VALUE - 1L
+                        && restoredInputs.get(gold) == Long.MAX_VALUE - 1L,
+                "Queue persistence retains complete component keys and exact compressed long balances");
+        restored.onChunkUnloaded();
+        helper.succeed();
+    }
+
     public void nativeSlotsAndExactLongBalances(GameTestHelper helper) {
         var host = place(helper);
         var inventory = host.getLogic().getReturnInv();

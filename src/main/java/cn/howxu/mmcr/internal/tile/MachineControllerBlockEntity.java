@@ -36,6 +36,7 @@ import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
+import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -173,6 +174,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.function.LongFunction;
+import java.util.function.BooleanSupplier;
 
 public class MachineControllerBlockEntity extends BlockEntity {
 
@@ -378,6 +380,80 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     () -> factory.releasePatternStart(lane));
         }
         return PatternStartReservation.unavailable();
+    }
+
+    /** Reserves one runtime/lane for a pending prefix, without requiring the whole request to fit. */
+    public PatternStartReservation reservePendingPatternStart(BlockPos sourcePort, List<MachineOutput> patternOutputs,
+                                                               long requestedParallelism,
+                                                               LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
+        return reservePendingPatternStart(sourcePort, patternOutputs, requestedParallelism,
+                capabilitiesForParallelism, () -> true, new PendingPatternCursor());
+    }
+
+    /** Shares a preparation budget across pending groups/controllers; unsuccessful candidates retain rotation. */
+    public PatternStartReservation reservePendingPatternStart(BlockPos sourcePort, List<MachineOutput> patternOutputs,
+                                                               long requestedParallelism,
+                                                               LongFunction<List<MachineCapability>> capabilitiesForParallelism,
+                                                               BooleanSupplier preparationAllowed, PendingPatternCursor cursor) {
+        if (requestedParallelism <= 0L || capabilitiesForParallelism == null || preparationAllowed == null || cursor == null) {
+            return PatternStartReservation.unavailable();
+        }
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        if (sourcePort == null || patternOutputs == null || !snapshot.structure().formed()
+                || !snapshot.structure().structureAreaLoaded() || redstonePaused
+                || !snapshot.linkedPortPositions().contains(sourcePort)) return PatternStartReservation.unavailable();
+        List<MachineRecipe> candidates = recipesForMachine();
+        if (candidates.isEmpty()) return PatternStartReservation.unavailable();
+        long catalog = RecipeRegistry.catalogForPool(currentRecipePoolId()).version();
+        if (cursor.catalog != catalog) {
+            cursor.catalog = catalog;
+            cursor.next = 0;
+        }
+        int first = Math.floorMod(cursor.next, candidates.size());
+        for (int offset = 0; offset < candidates.size(); offset++) {
+            int index = (first + offset) % candidates.size();
+            MachineRecipe recipe = candidates.get(index);
+            if (!patternOutputsMatch(recipe, snapshot, patternOutputs)) continue;
+            if (!preparationAllowed.getAsBoolean()) return PatternStartReservation.unavailable();
+            cursor.next = (index + 1) % candidates.size();
+            if (!hasFactoryController()) {
+                CraftingRuntime crafting = runtime.craftingRuntime();
+                CraftingRuntime.PreparedStart prepared = crafting.preparePendingPatternStart(recipe, requestedParallelism,
+                        capabilitiesForParallelism, sourcePort);
+                if (prepared == null) continue;
+                if (!crafting.reservePatternStart()) {
+                    crafting.releasePatternStart(prepared);
+                    continue;
+                }
+                return PatternStartReservation.reserved(recipe, "", crafting, prepared,
+                        () -> crafting.releasePatternStart(prepared));
+            }
+            FactoryRecipeScheduler scheduler = factoryScheduler();
+            scheduler.setThreadLimit(effectiveFactoryThreadLimit());
+            FactoryRuntime factory = runtime.factoryRuntime();
+            Machine machine = snapshot.structure().machine() == null
+                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+            factory.syncCoreLanes(this, machine, recipesForMachine());
+            FactoryRuntime.PatternLane lane = factory.reservePendingPatternStart(recipe, requestedParallelism,
+                    capabilitiesForParallelism, sourcePort);
+            if (lane == null) continue;
+            return PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(), lane.preparedStart(),
+                    () -> factory.releasePatternStart(lane));
+        }
+        return PatternStartReservation.unavailable();
+    }
+
+    /** Progress belongs to one queued request search, never to every caller of a controller.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class PendingPatternCursor {
+        private long catalog = Long.MIN_VALUE;
+        private int next;
+    }
+
+    /** Current candidate limits and duration; never invokes beforeStart or reserves execution capacity. */
+    public @Nullable EffectiveRecipe effectivePatternRecipe(MachineRecipe recipe) {
+        return runtime.craftingRuntime().effectivePatternRecipe(recipe);
     }
 
     /** Admits as many pattern starts as this controller can reserve for a single external batch. */

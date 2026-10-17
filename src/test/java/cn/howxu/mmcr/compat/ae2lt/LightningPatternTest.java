@@ -14,7 +14,6 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestState;
@@ -196,17 +195,21 @@ class LightningPatternTest {
     }
 
     @Test
-    void batchSlicePreservesLongLightningAmounts() throws Exception {
+    void partialLightningRequestPreservesLongAmountsAndRollsBack() {
         var high = LoadedLightningBridge.FAMILY.adapter().toKey(HIGH_VOLTAGE);
         var extreme = LoadedLightningBridge.FAMILY.adapter().toKey(EXTREME_HIGH_VOLTAGE);
         var holders = new KeyCounter();
         holders.add(high, 4_294_967_294L);
         holders.add(extreme, 8_589_934_588L);
-        var method = PatternInterfaceCraftingMachine.class.getDeclaredMethod("slice", KeyCounter[].class, long.class, long.class);
-        method.setAccessible(true);
-        var sliced = (KeyCounter[]) method.invoke(null, new KeyCounter[]{holders}, 1L, 2L);
-        assertThat(sliced[0].get(high)).isEqualTo(2_147_483_647L);
-        assertThat(sliced[0].get(extreme)).isEqualTo(4_294_967_294L);
+        var request = LoadedLightningBridge.FAMILY.patternRequestView(new KeyCounter[]{holders});
+        int highSlot = request.resource(0) == HIGH_VOLTAGE ? 0 : 1;
+        int extremeSlot = 1 - highSlot;
+        try (var transaction = Transaction.openRoot()) {
+            assertThat(request.extract(highSlot, HIGH_VOLTAGE, 2_147_483_647L, transaction)).isEqualTo(2_147_483_647L);
+            assertThat(request.amount(highSlot)).isEqualTo(2_147_483_647L);
+        }
+        assertThat(request.amount(highSlot)).isEqualTo(4_294_967_294L);
+        assertThat(request.amount(extremeSlot)).isEqualTo(8_589_934_588L);
         assertThat(holders.get(high)).isEqualTo(4_294_967_294L);
     }
 

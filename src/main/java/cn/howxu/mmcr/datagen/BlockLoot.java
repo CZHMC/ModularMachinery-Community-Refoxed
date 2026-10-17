@@ -5,12 +5,15 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.loot.BlockLootSubProvider;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.storage.loot.LootTable;
+import net.minecraft.world.level.storage.loot.functions.CopyComponentsFunction;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.neoforged.neoforge.common.conditions.ICondition;
 import net.neoforged.neoforge.common.conditions.ModLoadedCondition;
 
@@ -40,6 +43,13 @@ public final class BlockLoot extends BlockLootSubProvider {
     public void generate() {
         for (Block block : getKnownBlocks()) {
             LootTable.Builder builder = createSingleItemTable(block);
+            Identifier id = BuiltInRegistries.BLOCK.getKey(block);
+            if (MMCR.MODID.equals(id.getNamespace())
+                    && ("ae2_me_pattern_interface".equals(id.getPath())
+                    || "eae_me_extended_pattern_interface".equals(id.getPath()))) {
+                builder.apply(CopyComponentsFunction.copyComponentsFromBlockEntity(LootContextParams.BLOCK_ENTITY)
+                        .include(DataComponents.BLOCK_ENTITY_DATA));
+            }
             for (ICondition condition : conditionsFor(block)) {
                 builder.withCondition(condition);
             }

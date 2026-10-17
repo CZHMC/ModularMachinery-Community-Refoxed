@@ -28,6 +28,8 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PendingPatternScheduler;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternLogicKind;
@@ -47,14 +49,19 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.TypedEntityData;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -93,6 +100,21 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final Map<AE2ResourceFamily<?>, PatternReturnResourceStorage<?>> returnStorages = new LinkedHashMap<>();
     private final CapabilitySnapshot capabilitySnapshot;
     private boolean returnInventoryNotificationPending;
+    private final PendingPatternQueue pendingPatterns = new PendingPatternQueue(this::onPendingPatternsCommitted);
+    private final PendingPatternScheduler pendingScheduler = new PendingPatternScheduler(this, pendingPatterns);
+
+    public PendingPatternQueue pendingPatterns() {
+        return pendingPatterns;
+    }
+
+    public PendingPatternScheduler pendingScheduler() {
+        return pendingScheduler;
+    }
+
+    private void onPendingPatternsCommitted() {
+        setChanged();
+        returnInventoryNotificationPending = true;
+    }
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -371,6 +393,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     protected void tick() {
         super.tick();
+        if (!pendingPatterns.isEmpty()) PendingPatternScheduler.schedule(this);
         if (returnInventoryNotificationPending) {
             returnInventoryNotificationPending = false;
             notifyStorageChanged();
@@ -392,6 +415,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         super.saveAdditional(output);
         mainNode.serialize(output);
         logic.writeToNBT(output);
+        pendingPatterns.write(output, level == null ? 0L : level.getGameTime());
     }
 
     @Override
@@ -401,9 +425,27 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
             super.loadAdditional(input);
             mainNode.deserialize(input);
             logic.readFromNBT(input);
+            pendingPatterns.read(input);
         } finally {
             endLoadingAdditional();
         }
+    }
+
+    @Override
+    protected void collectImplicitComponents(DataComponentMap.Builder components) {
+        super.collectImplicitComponents(components);
+        if (!pendingPatterns.isEmpty() && level != null) {
+            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
+            pendingPatterns.write(output, level.getGameTime());
+            components.set(DataComponents.BLOCK_ENTITY_DATA, TypedEntityData.of(getType(), output.buildResult()));
+        }
+    }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = super.getUpdateTag(registries);
+        tag.remove("pending_patterns");
+        return tag;
     }
 
     @Override

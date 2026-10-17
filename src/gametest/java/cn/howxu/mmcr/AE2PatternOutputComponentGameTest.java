@@ -134,6 +134,11 @@ public class AE2PatternOutputComponentGameTest {
             helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
                             grid.getEnergyService(), helper.getLevel()) == 1 && cpu.getWaitingFor(gold) == 10_000L,
                     "Real CPU dispatch admits large leftovers and reserves the full output");
+            helper.assertTrue(port.pendingPatterns().totalCopies() == 1L
+                            && port.getLogic().getReturnInv().isEmpty()
+                            && controller.runtimeSnapshot().crafting().recipeId() == null,
+                    "Standard CPU dispatch transfers exactly one request without synchronous execution");
+            port.pendingScheduler().tick(helper.getLevel().getGameTime() + 1L);
             helper.assertTrue(port.getLogic().getReturnInv().getAvailableStacks().get(iron) == 9_999L,
                     "Exactly one item is consumed and 9999 leftovers are safely owned by the return inventory");
         }).thenWaitUntil(() -> {
@@ -238,6 +243,10 @@ public class AE2PatternOutputComponentGameTest {
                     "CPU pushes the pattern whose recipe enchantment is stored independently");
             helper.assertTrue(cpu.getWaitingFor(outputKey) == 9L,
                     "CPU waits for the exact enchanted and named output");
+            helper.assertTrue(port.pendingPatterns().totalCopies() == 1L
+                            && controller.runtimeSnapshot().crafting().recipeId() == null,
+                    "Component-bearing output remains pending until scheduler execution");
+            port.pendingScheduler().tick(helper.getLevel().getGameTime() + 1L);
             var accessor = new BlockAccessorImpl.Builder().level(helper.getLevel())
                     .player(helper.makeMockPlayer(GameType.SURVIVAL))
                     .hit(new BlockHitResult(controller.getBlockPos().getCenter(), Direction.SOUTH,
@@ -248,7 +257,7 @@ public class AE2PatternOutputComponentGameTest {
             var jadeOutputs = RecipeOutputCodec.read(jadeData,
                     accessor.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE));
             helper.assertTrue(jadeOutputs.size() == 1,
-                    "Jade receives the active enchanted output immediately after ME pattern admission");
+                    "Jade receives the active enchanted output after deferred ME pattern execution");
             helper.assertTrue(jadeOutputs.getFirst().amount() == 9L
                             && ItemStack.isSameItemSameComponents(expected,
                             ((MachineOutput.ItemOutput) jadeOutputs.getFirst().output()).resolvedStack()),

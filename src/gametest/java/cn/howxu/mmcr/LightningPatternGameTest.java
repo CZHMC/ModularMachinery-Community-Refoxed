@@ -91,24 +91,30 @@ public class LightningPatternGameTest {
                         "Controller forms with the real pattern interface"))
                 .thenExecute(() -> {
                     var encoded = PatternDetailsHelper.encodeProcessingPattern(
-                            List.of(new GenericStack(iron, 1L), new GenericStack(water, 250L),
-                                    new GenericStack(high, 2L), new GenericStack(extreme, 3L)),
+                            List.of(new GenericStack(iron, 3L), new GenericStack(water, 1_000L),
+                                    new GenericStack(high, 5L), new GenericStack(extreme, 7L)),
                             List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L),
                                     new GenericStack(high, 4L), new GenericStack(extreme, 5L)));
                     host.getLogic().getPatternInv().addItems(encoded);
                     var pattern = host.getLogic().getAvailablePatterns().getFirst();
-                    var holders = new KeyCounter();
-                    holders.add(iron, 3L);
-                    holders.add(water, 1_000L);
-                    holders.add(high, 5L);
-                    holders.add(extreme, 7L);
-                    helper.assertTrue(host.craftingMachine().pushPattern(pattern, new KeyCounter[]{holders}, null),
+                    KeyCounter[] holders = {new KeyCounter(), new KeyCounter(), new KeyCounter(), new KeyCounter()};
+                    holders[0].add(iron, 3L);
+                    holders[1].add(water, 1_000L);
+                    holders[2].add(high, 5L);
+                    holders[3].add(extreme, 7L);
+                    helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, null),
                             "A real decoded mixed pattern reaches controller admission");
+                    helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
+                                    && host.pendingPatterns().totalCopies() == 1L
+                                    && host.getLogic().getReturnInv().isEmpty(),
+                            "Admission owns the mixed request without starting or returning material");
+                    host.pendingScheduler().tick(helper.getLevel().getGameTime() + 1L);
                     helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
                             "Both lightning output types match the intended recipe");
                     var returns = host.getLogic().getReturnInv().getAvailableStacks();
-                    helper.assertTrue(holders.get(iron) == 0L && holders.get(water) == 0L
-                                    && holders.get(high) == 0L && holders.get(extreme) == 0L,
+                    helper.assertTrue(holders[0].get(iron) == 0L && holders[1].get(water) == 0L
+                                    && holders[2].get(high) == 0L && holders[3].get(extreme) == 0L
+                                    && host.pendingPatterns().isEmpty(),
                             "The original AE2 holders are accepted once");
                     helper.assertTrue(returns.get(iron) == 2L && returns.get(water) == 750L
                                     && returns.get(high) == 3L && returns.get(extreme) == 4L,
