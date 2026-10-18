@@ -29,6 +29,9 @@ runs {
             // xaero map
             runtime("curse.maven:${minimap_id}:${minimap_version}")
             runtime("curse.maven:${worldmap_id}:${worldmap_version}")
+            // aae
+            runtime("curse.maven:${aae_id}:${aae_version}")
+            runtime("curse.maven:${geckolib_id}:${geckolib_version}")
         }
     }
 
