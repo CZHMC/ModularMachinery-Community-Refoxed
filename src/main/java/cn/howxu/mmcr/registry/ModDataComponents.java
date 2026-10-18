@@ -3,6 +3,7 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.network.KeyCardBinding;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
+import cn.howxu.mmcr.internal.item.PatternBatchData;
 import cn.howxu.mmcr.internal.item.TerminalData;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.registries.Registries;
@@ -22,6 +23,11 @@ public final class ModDataComponents {
 
     public static final DeferredRegister.DataComponents REGISTER =
             DeferredRegister.createDataComponents(Registries.DATA_COMPONENT_TYPE, MMCR.MODID);
+
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<PatternBatchData>>
+            PATTERN_BATCH = REGISTER.registerComponentType("pattern_batch", builder ->
+                    builder.persistent(PatternBatchData.CODEC)
+                            .networkSynchronized(PatternBatchData.STREAM_CODEC));
 
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<MultiblockDetectorSelection>>
             MULTIBLOCK_DETECTOR_SELECTION = REGISTER.registerComponentType("multiblock_detector_selection", builder ->

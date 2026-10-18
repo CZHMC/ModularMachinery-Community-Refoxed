@@ -18,7 +18,6 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.PatternInterfaceMenu;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue.OfferLimits;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -61,28 +60,14 @@ public class PatternReturnInventoryGameTest {
         items.add(iron, Long.MAX_VALUE / 2L);
         items.add(gold, Long.MAX_VALUE / 2L);
         KeyCounter[] inputs = {items};
-        var definition = AEItemKey.of(Items.PAPER);
         var outputs = List.of(new GenericStack(AEItemKey.of(Items.DIAMOND), 1L));
-        var limits = new OfferLimits(3L, 3L);
-        long now = helper.getLevel().getGameTime();
+        PendingPatternQueueGameTest.read(helper, queue,
+                PendingPatternQueueGameTest.legacyData(helper, inputs, outputs, 2L));
         try (Transaction transaction = Transaction.openRoot()) {
-            helper.assertTrue(queue.offer(definition, outputs, inputs, limits, now, transaction),
-                    "An exact long template is provisionally admitted");
+            helper.assertTrue(queue.refundNext(host, transaction), "An entire long group provisionally transfers to returns");
         }
-        helper.assertTrue(queue.isEmpty() && queue.committedRevision() == 0L,
-                "Root rollback restores queue ownership without emitting a committed admission");
-        for (int copy = 0; copy < 2; copy++) {
-            try (Transaction transaction = Transaction.openRoot()) {
-                helper.assertTrue(queue.offer(definition, outputs, inputs, limits, now, transaction),
-                        "Each complete key independently fits its long budget");
-                transaction.commit();
-            }
-        }
-        try (Transaction transaction = Transaction.openRoot()) {
-            helper.assertTrue(!queue.offer(definition, outputs, inputs, limits, now, transaction),
-                    "Per-key multiplication overflow rejects a third copy before changing queue state");
-            transaction.commit();
-        }
+        helper.assertTrue(queue.totalCopies() == 2L && host.getLogic().getReturnInv().isEmpty()
+                        && queue.committedRevision() == 0L, "Root rollback restores the entire escrow and return inventory");
         items.add(iron, 1L);
         helper.assertTrue(queue.totalCopies() == 2L && queue.groups().size() == 1
                         && queue.groups().getFirst().inputs(2L)[0].get(iron) == Long.MAX_VALUE - 1L
@@ -101,6 +86,11 @@ public class PatternReturnInventoryGameTest {
                         && restoredInputs.get(iron) == Long.MAX_VALUE - 1L
                         && restoredInputs.get(gold) == Long.MAX_VALUE - 1L,
                 "Queue persistence retains complete component keys and exact compressed long balances");
+        PendingPatternQueueGameTest.refund(helper, restored);
+        helper.assertTrue(restored.pendingPatterns().isEmpty()
+                        && restored.getLogic().getReturnInv().getAvailableStacks().get(iron) == Long.MAX_VALUE - 1L
+                        && restored.getLogic().getReturnInv().getAvailableStacks().get(gold) == Long.MAX_VALUE - 1L,
+                "Reload refunds all copies in one operation without int truncation");
         restored.onChunkUnloaded();
         helper.succeed();
     }
@@ -268,13 +258,53 @@ public class PatternReturnInventoryGameTest {
                 "UI retains just the original nine ordinary slots; hidden balances are not synchronized as item counts");
         List<ItemStack> drops = new ArrayList<>();
         inventory.addDrops(drops, helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
-        helper.assertTrue(drops.stream().filter(stack -> stack.is(Items.DIAMOND)).count() == 1024L,
-                "Even the last hidden slot uses bounded physical drops");
-        helper.assertTrue(drops.stream().filter(stack -> stack.is(Items.IRON_INGOT)).mapToLong(ItemStack::getCount).sum() == 80L
-                        && drops.stream().filter(stack -> stack.is(Items.IRON_INGOT))
-                        .allMatch(stack -> key.equals(AEItemKey.of(stack))), "Ordinary drops preserve old contents and components");
-        helper.assertTrue(drops.stream().allMatch(stack -> stack.getCount() <= stack.getMaxStackSize()),
-                "Physical drops are legal bounded ItemStacks");
+        helper.assertTrue(drops.isEmpty(), "Native addDrops cannot also discharge balances owned by the block carrier");
+        helper.assertTrue(inventory.getAvailableStacks().get(key) == 80L
+                        && inventory.getAvailableStacks().get(AEItemKey.of(Items.DIAMOND)) == Long.MAX_VALUE
+                        && host.collectComponents().has(DataComponents.BLOCK_ENTITY_DATA),
+                "Old component keys and extreme return quantities remain available to the compressed block carrier");
+        helper.succeed();
+    }
+
+    public void fullReturnsKeepLegacyGroupAcrossReload(GameTestHelper helper) {
+        var host = place(helper);
+        var inventory = host.getLogic().getReturnInv();
+        AEItemKey existing = variant(helper, 0);
+        for (int index = 0; index < 256; index++) {
+            inventory.insert(variant(helper, index), index == 0 ? Long.MAX_VALUE - 10L : Long.MAX_VALUE,
+                    Actionable.MODULATE, IActionSource.empty());
+        }
+        KeyCounter inputs = new KeyCounter();
+        inputs.add(existing, 5L);
+        inputs.add(AEFluidKey.of(Fluids.WATER), 1_000L);
+        PendingPatternQueueGameTest.read(helper, host.pendingPatterns(), PendingPatternQueueGameTest.legacyData(helper,
+                new KeyCounter[]{inputs}, List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)), 1L));
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertFalse(host.pendingPatterns().refundNext(host, transaction), "No partial refund when one resource key cannot fit");
+            transaction.commit();
+        }
+        helper.assertTrue(host.pendingPatterns().totalCopies() == 1L
+                        && inventory.getAvailableStacks().get(existing) == Long.MAX_VALUE - 10L
+                        && inventory.getAvailableStacks().get(AEFluidKey.of(Fluids.WATER)) == 0L,
+                "A full return inventory retains the entire legacy owner and rolls back any provisional insertion");
+        var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+        host.saveAdditional(saved);
+        host.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING,
+                helper.getLevel().registryAccess(), saved.buildResult()));
+        AtomicBoolean online = new AtomicBoolean(false);
+        KeyCounter received = new KeyCounter();
+        var network = receiver(received, online);
+        helper.assertFalse(inventory.injectIntoNetwork(network, IActionSource.empty(), stack -> {}),
+                "A disconnected or full network keeps all native return balances");
+        online.set(true);
+        inventory.injectIntoNetwork(network, IActionSource.empty(), stack -> {});
+        helper.assertTrue(received.get(existing) == Long.MAX_VALUE - 10L, "Recovery drains exactly the original native balance");
+        PendingPatternQueueGameTest.refund(helper, host);
+        inventory.injectIntoNetwork(network, IActionSource.empty(), stack -> {});
+        helper.assertTrue(host.pendingPatterns().isEmpty() && inventory.isEmpty()
+                        && received.get(existing) == Long.MAX_VALUE - 5L
+                        && received.get(AEFluidKey.of(Fluids.WATER)) == 1_000L,
+                "After reload and capacity recovery, escrow and native balances return exactly once");
         helper.succeed();
     }
 

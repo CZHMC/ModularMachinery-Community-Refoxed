@@ -194,14 +194,17 @@ public class AE2PatternInterfaceGameTest {
             helper.assertTrue(patternPort.getLogic().pushPattern(pattern, new KeyCounter[]{requestItems}),
                     "Native PatternProviderLogic accepts the encoded pattern through the MMCR crafting bridge");
             helper.assertTrue(requestItems.get(AEItemKey.of(Items.IRON_INGOT)) == 0L
-                            && patternPort.pendingPatterns().totalCopies() == 1L
-                            && controller.runtimeSnapshot().crafting().recipeId() == null,
-                    "Native success locks one privately accepted request without synchronously starting it");
+                            && patternPort.pendingPatterns().isEmpty()
+                            && PATTERN_RECIPE_ID.equals(controller.runtimeSnapshot().crafting().recipeId()),
+                    "Native success pays and activates exactly one request without precollection");
+            helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
+                            Actionable.SIMULATE, new BaseActionSource()) == 0L,
+                    "A one-tick recipe cannot return output on the push stack before CPU waiting registration");
             KeyCounter lockedRequest = new KeyCounter();
             lockedRequest.add(AEItemKey.of(Items.IRON_INGOT), 1L);
             helper.assertTrue(!patternPort.getLogic().pushPattern(pattern, new KeyCounter[]{lockedRequest})
                             && lockedRequest.get(AEItemKey.of(Items.IRON_INGOT)) == 1L
-                            && patternPort.pendingPatterns().totalCopies() == 1L,
+                            && patternPort.pendingPatterns().isEmpty(),
                     "Native LOCK_UNTIL_RESULT blocks a second admission without taking its material");
             PatternInterfaceMenu menu = new PatternInterfaceMenu(AE2MenuTypes.PATTERN, 0,
                     makePlayerWithConnection(helper).getInventory(), patternPort);
@@ -229,12 +232,16 @@ public class AE2PatternInterfaceGameTest {
     }
 
     public void craftingCpuCancellationKeepsAcceptedRequests(GameTestHelper helper) {
+        cancelReturnsOnlyUndispatchedCpuMaterials(helper);
+    }
+
+    public void cancelReturnsOnlyUndispatchedCpuMaterials(GameTestHelper helper) {
         craftingCpuDispatchesStandardRequests(helper, true);
     }
 
     private static void craftingCpuDispatchesStandardRequests(GameTestHelper helper, boolean cancel) {
-        Identifier machineId = MMCR.id("ae2_cpu_standard_factory_test");
-        Identifier recipeId = MMCR.id("ae2_cpu_standard_factory_recipe");
+        Identifier machineId = MMCR.id(cancel ? "ae2_cpu_cancel_factory_test" : "ae2_cpu_standard_factory_test");
+        Identifier recipeId = MMCR.id(cancel ? "ae2_cpu_cancel_factory_recipe" : "ae2_cpu_standard_factory_recipe");
         BlockPos patternPortPos = new BlockPos(0, 1, 0);
         BlockPos factoryPos = new BlockPos(1, 0, 0);
         BlockPos factoryPos2 = new BlockPos(2, 0, 0);
@@ -264,7 +271,7 @@ public class AE2PatternInterfaceGameTest {
                     List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
                             MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
                     List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
-                    List.of(), 0, 2, false, false, false, Set.of()));
+                    List.of(), 0, cancel ? 1 : 2, false, false, false, Set.of()));
         }
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO, MachineControllerBlockEntity.class);
@@ -342,10 +349,6 @@ public class AE2PatternInterfaceGameTest {
                 CraftingCpuLogic cpu = cpuCluster.craftingLogic;
                 helper.assertTrue(cpu.trySubmitJob(grid, plan, new BaseActionSource(), null).successful(),
                         "Crafting CPU accepts the two-operation processing job");
-                if (cancel) {
-                    patternPort.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE,
-                            LockCraftingMode.LOCK_UNTIL_RESULT);
-                }
                 cpu.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), 2L, Actionable.MODULATE);
                 helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
                                 grid.getEnergyService(), helper.getLevel()) == 0,
@@ -387,18 +390,24 @@ public class AE2PatternInterfaceGameTest {
                                 && cpu.getWaitingFor(AEItemKey.of(Items.GOLD_INGOT)) == 1L
                                 && cpu.getPendingOutputs(AEItemKey.of(Items.GOLD_INGOT)) == 1L,
                         "Native CPU charges and records only one request, retaining the other task and input");
-                helper.assertTrue(patternPort.pendingPatterns().totalCopies() == 1L
-                                && controller.runtimeSnapshot().factory().activeLaneCount() == 0,
-                        "CPU admission never starts a factory lane on its call stack");
-                if (cancel) {
-                    helper.assertTrue(patternPort.getLogic().getCraftingLockedReason() == LockCraftingMode.LOCK_UNTIL_RESULT
-                                    && !patternPort.getLogic().pushPattern(pattern, new KeyCounter[]{singleInput})
-                                    && singleInput.get(AEItemKey.of(Items.IRON_INGOT)) == 1L
-                                    && patternPort.pendingPatterns().totalCopies() == 1L,
-                            "Native result lock rejects another request even with spare factory admission capacity");
-                    cpu.cancel();
-                    helper.assertTrue(!cpu.hasJob() && patternPort.pendingPatterns().totalCopies() == 1L,
-                            "Cancelling the CPU job does not revoke material already accepted by the interface");
+                 helper.assertTrue(patternPort.pendingPatterns().isEmpty()
+                                 && controller.runtimeSnapshot().factory().activeLaneCount() == 1
+                                 && grid.getStorageService().getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), 1L,
+                                 Actionable.SIMULATE, new BaseActionSource()) == 0L,
+                         "CPU admission pays one lane, but no output reaches the network before waitingFor is registered");
+                 if (cancel) {
+                     availablePower[0] = singlePower;
+                     helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
+                                     limitedEnergy, helper.getLevel()) == 0
+                                     && cpu.getStored(AEItemKey.of(Items.IRON_INGOT)) == 1L
+                                     && cpu.getWaitingFor(AEItemKey.of(Items.GOLD_INGOT)) == 1L
+                                     && cpu.getPendingOutputs(AEItemKey.of(Items.GOLD_INGOT)) == 1L
+                                     && patternPort.pendingPatterns().isEmpty(),
+                             "Busy recipe rejects the second batch: its task and material remain owned by the real CPU");
+                     cpu.cancel();
+                     helper.assertTrue(!cpu.hasJob() && patternPort.pendingPatterns().isEmpty()
+                                     && controller.runtimeSnapshot().factory().activeLaneCount() == 1,
+                             "Cancellation leaves only the already paid lane running, with no privately queued materials");
                     patternPort.getLogic().getPatternInv().setItemDirect(0, ItemStack.EMPTY);
                     patternPort.getLogic().updatePatterns();
                 } else {
@@ -408,31 +417,29 @@ public class AE2PatternInterfaceGameTest {
                                     && cpu.getWaitingFor(AEItemKey.of(Items.GOLD_INGOT)) == 2L
                                     && cpu.getStored(AEItemKey.of(Items.IRON_INGOT)) == 0L
                                     && cpu.getPendingOutputs(AEItemKey.of(Items.GOLD_INGOT)) == 0L
-                                    && patternPort.pendingPatterns().totalCopies() == 2L,
+                                     && patternPort.pendingPatterns().isEmpty()
+                                     && controller.runtimeSnapshot().factory().activeLaneCount() == 2,
                             "A second standard dispatch independently accounts for the second request");
                     helper.assertTrue(Math.abs(spentPower[0] - singlePower * 2D) < 0.0001D,
                             "Two standard requests charge exactly twice the single-request power");
                 }
-                long now = helper.getLevel().getGameTime();
-                patternPort.pendingScheduler().tick(now + 5L);
-                patternPort.pendingScheduler().tick(now + 6L);
-                helper.assertTrue(controller.runtimeSnapshot().factory().activeLaneCount() == (cancel ? 1 : 2)
-                                && patternPort.pendingPatterns().isEmpty(),
-                        "Explicit deferred scheduling starts exactly the accepted requests, including after cancellation");
+                 helper.assertTrue(controller.runtimeSnapshot().factory().activeLaneCount() == (cancel ? 1 : 2)
+                                 && patternPort.pendingPatterns().isEmpty(),
+                         "Only the synchronously paid requests own active lanes, including after cancellation");
         }).thenWaitUntil(() -> {
             long expected = cancel ? 1L : 2L;
-            helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), expected,
+             helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.GOLD_INGOT), expected + 1L,
                             Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == expected,
                     "The pushed pattern's output returns through the AE2 pattern interface into ME storage");
             helper.assertTrue(meChest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), 2L,
                             Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == (cancel ? 1L : 0L),
                     "Only the unaccepted input returns on cancellation; accepted input executes exactly once");
             CraftingCpuLogic cpu = helper.getBlockEntity(cpuPos, CraftingBlockEntity.class).getCluster().craftingLogic;
-            helper.assertTrue(!cpu.hasJob(), "Native CPU job is settled or cancelled independently of deferred execution");
+             helper.assertTrue(!cpu.hasJob(), "Native CPU job is settled or cancelled independently of paid execution");
             if (cancel) {
                 var patternPort = helper.getBlockEntity(patternPortPos, PatternInterfaceBlockEntity.class);
                 helper.assertTrue(patternPort.getLogic().getCraftingLockedReason() == LockCraftingMode.NONE,
-                        "Deferred result injection releases the native result lock even after CPU cancellation");
+                         "Native result injection leaves no result lock after CPU cancellation");
             }
         }).thenSucceed();
     }
@@ -504,9 +511,9 @@ public class AE2PatternInterfaceGameTest {
                              new KeyCounter[]{requestItems}),
                     "ExtendedAE slot 35 pattern reaches the existing crafting machine");
             helper.assertTrue(requestItems.get(AEItemKey.of(Items.IRON_INGOT)) == 0L
-                            && patternPort.pendingPatterns().totalCopies() == 1L
-                            && controller.runtimeSnapshot().crafting().recipeId() == null,
-                    "ExtendedAE uses the same private deferred-admission path");
+                            && patternPort.pendingPatterns().isEmpty()
+                            && EXTENDED_PATTERN_RECIPE_ID.equals(controller.runtimeSnapshot().crafting().recipeId()),
+                    "ExtendedAE uses the same immediately paid, single-thread admission path");
         });
 
         helper.runAtTickTime(50, () -> {

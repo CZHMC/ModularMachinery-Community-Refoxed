@@ -48,6 +48,7 @@ public final class BlockLoot extends BlockLootSubProvider {
                     && ("ae2_me_pattern_interface".equals(id.getPath())
                     || "eae_me_extended_pattern_interface".equals(id.getPath()))) {
                 builder.apply(CopyComponentsFunction.copyComponentsFromBlockEntity(LootContextParams.BLOCK_ENTITY)
+                        // One compressed owner for both legacy escrow and every native return slot.
                         .include(DataComponents.BLOCK_ENTITY_DATA));
             }
             for (ICondition condition : conditionsFor(block)) {

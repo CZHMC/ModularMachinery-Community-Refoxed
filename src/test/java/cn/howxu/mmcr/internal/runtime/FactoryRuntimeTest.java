@@ -90,6 +90,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
@@ -131,6 +132,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,6 +147,41 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 class FactoryRuntimeTest {
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
     private ServerThreadTestScope serverThreadScope;
+
+    @Test
+    void preparingAndReservedExactStartsShareTheRecipeThreadQuotaWithoutReducingStaticSupport() {
+        AtomicReference<FactoryRuntime> owner = new AtomicReference<>();
+        AtomicInteger hooks = new AtomicInteger();
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        var original = controller.currentStructureSnapshot().configuredMachine();
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("exact_preparing_quota"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of());
+        RecipeRegistry.registerStatic(recipe);
+        controller.setMachine(new Machine() {
+            @Override public Identifier registryName() { return original.registryName(); }
+            @Override public BlockArray pattern() { return original.pattern(); }
+            @Override public MachineControllerSpec controller() { return original.controller(); }
+            @Override public RecipeBehavior behavior() {
+                return RecipeBehavior.builder().beforeStart(context -> {
+                    hooks.incrementAndGet();
+                    assertThat(owner.get().reserveExactPatternStart(recipe, 1L, List.of(), null)).isNull();
+                }).build();
+            }
+        });
+        var factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(4);
+        owner.set(factory);
+        assertThat(factory.supportsPatternRecipe(recipe)).isTrue();
+        var first = factory.reserveExactPatternStart(recipe, 1L, List.of(), null);
+        assertThat(first).isNotNull();
+        assertThat(hooks).hasValue(1);
+        assertThat(factory.supportsPatternRecipe(recipe)).isTrue();
+        assertThat(factory.reserveExactPatternStart(recipe, 1L, List.of(), null)).isNull();
+        factory.releasePatternStart(first);
+        assertThat(factory.reserveExactPatternStart(recipe, 1L, List.of(), null)).isNotNull();
+        assertThat(hooks).hasValue(2);
+    }
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -2836,10 +2874,11 @@ class FactoryRuntimeTest {
         thread.onRecipeFinished();
         assertThat(thread.runtime().active()).isFalse();
 
-        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_LOOKUP);
+        HolderLookup.Provider lookup = HolderLookup.Provider.create(Stream.of(BuiltInRegistries.ITEM));
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
         thread.save(output);
         FactoryRecipeThread restored = FactoryRecipeThread.load(
-                TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), controller,
+                TagValueInput.create(ProblemReporter.DISCARDING, lookup, output.buildResult()), controller,
                 List.of(candidate));
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
         var snapshot = controller.runtimeSnapshot();

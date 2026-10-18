@@ -62,6 +62,66 @@ public final class GameTestRegistry {
         register(event, "input_isolation_paid_ordinary_reload", 20, InputIsolationGameTest::paidOrdinaryScopeSurvivesReload);
         register(event, "input_isolation_paid_isolated_reload", 20, InputIsolationGameTest::paidIsolatedScopeSurvivesReload);
         if (ModList.get().isLoaded("ae2")) {
+            register(event, "pattern_batch_definition_roundtrip", 20,
+                    PatternBatchCodecGameTest::batchDefinitionRoundTripsDistinctMultipliers);
+            register(event, "pattern_batch_invalid_definition", 20,
+                    PatternBatchCodecGameTest::invalidBatchDefinitionCannotBecomeAnUnscaledTask);
+            register(event, "pattern_batch_native_job_reload", 20,
+                    PatternBatchCodecGameTest::nativeExecutingJobReloadKeepsFullAndRemainder);
+            register(event, "pattern_batch_int_max_native_dispatch", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().nativeCpuDispatchesIntMaxParallelismAsOneBatch(helper));
+            register(event, "pattern_batch_large_item_settlement", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeBatchSettlesOutputsAboveIntRangeWithoutTruncation(helper));
+            register(event, "pattern_batch_large_fluid_settlement", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeFluidBatchSettlesOutputsAboveIntRangeWithoutTruncation(helper));
+            register(event, "pattern_batch_large_item_atomic_refusal", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeBatchFailsAtomicallyWhenOneUnitOrAePowerIsMissing(helper));
+            register(event, "pattern_batch_large_fluid_atomic_refusal", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeFluidBatchFailsAtomicallyWhenOneUnitOrAePowerIsMissing(helper));
+            register(event, "pattern_batch_large_cpu_cancel", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().cancelUndispatchedHugeBatchReturnsEveryCpuHeldUnit(helper));
+            register(event, "pattern_batch_cpu_full_remainder_reload", 3000,
+                    helper -> new PatternBatchLargeAmountGameTest().nativeCpuReloadKeepsFullAndRemainderThenSettles(helper));
+            register(event, "pattern_batch_full_remainder_totals", 40,
+                    PatternBatchPlanningGameTest::fullRemainderAndSingleHugeBatchPreserveTotals);
+            register(event, "pattern_batch_reuse_cycle_safety", 40,
+                    PatternBatchPlanningGameTest::reusedMoldAndCyclicDependencyRemainExecutable);
+            register(event, "pattern_batch_dag_totals", 40,
+                    PatternBatchPlanningGameTest::acyclicUpstreamAndByproductsKeepUsedItems);
+            register(event, "pattern_batch_unknown_requirement_safety", 40,
+                    PatternBatchPlanningGameTest::unknownRequirementsPoisonOnlyEnumerableComponents);
+            register(event, "pattern_batch_snapshot_isolation", 40,
+                    PatternBatchPlanningGameTest::planningDoesNotTouchLiveWorldOrInvokeHooks);
+            register(event, "pattern_batch_native_provider_isolation", 40,
+                    PatternBatchPlanningGameTest::mixedProvidersNeverDispatchBatchToVanilla);
+            if (ModList.get().isLoaded("extendedae")) {
+                register(event, "pattern_batch_two_host_publication", 100,
+                        PatternBatchPlanningGameTest::onlyTheTwoMmcrHostsPublishBatchIdentity);
+            }
+            register(event, "pattern_batch_paid_processing_reload", 1000, MMCR.id("pattern_batch_cross_chunk"),
+                    helper -> new PatternBatchPersistenceGameTest().reloadCpuMachineAndInterfaceDuringPaidProcessing(helper));
+            register(event, "pattern_batch_paid_final_tick_reload", 1000, MMCR.id("pattern_batch_cross_chunk"),
+                    helper -> new PatternBatchPersistenceGameTest().reloadCpuMachineAndInterfaceAfterFinalTickPaid(helper));
+            register(event, "pattern_batch_paid_output_reload", 1000, MMCR.id("pattern_batch_cross_chunk"),
+                    helper -> new PatternBatchPersistenceGameTest().reloadCpuMachineAndInterfaceWithOutputWaitingForNetwork(helper));
+            register(event, "pattern_batch_machine_energy_refusal", 600,
+                    helper -> new PatternBatchPersistenceGameTest().hugeBatchRejectsMissingMachineFeWithoutTakingCpuInputs(helper));
+            register(event, "pattern_batch_full_output_refusal", 600,
+                    helper -> new PatternBatchPersistenceGameTest().hugeBatchRejectsFullOutputWithoutTakingCpuInputs(helper));
+            register(event, "pattern_batch_overflow_before_payment", 600,
+                    helper -> new PatternBatchPersistenceGameTest().overflowingBatchDefinitionRejectsBeforeAnyCpuPayment(helper));
+            register(event, "pattern_batch_exact_normal_runtime", 40,
+                    PatternBatchRuntimeGameTest::exactNormalBatchRejectsPrefixAndFinishesOnce);
+            register(event, "pattern_batch_exact_factory_runtime", 40,
+                    PatternBatchRuntimeGameTest::exactFactoryBatchRejectsPrefixAndFinishesOnce);
+            register(event, "pattern_batch_paid_normal_snapshot", 40,
+                    PatternBatchRuntimeGameTest::paidNormalPatternReloadKeepsSnapshot);
+            register(event, "pattern_batch_paid_factory_snapshot", 40,
+                    PatternBatchRuntimeGameTest::paidFactoryPatternReloadKeepsSnapshot);
+            register(event, "pattern_batch_exact_long_resources", 40,
+                    PatternBatchRuntimeGameTest::exactLongItemAndFluidBatchFinishesOnce);
+            register(event, "pattern_batch_inspect_unloaded_chunk", 40,
+                    PatternBatchRuntimeGameTest::inspectionDoesNotLoadLinkedControllerChunk);
             register(event, "input_isolation_native_ae_input", 20, InputIsolationGameTest::nativeAeInputUsesOnePhysicalSource);
             register(event, "input_isolation_ordinary_pattern_request", 20, InputIsolationGameTest::ordinaryPatternRequestIsAtomic);
             register(event, "input_isolation_isolated_pattern_request", 20, InputIsolationGameTest::isolatedPatternRequestIsAtomic);
@@ -337,6 +397,8 @@ public final class GameTestRegistry {
                     helper -> new PatternReturnInventoryGameTest().oldSaveMenuAndBoundedDrops(helper));
             register(event, "ae2_pattern_return_large_cpu_execution", 160,
                     helper -> new AE2PatternOutputComponentGameTest().craftingCpuSettlesLargeInputsOutputsAndLeftovers(helper));
+            register(event, "ae2_pattern_batch_exact_excess_return", 160,
+                    helper -> new AE2PatternOutputComponentGameTest().requestExcessReturnsExactlyOnce(helper));
             register(event, "ae2_pattern_return_native_transfer_menu", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeTransferAndMenuInsertionConserveResources(helper));
             register(event, "ae2_pattern_atomic_admission", 20, RunningRecipeGameTest::patternAdmissionRollsBackRequestAndOrdinaryInput);
@@ -427,28 +489,28 @@ public final class GameTestRegistry {
                     helper -> new AE2PatternInterfaceGameTest().craftingCpuCancellationKeepsAcceptedRequests(helper));
             register(event, "ae2_pending_queue_long_returns", 40,
                     helper -> new PatternReturnInventoryGameTest().pendingQueueLongBalancesRollbackAndPersistence(helper));
-            register(event, "ae2_pending_queue_signatures", 20,
-                    helper -> new PendingPatternQueueGameTest().mergesOnlyIdenticalSlotTemplates(helper));
-            register(event, "ae2_pending_queue_ownership", 20,
-                    helper -> new PendingPatternQueueGameTest().offerOwnsDeepCopies(helper));
             register(event, "ae2_pending_queue_rollback", 20,
                     helper -> new PendingPatternQueueGameTest().rollbackRestoresGroupAndCounts(helper));
-            register(event, "ae2_pending_queue_overflow", 20,
-                    helper -> new PendingPatternQueueGameTest().overflowRejectsWithoutMutation(helper));
-            register(event, "ae2_pending_queue_capacity", 20,
-                    helper -> new PendingPatternQueueGameTest().capacityAndDistinctKeyLimitsPreserveExistingWork(helper));
             register(event, "ae2_pending_queue_large", 20,
-                    helper -> new PendingPatternQueueGameTest().largeCompressedGroupCanSplitAndRollback(helper));
+                    helper -> new PendingPatternQueueGameTest().largeCompressedGroupRefundsAtomically(helper));
             register(event, "ae2_pending_queue_callback", 20,
                     helper -> new PendingPatternQueueGameTest().rootCallbackFailurePreservesCommittedOwnership(helper));
             register(event, "ae2_pending_queue_legacy", 20,
                     helper -> new PendingPatternQueueGameTest().oldSaveHasEmptyPendingQueue(helper));
             register(event, "ae2_pending_queue_persistence", 20,
                     helper -> new PendingPatternQueueGameTest().pendingQueueRoundTripPreservesComponentsAndLongCounts(helper));
-            register(event, "ae2_pending_queue_age", 20,
-                    helper -> new PendingPatternQueueGameTest().reloadKeepsAgeWithoutOfflineAdvance(helper));
             register(event, "ae2_pending_queue_damaged", 20,
                     helper -> new PendingPatternQueueGameTest().damagedOrFutureDataIsPreservedAndBlocked(helper));
+            register(event, "ae2_legacy_pattern_refund_only", 40,
+                    PendingPatternLifecycleGameTest::legacyAcceptedInputsAreRefundedNotExecuted);
+            register(event, "ae2_legacy_pattern_one_group_per_tick", 40,
+                    PendingPatternLifecycleGameTest::legacyTickAttemptsOnlyOneGroup);
+            register(event, "ae2_legacy_pattern_old_carrier_refund", 40,
+                    PendingPatternLifecycleGameTest::oldCarrierOnlyRefunds);
+            register(event, "ae2_legacy_pattern_unknown_carrier", 40,
+                    PendingPatternLifecycleGameTest::unknownCarrierPreservesBlockedOwnership);
+            register(event, "ae2_legacy_pattern_full_return_reload", 40,
+                    helper -> new PatternReturnInventoryGameTest().fullReturnsKeepLegacyGroupAcrossReload(helper));
             register(event, "ae2_pending_pattern_carrier", 40, PendingPatternLifecycleGameTest::ordinaryCarrierRoundTrip);
             if (ModList.get().isLoaded("extendedae")) {
                 register(event, "eae_pending_pattern_carrier", 40, PendingPatternLifecycleGameTest::extendedCarrierRoundTrip);
@@ -685,10 +747,15 @@ public final class GameTestRegistry {
     }
 
     private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Consumer<GameTestHelper> test) {
+        register(event, name, maxTicks, Identifier.fromNamespaceAndPath("minecraft", "empty"), test);
+    }
+
+    private static void register(RegisterGameTestsEvent event, String name, int maxTicks, Identifier structure,
+                                 Consumer<GameTestHelper> test) {
         Holder<TestEnvironmentDefinition<?>> environment = Holder.direct(new TestEnvironmentDefinition.AllOf());
         TestData<Holder<TestEnvironmentDefinition<?>>> data = new TestData<>(
                 environment,
-                Identifier.fromNamespaceAndPath("minecraft", "empty"),
+                structure,
                 maxTicks,
                 0,
                 true,

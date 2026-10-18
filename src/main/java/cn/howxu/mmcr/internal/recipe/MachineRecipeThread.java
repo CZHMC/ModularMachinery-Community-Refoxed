@@ -14,6 +14,8 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -27,6 +29,7 @@ public final class MachineRecipeThread extends RecipeThread {
     private final boolean controlsControllerRuntime;
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
+    private boolean lastRecipeRequiresPatternRequest;
     private boolean restartPending;
     private @Nullable PendingAsyncSearch pendingAsyncSearch;
     private long nextAsyncSearchId;
@@ -102,13 +105,38 @@ public final class MachineRecipeThread extends RecipeThread {
         if (recipe == null) return;
         lastRecipe = recipe;
         lastRecipeCatalogVersion = currentRecipeCatalog().version();
+        lastRecipeRequiresPatternRequest = runtime.requiresPatternRequest();
         restartPending = false;
         clearFullSearchRequest();
         installStartedProgram();
     }
 
     public void markRecipeFinished() {
-        restartPending = lastRecipe != null;
+        restartPending = lastRecipe != null && !lastRecipeRequiresPatternRequest;
+    }
+
+    /** Validated lastRecipe lookup for a new external request, not an automatic restart. */
+    public @Nullable MachineRecipe cachedPatternRecipe(Identifier recipeId) {
+        if (lastRecipe == null || !lastRecipe.id().equals(recipeId)) return null;
+        resolveCurrentLastRecipe(List.of(lastRecipe));
+        return lastRecipe;
+    }
+
+    public void savePatternMemory(ValueOutput output) {
+        output.putBoolean("requires_pattern_request", lastRecipeRequiresPatternRequest);
+        if (lastRecipe != null) output.store("recipe", MachineRecipe.CODEC.codec(), lastRecipe);
+    }
+
+    public void loadPatternMemory(ValueInput input) {
+        clearLastRecipe();
+        MachineRecipe saved = input.read("recipe", MachineRecipe.CODEC.codec()).orElse(null);
+        if (saved == null || !recipeBelongsToCurrentMachine(saved)) return;
+        MachineRecipe current = currentRecipeCatalog().recipes().stream()
+                .filter(recipe -> recipe.id().equals(saved.id())).findFirst().orElse(null);
+        if (current == null || !ActiveMachineRecipe.sameDefinition(saved, current, registryAccess())) return;
+        lastRecipe = current;
+        lastRecipeCatalogVersion = currentRecipeCatalog().version();
+        lastRecipeRequiresPatternRequest = input.getBooleanOr("requires_pattern_request", false);
     }
 
     public StartResult tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
@@ -173,7 +201,7 @@ public final class MachineRecipeThread extends RecipeThread {
 
     public @Nullable MachineRecipe peekRestartRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                                          long structureVersion) {
-        if (!restartPending || hasFullSearchPending()) return null;
+        if (lastRecipeRequiresPatternRequest || !restartPending || hasFullSearchPending()) return null;
         MachineRecipe retryRecipe = resolveCurrentLastRecipe(candidatesForMachine(candidates));
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         boolean canRestart = retryRecipe != null && availableParallelism > 0
@@ -293,6 +321,7 @@ public final class MachineRecipeThread extends RecipeThread {
     private void clearLastRecipe() {
         lastRecipe = null;
         lastRecipeCatalogVersion = Long.MIN_VALUE;
+        lastRecipeRequiresPatternRequest = false;
         restartPending = false;
     }
 }

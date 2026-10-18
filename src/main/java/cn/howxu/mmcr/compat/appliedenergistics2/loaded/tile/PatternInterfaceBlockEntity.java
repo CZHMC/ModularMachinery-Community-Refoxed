@@ -8,7 +8,10 @@ import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.security.IActionSource;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import net.minecraft.resources.Identifier;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
@@ -28,7 +31,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PendingPatternScheduler;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
@@ -52,6 +55,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.TypedEntityData;
@@ -62,6 +66,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.level.storage.TagValueInput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -72,6 +77,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongFunction;
 
@@ -101,14 +107,12 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final CapabilitySnapshot capabilitySnapshot;
     private boolean returnInventoryNotificationPending;
     private final PendingPatternQueue pendingPatterns = new PendingPatternQueue(this::onPendingPatternsCommitted);
-    private final PendingPatternScheduler pendingScheduler = new PendingPatternScheduler(this, pendingPatterns);
+    private long lastLegacyRefundTick = Long.MIN_VALUE;
+    private @Nullable BatchPublicationKey batchPublicationKey;
+    private boolean batchPublicationSuspended;
 
     public PendingPatternQueue pendingPatterns() {
         return pendingPatterns;
-    }
-
-    public PendingPatternScheduler pendingScheduler() {
-        return pendingScheduler;
     }
 
     private void onPendingPatternsCommitted() {
@@ -393,10 +397,74 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     protected void tick() {
         super.tick();
-        if (!pendingPatterns.isEmpty()) PendingPatternScheduler.schedule(this);
+        refreshBatchPatterns();
+        refundLegacyInputs();
         if (returnInventoryNotificationPending) {
             returnInventoryNotificationPending = false;
             notifyStorageChanged();
+        }
+    }
+
+    /** Refresh only future provider/profile lookups; captured calculations and existing jobs stay unchanged. */
+    public void refreshBatchPatterns() {
+        if (!(level instanceof ServerLevel serverLevel) || !serverLevel.getServer().isSameThread()
+                || isRemoved() || batchPublicationSuspended
+                || !PatternBatchPlanning.isBatchHost(this)) return;
+        IGrid grid = mainNode.getGrid();
+        if (grid == null) {
+            batchPublicationKey = null;
+            PatternBatchPlanning.remove(this);
+            return;
+        }
+        Set<BlockPos> links = Set.copyOf(linkedControllerPositions());
+        List<ControllerBatchVersion> controllers = new ArrayList<>();
+        for (BlockPos position : links.stream().sorted(BlockPos::compareTo).toList()) {
+            if (!level.hasChunkAt(position)
+                    || !(level.getBlockEntity(position) instanceof MachineControllerBlockEntity controller)
+                    || controller.isRemoved()) continue;
+            var snapshot = controller.currentRuntimeSnapshot();
+            Identifier pool = controller.currentRecipePoolId();
+            // Reuse the runtime's static lane/core eligibility, not occupancy or another lane-rule approximation.
+            List<Identifier> eligible = snapshot.factoryControllerPresent()
+                    ? controller.recipesForMachine().stream().filter(controller::supportsPatternRecipe)
+                    .map(MachineRecipe::id).toList() : List.of();
+            controllers.add(new ControllerBatchVersion(controller, controller.lifecycleEpoch(), snapshot.structure(),
+                    snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(),
+                    snapshot.upgradeContentRevision(), pool, RecipeRegistry.catalogForPool(pool).version(),
+                    snapshot.maxParallelism(), controller.effectiveFactoryThreadLimit(),
+                    snapshot.linkedPortPositions().contains(worldPosition), snapshot.moduleConnectionStatus(), eligible));
+        }
+        var key = new BatchPublicationKey(grid, links, List.copyOf(controllers));
+        if (key.equals(batchPublicationKey)) return;
+        batchPublicationKey = key;
+        // The mixin publishes before updatePatterns' native ICraftingProvider.requestUpdate call.
+        logic.updatePatterns();
+    }
+
+    /** Only static rule/version inputs belong here: active recipes, energy, progress and return fullness do not.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record ControllerBatchVersion(MachineControllerBlockEntity controller, long lifecycle,
+                                          StructureSnapshot structure, long capability, long modifier, long state,
+                                          long upgrade, @Nullable Identifier pool, long catalog, long maxParallelism,
+                                          int threadLimit, boolean linked, ModuleConnectionStatus modules,
+                                          List<Identifier> eligibleFactoryRecipes) {
+    }
+
+    /** Kept on the host/main thread only, never included in a calculation snapshot.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record BatchPublicationKey(IGrid grid, Set<BlockPos> links, List<ControllerBatchVersion> controllers) {
+    }
+
+    /** Legacy inputs are refunds, never recipe requests, and need no active grid. */
+    public void refundLegacyInputs() {
+        if (level == null || level.isClientSide() || isRemoved() || pendingPatterns.isEmpty()) return;
+        if (lastLegacyRefundTick == level.getGameTime()) return;
+        lastLegacyRefundTick = level.getGameTime();
+        pendingPatterns.rebaseClock(level.getGameTime());
+        try (Transaction transaction = Transaction.openRoot()) {
+            if (pendingPatterns.refundNext(this, transaction)) transaction.commit();
         }
     }
 
@@ -434,9 +502,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     protected void collectImplicitComponents(DataComponentMap.Builder components) {
         super.collectImplicitComponents(components);
-        if (!pendingPatterns.isEmpty() && level != null) {
+        if ((!pendingPatterns.isEmpty() || !logic.getReturnInv().isEmpty()) && level != null) {
             TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
             pendingPatterns.write(output, level.getGameTime());
+            logic.getReturnInv().writeToTag(output.childrenList(PatternProviderLogic.NBT_RETURN_INV));
             components.set(DataComponents.BLOCK_ENTITY_DATA, TypedEntityData.of(getType(), output.buildResult()));
         }
     }
@@ -451,8 +520,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void clearRemoved() {
         super.clearRemoved();
+        batchPublicationSuspended = false;
+        batchPublicationKey = null;
         GridHelper.onFirstTick(this, blockEntity -> {
-            if (blockEntity.getLevel() != null) {
+            if (blockEntity.getLevel() != null && !blockEntity.isRemoved() && !blockEntity.batchPublicationSuspended) {
                 blockEntity.mainNode.create(blockEntity.getLevel(), blockEntity.getBlockPos());
                 blockEntity.logic.updatePatterns();
             }
@@ -461,12 +532,14 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void onChunkUnloaded() {
+        stopBatchPublication();
         super.onChunkUnloaded();
         mainNode.destroy();
     }
 
     @Override
     public void setRemoved() {
+        stopBatchPublication();
         super.setRemoved();
         mainNode.destroy();
     }
@@ -474,16 +547,31 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void dropContents() {
         if (level == null || level.isClientSide()) return;
+        var inventory = logic.getReturnInv();
+        var returns = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
+        inventory.writeToTag(returns.childrenList(PatternProviderLogic.NBT_RETURN_INV));
         List<ItemStack> drops = new ArrayList<>();
         logic.addDrops(drops);
         for (ItemStack stack : drops) {
             Block.popResource(level, worldPosition, stack);
         }
         logic.clearContent();
+        // preRemoveSideEffects may run before playerDestroy builds loot. Preserve the carrier's
+        // sole material owner while clearing native patterns/sendList to make repeat calls safe.
+        inventory.readFromTag(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), returns.buildResult())
+                .childrenListOrEmpty(PatternProviderLogic.NBT_RETURN_INV));
     }
 
     private void onNetworkChanged() {
+        batchPublicationKey = null;
+        refreshBatchPatterns();
         if (!logic.getReturnInv().isEmpty() || logic.isBusy()) logic.onMainNodeStateChanged();
+    }
+
+    private void stopBatchPublication() {
+        batchPublicationSuspended = true;
+        batchPublicationKey = null;
+        if (level instanceof ServerLevel) PatternBatchPlanning.remove(this);
     }
 
     private MEStorage networkStorage() {

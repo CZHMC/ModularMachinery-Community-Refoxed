@@ -104,21 +104,33 @@ public class LightningPatternGameTest {
                     holders[3].add(extreme, 7L);
                     helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, null),
                             "A real decoded mixed pattern reaches controller admission");
-                    helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
-                                    && host.pendingPatterns().totalCopies() == 1L
-                                    && host.getLogic().getReturnInv().isEmpty(),
-                            "Admission owns the mixed request without starting or returning material");
-                    host.pendingScheduler().tick(helper.getLevel().getGameTime() + 1L);
-                    helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
-                            "Both lightning output types match the intended recipe");
+                    helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
+                                    && controller.runtimeSnapshot().crafting().parallelism() == 1L
+                                    && host.pendingPatterns().isEmpty(),
+                            "Mixed admission immediately pays one complete recipe on one thread, without precollection");
                     var returns = host.getLogic().getReturnInv().getAvailableStacks();
                     helper.assertTrue(holders[0].get(iron) == 0L && holders[1].get(water) == 0L
                                     && holders[2].get(high) == 0L && holders[3].get(extreme) == 0L
                                     && host.pendingPatterns().isEmpty(),
                             "The original AE2 holders are accepted once");
                     helper.assertTrue(returns.get(iron) == 2L && returns.get(water) == 750L
-                                    && returns.get(high) == 3L && returns.get(extreme) == 4L,
-                            "Each family returns exactly its unconsumed amount");
+                                    && returns.get(high) == 3L && returns.get(extreme) == 4L
+                                    && returns.get(AEItemKey.of(Items.GOLD_INGOT)) == 0L,
+                            "Each family returns exactly its unconsumed amount, without finishing on the push stack");
+                    KeyCounter[] next = {new KeyCounter(), new KeyCounter(), new KeyCounter(), new KeyCounter()};
+                    next[0].add(iron, 3L);
+                    next[1].add(water, 1_000L);
+                    next[2].add(high, 5L);
+                    next[3].add(extreme, 7L);
+                    helper.assertTrue(!host.craftingMachine().pushPattern(pattern, next, null)
+                                    && next[0].get(iron) == 3L && next[1].get(water) == 1_000L
+                                    && next[2].get(high) == 5L && next[3].get(extreme) == 7L
+                                    && host.pendingPatterns().isEmpty(),
+                            "An active thread rejects the next mixed request without taking any resource family");
+                    var afterRejection = host.getLogic().getReturnInv().getAvailableStacks();
+                    helper.assertTrue(afterRejection.get(iron) == 2L && afterRejection.get(water) == 750L
+                                    && afterRejection.get(high) == 3L && afterRejection.get(extreme) == 4L,
+                            "Busy rejection leaves all native return balances unchanged");
                     var restored = reload(helper, host);
                     var savedReturns = restored.getLogic().getReturnInv().getAvailableStacks();
                     helper.assertTrue(savedReturns.get(high) == 3L && savedReturns.get(extreme) == 4L

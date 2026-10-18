@@ -94,6 +94,31 @@ class FactoryRecipeThreadTest {
     }
 
     @Test
+    void onlyAnEligibleCoreLaneCanAdvertiseThisRecipe() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("core_pattern_allowed"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of());
+        RecipeRegistry.registerStatic(recipe);
+        try {
+            var lane = FactoryRecipeThread.core(controller, "restricted", Set.of());
+            assertThat(lane.canStartPatternRecipe(recipe)).isFalse();
+            lane.replaceRecipeSet(Set.of(recipe));
+            assertThat(lane.canStartPatternRecipe(recipe)).isTrue();
+            var prepared = lane.runtime().prepareExactPatternStart(recipe, 1L, List.of(), null);
+            assertThat(prepared).isNotNull();
+            assertThat(lane.runtime().reservePatternStart()).isTrue();
+            assertThat(lane.runtime().commitPatternStart(prepared)).isTrue();
+            lane.rememberPatternStartedRecipe();
+            assertThat(lane.cachedPatternRecipe(recipe.id())).isSameAs(recipe);
+            lane.replaceRecipeSet(Set.of());
+            assertThat(lane.cachedPatternRecipe(recipe.id())).isNull();
+        } finally {
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    @Test
     void delegates_custom_requirement_wakeups_without_concrete_requirement_dispatch() {
         try (var ignored = RequirementHandlerRegistry.openTestScope()) {
             Identifier id = Identifier.fromNamespaceAndPath("mmcr_test", "factory_wakeup");
