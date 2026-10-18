@@ -782,6 +782,7 @@ public final class CraftingRuntime {
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return null;
         EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
+        if (AsyncRequirementPlanner.capturedRequirementFailure(runtime, effectiveRecipe.requirements()) != null) return null;
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
                 effectiveRecipe.parallelismLimit()));
         List<MachineRequirement> recipeRequirements = effectiveRecipe.requirements();
@@ -824,6 +825,7 @@ public final class CraftingRuntime {
         runtime = current;
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList();
+        if (AsyncRequirementPlanner.capturedRequirementFailure(runtime, requirements) != null) return null;
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
         CraftingContext patternContext = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime));
         if (requestSource == null) {

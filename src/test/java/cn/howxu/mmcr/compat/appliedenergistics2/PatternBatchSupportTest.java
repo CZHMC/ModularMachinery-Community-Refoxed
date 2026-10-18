@@ -6,15 +6,27 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.CustomRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import com.mojang.serialization.MapCodec;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchSupport;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchSupport.Safety;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
@@ -29,12 +41,16 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,6 +62,9 @@ class PatternBatchSupportTest {
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
         TestBootstrap.bootstrapCapabilities();
+        TestBootstrap.registerType(new LevelType(MMCR.id("batch_profile_coil"), Component.empty()));
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("batch_profile_iron"), MMCR.id("batch_profile_coil"), 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
     }
 
     @Test
@@ -93,17 +112,58 @@ class PatternBatchSupportTest {
                 pattern(10, List.of(stack(Items.GOLD_INGOT, 2), stack(Items.DIAMOND, 3))))).isNull();
     }
 
-    @Test
-    void unknownRequirementIsNotDisguisedAsACapacityOfOne() {
-        var ordinary = recipe("known_one", List.of(input()), List.of(output(1)), true);
-        var unknown = recipe("unknown_one", List.of(input(), new StageRequirement(1)), List.of(output(1)), true);
+    @ParameterizedTest
+    @MethodSource("runtimeRequirements")
+    void runtimeRequirementsDoNotDisableBulkInputDelivery(MachineRequirement requirement) {
+        var guarded = recipe("guarded", List.of(input(), requirement), List.of(output(1)), true);
         var resolver = new EffectiveRecipeResolver();
         var pattern = pattern(1, List.of(stack(Items.GOLD_INGOT, 1)));
-        var knownProfile = PatternBatchSupport.inspectRecipe(ordinary, resolver.resolve(ordinary, snapshot(1), List.of()), pattern);
-        var unknownProfile = PatternBatchSupport.inspectRecipe(unknown, resolver.resolve(unknown, snapshot(1), List.of()), pattern);
-        assertThat(knownProfile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
-        assertThat(unknownProfile.safety()).isEqualTo(Safety.UNPROVEN);
-        assertThat(unknownProfile.maxMultiplier()).isEqualTo(knownProfile.maxMultiplier());
+        var profile = PatternBatchSupport.inspectRecipe(guarded, resolver.resolve(guarded, snapshot(4), List.of()), pattern);
+        assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+        assertThat(profile.maxMultiplier()).isEqualTo(4L);
+    }
+
+    static Stream<MachineRequirement> runtimeRequirements() {
+        return Stream.of(new LevelRequirement(MMCR.id("batch_profile_coil"), MMCR.id("batch_profile_iron")), new StageRequirement(2),
+                SmartInterfaceRequirement.input("temperature", 10F, 20F),
+                SmartInterfaceRequirement.output("temperature", 42F));
+    }
+
+    @Test
+    void retainedOrProbabilisticInputsStillUseTheMachinesParallelLimit() {
+        for (float consumeChance : new float[]{0F, 0.5F}) {
+            var retained = new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                    1F, List.of(), DataComponentPredicateSet.EMPTY, consumeChance);
+            var recipe = recipe("retained", List.of(retained), List.of(output(1)), true);
+            var effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(4), List.of());
+            var profile = PatternBatchSupport.inspectRecipe(recipe, effective,
+                    pattern(1, List.of(stack(Items.GOLD_INGOT, 1))));
+            assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+            assertThat(profile.maxMultiplier()).isEqualTo(4L);
+        }
+    }
+
+    @Test
+    void customRequirementIsValidatedByItsRuntimeHandlerRatherThanAProviderWhitelist() {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(ExternalCondition.TYPE);
+            var recipe = recipe("custom_condition", List.of(input(), new ExternalCondition()), List.of(output(1)), true);
+            var effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(4L), List.of());
+            var profile = PatternBatchSupport.inspectRecipe(recipe, effective,
+                    pattern(1, List.of(stack(Items.GOLD_INGOT, 1))));
+            assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+            assertThat(profile.maxMultiplier()).isEqualTo(4L);
+        }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record ExternalCondition() implements CustomRequirement {
+        private static final RequirementType<ExternalCondition> TYPE = new RequirementType.Definition<>(
+                MMCR.id("batch_external_condition"), MapCodec.unit(ExternalCondition::new),
+                (requirement, capabilities, context) -> new RequirementPlan(context.requirementIndex(),
+                        context.requestedParallelism(), List.of(), null), ignored -> new ExternalCondition());
+        @Override public IOType io() { return IOType.INPUT; }
+        @Override public RequirementType<ExternalCondition> type() { return TYPE; }
     }
 
     @Test

@@ -26,6 +26,9 @@ import appeng.core.definitions.AEBlocks;
 import appeng.me.service.CraftingService;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
@@ -35,6 +38,9 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
@@ -54,6 +60,7 @@ import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -69,6 +76,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Native AE calculation and extraction exercise graph safety without ticking a machine.
  * @author howxu <dev@howxu.cn>
@@ -199,6 +207,58 @@ public final class PatternBatchPlanningGameTest {
                 "The supported huge order stays one batch rather than expanding per craft");
         conserve(helper, hugeOrder, hugePlan);
         helper.succeed();
+    }
+
+    public static void runtimeConditionsAndHooksPublishAndCompressBulkInputs(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        var host = helper.getBlockEntity(BlockPos.ZERO, PatternInterfaceBlockEntity.class);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode() != null,
+                        "Provider initializes through its native first tick"))
+                .thenExecute(() -> {
+                    var callbacks = new AtomicInteger();
+                    var controller = bindController(helper, host, new BlockPos(0, 0, 2), 4L);
+                    var base = parallelMachine(4L);
+                    controller.setMachine(new Machine() {
+                        @Override public Identifier registryName() { return base.registryName(); }
+                        @Override public BlockArray pattern() { return base.pattern(); }
+                        @Override public MachineControllerSpec controller() { return base.controller(); }
+                        @Override public boolean parallelizable() { return true; }
+                        @Override public long maxParallelism() { return 4L; }
+                        @Override public RecipeBehavior behavior() {
+                            return RecipeBehavior.builder().beforeStart(context -> callbacks.incrementAndGet())
+                                    .recipeTick(context -> callbacks.incrementAndGet())
+                                    .beforeFinish(context -> callbacks.incrementAndGet()).build();
+                        }
+                    });
+                    controller.setFormed(true);
+                    var level = MachineLevelRegistry.levelsForType(MachineLevelRegistry.types().getFirst().id()).getFirst();
+                    var recipeId = MMCR.id("batch_conditions_and_hooks");
+                    RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("test_cube"), 20,
+                            List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                                    new LevelRequirement(level.typeId(), level.id()), new StageRequirement(1),
+                                    SmartInterfaceRequirement.input("temperature", 10F, 20F),
+                                    SmartInterfaceRequirement.output("temperature", 42F),
+                                    MachineRequirement.itemOutput(new ItemStack(Items.DIAMOND, 9))),
+                            List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 9), 1F)),
+                            List.of(), 0, 1, false, true, false, Set.of()));
+                    host.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
+                            List.of(stack(Items.IRON_INGOT, 2)), List.of(stack(Items.DIAMOND, 9))));
+                    host.getLogic().updatePatterns();
+                    var unit = host.getLogic().getAvailablePatterns().stream()
+                            .filter(pattern -> pattern instanceof PatternBatchDetails batch && batch.data().recipeId().equals(recipeId))
+                            .map(pattern -> (PatternBatchDetails) pattern).findFirst().orElseThrow();
+                    var snapshot = PatternBatchPlanning.capture(host.getMainNode().getGrid());
+                    helper.assertTrue(snapshot.limits().get(unit.getDefinition()).maxMultiplier() == 4L,
+                            "Runtime conditions and registered callbacks retain the actual single-lane parallel limit");
+                    var materials = new KeyCounter();
+                    materials.add(AEItemKey.of(Items.IRON_INGOT), 24L);
+                    var plan = simulate(helper, List.of(unit), materials, stack(Items.DIAMOND, 100L), snapshot);
+                    helper.assertFalse(plan.simulation(), "All 12 recipe operations have their inputs");
+                    helper.assertTrue(plan.patternTimes().equals(Map.of(unit.scaled(4L), 3L)),
+                            "100 diamonds are planned as three batches of four, not twelve unit tasks");
+                    helper.assertTrue(callbacks.get() == 0, "Read-only publication and AE planning never execute runtime callbacks");
+                    settle(helper, plan);
+                }).thenSucceed();
     }
 
     public static void lightningBatchesPreserveNativePlanningAndAdmission(GameTestHelper helper) {

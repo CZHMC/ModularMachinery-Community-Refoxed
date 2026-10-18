@@ -20,6 +20,10 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchSupport;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestState;
@@ -57,6 +61,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static cn.howxu.mmcr.util.IOType.INPUT;
@@ -87,6 +92,10 @@ public final class PatternBatchRuntimeGameTest {
         completeBatch(helper, false, Integer.MAX_VALUE, false);
     }
 
+    public static void conditionalBatchRunsAllNativeCallbacksAtRequestedParallelism(GameTestHelper helper) {
+        completeBatch(helper, false, 4L, false, true);
+    }
+
     public static void inspectionDoesNotLoadLinkedControllerChunk(GameTestHelper helper) {
         try (var fixture = new Fixture(helper, false, 256L, false, "inspection")) {
             var unloaded = fixture.controller.getBlockPos().offset(1_000_000, 0, 0);
@@ -109,7 +118,11 @@ public final class PatternBatchRuntimeGameTest {
     }
 
     private static void completeBatch(GameTestHelper helper, boolean factory, long copies, boolean reload) {
-        try (var fixture = new Fixture(helper, factory, copies, reload)) {
+        completeBatch(helper, factory, copies, reload, false);
+    }
+
+    private static void completeBatch(GameTestHelper helper, boolean factory, long copies, boolean reload, boolean guarded) {
+        try (var fixture = new Fixture(helper, factory, copies, reload, "execution", guarded)) {
             var incomplete = fixture.request(copies, true);
             helper.assertTrue(fixture.reserve(copies, incomplete).status() == PatternStartReservation.Status.UNAVAILABLE,
                     "One missing item rejects the entire single-lane batch");
@@ -138,6 +151,9 @@ public final class PatternBatchRuntimeGameTest {
                             && fixture.returnedFluids() == Math.multiplyExact(100L, copies),
                     "The saved effective item/fluid snapshot settles exactly once through native return inventory");
             helper.assertTrue(fixture.activeRuntimeOrNull() == null, "Completed source execution is not automatically restarted");
+            helper.assertTrue(!fixture.tickParallelisms.isEmpty() && fixture.tickParallelisms.stream().allMatch(value -> value == copies)
+                            && fixture.finishParallelisms.equals(List.of(copies)),
+                    "Native tick and finish callbacks observe the whole batch parallelism and finish exactly once");
             for (int round = 0; round < 3; round++) fixture.round();
             helper.assertTrue(fixture.returnedItems() == Math.multiplyExact(3L, copies)
                             && fixture.returnedFluids() == Math.multiplyExact(100L, copies),
@@ -161,6 +177,8 @@ public final class PatternBatchRuntimeGameTest {
         private final PatternInterfaceBlockEntity host;
         private final MachineRecipe recipe;
         private final AtomicInteger hooks = new AtomicInteger();
+        private final List<Long> tickParallelisms = new ArrayList<>();
+        private final List<Long> finishParallelisms = new ArrayList<>();
         private boolean registered;
 
         private Fixture(GameTestHelper helper, boolean factory, long copies, boolean reload) {
@@ -168,6 +186,10 @@ public final class PatternBatchRuntimeGameTest {
         }
 
         private Fixture(GameTestHelper helper, boolean factory, long copies, boolean reload, String purpose) {
+            this(helper, factory, copies, reload, purpose, false);
+        }
+
+        private Fixture(GameTestHelper helper, boolean factory, long copies, boolean reload, String purpose, boolean guarded) {
             this.helper = helper;
             this.factory = factory;
             originalTime = helper.getLevel().getGameTime();
@@ -200,7 +222,9 @@ public final class PatternBatchRuntimeGameTest {
                 @Override public boolean hasFactory() { return factory; }
                 @Override public int factoryThreadLimit() { return 4; }
                 @Override public RecipeBehavior behavior() {
-                    return RecipeBehavior.builder().beforeStart(context -> hooks.incrementAndGet()).build();
+                    return RecipeBehavior.builder().beforeStart(context -> hooks.incrementAndGet())
+                            .recipeTick(context -> tickParallelisms.add(context.parallelism()))
+                            .beforeFinish(context -> finishParallelisms.add(context.effectiveParallelism())).build();
                 }
             };
             controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
@@ -221,11 +245,18 @@ public final class PatternBatchRuntimeGameTest {
                 controller.serverTick();
                 helper.assertTrue(controller.currentStructureSnapshot().formed(), "Real fixture structure forms before admission");
                 controller.setFormed(true);
-                recipe = MachineRecipe.fromCanonical(machineId.withSuffix("_recipe"), machineId, 2,
-                        List.of(new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
-                                new FluidRequirement(IOType.INPUT, FluidIngredient.of(Fluids.WATER), 250, FluidStack.EMPTY),
-                                new ItemRequirement(IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT, 3)),
-                                new FluidRequirement(IOType.OUTPUT, null, 0, new FluidStack(Fluids.LAVA, 100))),
+                var requirements = new ArrayList<MachineRequirement>(List.of(
+                                 new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
+                                 new FluidRequirement(IOType.INPUT, FluidIngredient.of(Fluids.WATER), 250, FluidStack.EMPTY),
+                                 new ItemRequirement(IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT, 3)),
+                                 new FluidRequirement(IOType.OUTPUT, null, 0, new FluidStack(Fluids.LAVA, 100))));
+                if (guarded) {
+                    var level = MachineLevelRegistry.levelsForType(MachineLevelRegistry.types().getFirst().id()).getFirst();
+                    controller.componentRuntime().replaceLevels(Map.of(level.typeId(), level));
+                    requirements.add(new LevelRequirement(level.typeId(), level.id()));
+                    requirements.add(new StageRequirement(1));
+                }
+                recipe = MachineRecipe.fromCanonical(machineId.withSuffix("_recipe"), machineId, 2, requirements,
                         List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), 1F),
                                 new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 100), 1F)),
                         List.of(), 0, 1, false, true, false, Set.of());

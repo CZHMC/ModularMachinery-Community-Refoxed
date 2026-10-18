@@ -6,8 +6,6 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.crafting.pattern.AEProcessingPattern;
-import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -61,12 +59,6 @@ public final class PatternBatchSupport {
                 if (effective == null) continue;
                 Profile profile = inspectRecipe(recipe, effective, original);
                 if (profile == null) continue;
-                var snapshot = controller.currentRuntimeSnapshot();
-                Machine machine = snapshot.structure().machine() == null
-                        ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-                if (machine != null && machine.behavior() instanceof RecipeBehavior behavior && behavior.hasBeforeStart()) {
-                    profile = new Profile(profile.binding(), profile.maxMultiplier(), Safety.UNPROVEN);
-                }
                 Profile next = profile;
                 profiles.merge(next.binding(), next, (first, second) -> new Profile(first.binding(),
                         Math.max(first.maxMultiplier(), second.maxMultiplier()),
@@ -106,22 +98,19 @@ public final class PatternBatchSupport {
                 if (amount <= 0L) return null;
                 maximum = Math.min(maximum, Long.MAX_VALUE / amount);
             }
-            boolean linear = true;
+            // This is bulk input delivery, not permission to bypass the recipe runtime.
+            // Conditions, custom requirements and callbacks are checked by actual start planning.
             for (MachineRequirement requirement : effective.requirements()) {
                 long amount;
                 if (requirement instanceof ItemRequirement item) {
-                    linear &= item.chance() == 1F && item.consumeChance() == 1F;
                     amount = item.io() == IOType.INPUT ? item.count() : item.stack().getCount();
                 } else if (requirement instanceof FluidRequirement fluid) {
-                    linear &= fluid.chance() == 1F && fluid.consumeChance() == 1F;
                     amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
                 } else if (requirement instanceof EnergyRequirement energy) {
                     amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
                 } else if (requirement instanceof LightningRequirement lightning) {
-                    linear &= lightning.chance() == 1F;
                     amount = lightning.amount();
                 } else {
-                    linear = false;
                     continue;
                 }
                 if (amount <= 0L) return null;
@@ -129,7 +118,7 @@ public final class PatternBatchSupport {
             }
             if (maximum < 1L) return null;
             return new Profile(new PatternBatchBinding(recipe.recipePoolId(), recipe.id(), crafts), maximum,
-                    linear ? Safety.PROVEN_LINEAR : Safety.UNPROVEN);
+                    Safety.PROVEN_LINEAR);
         } catch (ArithmeticException | IllegalArgumentException exception) {
             return null;
         }

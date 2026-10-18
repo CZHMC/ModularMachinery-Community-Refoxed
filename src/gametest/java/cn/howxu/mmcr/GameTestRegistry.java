@@ -120,6 +120,10 @@ public final class GameTestRegistry {
                     PatternBatchRuntimeGameTest::paidFactoryPatternReloadKeepsSnapshot);
             register(event, "pattern_batch_exact_long_resources", 40,
                     PatternBatchRuntimeGameTest::exactLongItemAndFluidBatchFinishesOnce);
+            register(event, "pattern_batch_conditions_callbacks_runtime", 40,
+                    PatternBatchRuntimeGameTest::conditionalBatchRunsAllNativeCallbacksAtRequestedParallelism);
+            register(event, "pattern_batch_conditions_callbacks_publication", 100,
+                    PatternBatchPlanningGameTest::runtimeConditionsAndHooksPublishAndCompressBulkInputs);
             register(event, "pattern_batch_inspect_unloaded_chunk", 40,
                     PatternBatchRuntimeGameTest::inspectionDoesNotLoadLinkedControllerChunk);
             register(event, "input_isolation_native_ae_input", 20, InputIsolationGameTest::nativeAeInputUsesOnePhysicalSource);

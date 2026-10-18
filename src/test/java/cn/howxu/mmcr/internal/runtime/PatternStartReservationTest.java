@@ -7,11 +7,15 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -28,6 +32,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
@@ -37,6 +44,7 @@ import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.SmartInterfaceCapability;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -74,6 +82,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.util.ProblemReporter;
@@ -103,6 +112,9 @@ class PatternStartReservationTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         TestBootstrap.bootstrapCapabilities();
+        TestBootstrap.registerType(new LevelType(MMCR.id("missing_coil"), Component.empty()));
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("missing_level"), MMCR.id("missing_coil"), 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
     }
 
     @AfterEach
@@ -1268,6 +1280,91 @@ class PatternStartReservationTest {
             assertThat(materials.amount(0)).isEqualTo(256L);
             assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
             assertThat(fixture.runtime.ledger().state().paidAttempts()).isZero();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"level", "stage", "callback_level", "callback_stage", "cancel"})
+    void batchDeliveryCannotBypassStaticConditionsOrCallbackCancellation(String condition) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            MachineRequirement guard = condition.endsWith("level")
+                    ? new LevelRequirement(MMCR.id("missing_coil"), MMCR.id("missing_level"))
+                    : new StageRequirement(2);
+            var requirements = new ArrayList<MachineRequirement>(List.of(input(Items.IRON_INGOT, 1)));
+            if (!condition.startsWith("callback_") && !condition.equals("cancel")) requirements.add(guard);
+            var behavior = RecipeBehavior.builder().beforeStart(context -> {
+                if (condition.startsWith("callback_")) {
+                    var modified = new ArrayList<>(context.requirements());
+                    modified.add(guard);
+                    context.setRequirements(modified);
+                }
+                if (condition.equals("cancel")) context.cancel();
+            }).build();
+            var fixture = new PendingStartFixture("guarded_batch_" + condition, behavior, requirements, 4L);
+            var materials = new LongResourceStorage<>(ItemResource.class, 1, 64L, ItemResource::isEmpty, null);
+            materials.setContents(0, ItemResource.of(Items.IRON_INGOT), 4L);
+            var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, List.of(new ItemBusCapability(materials, IOType.INPUT)));
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(materials.amount(0)).isEqualTo(4L);
+            assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+            assertThat(fixture.runtime.active()).isFalse();
+        }
+    }
+
+    @Test
+    void batchUsesActualBeforeStartInputDemandWithoutAcceptingAPrefix() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var fixture = new PendingStartFixture("batch_changed_input", RecipeBehavior.builder().beforeStart(context ->
+                    context.replaceExactItemInputCount(Items.IRON_INGOT, 1, 2)).build(),
+                    List.of(input(Items.IRON_INGOT, 1), new StageRequirement(1)), 4L);
+            var materials = new LongResourceStorage<>(ItemResource.class, 1, 64L, ItemResource::isEmpty, null);
+            materials.setContents(0, ItemResource.of(Items.IRON_INGOT), 4L);
+            List<MachineCapability> capabilities = List.of(new ItemBusCapability(materials, IOType.INPUT));
+            assertThat(fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities).status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(materials.amount(0)).isEqualTo(4L);
+            materials.setContents(0, ItemResource.of(Items.IRON_INGOT), 8L);
+            try (var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities)) {
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.parallelism()).isEqualTo(4L);
+                assertThat(reservation.commit()).isTrue();
+            }
+            assertThat(materials.amount(0)).isZero();
+            assertThat(fixture.runtime.parallelism()).isEqualTo(4L);
+        }
+    }
+
+    @Test
+    void smartConditionRejectsBulkDeliveryUntilItsActualValueMatches() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var fixture = new PendingStartFixture("batch_smart_condition", RecipeBehavior.defaults(), List.of(
+                    input(Items.IRON_INGOT, 1), SmartInterfaceRequirement.input("temperature", 10F, 20F)), 4L);
+            var values = new FloatValueStorage();
+            values.set("temperature", 5F);
+            var smart = new PatternFluxHost(RuntimeTestFixtures.itemInput(new BlockPos(5, 0, 0)),
+                    new SmartInterfaceCapability(values, IOType.INPUT));
+            smart.setLevel(fixture.controller.getLevel());
+            var components = new ArrayList<>(fixture.controller.componentRuntime().components());
+            components.add(new ProcessingComponent(null, smart, smart.getBlockPos(), smart.getBlockPos(), List.of()));
+            fixture.controller.componentRuntime().replaceComponents(components);
+            RuntimeTestFixtures.republish(fixture.controller);
+            var materials = new LongResourceStorage<>(ItemResource.class, 1, 64L, ItemResource::isEmpty, null);
+            materials.setContents(0, ItemResource.of(Items.IRON_INGOT), 4L);
+            List<MachineCapability> capabilities = List.of(new ItemBusCapability(materials, IOType.INPUT));
+            assertThat(fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities).status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(materials.amount(0)).isEqualTo(4L);
+            values.set("temperature", 15F);
+            try (var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities)) {
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.parallelism()).isEqualTo(4L);
+                assertThat(reservation.commit()).isTrue();
+            }
+            assertThat(materials.amount(0)).isZero();
+            assertThat(values.value("temperature")).contains(15F);
         }
     }
 
