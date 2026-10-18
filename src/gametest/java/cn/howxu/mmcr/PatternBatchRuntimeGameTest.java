@@ -240,7 +240,11 @@ public final class PatternBatchRuntimeGameTest {
             for (int round = 0; round < 8; round++) fixture.round();
             helper.assertTrue(fixture.returnedItems() == Math.multiplyExact(3L, copies)
                             && fixture.returnedFluids() == Math.multiplyExact(100L, copies),
-                    "The saved effective item/fluid snapshot settles exactly once through native return inventory");
+                    "The saved effective item/fluid snapshot settles exactly once through native return inventory; items="
+                            + fixture.returnedItems() + ", fluids=" + fixture.returnedFluids()
+                            + ", state=" + fixture.runtime.craftingRuntime().snapshot()
+                            + ", failure=" + fixture.runtime.craftingRuntime().failure()
+                            + ", ticks=" + fixture.tickParallelisms + ", finishes=" + fixture.finishParallelisms);
             helper.assertTrue(fixture.activeRuntimeOrNull() == null, "Completed source execution is not automatically restarted");
             helper.assertTrue(!fixture.tickParallelisms.isEmpty() && fixture.tickParallelisms.stream().allMatch(value -> value == copies)
                             && fixture.finishParallelisms.equals(List.of(copies)),
@@ -415,6 +419,8 @@ public final class PatternBatchRuntimeGameTest {
                 runtime.factoryRuntime().load(input, controller);
                 runtime.factoryRuntime().rebindCurrentVersions();
             } else {
+                // Match a real unload: release the old paid execution before restoring its ledger.
+                runtime.craftingRuntime().invalidate();
                 runtime.craftingRuntime().load(input, controller.resourceDomain());
                 runtime.craftingRuntime().rebindCurrentVersions();
             }
