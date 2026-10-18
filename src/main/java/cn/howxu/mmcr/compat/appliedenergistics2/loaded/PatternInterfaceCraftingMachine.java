@@ -83,6 +83,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                     try (var reservation = controller.reserveExactPatternStart(host.getBlockPos(), recipe.id(),
                             effective.outputs(), parallelism, capabilities)) {
                         if (reservation.status() != PatternStartReservation.Status.RESERVED) continue;
+                        if (batch != null && batch.data().multiplier() > 1L
+                                && !PatternBatchSupport.supportsBatchInputs(reservation.effectiveRequirements())) continue;
                         if (reservation.commit(transaction -> {
                             for (var view : views) {
                                 if (!view.accept(host, transaction)) throw new IllegalStateException("Pattern return inventory full");

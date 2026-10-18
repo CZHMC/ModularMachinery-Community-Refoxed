@@ -1252,6 +1252,21 @@ class PatternStartReservationTest {
     }
 
     @ParameterizedTest
+    @ValueSource(floats = {0F, 0.5F, 1F})
+    void probabilisticOutputPromisesAcceptUnchangedProbabilitiesButRejectCallbackChanges(float chance) {
+        List<MachineOutput> expected = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), chance),
+                new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 100), chance));
+        List<MachineOutput> same = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), chance),
+                new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 100), chance));
+        assertThat(CraftingRuntime.samePromisedOutputs(expected, same, 4L)).isTrue();
+        for (int index = 0; index < expected.size(); index++) {
+            var changed = new ArrayList<>(same);
+            changed.set(index, same.get(index).withChance(chance == 1F ? 0.5F : 1F));
+            assertThat(CraftingRuntime.samePromisedOutputs(expected, changed, 4L)).isFalse();
+        }
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"key", "amount", "components", "chance"})
     void beforeStartChangesPromisedOutputsRejectsWithoutPayment(String change) throws Exception {
         try (var ignored = ServerThreadTestScope.open()) {
@@ -1365,6 +1380,62 @@ class PatternStartReservationTest {
             }
             assertThat(materials.amount(0)).isZero();
             assertThat(values.value("temperature")).contains(15F);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0,false,false", "2,false,false", "4,false,false", "4,true,false", "4,false,true", "4,true,true"})
+    void onlyFullyRequestSuppliedRetainedInputsSkipContinuousChecksAfterReload(int requestCatalysts,
+                                                                              boolean saveDuringCommit, boolean overlaps) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var catalystItem = overlaps ? Items.IRON_INGOT : Items.DIAMOND;
+            var catalyst = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(catalystItem), 1,
+                    ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F);
+            var fixture = new PendingStartFixture("exact_retained_request", RecipeBehavior.defaults(),
+                    List.of(input(Items.IRON_INGOT, overlaps ? 2 : 1), catalyst), 4L);
+            var physical = RuntimeTestFixtures.itemInput(new BlockPos(5, 0, 0));
+            physical.setLevel(fixture.controller.getLevel());
+            setItem(physical.itemStorage(), 0, stack(catalystItem, 4));
+            var components = new ArrayList<>(fixture.controller.componentRuntime().components());
+            components.add(new ProcessingComponent(new MachineComponent(physical.kind(), physical.ioType()), physical,
+                    physical.getBlockPos(), physical.getBlockPos(), (String) null));
+            fixture.controller.componentRuntime().replaceComponents(components);
+            formForPattern(fixture.controller, true);
+            var request = new LongResourceStorage<>(ItemResource.class, 2, 64L, ItemResource::isEmpty, null);
+            request.setContents(0, ItemResource.of(Items.IRON_INGOT), 4L);
+            request.setContents(1, ItemResource.of(Items.DIAMOND), overlaps ? 0 : requestCatalysts);
+            var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, fixture.controller.getLevel().registryAccess());
+            try (var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, List.of(new ItemBusCapability(request, IOType.INPUT)))) {
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.commit(transaction -> {
+                    if (saveDuringCommit) fixture.runtime.save(saved);
+                })).isTrue();
+            }
+            assertThat(request.amount(0)).isZero();
+            assertThat(request.amount(1)).isEqualTo(overlaps ? 0 : requestCatalysts);
+            assertThat(physical.itemStorage().amount(0)).isEqualTo(overlaps ? 0L : 4L);
+            if (!saveDuringCommit) fixture.runtime.save(saved);
+            // AE owns the unconsumed request again; it is not a persistent physical input source.
+            request.setContents(1, ItemResource.of(Items.DIAMOND), 0L);
+            try (var transaction = Transaction.openRoot()) {
+                if (!overlaps) assertThat(physical.itemStorage().extract(0, physical.itemStorage().resource(0), 4L, transaction)).isEqualTo(4L);
+                transaction.commit();
+            }
+            var restored = new CraftingRuntime(fixture.controller, fixture.controller.componentRuntime());
+            restored.load(TagValueInput.create(ProblemReporter.DISCARDING, fixture.controller.getLevel().registryAccess(), saved.buildResult()),
+                    fixture.controller.resourceDomain());
+            assertThat(restored.active()).isTrue();
+            restored.rebindCurrentVersions();
+            boolean validatedRequest = requestCatalysts == 4 && !overlaps;
+            if (validatedRequest) assertThat(restored.installedTickRequirements()).isEmpty();
+            else assertThat(restored.installedTickRequirements()).isNotEmpty();
+            LevelStub.setGameTime(fixture.controller.getLevel(), 1L);
+            restored.tick();
+            assertThat(restored.tickCount()).isEqualTo(validatedRequest && !saveDuringCommit ? 1 : 0);
+            if (saveDuringCommit) assertThat(restored.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+            if (validatedRequest && !saveDuringCommit) assertThat(restored.failure()).isNull();
+            else assertThat(restored.failure()).isNotNull();
         }
     }
 

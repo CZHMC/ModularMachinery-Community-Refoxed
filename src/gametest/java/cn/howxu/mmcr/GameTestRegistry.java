@@ -124,6 +124,10 @@ public final class GameTestRegistry {
                     PatternBatchRuntimeGameTest::conditionalBatchRunsAllNativeCallbacksAtRequestedParallelism);
             register(event, "pattern_batch_conditions_callbacks_publication", 100,
                     PatternBatchPlanningGameTest::runtimeConditionsAndHooksPublishAndCompressBulkInputs);
+            register(event, "pattern_batch_probability_publication", 100,
+                    PatternBatchPlanningGameTest::onlyIntermediateInputProbabilityKeepsNativeUnitTasks);
+            register(event, "pattern_batch_probability_admission", 40,
+                    PatternBatchRuntimeGameTest::probabilisticOutputsAdmitBatchesAndRetainedInputsReturnUnconsumed);
             register(event, "pattern_batch_inspect_unloaded_chunk", 40,
                     PatternBatchRuntimeGameTest::inspectionDoesNotLoadLinkedControllerChunk);
             register(event, "input_isolation_native_ae_input", 20, InputIsolationGameTest::nativeAeInputUsesOnePhysicalSource);
@@ -392,6 +396,8 @@ public final class GameTestRegistry {
                         helper -> new LightningPatternGameTest().mixedLaneRollbackLongPersistenceAndNativeReturn(helper));
                 register(event, "ae2lt_pattern_batch_native_planning_admission", 160,
                         PatternBatchPlanningGameTest::lightningBatchesPreserveNativePlanningAndAdmission);
+                register(event, "pattern_batch_probability_lightning", 160,
+                        PatternBatchPlanningGameTest::probabilisticLightningOutputsPreserveNativePlanningAndAdmission);
             }
             register(event, "ae2_pattern_return_long_balances", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));

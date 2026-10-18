@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
@@ -100,6 +101,7 @@ public final class PatternBatchSupport {
             }
             // This is bulk input delivery, not permission to bypass the recipe runtime.
             // Conditions, custom requirements and callbacks are checked by actual start planning.
+            boolean linear = supportsBatchInputs(effective.requirements());
             for (MachineRequirement requirement : effective.requirements()) {
                 long amount;
                 if (requirement instanceof ItemRequirement item) {
@@ -118,7 +120,7 @@ public final class PatternBatchSupport {
             }
             if (maximum < 1L) return null;
             return new Profile(new PatternBatchBinding(recipe.recipePoolId(), recipe.id(), crafts), maximum,
-                    Safety.PROVEN_LINEAR);
+                    linear ? Safety.PROVEN_LINEAR : Safety.UNPROVEN);
         } catch (ArithmeticException | IllegalArgumentException exception) {
             return null;
         }
@@ -130,6 +132,22 @@ public final class PatternBatchSupport {
                 || !binding.recipeId().equals(recipe.id())) return false;
         Profile profile = inspectRecipe(recipe, effective, original);
         return profile != null && profile.binding().equals(binding);
+    }
+
+    /** Applied both during publication and after beforeStart has supplied the actual requirements. */
+    public static boolean supportsBatchInputs(List<MachineRequirement> requirements) {
+        for (MachineRequirement requirement : requirements) {
+            if (requirement.io() != IOType.INPUT) continue;
+            float consumeChance = switch (requirement) {
+                case ItemRequirement item -> item.consumeChance();
+                case FluidRequirement fluid -> fluid.consumeChance();
+                case LoadedChemicalRequirement chemical -> chemical.consumeChance();
+                case LightningRequirement lightning -> lightning.chance(); // Lightning inputs currently require 1.
+                default -> 1F;
+            };
+            if (consumeChance != 0F && consumeChance != 1F) return false;
+        }
+        return true;
     }
 
     private static boolean inputsMatch(List<MachineRequirement> requirements, IPatternDetails original) {
@@ -168,7 +186,6 @@ public final class PatternBatchSupport {
     private static Map<AEKey, Long> outputTotals(List<MachineOutput> outputs) {
         Map<AEKey, Long> totals = new LinkedHashMap<>();
         for (MachineOutput output : outputs) {
-            if (output.chance() != 1F) throw new IllegalArgumentException("Non-deterministic output");
             AEKey key;
             if (output instanceof MachineOutput.ItemOutput item) {
                 if (item.components().hasNonExactValues()) throw new IllegalArgumentException("Non-exact output components");

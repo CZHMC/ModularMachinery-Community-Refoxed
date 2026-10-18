@@ -38,6 +38,9 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
@@ -262,6 +265,14 @@ public final class PatternBatchPlanningGameTest {
     }
 
     public static void lightningBatchesPreserveNativePlanningAndAdmission(GameTestHelper helper) {
+        lightningBatchesPreserveNativePlanningAndAdmission(helper, 1F);
+    }
+
+    public static void probabilisticLightningOutputsPreserveNativePlanningAndAdmission(GameTestHelper helper) {
+        lightningBatchesPreserveNativePlanningAndAdmission(helper, 0.5F);
+    }
+
+    private static void lightningBatchesPreserveNativePlanningAndAdmission(GameTestHelper helper, float outputChance) {
         helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
         helper.setBlock(new BlockPos(2, 0, 0), ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
         var highHost = helper.getBlockEntity(BlockPos.ZERO, PatternInterfaceBlockEntity.class);
@@ -271,19 +282,56 @@ public final class PatternBatchPlanningGameTest {
                         "Lightning providers initialize through their native lifecycle"))
                 .thenExecute(() -> {
                     verifyLightningBatch(helper, highHost, new BlockPos(0, 0, 2), LightningTier.HIGH_VOLTAGE,
-                            LightningTier.EXTREME_HIGH_VOLTAGE);
+                            LightningTier.EXTREME_HIGH_VOLTAGE, outputChance);
                     verifyLightningBatch(helper, extremeHost, new BlockPos(2, 0, 2), LightningTier.EXTREME_HIGH_VOLTAGE,
-                            LightningTier.HIGH_VOLTAGE);
+                            LightningTier.HIGH_VOLTAGE, outputChance);
+                }).thenSucceed();
+    }
+
+    public static void onlyIntermediateInputProbabilityKeepsNativeUnitTasks(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        var host = helper.getBlockEntity(BlockPos.ZERO, PatternInterfaceBlockEntity.class);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode() != null,
+                        "Provider initializes through its native first tick"))
+                .thenExecute(() -> {
+                    bindController(helper, host, new BlockPos(0, 0, 2), 4L);
+                    for (float consumeChance : new float[]{0F, 0.5F, 1F}) {
+                        for (float outputChance : new float[]{0F, 0.5F, 1F}) {
+                            var recipeId = MMCR.id("batch_probability_" + (int) (consumeChance * 100) + "_" + (int) (outputChance * 100));
+                            var output = new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), outputChance);
+                            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("test_cube"), 20,
+                                    List.of(new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                                                    1F, List.of(), DataComponentPredicateSet.EMPTY, consumeChance),
+                                            OutputRegistry.toRequirement(output, List.of())), List.of(output),
+                                    List.of(), 0, 1, false, true, false, Set.of()));
+                            host.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
+                                    List.of(stack(Items.IRON_INGOT, 1)), List.of(stack(Items.GOLD_INGOT, 1))));
+                            host.getLogic().updatePatterns();
+                            var unit = host.getLogic().getAvailablePatterns().stream()
+                                    .filter(pattern -> pattern instanceof PatternBatchDetails batch && batch.data().recipeId().equals(recipeId))
+                                    .map(pattern -> (PatternBatchDetails) pattern).findFirst().orElseThrow();
+                            var limits = PatternBatchPlanning.capture(host.getMainNode().getGrid());
+                            var materials = new KeyCounter();
+                            materials.add(AEItemKey.of(Items.IRON_INGOT), 8L);
+                            var plan = simulate(helper, List.of(unit), materials, stack(Items.GOLD_INGOT, 8L), limits);
+                            helper.assertFalse(plan.simulation(), "Native AE has all nominal materials");
+                            var expected = consumeChance == 0.5F ? Map.of(unit, 8L) : Map.of(unit.scaled(4L), 2L);
+                            helper.assertTrue(plan.patternTimes().equals(expected),
+                                    "Only intermediate input consumption rolls back to unit tasks: input="
+                                            + consumeChance + ", output=" + outputChance);
+                            settle(helper, plan);
+                        }
+                    }
                 }).thenSucceed();
     }
 
     private static void verifyLightningBatch(GameTestHelper helper, PatternInterfaceBlockEntity host,
-                                             BlockPos controllerPos, LightningTier inputTier, LightningTier outputTier) {
-        var recipeId = MMCR.id("batch_planning_lightning_" + inputTier.requirementId().getPath());
+                                             BlockPos controllerPos, LightningTier inputTier, LightningTier outputTier, float outputChance) {
+        var recipeId = MMCR.id("batch_planning_lightning_" + inputTier.requirementId().getPath() + "_" + (int) (outputChance * 100));
         var inputKey = LoadedLightningBridge.FAMILY.adapter().toKey(inputTier);
         var outputKey = LoadedLightningBridge.FAMILY.adapter().toKey(outputTier);
         List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), 1F),
-                new LightningOutput(outputTier, 1_000_000_000L, 1F));
+                new LightningOutput(outputTier, 1_000_000_000L, outputChance));
         var requirements = new ArrayList<MachineRequirement>(List.of(
                 MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 LightningRequirement.input(inputTier, Integer.MAX_VALUE)));

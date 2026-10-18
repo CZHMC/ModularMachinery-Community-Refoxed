@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import cn.howxu.mmcr.MMCR;
@@ -18,6 +19,15 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
@@ -31,6 +41,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchSupport;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchSupport.Safety;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -42,10 +53,14 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -129,17 +144,71 @@ class PatternBatchSupportTest {
                 SmartInterfaceRequirement.output("temperature", 42F));
     }
 
-    @Test
-    void retainedOrProbabilisticInputsStillUseTheMachinesParallelLimit() {
-        for (float consumeChance : new float[]{0F, 0.5F}) {
-            var retained = new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
-                    1F, List.of(), DataComponentPredicateSet.EMPTY, consumeChance);
-            var recipe = recipe("retained", List.of(retained), List.of(output(1)), true);
+    @ParameterizedTest
+    @CsvSource({"item,0,PROVEN_LINEAR", "item,0.5,UNPROVEN", "item,1,PROVEN_LINEAR",
+            "fluid,0,PROVEN_LINEAR", "fluid,0.5,UNPROVEN", "fluid,1,PROVEN_LINEAR",
+            "chemical,0,PROVEN_LINEAR", "chemical,0.5,UNPROVEN", "chemical,1,PROVEN_LINEAR"})
+    void onlyIntermediateInputConsumptionProbabilitiesDisableBatching(String family, float consumeChance, Safety safety) {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
+            MachineRequirement requirement = switch (family) {
+                case "item" -> new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                        1F, List.of(), DataComponentPredicateSet.EMPTY, consumeChance);
+                case "fluid" -> new FluidRequirement(IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1, FluidStack.EMPTY,
+                        1F, List.of(), consumeChance);
+                default -> new LoadedChemicalRequirement(IOType.INPUT, ChemicalIngredient.chemical(MMCR.id("batch_chemical"), 1),
+                        1F, List.of(), consumeChance);
+            };
+            var requirements = family.equals("chemical") ? List.of(input(), requirement) : List.of(requirement);
+            var recipe = recipe("input_probability", requirements, List.of(output(1)), true);
             var effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(4), List.of());
+            var key = family.equals("fluid") ? AEFluidKey.of(Fluids.WATER) : AEItemKey.of(Items.IRON_INGOT);
             var profile = PatternBatchSupport.inspectRecipe(recipe, effective,
-                    pattern(1, List.of(stack(Items.GOLD_INGOT, 1))));
-            assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+                    patternFor(key, 1, List.of(stack(Items.GOLD_INGOT, 1))));
+            assertThat(profile.safety()).isEqualTo(safety);
             assertThat(profile.maxMultiplier()).isEqualTo(4L);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"item,0", "item,0.5", "item,1", "fluid,0", "fluid,0.5", "fluid,1"})
+    void outputProbabilityDoesNotDisableBatchingOrChangeNominalCraftRatio(String family, float chance) {
+        MachineOutput output = family.equals("item") ? new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), chance)
+                : new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 1), chance);
+        var recipe = recipe("output_probability", List.of(input()), List.of(output), true);
+        var effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(8), List.of());
+        var key = family.equals("item") ? AEItemKey.of(Items.GOLD_INGOT) : AEFluidKey.of(Fluids.LAVA);
+        var profile = PatternBatchSupport.inspectRecipe(recipe, effective, pattern(2, List.of(new GenericStack(key, 2L))));
+        assertThat(profile).isNotNull();
+        assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+        assertThat(profile.binding().recipeCraftsPerPattern()).isEqualTo(2L);
+        assertThat(profile.maxMultiplier()).isEqualTo(4L);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"HIGH_VOLTAGE,0", "HIGH_VOLTAGE,0.5", "HIGH_VOLTAGE,1",
+            "EXTREME_HIGH_VOLTAGE,0", "EXTREME_HIGH_VOLTAGE,0.5", "EXTREME_HIGH_VOLTAGE,1"})
+    void lightningInputsAndProbabilisticOutputsKeepTheirTierAndBatchBinding(LightningTier tier, float chance) {
+        try (var requirements = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
+            LightningRecipeTypes.register();
+            LightningBridgeBootstrap.installForTesting(new LoadedLightningBridge());
+            var outputTier = tier == LightningTier.HIGH_VOLTAGE ? LightningTier.EXTREME_HIGH_VOLTAGE : LightningTier.HIGH_VOLTAGE;
+            var recipe = recipe("lightning_probability", List.of(LightningRequirement.input(tier, 1L)),
+                    List.of(new LightningOutput(outputTier, 1L, chance)), true);
+            var effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(8), List.of());
+            var adapter = LoadedLightningBridge.FAMILY.adapter();
+            var profile = PatternBatchSupport.inspectRecipe(recipe, effective,
+                    patternFor(adapter.toKey(tier), 2L, List.of(new GenericStack(adapter.toKey(outputTier), 2L))));
+            assertThat(profile).isNotNull();
+            assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+            assertThat(profile.binding().recipeCraftsPerPattern()).isEqualTo(2L);
+            assertThat(profile.maxMultiplier()).isEqualTo(4L);
+            assertThat(CraftingRuntime.samePromisedOutputs(effective.outputs(),
+                    List.of(new LightningOutput(outputTier, 1L, chance)), 4L)).isTrue();
+            assertThat(CraftingRuntime.samePromisedOutputs(effective.outputs(),
+                    List.of(new LightningOutput(outputTier, 1L, chance == 1F ? 0.5F : 1F)), 4L)).isFalse();
+        } finally {
+            LightningBridgeBootstrap.resetForTesting();
         }
     }
 
