@@ -17,8 +17,13 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.connection.ConnectionType;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;
@@ -38,6 +43,29 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class TestBootstrapTest {
+    @Test
+    void warm_bootstrap_rebuilds_default_item_resources_after_restoring_components() throws Exception {
+        TestBootstrap.bootstrap();
+        try {
+            // Other suites temporarily replace vanilla components before creating default resources.
+            Items.DIAMOND.builtInRegistryHolder().bindComponents(DataComponentMap.EMPTY);
+            Items.DIAMOND.resetDefaultResource();
+            ItemResource.of(Items.DIAMOND);
+
+            TestBootstrap.bootstrap();
+
+            var storage = RuntimeTestFixtures.itemInput(BlockPos.ZERO).itemStorage();
+            try (var transaction = Transaction.openRoot()) {
+                assertThat(storage.insert(0, ItemResource.of(Items.DIAMOND), 4L, transaction)).isEqualTo(4L);
+                transaction.commit();
+            }
+            assertThat(storage.amount(0)).isEqualTo(4L);
+        } finally {
+            Items.DIAMOND.resetDefaultResource();
+            TestBootstrap.bootstrap();
+        }
+    }
+
     @Test
     void cold_menu_registration_preserves_absent_loaded_and_unavailable_overrides() throws Throwable {
         Set<URL> classpath = new LinkedHashSet<>();

@@ -725,6 +725,8 @@ public final class TestBootstrap {
                     // The test bootstrap has no loaded tags for delayed components.
                 }
                 item.builtInRegistryHolder().bindComponents(builder.build());
+                // Rebinding holder components does not invalidate NeoForge's cached default ItemResource.
+                item.resetDefaultResource();
             }
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to bind vanilla item components", exception);
