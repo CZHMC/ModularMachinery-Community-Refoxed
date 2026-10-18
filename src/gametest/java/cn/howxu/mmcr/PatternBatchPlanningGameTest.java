@@ -31,9 +31,14 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning.BatchLimit;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning.Snapshot;
@@ -41,6 +46,9 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchSupport.Safet
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.item.PatternBatchData;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -191,6 +199,85 @@ public final class PatternBatchPlanningGameTest {
                 "The supported huge order stays one batch rather than expanding per craft");
         conserve(helper, hugeOrder, hugePlan);
         helper.succeed();
+    }
+
+    public static void lightningBatchesPreserveNativePlanningAndAdmission(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        helper.setBlock(new BlockPos(2, 0, 0), ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        var highHost = helper.getBlockEntity(BlockPos.ZERO, PatternInterfaceBlockEntity.class);
+        var extremeHost = helper.getBlockEntity(new BlockPos(2, 0, 0), PatternInterfaceBlockEntity.class);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(
+                        highHost.getMainNode().getNode() != null && extremeHost.getMainNode().getNode() != null,
+                        "Lightning providers initialize through their native lifecycle"))
+                .thenExecute(() -> {
+                    verifyLightningBatch(helper, highHost, new BlockPos(0, 0, 2), LightningTier.HIGH_VOLTAGE,
+                            LightningTier.EXTREME_HIGH_VOLTAGE);
+                    verifyLightningBatch(helper, extremeHost, new BlockPos(2, 0, 2), LightningTier.EXTREME_HIGH_VOLTAGE,
+                            LightningTier.HIGH_VOLTAGE);
+                }).thenSucceed();
+    }
+
+    private static void verifyLightningBatch(GameTestHelper helper, PatternInterfaceBlockEntity host,
+                                             BlockPos controllerPos, LightningTier inputTier, LightningTier outputTier) {
+        var recipeId = MMCR.id("batch_planning_lightning_" + inputTier.requirementId().getPath());
+        var inputKey = LoadedLightningBridge.FAMILY.adapter().toKey(inputTier);
+        var outputKey = LoadedLightningBridge.FAMILY.adapter().toKey(outputTier);
+        List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), 1F),
+                new LightningOutput(outputTier, 1_000_000_000L, 1F));
+        var requirements = new ArrayList<MachineRequirement>(List.of(
+                MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                LightningRequirement.input(inputTier, Integer.MAX_VALUE)));
+        outputs.forEach(output -> requirements.add(OutputRegistry.toRequirement(output, List.of())));
+        var recipe = MachineRecipe.fromCanonical(recipeId, MMCR.id("test_cube"), 20, requirements, outputs,
+                List.of(), 0, 1, false, true, false, Set.of());
+        RecipeRegistry.registerStatic(recipe);
+        var controller = bindController(helper, host, controllerPos, 256L);
+        var components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(null, host, host.getBlockPos(),
+                host.getBlockPos().subtract(controller.getBlockPos()), List.of()));
+        controller.componentRuntime().replaceComponents(components);
+        helper.assertTrue(StructureClaimRegistry.get(helper.getLevel()).claim(controller.getBlockPos(), List.of(
+                        new StructureClaimRegistry.Claim(host.getBlockPos(), ComponentClaimPolicy.EXCLUSIVE))).accepted(),
+                "The admission fixture owns a real controller resource domain");
+        var physical = PatternDetailsHelper.encodeProcessingPattern(
+                List.of(stack(Items.IRON_INGOT, 4L), new GenericStack(inputKey, 4_294_967_294L)),
+                List.of(stack(Items.GOLD_INGOT, 6L), new GenericStack(outputKey, 2_000_000_000L)));
+        host.getLogic().getPatternInv().setItemDirect(0, physical);
+        host.getLogic().updatePatterns();
+        var unit = host.getLogic().getAvailablePatterns().stream()
+                .filter(pattern -> pattern instanceof PatternBatchDetails batch && batch.data().recipeId().equals(recipeId))
+                .map(pattern -> (PatternBatchDetails) pattern).findFirst().orElseThrow();
+        var limits = PatternBatchPlanning.capture(host.getMainNode().getGrid());
+        var materials = new KeyCounter();
+        materials.add(AEItemKey.of(Items.IRON_INGOT), 40_000L);
+        materials.add(inputKey, 42_949_672_940_000L);
+        var requested = stack(Items.GOLD_INGOT, 60_000L);
+        var normal = simulate(helper, List.of(unit), materials, requested, Snapshot.EMPTY);
+        var batched = simulate(helper, List.of(unit), materials, requested, limits);
+        helper.assertFalse(normal.simulation() || batched.simulation(), "Both lightning plans have all materials");
+        helper.assertTrue(batched.patternTimes().equals(Map.of(unit.scaled(128L), 78L, unit.scaled(16L), 1L)),
+                "Lightning recipes compress by single-lane capacity, accounting for two recipe crafts per pattern");
+        conserve(helper, normal.patternTimes(), batched.patternTimes());
+        helper.assertTrue(counter(normal.usedItems()).equals(counter(batched.usedItems())) && normal.bytes() == batched.bytes(),
+                "Compression preserves native lightning material and CPU accounting");
+        settle(helper, batched);
+        var batch = unit.scaled(128L);
+        var restored = PatternDetailsHelper.decodePattern(batch.getDefinition(), helper.getLevel());
+        helper.assertTrue(batch.equals(restored) && restored.getOutputs().equals(batch.getOutputs())
+                        && restored.getOutputs().contains(new GenericStack(outputKey, 256_000_000_000L)),
+                "A saved lightning batch restores the exact scaled protocol");
+        var inventory = new ListCraftingInventory(key -> {});
+        inventory.insert(AEItemKey.of(Items.IRON_INGOT), 512L, Actionable.MODULATE);
+        inventory.insert(inputKey, 549_755_813_632L, Actionable.MODULATE);
+        var holders = CraftingCpuHelper.extractPatternInputs(restored, inventory, helper.getLevel(), new KeyCounter(), new KeyCounter());
+        helper.assertTrue(holders != null, "Native CPU extraction retains complete long-amount lightning inputs");
+        SharedIoCoordinator.get(helper.getLevel()).markControllerEligible(controller, helper.getLevel().getGameTime());
+        helper.assertTrue(host.craftingMachine().pushPattern(restored, holders, null),
+                "Real controller admission pays a complete long-amount lightning batch");
+        helper.assertTrue(controller.runtimeSnapshot().crafting().parallelism() == 256L
+                        && recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
+                        && host.getLogic().getReturnInv().isEmpty(),
+                "Both pattern crafts execute on one lane without truncation or spurious leftovers");
     }
 
     public static void reusedMoldAndCyclicDependencyRemainExecutable(GameTestHelper helper) {

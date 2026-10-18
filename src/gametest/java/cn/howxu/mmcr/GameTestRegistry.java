@@ -386,6 +386,8 @@ public final class GameTestRegistry {
                         helper -> new LightningPatternGameTest().nativePatternAdmissionAndPersistence(helper));
                 register(event, "ae2lt_mixed_lane_long_return", 40,
                         helper -> new LightningPatternGameTest().mixedLaneRollbackLongPersistenceAndNativeReturn(helper));
+                register(event, "ae2lt_pattern_batch_native_planning_admission", 160,
+                        PatternBatchPlanningGameTest::lightningBatchesPreserveNativePlanningAndAdmission);
             }
             register(event, "ae2_pattern_return_long_balances", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));

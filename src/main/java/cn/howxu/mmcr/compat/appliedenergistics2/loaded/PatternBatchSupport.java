@@ -117,6 +117,9 @@ public final class PatternBatchSupport {
                     amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
                 } else if (requirement instanceof EnergyRequirement energy) {
                     amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
+                } else if (requirement instanceof LightningRequirement lightning) {
+                    linear &= lightning.chance() == 1F;
+                    amount = lightning.amount();
                 } else {
                     linear = false;
                     continue;
