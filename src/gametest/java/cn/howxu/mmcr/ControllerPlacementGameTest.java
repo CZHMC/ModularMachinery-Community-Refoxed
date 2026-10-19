@@ -24,9 +24,11 @@ public final class ControllerPlacementGameTest {
     public static final Identifier REQUIRED_VERTICAL_MACHINE = MMCR.id("controller_placement_required_vertical");
     private static final Identifier HORIZONTAL_MACHINE = MMCR.id("test_cube");
     private static final Identifier OPTIONAL_VERTICAL_MACHINE = MMCR.id("expandable_structure_vertical_roll");
-    private static final float[] CARDINAL_YAWS = {0, 90, 180, 270};
-    private static final Direction[] HORIZONTAL_FRONTS = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
-    private static final Direction[] VERTICAL_UPS = {Direction.SOUTH, Direction.WEST, Direction.NORTH, Direction.EAST};
+    private static final float[] VERTICAL_YAWS = {0, 90, 180, 270, 44.99F, 45, -45, -45.01F};
+    private static final Direction[] HORIZONTAL_FRONTS = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST,
+            Direction.NORTH, Direction.EAST, Direction.NORTH, Direction.WEST};
+    private static final Direction[] UPWARD_ROLLS = {Direction.SOUTH, Direction.WEST, Direction.NORTH, Direction.EAST,
+            Direction.SOUTH, Direction.WEST, Direction.SOUTH, Direction.EAST};
 
     private ControllerPlacementGameTest() {
     }
@@ -45,28 +47,28 @@ public final class ControllerPlacementGameTest {
     }
 
     public static void optionalVerticalPlacementFollowsMeDrive(GameTestHelper helper) {
-        for (int i = 0; i < CARDINAL_YAWS.length; i++) {
+        for (int i = 0; i < VERTICAL_YAWS.length; i++) {
             for (float pitch : new float[]{-65, 0, 65}) {
-                assertPlacement(helper, OPTIONAL_VERTICAL_MACHINE, CARDINAL_YAWS[i], pitch,
+                assertPlacement(helper, OPTIONAL_VERTICAL_MACHINE, VERTICAL_YAWS[i], pitch,
                         HORIZONTAL_FRONTS[i], HORIZONTAL_FRONTS[i]);
             }
-            assertPlacement(helper, OPTIONAL_VERTICAL_MACHINE, CARDINAL_YAWS[i], 65.01F,
-                    Direction.UP, VERTICAL_UPS[i]);
-            assertPlacement(helper, OPTIONAL_VERTICAL_MACHINE, CARDINAL_YAWS[i], -65.01F,
-                    Direction.DOWN, VERTICAL_UPS[i]);
+            assertPlacement(helper, OPTIONAL_VERTICAL_MACHINE, VERTICAL_YAWS[i], 65.01F,
+                    Direction.UP, UPWARD_ROLLS[i]);
+            assertPlacement(helper, OPTIONAL_VERTICAL_MACHINE, VERTICAL_YAWS[i], -65.01F,
+                    Direction.DOWN, HORIZONTAL_FRONTS[i]);
         }
         helper.succeed();
     }
 
     public static void requiredVerticalPlacementFollowsPitchSign(GameTestHelper helper) {
-        for (int i = 0; i < CARDINAL_YAWS.length; i++) {
+        for (int i = 0; i < VERTICAL_YAWS.length; i++) {
             for (float pitch : new float[]{0, 0.01F, 90}) {
-                assertPlacement(helper, REQUIRED_VERTICAL_MACHINE, CARDINAL_YAWS[i], pitch,
-                        Direction.UP, VERTICAL_UPS[i]);
+                assertPlacement(helper, REQUIRED_VERTICAL_MACHINE, VERTICAL_YAWS[i], pitch,
+                        Direction.UP, UPWARD_ROLLS[i]);
             }
             for (float pitch : new float[]{-0.01F, -90}) {
-                assertPlacement(helper, REQUIRED_VERTICAL_MACHINE, CARDINAL_YAWS[i], pitch,
-                        Direction.DOWN, VERTICAL_UPS[i]);
+                assertPlacement(helper, REQUIRED_VERTICAL_MACHINE, VERTICAL_YAWS[i], pitch,
+                        Direction.DOWN, HORIZONTAL_FRONTS[i]);
             }
         }
         helper.succeed();
@@ -89,13 +91,22 @@ public final class ControllerPlacementGameTest {
                                         Direction facing, Direction up) {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
         player.setYRot(yaw);
+        player.setYHeadRot(yaw);
         player.setXRot(pitch);
         BlockPos pos = helper.absolutePos(new BlockPos(1, 2, 1));
         for (Vec3 offset : new Vec3[]{new Vec3(-3, 4, 2), new Vec3(3, -2, -4)}) {
             player.setPos(Vec3.atCenterOf(pos).add(offset));
             for (Direction clickedFace : Direction.values()) {
-                assertState(helper, placement(helper, machineId, player, pos, clickedFace), facing, up,
-                        machineId + " yaw=" + yaw + " pitch=" + pitch + " face=" + clickedFace + " offset=" + offset);
+                BlockState state = placement(helper, machineId, player, pos, clickedFace);
+                String scenario = machineId + " yaw=" + yaw + " pitch=" + pitch + " face=" + clickedFace + " offset=" + offset;
+                assertState(helper, state, facing, up, scenario);
+                if (facing.getAxis().isVertical() && pitch != 0.0F) {
+                    Vec3 viewUp = player.getUpVector(1.0F);
+                    Direction structureUp = BlockRotator.rotateDirection(Direction.UP, facing,
+                            state.getValue(MachineControllerBlock.ROLL_FACING));
+                    helper.assertTrue(viewUp.x * structureUp.getStepX() + viewUp.z * structureUp.getStepZ() > 0.0D,
+                            "Controller top must align with the player's view-up projection: " + scenario);
+                }
             }
         }
     }

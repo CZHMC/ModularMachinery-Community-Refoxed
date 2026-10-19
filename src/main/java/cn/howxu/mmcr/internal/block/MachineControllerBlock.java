@@ -107,7 +107,8 @@ public class MachineControllerBlock extends Block implements EntityBlock {
                 isVerticalRequired());
         return defaultBlockState()
                 .setValue(FACING, facing)
-                .setValue(ROLL_FACING, facing.getAxis().isVertical()
+                // The horizontal projection of screen-up reverses when looking up at the underside.
+                .setValue(ROLL_FACING, facing == Direction.UP
                         ? horizontalFacing.getOpposite() : horizontalFacing);
     }
 
