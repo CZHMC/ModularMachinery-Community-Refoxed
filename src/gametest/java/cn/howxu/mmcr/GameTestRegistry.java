@@ -54,6 +54,10 @@ public final class GameTestRegistry {
 
     public static void registerAll(RegisterGameTestsEvent event) {
         register(event, "block_map_color", 20, BlockMapColorGameTest::registeredBlocksAreVisibleMapSurfaces);
+        register(event, "controller_placement_horizontal", 20, ControllerPlacementGameTest::horizontalPlacementFollowsEnrichmentChamber);
+        register(event, "controller_placement_optional_vertical", 20, ControllerPlacementGameTest::optionalVerticalPlacementFollowsMeDrive);
+        register(event, "controller_placement_required_vertical", 20, ControllerPlacementGameTest::requiredVerticalPlacementFollowsPitchSign);
+        register(event, "controller_placement_without_player", 20, ControllerPlacementGameTest::placementWithoutPlayerUsesReferenceFallbacks);
         register(event, "input_isolation_item_sources", 20, InputIsolationGameTest::itemSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_fluid_sources", 20, InputIsolationGameTest::fluidSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_combined_atomic", 20, InputIsolationGameTest::combinedInputSharesEnergyAndOutputAtomically);
@@ -549,6 +553,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
+        event.registerMachine(MachineBuilder.machine(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE)
+                .displayNameKey("machine.mmcr_test.controller_placement_required_vertical")
+                .controller(controller -> controller.requireVerticalFacing()).build());
         event.registerMachine(MachineBuilder.machine(ControllerUiGameTest.MACHINE_ID)
                 .displayNameKey("gui.mmcr.ui.test_machine")
                 .allowMultithreading()
@@ -600,6 +607,11 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
+        event.registerStructure(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE,
+                structure -> structure.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("C")
+                        .where('C', BlockPredicate.deferredBlock(
+                                () -> ModBlocks.controllerFor(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE).get()))
+                        .controller('C'))));
         event.registerStructure(ControllerUiGameTest.MACHINE_ID, structure -> structure.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("SCF")
                         .where('S', BlockPredicate.deferredBlock(() -> ModBlocks.DATA_STORAGE.get()))
