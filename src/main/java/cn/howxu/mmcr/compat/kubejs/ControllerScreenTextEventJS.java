@@ -33,40 +33,68 @@ public final class ControllerScreenTextEventJS implements KubeEvent {
     }
 
     public void append(String scope, String lineId, Component text) {
-        textHandle().append(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"), requireText(text));
+        append(scope, parseNamespacedIdentifier(lineId, "lineId"), text);
+    }
+
+    public void append(String scope, Identifier lineId, Component text) {
+        textHandle().append(parseScope(scope), lineId, requireText(text));
     }
 
     public void appendAfter(String scope, String lineId, String afterLineId, Component text) {
-        textHandle().appendAfter(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
-                parseNamespacedIdentifier(afterLineId, "afterLineId"), requireText(text));
+        appendAfter(scope, parseNamespacedIdentifier(lineId, "lineId"),
+                parseNamespacedIdentifier(afterLineId, "afterLineId"), text);
+    }
+
+    public void appendAfter(String scope, Identifier lineId, Identifier afterLineId, Component text) {
+        textHandle().appendAfter(parseScope(scope), lineId, afterLineId, requireText(text));
     }
 
     public void replace(String lineId, Component text) {
-        textHandle().replace(parseNamespacedIdentifier(lineId, "lineId"), requireText(text));
+        replace(parseNamespacedIdentifier(lineId, "lineId"), text);
+    }
+
+    public void replace(Identifier lineId, Component text) {
+        textHandle().replace(lineId, requireText(text));
     }
 
     public void appendTranslatable(String scope, String lineId, String key, Object... args) {
+        appendTranslatable(scope, parseNamespacedIdentifier(lineId, "lineId"), key, args);
+    }
+
+    public void appendTranslatable(String scope, Identifier lineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().append(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
+        textHandle().append(parseScope(scope), lineId,
                 Component.translatable(key, args));
     }
 
     public void appendAfterTranslatable(String scope, String lineId, String afterLineId, String key, Object... args) {
+        appendAfterTranslatable(scope, parseNamespacedIdentifier(lineId, "lineId"),
+                parseNamespacedIdentifier(afterLineId, "afterLineId"), key, args);
+    }
+
+    public void appendAfterTranslatable(String scope, Identifier lineId, Identifier afterLineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().appendAfter(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"),
-                parseNamespacedIdentifier(afterLineId, "afterLineId"), Component.translatable(key, args));
+        textHandle().appendAfter(parseScope(scope), lineId, afterLineId, Component.translatable(key, args));
     }
 
     public void replaceTranslatable(String lineId, String key, Object... args) {
+        replaceTranslatable(parseNamespacedIdentifier(lineId, "lineId"), key, args);
+    }
+
+    public void replaceTranslatable(Identifier lineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().replace(parseNamespacedIdentifier(lineId, "lineId"), Component.translatable(key, args));
+        textHandle().replace(lineId, Component.translatable(key, args));
     }
 
     public void remove(String scope, String lineId) {
-        textHandle().remove(parseScope(scope), parseNamespacedIdentifier(lineId, "lineId"));
+        remove(scope, parseNamespacedIdentifier(lineId, "lineId"));
+    }
+
+    public void remove(String scope, Identifier lineId) {
+        textHandle().remove(parseScope(scope), lineId);
     }
 
     static Identifier parseIdentifier(String value, String name) {

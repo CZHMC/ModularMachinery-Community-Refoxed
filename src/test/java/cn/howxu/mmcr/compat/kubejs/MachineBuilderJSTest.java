@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.sound.MachineSoundRegistry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Map;
 import net.minecraft.resources.Identifier;
+import net.minecraft.IdentifierException;
 import dev.latvian.mods.rhino.ContextFactory;
 import dev.latvian.mods.rhino.Wrapper;
 import dev.latvian.mods.rhino.ScriptableObject;
@@ -62,6 +63,26 @@ class MachineBuilderJSTest {
         MachineDefinitions.clearForTesting();
         PublicApiBootstrap.clearForTesting();
         MachineDefinitions.beginRegistryPhase();
+    }
+
+    @Test
+    void identifier_and_string_declarations_preserve_resource_ids_and_texture_order() {
+        var event = new MMCRStartupEventJS();
+        var builder = event.createMachine(MMCR.id("identifier_overloads"))
+                .recipePool(MMCR.id("first_pool"), MMCR.id("second_pool"))
+                .allowNetworkMachine(MMCR.id("peer"))
+                .requestProcess(MMCR.id("request"), (body, request, sender, receiver) -> {})
+                .controllerTextures("test:front", "test:side", "test:top", "test:bottom");
+        var registration = builder.createObject();
+        assertThat(registration.recipePoolIds()).containsExactly(MMCR.id("first_pool"), MMCR.id("second_pool"));
+        assertThat(registration.networkInterface().allowedMachineIds()).contains(MMCR.id("peer"));
+        assertThat(registration.requestProcessors()).containsKey(MMCR.id("request"));
+        assertThat(registration.controllerSpec().frontTexture()).isEqualTo(Identifier.parse("test:front"));
+        assertThat(registration.controllerSpec().sideTexture()).isEqualTo(Identifier.parse("test:side"));
+        assertThat(registration.controllerSpec().topTexture()).isEqualTo(Identifier.parse("test:top"));
+        assertThat(registration.controllerSpec().bottomTexture()).isEqualTo(Identifier.parse("test:bottom"));
+        assertThatThrownBy(() -> builder.controllerTextures("invalid id", "test:side", "test:top", "test:bottom"))
+                .isInstanceOf(IdentifierException.class);
     }
 
     @Test
@@ -565,6 +586,7 @@ class MachineBuilderJSTest {
                   .controllerBaseTexture('minecraft:block/quartz_block_bottom')
                   .formedPortBaseTexture('minecraft:block/quartz_block_bottom')
                   .host('mmcr:space_reassembler')
+                  .recipePool('mmcr:first_pool', 'mmcr:second_pool')
                   .runningSound('minecraft:block.furnace.fire_crackle')
                   .finishSound('minecraft:entity.ender_dragon.growl')
                   .createObject();

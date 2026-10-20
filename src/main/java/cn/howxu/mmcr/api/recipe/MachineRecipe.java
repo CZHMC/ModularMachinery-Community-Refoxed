@@ -400,6 +400,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return requirements;
     }
 
+    public MachineRecipe withId(String id) {
+        return withId(Identifier.parse(id));
+    }
+
     public MachineRecipe withId(Identifier id) {
         return new MachineRecipe(id, this);
     }
@@ -420,6 +424,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
 
     public Set<Identifier> requiredHostIds() {
         return requiredHostIds;
+    }
+
+    public boolean canRunOnConnectedHost(String hostId) {
+        return canRunOnConnectedHost(hostId == null ? null : Identifier.parse(hostId));
     }
 
     public boolean canRunOnConnectedHost(Identifier hostId) {

@@ -4,6 +4,9 @@ import appeng.core.definitions.AEItems;
 import com.mojang.authlib.GameProfile;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -29,6 +32,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -238,6 +242,18 @@ public class MekanismPortGameTest {
                     "Normal chemical port accepts non-radioactive chemicals");
             tx.commit();
         }
+        var capability = new ChemicalPortCapability(port);
+        var snapshot = new CapabilitySnapshot(List.of(capability));
+        var facet = snapshot.facets(ChemicalViewFacet.class).getFirst();
+        String oxygenId = oxygen.typeHolder().getRegisteredName();
+        String radioactiveId = radioactive.typeHolder().getRegisteredName();
+        helper.assertTrue(facet.outputCapacity(oxygenId) > 0L && facet.outputCapacity(radioactiveId) == 0L,
+                "String chemical IDs retain the loaded facet's resource validation");
+        helper.assertTrue(!facet.matchesTag("mmcr_test:missing_chemical_tag"),
+                "String tag lookup reaches the chemical facet without implicit Identifier conversion");
+        helper.assertTrue(new MachineIoView(snapshot).chemicalAmount(oxygenId) == 1_000L
+                        && new MachineIoView(snapshot).chemicalAmount(radioactiveId) == 0L,
+                "String aggregate lookup finds only the chemical accepted by the transaction");
         helper.succeed();
     }
 

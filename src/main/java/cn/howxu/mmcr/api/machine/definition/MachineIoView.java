@@ -135,6 +135,10 @@ public final class MachineIoView {
         return resourceAmounts(amounts);
     }
 
+    public long chemicalAmount(String chemicalId) {
+        return chemicalAmount(Identifier.parse(chemicalId));
+    }
+
     public long chemicalAmount(Identifier chemicalId) {
         Objects.requireNonNull(chemicalId, "chemicalId");
         long amount = 0L;
@@ -142,6 +146,10 @@ public final class MachineIoView {
             if (chemicalId.equals(input.resource())) amount = saturatedAdd(amount, input.amount());
         }
         return amount;
+    }
+
+    public long chemicalTagAmount(String tagId) {
+        return chemicalTagAmount(Identifier.parse(tagId));
     }
 
     public long chemicalTagAmount(Identifier tagId) {
@@ -154,6 +162,10 @@ public final class MachineIoView {
             }
         }
         return amount;
+    }
+
+    public long chemicalOutputCapacity(String chemicalId) {
+        return chemicalOutputCapacity(Identifier.parse(chemicalId));
     }
 
     public long chemicalOutputCapacity(Identifier chemicalId) {

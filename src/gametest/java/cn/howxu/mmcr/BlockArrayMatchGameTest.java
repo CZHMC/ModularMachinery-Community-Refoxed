@@ -3,9 +3,11 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.api.facade.behavior.BehaviorAdapters;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 
 public class BlockArrayMatchGameTest {
 
@@ -27,9 +29,14 @@ public class BlockArrayMatchGameTest {
                     "Formed structure records the eight casing blocks");
             helper.assertTrue(be.behaviorContext().countStructureBlocks("mmcr:basic_casing") == 8,
                     "Registry-name lookup matches the Block lookup");
+            var publicContext = BehaviorAdapters.wrap(be.behaviorContext());
+            helper.assertTrue(publicContext.countStructureBlocks(MMCR.id("basic_casing")) == 8,
+                    "Public Identifier lookup matches the formed structure");
+            helper.assertTrue(publicContext.controller().countStructureBlocks(MMCR.id("basic_casing")) == 8,
+                    "Public controller view forwards Identifier lookup");
             boolean rejected = false;
             try {
-                be.behaviorContext().countStructureBlocks("missingmod:not_a_block");
+                publicContext.countStructureBlocks(Identifier.parse("missingmod:not_a_block"));
             } catch (IllegalArgumentException ignored) {
                 rejected = true;
             }

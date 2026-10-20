@@ -119,17 +119,29 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS allowNetworkMachine(String machineId) {
-        allowedNetworkMachineIds.add(Identifier.parse(machineId));
+        return allowNetworkMachine(Identifier.parse(machineId));
+    }
+
+    public MachineBuilderJS allowNetworkMachine(Identifier machineId) {
+        allowedNetworkMachineIds.add(Objects.requireNonNull(machineId, "machineId"));
         return this;
     }
 
     public MachineBuilderJS requestProcess(String requestId, RequestProcess process) {
-        callbackBuilder.requestProcessInternal(Identifier.parse(requestId), process);
+        return requestProcess(Identifier.parse(requestId), process);
+    }
+
+    public MachineBuilderJS requestProcess(Identifier requestId, RequestProcess process) {
+        callbackBuilder.requestProcessInternal(requestId, process);
         return this;
     }
 
     public MachineBuilderJS requestFailed(String requestId, RequestFailed failure) {
-        callbackBuilder.requestFailed(Identifier.parse(requestId), failure);
+        return requestFailed(Identifier.parse(requestId), failure);
+    }
+
+    public MachineBuilderJS requestFailed(Identifier requestId, RequestFailed failure) {
+        callbackBuilder.requestFailed(requestId, failure);
         return this;
     }
 
@@ -212,12 +224,23 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return builder.build();
     }
 
+    public MachineBuilderJS recipePool() {
+        throw new IllegalArgumentException("recipePool requires at least one id");
+    }
+
     public MachineBuilderJS recipePool(String... recipePoolIds) {
         if (recipePoolIds == null || recipePoolIds.length == 0) {
             throw new IllegalArgumentException("recipePool requires at least one id");
         }
-        this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id,
-                Arrays.stream(recipePoolIds).map(Identifier::parse).toList());
+        return recipePool(Arrays.stream(recipePoolIds).map(Identifier::parse).toArray(Identifier[]::new));
+    }
+
+    @HideFromJS
+    public MachineBuilderJS recipePool(Identifier... recipePoolIds) {
+        if (recipePoolIds == null || recipePoolIds.length == 0) {
+            throw new IllegalArgumentException("recipePool requires at least one id");
+        }
+        this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id, Arrays.asList(recipePoolIds));
         return this;
     }
 
@@ -262,7 +285,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return runningSound(Identifier.parse(soundId));
     }
 
-    @HideFromJS
     public MachineBuilderJS runningSound(Identifier soundId) {
         MachineRegistration.validateSound(soundId);
         this.runningSoundId = soundId;
@@ -273,17 +295,26 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return finishSound(Identifier.parse(soundId));
     }
 
-    @HideFromJS
     public MachineBuilderJS finishSound(Identifier soundId) {
         MachineRegistration.validateSound(soundId);
         this.finishSoundId = soundId;
         return this;
     }
 
+    public MachineBuilderJS host() {
+        return this;
+    }
+
     public MachineBuilderJS host(String... moduleIds) {
         if (moduleIds == null) return this;
-        for (String moduleId : moduleIds) {
-            if (moduleId != null) acceptedModuleIds.add(Identifier.parse(moduleId));
+        return host(Arrays.stream(moduleIds).filter(Objects::nonNull).map(Identifier::parse).toArray(Identifier[]::new));
+    }
+
+    @HideFromJS
+    public MachineBuilderJS host(Identifier... moduleIds) {
+        if (moduleIds == null) return this;
+        for (Identifier moduleId : moduleIds) {
+            if (moduleId != null) acceptedModuleIds.add(moduleId);
         }
         return this;
     }
@@ -318,7 +349,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerTextures(Identifier.parse(front), Identifier.parse(otherFive));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerTextures(Identifier front, Identifier otherFive) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = otherFive;
@@ -327,7 +357,10 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
-    @HideFromJS
+    public MachineBuilderJS controllerTextures(String front, String side, String top, String bottom) {
+        return controllerTextures(Identifier.parse(front), Identifier.parse(side), Identifier.parse(top), Identifier.parse(bottom));
+    }
+
     public MachineBuilderJS controllerTextures(Identifier front, Identifier side, Identifier top, Identifier bottom) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = side;
@@ -340,7 +373,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerFrontTexture(Identifier.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerFrontTexture(Identifier texture) {
         this.controllerFrontTexture = texture;
         return this;
@@ -350,7 +382,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerSideTexture(Identifier.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerSideTexture(Identifier texture) {
         this.controllerSideTexture = texture;
         return this;
@@ -360,7 +391,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerTopTexture(Identifier.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerTopTexture(Identifier texture) {
         this.controllerTopTexture = texture;
         return this;
@@ -370,7 +400,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerBottomTexture(Identifier.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerBottomTexture(Identifier texture) {
         this.controllerBottomTexture = texture;
         return this;
@@ -380,7 +409,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerIdleOverlayTexture(Identifier.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerIdleOverlayTexture(Identifier texture) {
         this.controllerIdleOverlayTexture = texture;
         return this;
@@ -390,7 +418,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerActiveOverlayTexture(Identifier.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerActiveOverlayTexture(Identifier texture) {
         this.controllerActiveOverlayTexture = texture;
         return this;
@@ -464,7 +491,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return machineBasicBlock(Identifier.parse(blockId));
     }
 
-    @HideFromJS
     public MachineBuilderJS machineBasicBlock(Identifier blockId) {
         this.machineBasicBlock = blockId;
         return this;
@@ -474,7 +500,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerBaseTexture(Identifier.parse(textureId));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerBaseTexture(Identifier textureId) {
         this.controllerBaseTexture = textureId;
         return this;
@@ -484,13 +509,16 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return formedPortBaseTexture(Identifier.parse(textureId));
     }
 
-    @HideFromJS
     public MachineBuilderJS formedPortBaseTexture(Identifier textureId) {
         this.formedPortBaseTexture = textureId;
         return this;
     }
 
     public MachineBuilderJS appearance(String machineBasicBlock) {
+        return appearance(Identifier.parse(machineBasicBlock));
+    }
+
+    public MachineBuilderJS appearance(Identifier machineBasicBlock) {
         return machineBasicBlock(machineBasicBlock);
     }
 
@@ -528,6 +556,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    @HideFromJS
     public BlockPredicate anyOfPort(Identifier... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(cn.howxu.mmcr.api.machine.definition.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);

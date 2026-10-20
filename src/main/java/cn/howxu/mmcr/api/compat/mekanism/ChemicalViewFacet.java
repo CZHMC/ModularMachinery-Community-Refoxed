@@ -17,5 +17,13 @@ public interface ChemicalViewFacet extends CapabilityFacet {
 
     boolean matchesTag(Identifier tagId);
 
+    default boolean matchesTag(String tagId) {
+        return matchesTag(tagId == null ? null : Identifier.parse(tagId));
+    }
+
     long outputCapacity(Identifier chemicalId);
+
+    default long outputCapacity(String chemicalId) {
+        return outputCapacity(chemicalId == null ? null : Identifier.parse(chemicalId));
+    }
 }

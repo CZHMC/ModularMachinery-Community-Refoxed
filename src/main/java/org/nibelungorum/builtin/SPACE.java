@@ -47,7 +47,7 @@ public class SPACE {
                     .recipePool(SPACE_ELEVATOR)
                     .displayNameKey("machine.mmcr.space_elevator")
                     .appearance(a -> a
-                            .machineBasicBlock("smooth_quartz")
+                            .machineBasicBlock(Identifier.parse("smooth_quartz"))
                             .controllerBaseTexture(Identifier.parse("block/quartz_block_bottom"))
                             .formedPortBaseTexture(Identifier.parse("block/quartz_block_bottom"))
                     )
@@ -60,7 +60,7 @@ public class SPACE {
                     .machine(SPACE_REASSEMBLER)
                     .recipePool(SPACE_REASSEMBLER, SPACE_MINER, SPACE_POOL_1, SPACE_POOL_2, SPACE_POOL_3)
                     .displayNameKey("machine.mmcr.space_reassembler")
-                    .appearance(a -> a.machineBasicBlock("quartz_pillar"))
+                    .appearance(a -> a.machineBasicBlock(Identifier.parse("quartz_pillar")))
                     .allowMultithreading()
                     .role(MachineKind.MODULE)
                     .build();
@@ -93,11 +93,11 @@ public class SPACE {
                                     .layer("      XXXXX      ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
                                     .layer("       XXX       ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
                                     .layer("        X        ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ", "                 ")
-                                    .where('X', block("minecraft:smooth_quartz"))
-                                    .where('A', block("minecraft:amethyst_block"))
+                                    .where('X', block(Identifier.parse("minecraft:smooth_quartz")))
+                                    .where('A', block(Identifier.parse("minecraft:amethyst_block")))
                                     .where('B', coupler())
                                     .where('D', any(
-                                            block("minecraft:smooth_quartz"),
+                                            block(Identifier.parse("minecraft:smooth_quartz")),
                                             BlockConditions.itemInput(),
                                             BlockConditions.itemOutput(),
                                             BlockConditions.energyInput(),
@@ -116,15 +116,15 @@ public class SPACE {
                                     .layer("AAA", "XBX", "XBX", "XDX")
                                     .layer("AAA", "BEB", "B B", "DDD")
                                     .layer("AAA", "XFX", "XBX", "XDX")
-                                    .where('X', block("minecraft:quartz_pillar"))
-                                    .where('A', block("minecraft:amethyst_block"))
+                                    .where('X', block(Identifier.parse("minecraft:quartz_pillar")))
+                                    .where('A', block(Identifier.parse("minecraft:amethyst_block")))
                                     .where('B', any(
-                                            block("minecraft:smooth_quartz"),
+                                            block(Identifier.parse("minecraft:smooth_quartz")),
                                             BlockConditions.itemInput(),
                                             BlockConditions.itemOutput(),
                                             BlockConditions.energyInput()
                                     ))
-                                    .where('D', block("minecraft:glass"))
+                                    .where('D', block(Identifier.parse("minecraft:glass")))
                                     .where('E', coupler())
                                     .controller('F')
                             )

@@ -63,12 +63,12 @@ public class DISTILLATION_TOWER {
                                             BlockConditions.itemInput(),
                                             BlockConditions.itemOutput(),
                                             BlockConditions.energyInput(),
-                                            block("minecraft:deepslate_bricks")
+                                            block(Identifier.parse("minecraft:deepslate_bricks"))
                                     ))
-                                    .where('X', block("minecraft:polished_blackstone"))
-                                    .where('A', block("minecraft:deepslate_bricks"))
-                                    .where('B', block("minecraft:polished_blackstone_bricks"))
-                                    .where('D', block("minecraft:gilded_blackstone"))
+                                    .where('X', block(Identifier.parse("minecraft:polished_blackstone")))
+                                    .where('A', block(Identifier.parse("minecraft:deepslate_bricks")))
+                                    .where('B', block(Identifier.parse("minecraft:polished_blackstone_bricks")))
+                                    .where('D', block(Identifier.parse("minecraft:gilded_blackstone")))
                                     .controller('E')
                             )
                     )
@@ -85,12 +85,12 @@ public class DISTILLATION_TOWER {
                                             BlockConditions.itemInput(),
                                             BlockConditions.itemOutput(),
                                             BlockConditions.energyInput(),
-                                            block("minecraft:deepslate_bricks")
+                                            block(Identifier.parse("minecraft:deepslate_bricks"))
                                     ))
-                                    .where('X', block("minecraft:polished_blackstone"))
-                                    .where('A', block("minecraft:deepslate_bricks"))
-                                    .where('B', block("minecraft:polished_blackstone_bricks"))
-                                    .where('D', block("minecraft:gilded_blackstone"))
+                                    .where('X', block(Identifier.parse("minecraft:polished_blackstone")))
+                                    .where('A', block(Identifier.parse("minecraft:deepslate_bricks")))
+                                    .where('B', block(Identifier.parse("minecraft:polished_blackstone_bricks")))
+                                    .where('D', block(Identifier.parse("minecraft:gilded_blackstone")))
                                     .controller('E')
                             )
                     )
@@ -107,12 +107,12 @@ public class DISTILLATION_TOWER {
                                             BlockConditions.itemInput(),
                                             BlockConditions.itemOutput(),
                                             BlockConditions.energyInput(),
-                                            block("minecraft:deepslate_bricks")
+                                            block(Identifier.parse("minecraft:deepslate_bricks"))
                                     ))
-                                    .where('X', block("minecraft:polished_blackstone"))
-                                    .where('A', block("minecraft:deepslate_bricks"))
-                                    .where('B', block("minecraft:polished_blackstone_bricks"))
-                                    .where('D', block("minecraft:gilded_blackstone"))
+                                    .where('X', block(Identifier.parse("minecraft:polished_blackstone")))
+                                    .where('A', block(Identifier.parse("minecraft:deepslate_bricks")))
+                                    .where('B', block(Identifier.parse("minecraft:polished_blackstone_bricks")))
+                                    .where('D', block(Identifier.parse("minecraft:gilded_blackstone")))
                                     .controller('E')
                             )
                     )

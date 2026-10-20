@@ -167,10 +167,14 @@ public final class KubeJSApi {
     }
 
     public void sendRequest(NetworkInterfaceReference source, MachineReference target, String requestId, Object body) {
+        sendRequest(source, target, Identifier.parse(requestId), body);
+    }
+
+    public void sendRequest(NetworkInterfaceReference source, MachineReference target, Identifier requestId, Object body) {
         DataValue value = dataValue(body);
         Map<String, DataValue> values = value.asMap().orElseThrow(() ->
                 new IllegalArgumentException("Network request body must be a map"));
-        NetworkApi.sendRequest(source, target, Identifier.parse(requestId), RequestBody.of(values));
+        NetworkApi.sendRequest(source, target, requestId, RequestBody.of(values));
     }
 
     public DataValue dataValue(Object value) {
@@ -204,6 +208,10 @@ public final class KubeJSApi {
     public BlockPredicate ports() { return KubeJSInterfaceHelpers.ports(); }
 
     public BlockPredicate block(String blockId) {
+        return block(Identifier.parse(blockId));
+    }
+
+    public BlockPredicate block(Identifier blockId) {
         return new BlockPredicate.OfBlock(requireBlock(blockId));
     }
 
@@ -226,8 +234,16 @@ public final class KubeJSApi {
         return new BlockPredicate.OfBlockState(state);
     }
 
+    public BlockPredicate state(Identifier blockId) {
+        return state(blockId.toString());
+    }
+
     public BlockPredicate tag(String tagId) {
-        var tag = TagKey.create(Registries.BLOCK, Identifier.parse(tagId));
+        return tag(Identifier.parse(tagId));
+    }
+
+    public BlockPredicate tag(Identifier tagId) {
+        var tag = TagKey.create(Registries.BLOCK, tagId);
         return new BlockPredicate.OfTag(tag);
     }
 
@@ -263,6 +279,10 @@ public final class KubeJSApi {
     public PortTierRequirementSpec heatOutputTier() { return KubeJSInterfaceHelpers.heatOutputTier(); }
 
     public MachineIngredient itemInput(String itemId, long count, float consumeChance) {
+        return itemInput(Identifier.parse(itemId), count, consumeChance);
+    }
+
+    public MachineIngredient itemInput(Identifier itemId, long count, float consumeChance) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), MachineOutput.recipeStackAmount(count), null, consumeChance);
     }
 
@@ -270,8 +290,16 @@ public final class KubeJSApi {
         return itemInput(itemId, (long) count, consumeChance);
     }
 
+    public MachineIngredient itemInput(Identifier itemId, int count, float consumeChance) {
+        return itemInput(itemId, (long) count, consumeChance);
+    }
+
     public MachineIngredient tagInput(String tagId, long count, float consumeChance) {
-        var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
+        return tagInput(Identifier.parse(tagId), count, consumeChance);
+    }
+
+    public MachineIngredient tagInput(Identifier tagId, long count, float consumeChance) {
+        var tag = TagKey.create(Registries.ITEM, tagId);
         var items = RegistryAccessContainer.current.lookup(Registries.ITEM)
                 .orElseThrow(() -> new IllegalStateException("Item registry unavailable"));
         return new MachineIngredient.ItemIngredient(Ingredient.of(items.getOrThrow(tag)), MachineOutput.recipeStackAmount(count), null, consumeChance);
@@ -281,23 +309,41 @@ public final class KubeJSApi {
         return tagInput(tagId, (long) count, consumeChance);
     }
 
+    public MachineIngredient tagInput(Identifier tagId, int count, float consumeChance) {
+        return tagInput(tagId, (long) count, consumeChance);
+    }
+
     public MachineIngredient fluidInput(String fluidId, long amount) {
-        Identifier identifier = Identifier.parse(fluidId);
-        if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
-        return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.getValue(identifier)), MachineOutput.recipeStackAmount(amount));
+        return fluidInput(Identifier.parse(fluidId), amount);
+    }
+
+    public MachineIngredient fluidInput(Identifier fluidId, long amount) {
+        if (!BuiltInRegistries.FLUID.containsKey(fluidId)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
+        return new MachineIngredient.FluidIngredient(FluidIngredient.of(BuiltInRegistries.FLUID.getValue(fluidId)), MachineOutput.recipeStackAmount(amount));
     }
 
     public MachineIngredient fluidInput(String fluidId, int amount) {
         return fluidInput(fluidId, (long) amount);
     }
 
+    public MachineIngredient fluidInput(Identifier fluidId, int amount) {
+        return fluidInput(fluidId, (long) amount);
+    }
+
     public FluidStack fluidStack(String fluidId, long amount) {
-        Identifier identifier = Identifier.parse(fluidId);
-        if (!BuiltInRegistries.FLUID.containsKey(identifier)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
-        return new FluidStack(BuiltInRegistries.FLUID.getValue(identifier), MachineOutput.recipeStackAmount(amount));
+        return fluidStack(Identifier.parse(fluidId), amount);
+    }
+
+    public FluidStack fluidStack(Identifier fluidId, long amount) {
+        if (!BuiltInRegistries.FLUID.containsKey(fluidId)) throw new IllegalArgumentException("Unknown fluid: " + fluidId);
+        return new FluidStack(BuiltInRegistries.FLUID.getValue(fluidId), MachineOutput.recipeStackAmount(amount));
     }
 
     public FluidStack fluidStack(String fluidId, int amount) {
+        return fluidStack(fluidId, (long) amount);
+    }
+
+    public FluidStack fluidStack(Identifier fluidId, int amount) {
         return fluidStack(fluidId, (long) amount);
     }
 
@@ -307,35 +353,55 @@ public final class KubeJSApi {
     }
 
     public CustomRecipeIo chemicalInput(String chemicalId, long amount) {
+        return chemicalInput(requireChemicalId(chemicalId, "chemicalId"), amount);
+    }
+
+    public CustomRecipeIo chemicalInput(Identifier chemicalId, long amount) {
         return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
-                        ChemicalIngredient.chemical(requireChemicalId(chemicalId, "chemicalId"), amount)));
+                        ChemicalIngredient.chemical(chemicalId, amount)));
     }
 
     public CustomRecipeIo chemicalInput(String chemicalId, long amount, double consumeChance) {
+        return chemicalInput(requireChemicalId(chemicalId, "chemicalId"), amount, consumeChance);
+    }
+
+    public CustomRecipeIo chemicalInput(Identifier chemicalId, long amount, double consumeChance) {
         return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
-                        ChemicalIngredient.chemical(requireChemicalId(chemicalId, "chemicalId"), amount),
+                        ChemicalIngredient.chemical(chemicalId, amount),
                         (float) consumeChance));
     }
 
     public CustomRecipeIo chemicalTagInput(String tagId, long amount) {
+        return chemicalTagInput(requireChemicalId(tagId, "tagId"), amount);
+    }
+
+    public CustomRecipeIo chemicalTagInput(Identifier tagId, long amount) {
         return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
-                        ChemicalIngredient.tag(requireChemicalId(tagId, "tagId"), amount)));
+                        ChemicalIngredient.tag(tagId, amount)));
     }
 
     public CustomRecipeIo chemicalTagInput(String tagId, long amount, double consumeChance) {
+        return chemicalTagInput(requireChemicalId(tagId, "tagId"), amount, consumeChance);
+    }
+
+    public CustomRecipeIo chemicalTagInput(Identifier tagId, long amount, double consumeChance) {
         return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
                 MachineRecipeBuilder.chemicalInputPayload(
-                        ChemicalIngredient.tag(requireChemicalId(tagId, "tagId"), amount),
+                        ChemicalIngredient.tag(tagId, amount),
                         (float) consumeChance));
     }
 
     public CustomRecipeIo chemicalOutput(String chemicalId, long amount, double chance) {
+        return chemicalOutput(requireChemicalId(chemicalId, "chemicalId"), amount, chance);
+    }
+
+    public CustomRecipeIo chemicalOutput(Identifier chemicalId, long amount, double chance) {
         return customRecipeIo(MekanismPortFamilies.CHEMICAL.toString(), IOType.OUTPUT,
                 MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(
-                        requireChemicalId(chemicalId, "chemicalId"), amount, (float) chance)));
+                        chemicalId, amount, (float) chance)));
     }
 
     public CustomRecipeIo heatTemperatureInput(double temperature) {
@@ -361,7 +427,11 @@ public final class KubeJSApi {
      * @return validated custom recipe IO
      */
     public CustomRecipeIo customRecipeIo(String typeId, IOType io, JsonElement payload) {
-        return RecipeIoValidation.custom(Identifier.parse(typeId), io, payload);
+        return customRecipeIo(Identifier.parse(typeId), io, payload);
+    }
+
+    public CustomRecipeIo customRecipeIo(Identifier typeId, IOType io, JsonElement payload) {
+        return RecipeIoValidation.custom(typeId, io, payload);
     }
 
     public MachineModifier.Numeric modifier(String target, String scope, double value, String operation, boolean chance) {
@@ -380,19 +450,24 @@ public final class KubeJSApi {
     }
 
     public ModifierUse modifierUse(String modifierId, BlockPredicate replacement) {
-        Identifier id = ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId");
-        return new ModifierUse(id, toPublicBlockPredicate(replacement));
+        return modifierUse(ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId"), replacement);
+    }
+
+    public ModifierUse modifierUse(Identifier modifierId, BlockPredicate replacement) {
+        return new ModifierUse(modifierId, toPublicBlockPredicate(replacement));
     }
 
     public LevelRequirement levelRequirement(String typeId, String levelId) {
-        Identifier type = Identifier.parse(typeId);
-        Identifier level = Identifier.parse(levelId);
-        var registered = MachineLevelRegistry.getLevel(level);
-        if (MachineLevelRegistry.getType(type) == null || registered == null
-                || !registered.typeId().equals(type)) {
+        return levelRequirement(Identifier.parse(typeId), Identifier.parse(levelId));
+    }
+
+    public LevelRequirement levelRequirement(Identifier typeId, Identifier levelId) {
+        var registered = MachineLevelRegistry.getLevel(levelId);
+        if (MachineLevelRegistry.getType(typeId) == null || registered == null
+                || !registered.typeId().equals(typeId)) {
             throw new IllegalArgumentException("Unknown or mismatched machine level: " + typeId + "/" + levelId);
         }
-        return new LevelRequirement(type, level);
+        return new LevelRequirement(typeId, levelId);
     }
 
     public StageRequirement stageRequirement(int minStage) {
@@ -400,11 +475,14 @@ public final class KubeJSApi {
     }
 
     public LevelSlot levelSlot(String typeId) {
-        Identifier type = Identifier.parse(typeId);
-        if (MachineLevelRegistry.getType(type) == null) {
+        return levelSlot(Identifier.parse(typeId));
+    }
+
+    public LevelSlot levelSlot(Identifier typeId) {
+        if (MachineLevelRegistry.getType(typeId) == null) {
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
-        return new LevelSlot(type);
+        return new LevelSlot(typeId);
     }
 
     public SmartInterfaceRequirement smartInterfaceInput(String type, float min, float max) {
@@ -416,6 +494,10 @@ public final class KubeJSApi {
     }
 
     public MachineRequirement itemOutputRequirement(String itemId, long count, float chance) {
+        return itemOutputRequirement(Identifier.parse(itemId), count, chance);
+    }
+
+    public MachineRequirement itemOutputRequirement(Identifier itemId, long count, float chance) {
         return MachineRequirement.itemOutput(new ItemStack(requireItem(itemId), MachineOutput.recipeStackAmount(count)), chance);
     }
 
@@ -423,7 +505,15 @@ public final class KubeJSApi {
         return itemOutputRequirement(itemId, (long) count, chance);
     }
 
+    public MachineRequirement itemOutputRequirement(Identifier itemId, int count, float chance) {
+        return itemOutputRequirement(itemId, (long) count, chance);
+    }
+
     public MachineRequirement itemOutputRequirementWithComponents(String itemId, long count, JsonElement components, float chance) {
+        return itemOutputRequirementWithComponents(Identifier.parse(itemId), count, components, chance);
+    }
+
+    public MachineRequirement itemOutputRequirementWithComponents(Identifier itemId, long count, JsonElement components, float chance) {
         return new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                 new ItemStack(requireItem(itemId), MachineOutput.recipeStackAmount(count)), chance, List.of(),
                 DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow(), 1F);
@@ -434,7 +524,16 @@ public final class KubeJSApi {
         return itemOutputRequirementWithComponents(itemId, (long) count, components, chance);
     }
 
+    public MachineRequirement itemOutputRequirementWithComponents(Identifier itemId, int count, JsonElement components,
+                                                                    float chance) {
+        return itemOutputRequirementWithComponents(itemId, (long) count, components, chance);
+    }
+
     public MachineRequirement itemInputRequirement(String itemId, long count) {
+        return itemInputRequirement(Identifier.parse(itemId), count);
+    }
+
+    public MachineRequirement itemInputRequirement(Identifier itemId, long count) {
         return MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), MachineOutput.recipeStackAmount(count)));
     }
 
@@ -442,7 +541,15 @@ public final class KubeJSApi {
         return itemInputRequirement(itemId, (long) count);
     }
 
+    public MachineRequirement itemInputRequirement(Identifier itemId, int count) {
+        return itemInputRequirement(itemId, (long) count);
+    }
+
     public MachineRequirement fluidInputRequirement(String fluidId, long amount) {
+        return fluidInputRequirement(Identifier.parse(fluidId), amount);
+    }
+
+    public MachineRequirement fluidInputRequirement(Identifier fluidId, long amount) {
         return MachineRequirement.fromInput(fluidInput(fluidId, amount));
     }
 
@@ -450,7 +557,15 @@ public final class KubeJSApi {
         return fluidInputRequirement(fluidId, (long) amount);
     }
 
+    public MachineRequirement fluidInputRequirement(Identifier fluidId, int amount) {
+        return fluidInputRequirement(fluidId, (long) amount);
+    }
+
     public MachineRequirement fluidOutputRequirement(String fluidId, long amount, float chance) {
+        return fluidOutputRequirement(Identifier.parse(fluidId), amount, chance);
+    }
+
+    public MachineRequirement fluidOutputRequirement(Identifier fluidId, long amount, float chance) {
         return MachineRequirement.fluidOutput(fluidStack(fluidId, amount), chance);
     }
 
@@ -458,16 +573,22 @@ public final class KubeJSApi {
         return fluidOutputRequirement(fluidId, (long) amount, chance);
     }
 
-    private static Block requireBlock(String id) {
-        Identifier identifier = Identifier.parse(id);
-        if (!BuiltInRegistries.BLOCK.containsKey(identifier)) throw new IllegalArgumentException("Unknown block: " + id);
-        return BuiltInRegistries.BLOCK.getValue(identifier);
+    public MachineRequirement fluidOutputRequirement(Identifier fluidId, int amount, float chance) {
+        return fluidOutputRequirement(fluidId, (long) amount, chance);
     }
 
-    private static Item requireItem(String id) {
-        Identifier identifier = Identifier.parse(id);
-        if (!BuiltInRegistries.ITEM.containsKey(identifier)) throw new IllegalArgumentException("Unknown item: " + id);
-        return BuiltInRegistries.ITEM.getValue(identifier);
+    private static Block requireBlock(String id) {
+        return requireBlock(Identifier.parse(id));
+    }
+
+    private static Block requireBlock(Identifier id) {
+        if (!BuiltInRegistries.BLOCK.containsKey(id)) throw new IllegalArgumentException("Unknown block: " + id);
+        return BuiltInRegistries.BLOCK.getValue(id);
+    }
+
+    private static Item requireItem(Identifier id) {
+        if (!BuiltInRegistries.ITEM.containsKey(id)) throw new IllegalArgumentException("Unknown item: " + id);
+        return BuiltInRegistries.ITEM.getValue(id);
     }
 
     private static Identifier requireChemicalId(String value, String name) {

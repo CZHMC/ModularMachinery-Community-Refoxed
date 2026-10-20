@@ -30,4 +30,10 @@ public record FailureOccurrence(@Nullable FailureReason reason, FailureTrace tra
         return new FailureOccurrence(reason,
                 trace.append(new FailureTrace.Frame(source, phase, recipeId, requirementIndex)), details);
     }
+
+    public FailureOccurrence append(String source, FailurePhase phase,
+                                    @Nullable String recipeId, @Nullable Integer requirementIndex) {
+        return append(Identifier.parse(source), phase,
+                recipeId == null ? null : Identifier.parse(recipeId), requirementIndex);
+    }
 }

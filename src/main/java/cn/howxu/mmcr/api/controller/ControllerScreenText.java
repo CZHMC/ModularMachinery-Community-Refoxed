@@ -11,6 +11,10 @@ import net.minecraft.resources.Identifier;
 public interface ControllerScreenText {
     void append(ControllerScreenTextScope scope, Identifier lineId, Component text);
 
+    default void append(ControllerScreenTextScope scope, String lineId, Component text) {
+        append(scope, Identifier.parse(lineId), text);
+    }
+
     /**
      * Replaces an existing line after the current append operations have completed.
      *
@@ -18,6 +22,10 @@ public interface ControllerScreenText {
      * have enough information to resolve a scope-free line ID.</p>
      */
     default void replace(Identifier lineId, Component text) {
+    }
+
+    default void replace(String lineId, Component text) {
+        replace(Identifier.parse(lineId), text);
     }
 
     /**
@@ -31,7 +39,15 @@ public interface ControllerScreenText {
         append(scope, lineId, text);
     }
 
+    default void appendAfter(ControllerScreenTextScope scope, String lineId, String afterLineId, Component text) {
+        appendAfter(scope, Identifier.parse(lineId), Identifier.parse(afterLineId), text);
+    }
+
     void remove(ControllerScreenTextScope scope, Identifier lineId);
+
+    default void remove(ControllerScreenTextScope scope, String lineId) {
+        remove(scope, Identifier.parse(lineId));
+    }
 
     void clear(ControllerScreenTextScope scope);
 }

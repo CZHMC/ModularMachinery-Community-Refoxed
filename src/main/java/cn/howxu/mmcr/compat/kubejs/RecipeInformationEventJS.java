@@ -31,12 +31,22 @@ public final class RecipeInformationEventJS implements KubeEvent {
 
     public void addRecipePoolInfo(String poolId, String translationKey, Object... arguments) {
         if (!available()) return;
-        entries.add(RecipeInformation.pool(parseIdentifier(poolId, "poolId"), translationKey, arguments));
+        addRecipePoolInfo(parseIdentifier(poolId, "poolId"), translationKey, arguments);
+    }
+
+    public void addRecipePoolInfo(Identifier poolId, String translationKey, Object... arguments) {
+        if (!available()) return;
+        entries.add(RecipeInformation.pool(poolId, translationKey, arguments));
     }
 
     public void addRecipeInfo(String recipeId, String translationKey, Object... arguments) {
         if (!available()) return;
-        entries.add(RecipeInformation.recipe(parseIdentifier(recipeId, "recipeId"), translationKey, arguments));
+        addRecipeInfo(parseIdentifier(recipeId, "recipeId"), translationKey, arguments);
+    }
+
+    public void addRecipeInfo(Identifier recipeId, String translationKey, Object... arguments) {
+        if (!available()) return;
+        entries.add(RecipeInformation.recipe(recipeId, translationKey, arguments));
     }
 
     List<RecipeInformation> entries() {

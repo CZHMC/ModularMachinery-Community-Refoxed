@@ -28,6 +28,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 import dev.latvian.mods.kubejs.recipe.RecipesKubeEvent;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -77,18 +78,24 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS id(String id) {
-        this.id = Identifier.parse(id);
+        return id(Identifier.parse(id));
+    }
+
+    public MachineRecipeBuilderJS id(Identifier id) {
+        this.id = id;
         return this;
     }
 
     public MachineRecipeBuilderJS recipePool(String id) {
-        var parsed = Identifier.parse(id);
+        return recipePool(Identifier.parse(id));
+    }
 
-        if (!MachineRegistry.containsRecipePool(parsed)) {
+    public MachineRecipeBuilderJS recipePool(Identifier id) {
+        if (!MachineRegistry.containsRecipePool(id)) {
             throw new IllegalArgumentException("Recipe pool not found: " + id);
         }
 
-        this.recipePoolId = parsed;
+        this.recipePoolId = id;
 
         return this;
     }
@@ -159,7 +166,11 @@ public class MachineRecipeBuilderJS {
      * @return this builder
      */
     public MachineRecipeBuilderJS custom(String typeId, IOType io, JsonElement payload) {
-        return addRequirement(new CustomRecipeIo(Identifier.parse(typeId), io, payload));
+        return custom(Identifier.parse(typeId), io, payload);
+    }
+
+    public MachineRecipeBuilderJS custom(Identifier typeId, IOType io, JsonElement payload) {
+        return addRequirement(new CustomRecipeIo(typeId, io, payload));
     }
 
     public MachineRecipeBuilderJS priority(int priority) {
@@ -193,6 +204,10 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemInput(String itemId, long count) {
+        return itemInput(Identifier.parse(itemId), count);
+    }
+
+    public MachineRecipeBuilderJS itemInput(Identifier itemId, long count) {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 1F);
     }
 
@@ -200,7 +215,15 @@ public class MachineRecipeBuilderJS {
         return itemInput(itemId, (long) count);
     }
 
+    public MachineRecipeBuilderJS itemInput(Identifier itemId, int count) {
+        return itemInput(itemId, (long) count);
+    }
+
     public MachineRecipeBuilderJS tagInput(String tagId, long count) {
+        return tagInput(Identifier.parse(tagId), count);
+    }
+
+    public MachineRecipeBuilderJS tagInput(Identifier tagId, long count) {
         return addItemInput(Ingredient.of(tagItems(tagId)), count,
                 DataComponentPredicateSet.EMPTY, 1F);
     }
@@ -209,7 +232,15 @@ public class MachineRecipeBuilderJS {
         return tagInput(tagId, (long) count);
     }
 
+    public MachineRecipeBuilderJS tagInput(Identifier tagId, int count) {
+        return tagInput(tagId, (long) count);
+    }
+
     public MachineRecipeBuilderJS itemInputWithComponents(String itemId, long count, JsonElement components) {
+        return itemInputWithComponents(Identifier.parse(itemId), count, components);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(Identifier itemId, long count, JsonElement components) {
         return itemInputWithComponents(itemId, count, components, 1F);
     }
 
@@ -217,7 +248,15 @@ public class MachineRecipeBuilderJS {
         return itemInputWithComponents(itemId, (long) count, components);
     }
 
+    public MachineRecipeBuilderJS itemInputWithComponents(Identifier itemId, int count, JsonElement components) {
+        return itemInputWithComponents(itemId, (long) count, components);
+    }
+
     public MachineRecipeBuilderJS itemInputWithComponents(String itemId, long count, JsonElement components, float consumeChance) {
+        return itemInputWithComponents(Identifier.parse(itemId), count, components, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS itemInputWithComponents(Identifier itemId, long count, JsonElement components, float consumeChance) {
         return addItemInput(Ingredient.of(item(itemId)), count, componentPredicates(components), consumeChance);
     }
 
@@ -226,7 +265,16 @@ public class MachineRecipeBuilderJS {
         return itemInputWithComponents(itemId, (long) count, components, consumeChance);
     }
 
+    public MachineRecipeBuilderJS itemInputWithComponents(Identifier itemId, int count, JsonElement components,
+                                                            float consumeChance) {
+        return itemInputWithComponents(itemId, (long) count, components, consumeChance);
+    }
+
     public MachineRecipeBuilderJS tagInputWithComponents(String tagId, long count, JsonElement components, float consumeChance) {
+        return tagInputWithComponents(Identifier.parse(tagId), count, components, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS tagInputWithComponents(Identifier tagId, long count, JsonElement components, float consumeChance) {
         return addItemInput(Ingredient.of(tagItems(tagId)), count, componentPredicates(components), consumeChance);
     }
 
@@ -235,7 +283,16 @@ public class MachineRecipeBuilderJS {
         return tagInputWithComponents(tagId, (long) count, components, consumeChance);
     }
 
+    public MachineRecipeBuilderJS tagInputWithComponents(Identifier tagId, int count, JsonElement components,
+                                                           float consumeChance) {
+        return tagInputWithComponents(tagId, (long) count, components, consumeChance);
+    }
+
     public MachineRecipeBuilderJS notConsumableItemInput(String itemId, long count) {
+        return notConsumableItemInput(Identifier.parse(itemId), count);
+    }
+
+    public MachineRecipeBuilderJS notConsumableItemInput(Identifier itemId, long count) {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, 0F);
     }
 
@@ -243,11 +300,23 @@ public class MachineRecipeBuilderJS {
         return notConsumableItemInput(itemId, (long) count);
     }
 
+    public MachineRecipeBuilderJS notConsumableItemInput(Identifier itemId, int count) {
+        return notConsumableItemInput(itemId, (long) count);
+    }
+
     public MachineRecipeBuilderJS chancedItemInput(String itemId, long count, float consumeChance) {
+        return chancedItemInput(Identifier.parse(itemId), count, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS chancedItemInput(Identifier itemId, long count, float consumeChance) {
         return addItemInput(Ingredient.of(item(itemId)), count, DataComponentPredicateSet.EMPTY, consumeChance);
     }
 
     public MachineRecipeBuilderJS chancedItemInput(String itemId, int count, float consumeChance) {
+        return chancedItemInput(itemId, (long) count, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS chancedItemInput(Identifier itemId, int count, float consumeChance) {
         return chancedItemInput(itemId, (long) count, consumeChance);
     }
 
@@ -260,10 +329,18 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS fluidInput(String fluidId, long amount) {
+        return fluidInput(Identifier.parse(fluidId), amount);
+    }
+
+    public MachineRecipeBuilderJS fluidInput(Identifier fluidId, long amount) {
         return addFluidInput(fluidId, amount, 1F);
     }
 
     public MachineRecipeBuilderJS fluidInput(String fluidId, int amount) {
+        return fluidInput(fluidId, (long) amount);
+    }
+
+    public MachineRecipeBuilderJS fluidInput(Identifier fluidId, int amount) {
         return fluidInput(fluidId, (long) amount);
     }
 
@@ -277,6 +354,10 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS fluidInput(String fluidId, long amount, double consumeChance) {
+        return fluidInput(Identifier.parse(fluidId), amount, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS fluidInput(Identifier fluidId, long amount, double consumeChance) {
         return addFluidInput(fluidId, amount, (float) consumeChance);
     }
 
@@ -284,16 +365,24 @@ public class MachineRecipeBuilderJS {
         return fluidInput(fluidId, (long) amount, consumeChance);
     }
 
-    private MachineRecipeBuilderJS addFluidInput(String fluidId, long amount, float consumeChance) {
+    public MachineRecipeBuilderJS fluidInput(Identifier fluidId, int amount, double consumeChance) {
+        return fluidInput(fluidId, (long) amount, consumeChance);
+    }
+
+    private MachineRecipeBuilderJS addFluidInput(Identifier fluidId, long amount, float consumeChance) {
         inputs.add(new MachineIngredient.FluidIngredient(FluidIngredient.of(fluid(fluidId)), MachineOutput.recipeStackAmount(amount), consumeChance));
         return this;
     }
 
-    private Fluid fluid(String fluidId) {
-        return BuiltInRegistries.FLUID.getValue(Identifier.parse(fluidId));
+    private Fluid fluid(Identifier fluidId) {
+        return BuiltInRegistries.FLUID.getValue(fluidId);
     }
 
     public MachineRecipeBuilderJS itemOutput(String itemId, long count) {
+        return itemOutput(Identifier.parse(itemId), count);
+    }
+
+    public MachineRecipeBuilderJS itemOutput(Identifier itemId, long count) {
         outputs.add(new ItemStack(item(itemId), MachineOutput.recipeStackAmount(count)));
         outputChances.add(1F);
         return this;
@@ -303,7 +392,15 @@ public class MachineRecipeBuilderJS {
         return itemOutput(itemId, (long) count);
     }
 
+    public MachineRecipeBuilderJS itemOutput(Identifier itemId, int count) {
+        return itemOutput(itemId, (long) count);
+    }
+
     public MachineRecipeBuilderJS chancedItemOutput(String itemId, long count, float chance) {
+        return chancedItemOutput(Identifier.parse(itemId), count, chance);
+    }
+
+    public MachineRecipeBuilderJS chancedItemOutput(Identifier itemId, long count, float chance) {
         outputs.add(new ItemStack(item(itemId), MachineOutput.recipeStackAmount(count)));
         outputChances.add(chance);
         return this;
@@ -313,12 +410,20 @@ public class MachineRecipeBuilderJS {
         return chancedItemOutput(itemId, (long) count, chance);
     }
 
+    public MachineRecipeBuilderJS chancedItemOutput(Identifier itemId, int count, float chance) {
+        return chancedItemOutput(itemId, (long) count, chance);
+    }
+
     public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, long count, JsonElement components) {
+        return itemOutputWithComponents(Identifier.parse(itemId), count, components);
+    }
+
+    public MachineRecipeBuilderJS itemOutputWithComponents(Identifier itemId, long count, JsonElement components) {
         if (count < 1L) {
             throw new IllegalArgumentException("Component item output count must be positive: " + count);
         }
         JsonObject stack = new JsonObject();
-        stack.addProperty("id", itemId);
+        stack.addProperty("id", itemId.toString());
         stack.addProperty("count", count);
         stack.add("components", components.deepCopy());
         componentOutputs.add(new ComponentOutput(outputs.size(), stack));
@@ -326,6 +431,10 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS itemOutputWithComponents(String itemId, int count, JsonElement components) {
+        return itemOutputWithComponents(itemId, (long) count, components);
+    }
+
+    public MachineRecipeBuilderJS itemOutputWithComponents(Identifier itemId, int count, JsonElement components) {
         return itemOutputWithComponents(itemId, (long) count, components);
     }
 
@@ -338,9 +447,12 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount) {
-        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        return chemicalInput(requireChemicalId(chemicalId, "chemicalId"), amount);
+    }
+
+    public MachineRecipeBuilderJS chemicalInput(Identifier chemicalId, long amount) {
         return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
-                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount)));
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(chemicalId, amount)));
     }
 
     /**
@@ -353,9 +465,12 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalInput(String chemicalId, long amount, double consumeChance) {
-        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        return chemicalInput(requireChemicalId(chemicalId, "chemicalId"), amount, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS chemicalInput(Identifier chemicalId, long amount, double consumeChance) {
         return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
-                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(id, amount), (float) consumeChance));
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.chemical(chemicalId, amount), (float) consumeChance));
     }
 
     /**
@@ -367,9 +482,12 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount) {
-        Identifier id = requireChemicalId(tagId, "tagId");
+        return chemicalTagInput(requireChemicalId(tagId, "tagId"), amount);
+    }
+
+    public MachineRecipeBuilderJS chemicalTagInput(Identifier tagId, long amount) {
         return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
-                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount)));
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(tagId, amount)));
     }
 
     /**
@@ -382,9 +500,12 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalTagInput(String tagId, long amount, double consumeChance) {
-        Identifier id = requireChemicalId(tagId, "tagId");
+        return chemicalTagInput(requireChemicalId(tagId, "tagId"), amount, consumeChance);
+    }
+
+    public MachineRecipeBuilderJS chemicalTagInput(Identifier tagId, long amount, double consumeChance) {
         return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.INPUT,
-                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(id, amount), (float) consumeChance));
+                MachineRecipeBuilder.chemicalInputPayload(ChemicalIngredient.tag(tagId, amount), (float) consumeChance));
     }
 
     /**
@@ -397,9 +518,12 @@ public class MachineRecipeBuilderJS {
      * @author howxu <dev@howxu.cn>
      */
     public MachineRecipeBuilderJS chemicalOutput(String chemicalId, long amount, double chance) {
-        Identifier id = requireChemicalId(chemicalId, "chemicalId");
+        return chemicalOutput(requireChemicalId(chemicalId, "chemicalId"), amount, chance);
+    }
+
+    public MachineRecipeBuilderJS chemicalOutput(Identifier chemicalId, long amount, double chance) {
         return custom(MekanismPortFamilies.CHEMICAL.toString(), IOType.OUTPUT,
-                MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(id, amount, (float) chance)));
+                MachineRecipeBuilder.chemicalOutputPayload(ChemicalOutput.of(chemicalId, amount, (float) chance)));
     }
 
     /**
@@ -428,7 +552,11 @@ public class MachineRecipeBuilderJS {
 
     /** Consumes lightning once per parallel recipe using an AE2LT resource ID. */
     public MachineRecipeBuilderJS lightningInput(String tierId, long amount) {
-        return addRequirement(LightningRequirement.input(LightningTier.fromId(Identifier.parse(tierId)), amount));
+        return lightningInput(Identifier.parse(tierId), amount);
+    }
+
+    public MachineRecipeBuilderJS lightningInput(Identifier tierId, long amount) {
+        return addRequirement(LightningRequirement.input(LightningTier.fromId(tierId), amount));
     }
 
     /** Produces lightning with guaranteed output using an AE2LT resource ID. */
@@ -436,14 +564,26 @@ public class MachineRecipeBuilderJS {
         return lightningOutput(tierId, amount, 1D);
     }
 
+    public MachineRecipeBuilderJS lightningOutput(Identifier tierId, long amount) {
+        return lightningOutput(tierId, amount, 1D);
+    }
+
     /** Produces lightning with the canonical output chance and amount clamping. */
     public MachineRecipeBuilderJS lightningOutput(String tierId, long amount, double chance) {
-        return addRequirement(LightningRequirement.output(LightningTier.fromId(Identifier.parse(tierId)),
+        return lightningOutput(Identifier.parse(tierId), amount, chance);
+    }
+
+    public MachineRecipeBuilderJS lightningOutput(Identifier tierId, long amount, double chance) {
+        return addRequirement(LightningRequirement.output(LightningTier.fromId(tierId),
                 amount, (float) chance));
     }
 
     /** Named chance variant shared with the standard KubeJS recipe schema. */
     public MachineRecipeBuilderJS lightningOutputChance(String tierId, long amount, double chance) {
+        return lightningOutput(tierId, amount, chance);
+    }
+
+    public MachineRecipeBuilderJS lightningOutputChance(Identifier tierId, long amount, double chance) {
         return lightningOutput(tierId, amount, chance);
     }
 
@@ -518,15 +658,18 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS requiresLevel(String typeId, String levelId) {
-        var type = Identifier.parse(typeId);
-        var level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
+        return requiresLevel(Identifier.parse(typeId), Identifier.parse(levelId));
+    }
+
+    public MachineRecipeBuilderJS requiresLevel(Identifier typeId, Identifier levelId) {
+        var level = MachineLevelRegistry.getLevel(levelId);
         if (level == null) {
             throw new IllegalArgumentException("Machine level not found: " + levelId);
         }
-        if (!level.typeId().equals(type)) {
+        if (!level.typeId().equals(typeId)) {
             throw new IllegalArgumentException("Machine level " + levelId + " does not belong to type " + typeId);
         }
-        requirements.add(LevelRequirement.input(type, level.id()));
+        requirements.add(LevelRequirement.input(typeId, level.id()));
         return this;
     }
 
@@ -536,7 +679,15 @@ public class MachineRecipeBuilderJS {
     }
 
     public MachineRecipeBuilderJS requiredHost(String hostId) {
-        requiredHostIds.add(Identifier.parse(hostId));
+        return requiredHost(Identifier.parse(hostId));
+    }
+
+    public MachineRecipeBuilderJS requiredHost(Identifier hostId) {
+        requiredHostIds.add(hostId);
+        return this;
+    }
+
+    public MachineRecipeBuilderJS requiredHosts() {
         return this;
     }
 
@@ -548,21 +699,30 @@ public class MachineRecipeBuilderJS {
         return this;
     }
 
+    @HideFromJS
+    public MachineRecipeBuilderJS requiredHosts(Identifier... hostIds) {
+        if (hostIds == null) return this;
+        for (Identifier hostId : hostIds) {
+            if (hostId != null) requiredHost(hostId);
+        }
+        return this;
+    }
+
     private MachineRecipeBuilderJS addItemInput(Ingredient item, long count, DataComponentPredicateSet components, float consumeChance) {
         inputs.add(new MachineIngredient.ItemIngredient(item, MachineOutput.recipeStackAmount(count), components, consumeChance));
         return this;
     }
 
-    private Item item(String itemId) {
-        return BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+    private Item item(Identifier itemId) {
+        return BuiltInRegistries.ITEM.getValue(itemId);
     }
 
     private DataComponentPredicateSet componentPredicates(JsonElement components) {
         return DataComponentPredicateSet.CODEC.parse(JsonOps.INSTANCE, components).getOrThrow();
     }
 
-    private HolderSet.Named<Item> tagItems(String tagId) {
-        var tag = TagKey.create(Registries.ITEM, Identifier.parse(tagId));
+    private HolderSet.Named<Item> tagItems(Identifier tagId) {
+        var tag = TagKey.create(Registries.ITEM, tagId);
         return BuiltInRegistries.ITEM.get(tag).orElseGet(() -> HolderSet.emptyNamed(BuiltInRegistries.ITEM, tag));
     }
 

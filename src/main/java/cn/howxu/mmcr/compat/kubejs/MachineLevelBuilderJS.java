@@ -31,7 +31,11 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
     }
 
     public MachineLevelBuilderJS type(String typeId) {
-        this.typeId = Identifier.parse(typeId);
+        return type(Identifier.parse(typeId));
+    }
+
+    public MachineLevelBuilderJS type(Identifier typeId) {
+        this.typeId = Objects.requireNonNull(typeId, "typeId");
         return this;
     }
 

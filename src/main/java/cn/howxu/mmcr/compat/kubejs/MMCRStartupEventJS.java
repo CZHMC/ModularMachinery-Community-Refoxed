@@ -27,51 +27,87 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public void registerControllerScreenText(String machineId, Consumer<ControllerScreenTextEventJS> handler) {
-        ControllerScreenTextRegistry.register(ControllerScreenTextEventJS.parseIdentifier(machineId, "machineId"),
+        registerControllerScreenText(parseIdentifier(machineId, "machineId"), handler);
+    }
+
+    public void registerControllerScreenText(Identifier machineId, Consumer<ControllerScreenTextEventJS> handler) {
+        ControllerScreenTextRegistry.register(machineId,
                 ControllerScreenTextEventJS.handler(handler));
     }
 
     public MachineBuilderJS createMachine(String id) {
+        return createMachine(Identifier.parse(id));
+    }
+
+    public MachineBuilderJS createMachine(Identifier id) {
         return new MachineBuilderJS(id);
     }
 
     public LevelTypeBuilderJS createLevelType(String id) {
+        return createLevelType(Identifier.parse(id));
+    }
+
+    public LevelTypeBuilderJS createLevelType(Identifier id) {
         return new LevelTypeBuilderJS(id);
     }
 
     public MachineLevelBuilderJS createLevel(String id) {
+        return createLevel(Identifier.parse(id));
+    }
+
+    public MachineLevelBuilderJS createLevel(Identifier id) {
         return new MachineLevelBuilderJS(id);
     }
 
     public LevelSlot levelSlot(String typeId) {
-        var id = Identifier.parse(typeId);
-        if (!StructureRegistration.current().levelTypes().containsKey(id)) {
+        return levelSlot(Identifier.parse(typeId));
+    }
+
+    public LevelSlot levelSlot(Identifier typeId) {
+        if (!StructureRegistration.current().levelTypes().containsKey(typeId)) {
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
-        return new LevelSlot(id);
+        return new LevelSlot(typeId);
     }
 
     public void registerModifier(String id, ModifierDefinition definition) {
-        Identifier modifierId = ControllerScreenTextEventJS.parseIdentifier(id, "modifierId");
-        StructureRegistration.current().registerModifier(modifierId, definition);
+        registerModifier(parseIdentifier(id, "modifierId"), definition);
+    }
+
+    public void registerModifier(Identifier id, ModifierDefinition definition) {
+        StructureRegistration.current().registerModifier(id, definition);
     }
 
     public void registerModifierItem(String itemId, String modifierId) {
         Identifier parsedModifierId = ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId");
-        StructureRegistration.current().registerModifierItem(parseIdentifier(itemId, "itemId"), parsedModifierId);
+        registerModifierItem(parseIdentifier(itemId, "itemId"), parsedModifierId);
+    }
+
+    public void registerModifierItem(Identifier itemId, Identifier modifierId) {
+        StructureRegistration.current().registerModifierItem(itemId, modifierId);
     }
 
     public void addRecipePoolWorkstation(String recipePoolId, String itemId) {
-        jeiWorkstations.add(new JeiWorkstationRegistration.RecipePoolItem(
-                parseIdentifier(recipePoolId, "recipePoolId"), parseIdentifier(itemId, "itemId")));
+        addRecipePoolWorkstation(parseIdentifier(recipePoolId, "recipePoolId"), parseIdentifier(itemId, "itemId"));
+    }
+
+    public void addRecipePoolWorkstation(Identifier recipePoolId, Identifier itemId) {
+        jeiWorkstations.add(new JeiWorkstationRegistration.RecipePoolItem(recipePoolId, itemId));
     }
 
     public void addMachineWorkstation(String machineId, String recipeTypeId) {
-        jeiWorkstations.add(new JeiWorkstationRegistration.Machine(
-                parseIdentifier(machineId, "machineId"), parseIdentifier(recipeTypeId, "recipeTypeId")));
+        addMachineWorkstation(parseIdentifier(machineId, "machineId"), parseIdentifier(recipeTypeId, "recipeTypeId"));
+    }
+
+    public void addMachineWorkstation(Identifier machineId, Identifier recipeTypeId) {
+        jeiWorkstations.add(new JeiWorkstationRegistration.Machine(machineId, recipeTypeId));
     }
 
     public void addMachineWorkStation(String machineId, String recipeTypeId) {
+        addMachineWorkstation(machineId, recipeTypeId);
+    }
+
+    public void addMachineWorkStation(Identifier machineId, Identifier recipeTypeId) {
         addMachineWorkstation(machineId, recipeTypeId);
     }
 
