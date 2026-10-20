@@ -21,6 +21,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
@@ -105,6 +106,18 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
 
     public static void sendTo(Player player, IOPortBlockEntity port) {
         if (player instanceof ServerPlayer serverPlayer) sendTo(serverPlayer, port);
+    }
+
+    public static void onMenuOpen(PlayerContainerEvent.Open event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.containerMenu != event.getContainer()) return;
+        IOPortBlockEntity port = switch (event.getContainer()) {
+            case ExtendedItemMenu menu -> menu.owner();
+            case ExtendedFluidMenu menu -> menu.owner();
+            case CombinedPortMenu menu -> menu.owner();
+            case ExtendedCombinedMenu menu -> menu.owner();
+            default -> null;
+        };
+        if (port != null) sendTo(player, port);
     }
 
     public static void sendToViewers(IOPortBlockEntity port) {

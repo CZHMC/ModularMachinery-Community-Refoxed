@@ -158,6 +158,7 @@ public final class GameTestRegistry {
                 PatchouliGuideGameTest::acquisitionMatchesOptionalInstallation);
         register(event, "controller_ui_menu_lifecycle", 20,
                 helper -> new ControllerUiGameTest().openMetadataAndLifecycle(helper));
+        register(event, "spectator_controller_ui_metadata", 20, ControllerUiGameTest::spectatorControllerMetadata);
         register(event, "controller_ui_terminal_menu_lifecycle", 20, ControllerUiGameTest::terminalMenuLifecycle);
         register(event, "controller_ui_manual_structure_check", 20, ControllerUiGameTest::manualStructureCheck);
         register(event, "controller_ui_request_storage", 100, ControllerUiGameTest::requestStorage);
@@ -271,6 +272,7 @@ public final class GameTestRegistry {
         register(event, "energy_input_ejection_continues_after_partial_target", 100, helper -> new AutoIOGameTest().energyInputEjectionContinuesAfterPartialTarget(helper));
         register(event, "energy_input_ejection_preserves_remainder", 100, helper -> new AutoIOGameTest().energyInputEjectionPreservesRemainder(helper));
         register(event, "port_menu_direction", 100, helper -> new PortMenuDirectionGameTest().itemBusMenuAllowsContainerSlotTransfers(helper));
+        register(event, "spectator_menu_opening", 20, SpectatorMenuGameTest::allBlockMenusCarryOpeningData);
         register(event, "shared_multiblock_teardown", 100, helper -> new SharedMultiblockIoGameTest().sharedEnergyPortFormsBothControllersAndSurvivesOneTeardown(helper));
         register(event, "shared_multiblock_input", 100, helper -> new SharedMultiblockIoGameTest().sharedInputPartiallyStartsBothControllers(helper));
         register(event, "shared_multiblock_energy", 100, helper -> new SharedMultiblockIoGameTest().finiteSharedEnergyRotatesTickGrantsBetweenLanes(helper));
