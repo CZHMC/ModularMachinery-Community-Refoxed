@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierItemKey;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -30,9 +31,11 @@ public final class StructureRegistration {
     protected final Map<Identifier, MachineStructureDefinition> structures = new LinkedHashMap<>();
     protected final Map<Identifier, LevelType> levelTypes = new LinkedHashMap<>();
     protected final Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
+    private final Map<Identifier, cn.howxu.mmcr.api.machine.definition.MachineLevel> levelDeclarations = new LinkedHashMap<>();
     protected final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
     protected final Map<Identifier, List<ItemStack>> modifierItems = new LinkedHashMap<>();
     private final Map<ModifierItemKey, Identifier> modifierItemKeys = new LinkedHashMap<>();
+    private final Map<Identifier, Identifier> modifierItemIds = new LinkedHashMap<>();
     private boolean frozen;
     private Snapshot snapshot;
 
@@ -45,9 +48,11 @@ public final class StructureRegistration {
         if (current != null) {
             prepared.levelTypes.putAll(current.levelTypes);
             prepared.levels.putAll(current.levels);
+            prepared.levelDeclarations.putAll(current.levelDeclarations);
             prepared.modifiers.putAll(current.modifiers);
             current.modifierItems().forEach((modifierId, stacks) -> stacks.forEach(stack ->
                     prepared.registerModifierItem(stack, modifierId)));
+            prepared.modifierItemIds.putAll(current.modifierItemIds);
         }
         current = prepared;
         return prepared;
@@ -111,13 +116,20 @@ public final class StructureRegistration {
         if (!levelTypes.containsKey(level.typeId())) {
             throw new ApiRegistrationException("Unknown machine level type: " + level.typeId());
         }
-        if (levels.putIfAbsent(level.id(), level) != null) {
+        if (levelDeclarations.containsKey(level.id()) || levels.putIfAbsent(level.id(), level) != null) {
             throw new ApiRegistrationException("Duplicate machine level: " + level.id());
         }
     }
 
     public void registerLevel(cn.howxu.mmcr.api.machine.definition.MachineLevel level) {
-        registerLevel(MachineDefinitionConverter.toMachineLevel(require(level, "level")));
+        requireOpen();
+        require(level, "level");
+        if (!levelTypes.containsKey(level.typeId())) {
+            throw new ApiRegistrationException("Unknown machine level type: " + level.typeId());
+        }
+        if (levels.containsKey(level.id()) || levelDeclarations.putIfAbsent(level.id(), level) != null) {
+            throw new ApiRegistrationException("Duplicate machine level: " + level.id());
+        }
     }
 
     public void registerModifier(Identifier id, ModifierDefinition definition) {
@@ -141,6 +153,16 @@ public final class StructureRegistration {
         modifierItems.computeIfAbsent(modifierId, ignored -> new ArrayList<>()).add(normalized);
     }
 
+    /** Records an item ID without constructing a stack before default components are bound. */
+    public void registerModifierItem(Identifier itemId, Identifier modifierId) {
+        requireOpen();
+        require(itemId, "modifier item id");
+        require(modifierId, "modifier id");
+        if (modifierItemIds.putIfAbsent(itemId, modifierId) != null) {
+            throw new ApiRegistrationException("Duplicate machine modifier item binding: " + itemId);
+        }
+    }
+
     public Map<Identifier, MachineStructureDefinition> structures() {
         return snapshot == null ? immutable(structures) : snapshot.structures();
     }
@@ -153,6 +175,11 @@ public final class StructureRegistration {
         return snapshot == null ? immutable(levels) : snapshot.levels();
     }
 
+    /** Pending declarations remain inspectable without resolving their block states. */
+    public Map<Identifier, cn.howxu.mmcr.api.machine.definition.MachineLevel> levelDeclarations() {
+        return immutable(levelDeclarations);
+    }
+
     public Map<Identifier, ModifierDefinition> modifiers() {
         return snapshot == null ? immutable(modifiers) : snapshot.modifiers();
     }
@@ -161,8 +188,20 @@ public final class StructureRegistration {
         return snapshot == null ? immutableItemBindings(modifierItems) : snapshot.modifierItems();
     }
 
+    public Map<Identifier, Identifier> modifierItemIds() {
+        return snapshot == null ? immutable(modifierItemIds) : snapshot.modifierItemIds();
+    }
+
     public Snapshot freeze() {
         if (frozen) return snapshot;
+        Map<Identifier, MachineLevel> resolvedLevels = new LinkedHashMap<>(levels);
+        levelDeclarations.forEach((id, declaration) -> {
+            try {
+                resolvedLevels.put(id, MachineDefinitionConverter.toMachineLevel(declaration));
+            } catch (RuntimeException exception) {
+                throw new ApiRegistrationException("Invalid machine level " + id + ": " + exception.getMessage(), exception);
+            }
+        });
         structures.values().forEach(structure -> structure.stages().forEach(stage -> {
             stage.requirements().levelSlots().values().forEach(typeId -> {
                 if (!levelTypes.containsKey(typeId)) throw new ApiRegistrationException(
@@ -179,8 +218,14 @@ public final class StructureRegistration {
             if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
                     "Modifier item binding refers to unknown machine modifier " + modifierId);
         });
+        modifierItemIds.forEach((itemId, modifierId) -> {
+            if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
+                    "Modifier item " + itemId + " refers to unknown machine modifier " + modifierId);
+        });
+        levels.putAll(resolvedLevels);
+        levelDeclarations.clear();
         frozen = true;
-        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems);
+        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds);
         return snapshot;
     }
 
@@ -208,11 +253,18 @@ public final class StructureRegistration {
     public record Snapshot(Map<Identifier, MachineStructureDefinition> structures,
             Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
             Map<Identifier, ModifierDefinition> modifiers,
-            Map<Identifier, List<ItemStack>> modifierItems) {
+            Map<Identifier, List<ItemStack>> modifierItems,
+            Map<Identifier, Identifier> modifierItemIds) {
         public Snapshot(Map<Identifier, MachineStructureDefinition> structures,
                 Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
                 Map<Identifier, ModifierDefinition> modifiers) {
             this(structures, levelTypes, levels, modifiers, Map.of());
+        }
+
+        public Snapshot(Map<Identifier, MachineStructureDefinition> structures,
+                Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
+                Map<Identifier, ModifierDefinition> modifiers, Map<Identifier, List<ItemStack>> modifierItems) {
+            this(structures, levelTypes, levels, modifiers, modifierItems, Map.of());
         }
 
         public Snapshot {
@@ -221,11 +273,28 @@ public final class StructureRegistration {
             levels = immutable(levels);
             modifiers = immutable(modifiers);
             modifierItems = immutableItemBindings(modifierItems);
+            modifierItemIds = immutable(modifierItemIds);
         }
 
         @Override
         public Map<Identifier, List<ItemStack>> modifierItems() {
             return immutableItemBindings(modifierItems);
+        }
+
+        /** Must only be called once item default components have been bound. */
+        public Map<Identifier, List<ItemStack>> resolveModifierItems() {
+            Map<Identifier, List<ItemStack>> resolved = new LinkedHashMap<>();
+            modifierItems().forEach((id, stacks) -> resolved.put(id, new ArrayList<>(stacks)));
+            modifierItemIds.forEach((itemId, modifierId) -> {
+                var item = BuiltInRegistries.ITEM.getOptional(itemId).orElseThrow(() ->
+                        new ApiRegistrationException("Machine modifier " + modifierId
+                                + " refers to unknown item " + itemId));
+                ItemStack stack = new ItemStack(item);
+                if (stack.isEmpty()) throw new ApiRegistrationException(
+                        "Machine modifier " + modifierId + " cannot bind empty item " + itemId);
+                resolved.computeIfAbsent(modifierId, ignored -> new ArrayList<>()).add(stack);
+            });
+            return immutableItemBindings(resolved);
         }
     }
 }

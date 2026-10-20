@@ -1,14 +1,12 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +45,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
 
     public LevelSlot levelSlot(String typeId) {
         var id = Identifier.parse(typeId);
-        if (MachineLevelRegistry.getType(id) == null) {
+        if (!StructureRegistration.current().levelTypes().containsKey(id)) {
             throw new IllegalArgumentException("Unknown machine level type: " + typeId);
         }
         return new LevelSlot(id);
@@ -58,19 +56,14 @@ public final class MMCRStartupEventJS implements KubeEvent {
         StructureRegistration.current().registerModifier(modifierId, definition);
     }
 
-    public void registerModifierItem(ItemStack stack, String modifierId) {
+    public void registerModifierItem(String itemId, String modifierId) {
         Identifier parsedModifierId = ControllerScreenTextEventJS.parseIdentifier(modifierId, "modifierId");
-        StructureRegistration.current().registerModifierItem(stack, parsedModifierId);
+        StructureRegistration.current().registerModifierItem(parseIdentifier(itemId, "itemId"), parsedModifierId);
     }
 
     public void addRecipePoolWorkstation(String recipePoolId, String itemId) {
         jeiWorkstations.add(new JeiWorkstationRegistration.RecipePoolItem(
                 parseIdentifier(recipePoolId, "recipePoolId"), parseIdentifier(itemId, "itemId")));
-    }
-
-    public void addRecipePoolWorkstation(String recipePoolId, ItemStack workstation) {
-        jeiWorkstations.add(new JeiWorkstationRegistration.RecipePoolStack(
-                parseIdentifier(recipePoolId, "recipePoolId"), workstation));
     }
 
     public void addMachineWorkstation(String machineId, String recipeTypeId) {

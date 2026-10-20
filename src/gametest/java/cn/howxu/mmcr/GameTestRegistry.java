@@ -141,7 +141,13 @@ public final class GameTestRegistry {
             register(event, "input_isolation_ordinary_pattern_topup", 20, InputIsolationGameTest::ordinaryPatternRequestCanTopUpAndRollback);
         }
         if (ModList.get().isLoaded("mekanism")) {
+            register(event, "startup_mekanism_registry_references", 20,
+                    StartupRegistryReferenceGameTest::mekanismExampleResolvesRegisteredContent);
             register(event, "input_isolation_chemical_shared_heat", 20, InputIsolationGameTest::chemicalIsolationStillSharesHeatAndEnergy);
+        }
+        if (ModList.get().isLoaded("kubejs")) {
+            register(event, "startup_kubejs_registry_references", 20,
+                    StartupRegistryReferenceGameTest::kubejsReferencesResolveAfterRegistryCallbacks);
         }
         register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
         register(event, "running_mixed_input_rollback", 20, RunningRecipeGameTest::mixedInputCommitRollsBackAfterEnergyChanges);
@@ -605,6 +611,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(RegisterMachineStructuresEvent event) {
+        if (ModList.get().isLoaded("mekanism")) {
+            StartupRegistryReferenceGameTest.registerPublicReferences(event);
+        }
         registerMachineStructures(RegistrationAdapters.core(event));
     }
 

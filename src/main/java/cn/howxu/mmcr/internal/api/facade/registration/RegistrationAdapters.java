@@ -132,22 +132,28 @@ public final class RegistrationAdapters {
         }
         @Override public void registerLevel(MachineLevelSpec level) {
             Objects.requireNonNull(level, "level");
-            registration(() -> core.registerLevel(StructureAdapters.unwrapRuntime(level)));
+            registration(() -> StructureAdapters.registerLevel(core, level));
         }
         @Override public void registerModifier(Identifier id, ModifierBundle modifier) {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(modifier, "modifier");
             registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier)));
         }
-        @Override public void registerModifierItem(ItemStack stack, Identifier id) {
-            Objects.requireNonNull(stack, "stack");
+        @Override public void registerModifierItem(Identifier itemId, Identifier id) {
+            Objects.requireNonNull(itemId, "itemId");
             Objects.requireNonNull(id, "modifierId");
-            registration(() -> core.registerModifierItem(stack, id));
+            registration(() -> core.registerModifierItem(itemId, id));
         }
         @Override public Map<Identifier, StructureSpec> structures() { return views(core.structures(), StructureAdapters::wrap); }
         @Override public Map<Identifier, LevelTypeSpec> levelTypes() { return views(core.levelTypes(), StructureAdapters::wrap); }
-        @Override public Map<Identifier, MachineLevelSpec> levels() { return views(core.levels(), StructureAdapters::wrap); }
+        @Override public Map<Identifier, MachineLevelSpec> levels() {
+            Map<Identifier, MachineLevelSpec> levels = new LinkedHashMap<>(
+                    views(core.levelDeclarations(), StructureAdapters::wrap));
+            levels.putAll(views(core.levels(), StructureAdapters::wrap));
+            return Collections.unmodifiableMap(levels);
+        }
         @Override public Map<Identifier, ModifierBundle> modifiers() { return views(core.modifiers(), ModifierAdapters::wrap); }
         @Override public Map<Identifier, List<ItemStack>> modifierItems() { return core.modifierItems(); }
+        @Override public Map<Identifier, Identifier> modifierItemIds() { return core.modifierItemIds(); }
     }
 }

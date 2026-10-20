@@ -17,8 +17,6 @@ import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierOperation;
 import cn.howxu.mmcr.publicapi.recipe.component.ComponentConditions;
 import cn.howxu.mmcr.publicapi.recipe.component.ComponentConstraints;
 import com.google.gson.JsonObject;
-import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -77,7 +75,6 @@ public class THERMAL_SMELTING_FURNACE {
                 THERMAL_SMELTING_COIL_TYPE,
                 1,
                 BlockConditions.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.IRON_BLOCK.asItem(), DataComponentMap.EMPTY)),
                 Modifiers.bundle(Modifiers.numeric("duration", ModifierScope.INPUT, 0.9D, ModifierOperation.MULTIPLY, false)))
         );
 
@@ -86,7 +83,6 @@ public class THERMAL_SMELTING_FURNACE {
                 THERMAL_SMELTING_COIL_TYPE,
                 3,
                 BlockConditions.blockState(Blocks.DIAMOND_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.DIAMOND_BLOCK.asItem(), DataComponentMap.EMPTY)),
                 Modifiers.bundle(
                         Modifiers.numeric("duration", ModifierScope.INPUT, 0.7D, ModifierOperation.MULTIPLY, false),
                         Modifiers.numeric("energy", ModifierScope.INPUT, 0.8D, ModifierOperation.MULTIPLY, false),
@@ -99,7 +95,6 @@ public class THERMAL_SMELTING_FURNACE {
                 THERMAL_SMELTING_COIL_TYPE,
                 2,
                 BlockConditions.blockState(Blocks.GOLD_BLOCK.defaultBlockState()),
-                new ItemStack(Holder.direct(Blocks.GOLD_BLOCK.asItem(), DataComponentMap.EMPTY)),
                 Modifiers.bundle(
                         Modifiers.numeric("duration", ModifierScope.INPUT, 0.6D, ModifierOperation.MULTIPLY, false),
                         Modifiers.numeric("energy", ModifierScope.INPUT, 0.7D, ModifierOperation.MULTIPLY, false),
