@@ -1,6 +1,10 @@
 ## Modular Machinery: Community Refoxed
 
 <p align="center">
+    <a href="https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed"><img src="./src/main/resources/mmcr.png"></a>
+</p>
+
+<p align="center">
     <a href="https://www.curseforge.com/minecraft/mc-mods/modular-machinery-community-refoxed"><img src="https://cf.way2muchnoise.eu/full_1654570_downloads.svg"></a>
     <a href="https://modrinth.com/mod/modular-machinery-community-refoxed"><img src="https://shieldcn.dev/modrinth/downloads/bUctkb7B.svg?size=sm"></a>
 </p>
