@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.block.BlockStateModelSet;
 import net.minecraft.client.renderer.block.FluidStateModelSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.util.ARGB;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
@@ -139,8 +140,8 @@ public final class WorldPreviewCompileInput {
 
             @Override
             public int getBlockTint(BlockPos position, ColorResolver resolver) {
-                return resolver.getColor(biomes.getOrDefault(position.asLong(), defaultBiome),
-                        position.getX(), position.getZ());
+                return ARGB.opaque(resolver.getColor(biomes.getOrDefault(position.asLong(), defaultBiome),
+                        position.getX(), position.getZ()));
             }
         }
 }

@@ -18,6 +18,7 @@ import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.ARGB;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
@@ -210,7 +211,7 @@ public final class WorldPreviewMeshCompiler {
             @Override public CardinalLighting cardinalLighting() { return CardinalLighting.DEFAULT; }
             @Override public LevelLightEngine getLightEngine() { return level.getLightEngine(); }
             @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
-                return resolver.getColor(level.getBiome(position).value(), position.getX(), position.getZ());
+                return ARGB.opaque(resolver.getColor(level.getBiome(position).value(), position.getX(), position.getZ()));
             }
         };
     }

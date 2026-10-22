@@ -8,6 +8,7 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.client.fluid.FluidTintSources;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +66,20 @@ class PreviewSceneMeshCompilerTest {
 
         assertThat(future).isNotDone();
         assertThat(pendingWorker.get()).isNotNull();
+    }
+
+    @Test
+    void preview_water_tint_is_opaque_and_preserves_biome_rgb() {
+        StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("preview_water_tint_test"),
+                Map.of(BlockPos.ZERO, Blocks.WATER.defaultBlockState()), Map.of());
+        try (PreviewLevel level = PreviewLevel.create(schema, () -> PreviewVisibility.ALL)) {
+            var region = PreviewSceneMeshCompiler.previewRegion(level, schema, PreviewVisibility.ALL);
+            var state = region.getBlockState(BlockPos.ZERO);
+
+            int tint = FluidTintSources.water().colorInWorld(state.getFluidState(), state, region, BlockPos.ZERO);
+
+            assertThat(tint).isEqualTo(0xFF3F76E4);
+        }
     }
 
     @Test
