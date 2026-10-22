@@ -36,6 +36,7 @@ import cn.howxu.mmcr.api.network.RequestBody;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.presentation.ReadableNumber;
 import dev.latvian.mods.kubejs.util.RegistryAccessContainer;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -234,6 +235,8 @@ public final class KubeJSApi {
         return new BlockPredicate.OfBlockState(state);
     }
 
+    // Rhino's Identifier conversion would reject state properties before the String parser runs.
+    @HideFromJS
     public BlockPredicate state(Identifier blockId) {
         return state(blockId.toString());
     }

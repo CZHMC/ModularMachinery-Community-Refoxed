@@ -11,9 +11,14 @@ import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.test.TestBootstrap;
+import dev.latvian.mods.kubejs.util.ID;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.ScriptableObject;
+import dev.latvian.mods.rhino.Wrapper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.IronBarsBlock;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -74,8 +79,34 @@ class IdentifierOverloadsTest {
     }
 
     @Test
+    void rhino_state_preserves_properties_when_identifier_conversion_is_registered() {
+        var factory = new ContextFactory();
+        factory.getTypeWrappers().registerDirect(Identifier.class, ID::mc);
+        var context = factory.enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", new KubeJSApi(), context);
+
+        Object result = context.evaluateString(scope, """
+                api.state('minecraft:iron_bars[east=true,north=false,south=true,waterlogged=false,west=true]')
+                """, "state-identifier-conversion-test", 1, null);
+
+        var predicate = (BlockPredicate.OfBlockState) Wrapper.unwrapped(result);
+        var expected = Blocks.IRON_BARS.defaultBlockState()
+                .setValue(IronBarsBlock.EAST, true)
+                .setValue(IronBarsBlock.NORTH, false)
+                .setValue(IronBarsBlock.SOUTH, true)
+                .setValue(IronBarsBlock.WEST, true)
+                .setValue(IronBarsBlock.WATERLOGGED, false);
+        assertThat(predicate.state()).isEqualTo(expected);
+        assertThat(predicate.matches(expected)).isTrue();
+        assertThat(predicate.matches(expected.setValue(IronBarsBlock.EAST, false))).isFalse();
+    }
+
+    @Test
     void helper_identifier_overloads_resolve_the_same_registered_resources() {
         var api = new KubeJSApi();
+        assertThat(((BlockPredicate.OfBlockState) api.state(Identifier.parse("minecraft:stone")))
+                .state()).isSameAs(Blocks.STONE.defaultBlockState());
         assertThat(((BlockPredicate.OfBlock) api.block(Identifier.parse("minecraft:stone")))
                 .block()).isSameAs(Blocks.STONE);
         assertThat(((BlockPredicate.OfTag) api.tag(Identifier.parse("minecraft:logs")))
