@@ -43,6 +43,8 @@ public final class PatternBatchPersistenceGameTest {
             fixture.addSpareMaterial();
             helper.assertTrue(fixture.dispatch() == 1 && fixture.provider.accepted == 1,
                     "Native CPU pays and starts the actual 2.1G batch before persistence testing");
+            helper.assertTrue(fixture.energyHatch().energyStorage().getAmountAsLong() == fixture.feBudget,
+                    "Admission checks the complete batch's FE without spending any of the forty-tick budget");
             if (point == SavePoint.FINAL_TICK_PAID) fixture.fillReturnSlots(BLOCKER);
             if (point == SavePoint.OUTPUT_WAITING) fixture.disconnectHost();
         }).thenWaitUntil(() -> {
@@ -125,7 +127,7 @@ public final class PatternBatchPersistenceGameTest {
                 .thenExecute(() -> {
                     helper.assertTrue(fixture.energyHatch().energyStorage().getAmountAsLong() == 0
                                     && fixture.provider.accepted == 1 && fixture.power.charges == 1,
-                             "Start and forty real ticks consume the original FE budget and only one CPU batch was paid");
+                             "Only forty real ticks consume the exact FE budget and only one CPU batch was paid");
                     fixture.energyHatch().energyStorage().setAmount(fixture.feBudget);
                 }).thenExecuteFor(85, () -> assertNoUnorderedRestart(helper, fixture)).thenSucceed();
     }
@@ -162,6 +164,8 @@ public final class PatternBatchPersistenceGameTest {
             else fixture.clearReturnBlocker(BLOCKER);
             helper.assertTrue(fixture.dispatch() == 1 && fixture.provider.accepted == 1 && fixture.power.charges == 1,
                     "Restoring the blocked resource admits the unchanged full batch exactly once");
+            helper.assertTrue(fixture.energyHatch().energyStorage().getAmountAsLong() == fixture.feBudget,
+                    "Successful retry checks machine FE without charging a startup fee");
         }).thenWaitUntil(() -> fixture.assertSettled(1)).thenExecute(() -> helper.assertTrue(
                         fixture.energyHatch().energyStorage().getAmountAsLong() == 0,
                         "No FE was lost to rejection or duplicate start; the original exact budget completes the recipe"))

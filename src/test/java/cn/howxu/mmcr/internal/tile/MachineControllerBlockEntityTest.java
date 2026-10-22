@@ -364,7 +364,7 @@ class MachineControllerBlockEntityTest {
                 new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
                 energy.getBlockPos(), (String) null)));
         RuntimeTestFixtures.republish(controller);
-        energy.energyStorage().setAmount(14L);
+        energy.energyStorage().setAmount(7L);
         return controller;
     }
 
@@ -437,6 +437,10 @@ class MachineControllerBlockEntityTest {
                 assertThat(crafting.active()).isTrue();
                 assertThat(crafting.recipe()).isSameAs(change.equals("modifier") ? original : replacement);
                 assertThat(starts).hasValue(2);
+                assertThat(energy.getEnergyStorage().amount()).isEqualTo(100L);
+                RuntimeTestFixtures.advanceGameTime(level);
+                crafting.tick();
+                assertThat(crafting.tickCount()).isEqualTo(1);
                 assertThat(energy.getEnergyStorage().amount()).isEqualTo(change.equals("modifier") ? 86L : 89L);
             }
         } finally {
@@ -650,7 +654,7 @@ class MachineControllerBlockEntityTest {
             assertThat(thread.hasFullSearchPending()).isTrue();
             assertThat(StartFailureRequirement.failNextCopy).isFalse();
             assertThat(StartFailureRequirement.failNextPlan).isFalse();
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(86L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
             MachineRecipe alternative = RecipeTestSupport.create(MMCR.id("cached_exception_alternative_" + shared + "_" + phase),
                     MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), -1, 1);
             RecipeRegistry.registerStatic(alternative);
@@ -665,7 +669,7 @@ class MachineControllerBlockEntityTest {
             assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
             assertThat(controller.successfulCompletions).isEqualTo(1);
             assertThat(controller.finishSounds).isEqualTo(1);
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(86L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
         } finally {
             StartFailureRequirement.failNextCopy.set(false);
             StartFailureRequirement.failNextPlan.set(false);

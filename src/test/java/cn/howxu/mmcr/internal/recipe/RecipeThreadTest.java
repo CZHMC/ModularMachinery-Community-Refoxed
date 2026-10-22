@@ -345,15 +345,17 @@ class RecipeThreadTest {
                 if (tick == 1) {
                     assertThat(thread.runtime().tickCount()).isEqualTo(1);
                     assertThat(output.itemStorage().amount(0)).isZero();
+                    assertThat(energy.getEnergyStorage().amount()).isEqualTo(1000L - 3L * 7L);
                 } else if (tick == 2) {
                     assertThat(output.itemStorage().amount(0)).isEqualTo(3L);
                     assertThat(thread.runtime().active()).isTrue();
                     assertThat(thread.runtime().parallelism()).isEqualTo(10L);
                     assertThat(thread.runtime().tickCount()).isZero();
-                    assertThat(energy.getEnergyStorage().amount()).isZero();
+                    assertThat(energy.getEnergyStorage().amount()).isEqualTo(70L);
                 } else if (tick == 3) {
                     assertThat(thread.runtime().tickCount()).isEqualTo(1);
                     assertThat(output.itemStorage().amount(0)).isEqualTo(3L);
+                    assertThat(energy.getEnergyStorage().amount()).isEqualTo(1000L - 10L * 7L);
                 } else {
                     assertThat(output.itemStorage().amount(0)).isEqualTo(13L);
                     assertThat(output.itemStorage().resource(0).toStack(1).is(Items.GOLD_NUGGET)).isTrue();
@@ -381,7 +383,7 @@ class RecipeThreadTest {
             assertThat(thread.runtime().parallelism()).isEqualTo(16L);
             assertThat(thread.runtime().tickCount()).isZero();
             assertThat(thread.runtime().installedProgram()).isNotNull();
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(1000L - 16L * 7L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(1000L);
             assertThat(output.itemStorage().amount(0)).isEqualTo(13L);
             assertThat(factory ? controllerFactorySearchAttempts(controller) : normalSearchAttempts(controller))
                     .isEqualTo(beforeSearch);
@@ -637,7 +639,7 @@ class RecipeThreadTest {
             assertThat(thread.runtime().active()).isTrue();
             assertThat(thread.runtime().recipe()).isSameAs(replacement);
             assertThat(thread.hasFullSearchPending()).isFalse();
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(100L);
             assertThat(normalSearchAttempts(controller)).isZero();
         } finally {
             MachineAsyncCoordinator.discard(level);
@@ -715,7 +717,7 @@ class RecipeThreadTest {
                     RecipeThread.StartResult.PENDING, RecipeThread.StartResult.STARTED);
             assertThat(thread.runtime().recipe()).isSameAs(recipe);
             assertThat(thread.isStartPending()).isFalse();
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(100L);
             assertThat(normalSearchAttempts(controller)).isZero();
         } finally {
             MachineAsyncCoordinator.discard(level);
@@ -910,7 +912,7 @@ class RecipeThreadTest {
             assertThat(thread.runtime().active()).isTrue();
             assertThat(thread.runtime().recipe()).isSameAs(recipe);
             assertThat(thread.isStartPending()).isFalse();
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(100L);
         } finally {
             MachineAsyncCoordinator.discard(level);
             SharedIoCoordinator.discard(level);
@@ -1027,7 +1029,7 @@ class RecipeThreadTest {
             assertThat(thread.isStartPending()).isFalse();
             assertThat(thread.hasFullSearchPending()).isTrue();
             assertThat(normalSearchAttempts(controller)).isEqualTo(beforeSearch);
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(86L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
         } finally {
             MachineAsyncCoordinator.discard(level);
             SharedIoCoordinator.discard(level);
@@ -1093,7 +1095,7 @@ class RecipeThreadTest {
             assertThat(thread.runtime().recipe()).isSameAs(recipe);
             assertThat(thread.isStartPending()).isFalse();
             assertThat(callbacks).hasValue(1);
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(100L);
             assertThat(normalSearchAttempts(controller)).isZero();
         } finally {
             MachineAsyncCoordinator.discard(level);
@@ -1159,7 +1161,7 @@ class RecipeThreadTest {
             assertThat(thread.runtime().recipe()).isSameAs(alternative);
             assertThat(thread.isStartPending()).isFalse();
             assertThat(thread.hasFullSearchPending()).isFalse();
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(97L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(100L);
             assertThat(callbacks).hasValue(boundary.endsWith("plan") ? 2 : 1);
         } finally {
             MachineAsyncCoordinator.discard(level);
@@ -1227,7 +1229,7 @@ class RecipeThreadTest {
             assertThat(thread.isStartPending()).isFalse();
             assertThat(thread.hasFullSearchPending()).isTrue();
             assertThat(output.itemStorage().amount(0)).isEqualTo(1L);
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(86L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(93L);
         } finally {
             MachineAsyncCoordinator.discard(level);
             SharedIoCoordinator.discard(level);
@@ -1278,7 +1280,7 @@ class RecipeThreadTest {
             assertThat(thread.isStartPending()).isFalse();
             assertThat(thread.runtime().active()).isEqualTo(!changeEpoch);
             assertThat(thread.hasFullSearchPending()).isEqualTo(changeEpoch);
-            assertThat(energy.getEnergyStorage().amount()).isEqualTo(changeEpoch ? 100L : 97L);
+            assertThat(energy.getEnergyStorage().amount()).isEqualTo(100L);
             if (!changeEpoch) assertThat(thread.runtime().recipe()).isSameAs(replacement);
         } finally {
             MachineAsyncCoordinator.discard(level);

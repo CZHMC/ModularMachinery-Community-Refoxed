@@ -445,8 +445,8 @@ public final class InputIsolationGameTest {
                     "Complete real item/fluid request reserves the ticker-qualified linked controller");
             energy.getEnergyStorage().setAmount(0);
             helper.assertFalse(stale.commit(transaction -> {
-                throw new AssertionError("Native request acceptance cannot run after energy payment fails");
-            }), "Energy loss after host reservation rejects actual pattern payment");
+                throw new AssertionError("Native request acceptance cannot run after the live energy check fails");
+            }), "Energy loss after host reservation rejects actual pattern admission");
             helper.assertTrue(holder.get(iron) == 2 && holder.get(water) == 250 && !fixture.runtime.active()
                             && completeItems.amount(0) == 2 && completeFluids.amount(0) == 250
                             && outside.itemStorage().amount(0) == 10 && outside.fluidStorage().amount(0) == 1_000,
@@ -459,10 +459,10 @@ public final class InputIsolationGameTest {
                         "Native item/fluid acceptance clears the real holders in the same root transaction");
             }),
                     "Complete request retries and commits through the native host admission boundary");
-            helper.assertTrue(holder.get(iron) == 0 && holder.get(water) == 0 && energy.getEnergyStorage().amount() == 13
+            helper.assertTrue(holder.get(iron) == 0 && holder.get(water) == 0 && energy.getEnergyStorage().amount() == 20
                             && outside.itemStorage().amount(0) == 10 && outside.fluidStorage().amount(0) == 1_000
                             && host.getLogic().getReturnInv().getAvailableStacks().get(iron) == 9,
-                    "Successful pattern start pays request holders and shared FE while preserving other inputs and return inventory");
+                    "Successful pattern admission pays request holders but only checks shared FE, preserving other inputs and return inventory");
             helper.assertTrue(fixture.runtime.activeInputScope().kind() == (isolated ? InputScope.Kind.ISOLATED : InputScope.Kind.ORDINARY)
                             && fixture.runtime.activeInputScope().sources().equals(List.of(host.getBlockPos())),
                     "Pattern runtime freezes the real ordinary/isolated host position rather than temporary capability indices");
@@ -523,10 +523,10 @@ public final class InputIsolationGameTest {
                         "Successful ordinary payment accepts both native request families atomically");
             }), "Same-group ordinary top-up succeeds after the external fluid is restored");
             helper.assertTrue(holder.get(iron) == 0 && holder.get(water) == 0 && ordinary.itemStorage().amount(0) == 0
-                            && ordinary.fluidStorage().amount(0) == 0 && energy.getEnergyStorage().amount() == 13
+                            && ordinary.fluidStorage().amount(0) == 0 && energy.getEnergyStorage().amount() == 20
                             && host.getLogic().getReturnInv().getAvailableStacks().get(iron) == 9
                             && host.getLogic().getReturnInv().getAvailableStacks().get(water) == 1_000,
-                    "Joint ordinary payment consumes request plus physical ingredients without consuming returned resources");
+                    "Joint ordinary admission consumes request plus physical ingredients without consuming shared FE or returned resources");
             helper.assertTrue(fixture.runtime.activeInputScope().kind() == InputScope.Kind.ORDINARY
                             && fixture.runtime.activeInputScope().sources().equals(List.of(host.getBlockPos(), ordinary.getBlockPos())),
                     "Paid ordinary execution freezes the real host and same-group physical source positions");

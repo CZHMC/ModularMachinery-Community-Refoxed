@@ -136,6 +136,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 
@@ -1636,13 +1637,13 @@ class CraftingRuntimeTest {
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         assertThat(input.itemStorage().amount(0)).isZero();
-        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isEqualTo(1L);
+        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isEqualTo(2L);
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
 
         assertThat(runtime.active()).isFalse();
         assertThat(input.itemStorage().amount(0)).isZero();
-        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isZero();
+        assertThat(inputEnergy.energyStorage().getAmountAsLong()).isEqualTo(1L);
         assertThat(output.itemStorage().amount(0)).isZero();
         assertThat(outputEnergy.energyStorage().getAmountAsLong()).isEqualTo(4L);
     }
@@ -1899,11 +1900,58 @@ class CraftingRuntimeTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
 
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(8);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(10);
         runtime.tick();
 
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(6);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(8);
         assertThat(runtime.active()).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, 1, 10", "true, 1, 10", "false, 10, 100", "true, 10, 100"})
+    void ordinaryEnergyIsCheckedAtAdmissionAndPaidOnlyOnRecipeTicks(boolean pattern, int duration, long totalEnergy) {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy, input);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_energy_admission", duration,
+                List.of(new EnergyRequirement(4L), input(Items.IRON_INGOT, 1), new EnergyRequirement(6L)));
+
+        energy.energyStorage().setAmount(9L);
+        if (pattern) {
+            assertThat(runtime.preparePatternStart(recipe, 1, List.of())).isNull();
+        } else {
+            runtime.start(recipe, 1);
+            assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        }
+        assertThat(runtime.active()).isFalse();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(9L);
+        assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+
+        energy.energyStorage().setAmount(totalEnergy);
+        if (pattern) {
+            var prepared = runtime.preparePatternStart(recipe, 1, List.of());
+            assertThat(prepared).isNotNull();
+            assertThat(runtime.reservePatternStart()).isTrue();
+            assertThat(runtime.commitPatternStart(prepared)).isTrue();
+        } else {
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        }
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(totalEnergy);
+        assertThat(input.itemStorage().amount(0)).isZero();
+        assertThat(runtime.tickCount()).isZero();
+
+        for (int tick = 1; tick <= duration; tick++) {
+            LevelStub.setGameTime(controller.getLevel(), tick);
+            runtime.tick();
+            assertThat(runtime.failure()).isNull();
+        }
+        assertThat(runtime.finishPending()).isTrue();
+        assertThat(energy.energyStorage().getAmountAsLong()).isZero();
+        runtime.finish();
+        assertThat(runtime.active()).isFalse();
+        assertThat(energy.energyStorage().getAmountAsLong()).isZero();
     }
 
     @Test
@@ -2079,6 +2127,41 @@ class CraftingRuntimeTest {
         assertThat(network.extracted()).isEqualTo(6L);
         assertThat(network.reserved()).isEqualTo(6L);
         assertThat(runtime.active()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void zeroEnergyPrefetchStillConsumesFollowingMaterialExactlyOnce(boolean pattern) {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        setItem(input.itemStorage(), 0, stack(Items.IRON_INGOT, 1));
+        PrefetchNetworkCapability network = new PrefetchNetworkCapability(0L);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(null, new TickCapabilityHost(network), BlockPos.ZERO, BlockPos.ZERO,
+                (String) null));
+        controller.componentRuntime().replaceComponents(components);
+        RuntimeTestFixtures.republish(controller);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_zero_energy_prefetch", 1,
+                List.of(new EnergyRequirement(0L), input(Items.IRON_INGOT, 1)));
+
+        if (pattern) {
+            var prepared = runtime.preparePatternStart(recipe, 1, List.of());
+            assertThat(prepared).isNotNull();
+            assertThat(prepared.prefetches()).isEmpty();
+            assertThat(runtime.reservePatternStart()).isTrue();
+            assertThat(runtime.commitPatternStart(prepared)).isTrue();
+        } else {
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        }
+        assertThat(input.itemStorage().amount(0)).isZero();
+        assertThat(network.extracted()).isZero();
+        assertThat(runtime.activeRecipe().inputConsumptionPlan().consumedBatches(1)).isEqualTo(1);
+        runtime.tick();
+        assertThat(runtime.failure()).isNull();
+        assertThat(runtime.finishPending()).isTrue();
+        runtime.finish();
+        assertThat(runtime.active()).isFalse();
     }
 
     @Test
@@ -2492,6 +2575,9 @@ class CraftingRuntimeTest {
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
 
         runtime.start(recipe, 1);
+        runtime.tick();
+        assertThat(runtime.failure()).isNull();
+        LevelStub.setGameTime(controller.getLevel(), 1);
         runtime.tick();
 
         assertThat(runtime.failureUnloc()).isEqualTo("gui.mmcr.controller.failure.missing_energy");

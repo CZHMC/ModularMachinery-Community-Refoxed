@@ -112,6 +112,24 @@ public final class CraftingPlan {
                 && !excluded.contains(requirementIndex));
     }
 
+    /** Commits selected input operations into a caller-owned transaction. */
+    public boolean commitInputsExcept(Set<Integer> excludedRequirementIndexes, TransactionContext transaction) {
+        if (failure != null) return false;
+        Set<Integer> excluded = excludedRequirementIndexes == null ? Set.of() : excludedRequirementIndexes;
+        return commitOperations(Objects.requireNonNull(transaction, "transaction"),
+                requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT
+                        && !excluded.contains(requirementIndex));
+    }
+
+    /** Validates selected inputs without retaining their writes in the caller's transaction. */
+    public boolean checkInputs(Set<Integer> requirementIndexes, TransactionContext transaction) {
+        if (failure != null) return false;
+        try (Transaction check = Transaction.open(Objects.requireNonNull(transaction, "transaction"))) {
+            return commitOperations(check, requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT
+                    && requirementIndexes.contains(requirementIndex));
+        }
+    }
+
     public boolean hasOperations(int requirementIndex) {
         return requirements.stream().anyMatch(requirement -> requirement.requirementIndex() == requirementIndex
                 && !requirement.operations().isEmpty());

@@ -125,7 +125,7 @@ class ExecutionAdmissionTest {
                 shared.resolve(level);
             }
             assertThat(runtime.active()).isTrue();
-            assertThat(input.getEnergyStorage().amount()).isEqualTo(1_000L - 7L * (attempt + 1));
+            assertThat(input.getEnergyStorage().amount()).isEqualTo(1_000L);
             assertThat(runtime.installedProgram()).isNull();
             assertThat(workers).isNotEmpty();
             Field tasksField = MachineAsyncCoordinator.class.getDeclaredField("tasks");
@@ -201,7 +201,7 @@ class ExecutionAdmissionTest {
         assertThat(recordCount()).isZero();
         CraftingRuntime replacement = lane("factory-32");
         assertThat(replacement.start(recipe, 1L).isCrafting()).isTrue();
-        assertThat(input.getEnergyStorage().amount()).isEqualTo(paid - 7L);
+        assertThat(input.getEnergyStorage().amount()).isEqualTo(paid);
     }
 
     @Test
@@ -236,7 +236,7 @@ class ExecutionAdmissionTest {
             assertThat(recordCount()).isEqualTo(1);
             drainWorkersAndAcks();
             assertThat(blocked.start(recipe, 1L).isCrafting()).isTrue();
-            assertThat(input.getEnergyStorage().amount()).isEqualTo(paid - 7L);
+            assertThat(input.getEnergyStorage().amount()).isEqualTo(paid);
         } finally {
             SharedIoCoordinator.discard(temporaryLevel);
             MachineAsyncCoordinator.discard(temporaryLevel);
@@ -319,7 +319,7 @@ class ExecutionAdmissionTest {
         assertThat(runtime.commitPatternStart(prepared, transaction -> {
             assertThat(Transaction.getLifecycle()).isEqualTo(Transaction.Lifecycle.OPEN);
             assertThat(payment.state().paidAttempts()).isEqualTo(1L);
-            assertThat(input.getEnergyStorage().amount()).isEqualTo(993L);
+            assertThat(input.getEnergyStorage().amount()).isEqualTo(1_000L);
             shared.cancel(controller.getBlockPos());
             runtime.invalidate();
             assertThat(shared.receiptsForTesting(runtime, "unpaid-cancel")).isEmpty();
@@ -351,7 +351,7 @@ class ExecutionAdmissionTest {
                 notifications.incrementAndGet();
                 assertThat(Transaction.getLifecycle()).isEqualTo(Transaction.Lifecycle.ROOT_CLOSING);
                 assertThat(runtime.active()).isFalse();
-                assertThat(input.getEnergyStorage().amount()).isEqualTo(993L);
+                assertThat(input.getEnergyStorage().amount()).isEqualTo(1_000L);
                 assertThat(payment.state().paidAttempts()).isEqualTo(1L);
                 assertThat(shared.receiptsForTesting(runtime, "commit-cancel")).singleElement().satisfies(receipt -> {
                     assertThat(receipt.terminal()).isFalse();
@@ -363,7 +363,7 @@ class ExecutionAdmissionTest {
         }.updateSnapshots(transaction))).isFalse();
         assertThat(notifications).hasValue(1);
         assertThat(runtime.active()).isFalse();
-        assertThat(input.getEnergyStorage().amount()).isEqualTo(993L);
+        assertThat(input.getEnergyStorage().amount()).isEqualTo(1_000L);
         assertThat(payment.state().paidAttempts()).isEqualTo(1L);
         assertThat(shared.receiptsForTesting(runtime, "commit-cancel")).singleElement().satisfies(receipt -> {
             assertThat(receipt.terminal()).isTrue();

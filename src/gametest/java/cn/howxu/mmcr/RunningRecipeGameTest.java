@@ -93,6 +93,47 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author howxu <dev@howxu.cn>
  */
 public final class RunningRecipeGameTest {
+    public static void ordinaryEnergyChargesOnlyRecipeTicks(GameTestHelper helper) {
+        var controller = retainedInputController(helper);
+        var energy = helper.getBlockEntity(new BlockPos(2, 2, 1), EnergyInputHatchBlockEntity.class);
+        energy.getEnergyStorage().setAmount(100L);
+        setWorkMode(controller, MachineWorkMode.SYNC);
+        var runtime = attachedRuntime(controller);
+        long originalTime = helper.getLevel().getGameTime();
+        try {
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("running_energy_admission"), controller.currentRecipePoolId(),
+                    10, List.of(new EnergyRequirement(10L)), List.of(), List.of(), 0, 1,
+                    false, false, false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+            helper.assertTrue(runtime.start(recipe, 1).isCrafting(),
+                    "Exactly the total recipe energy admits the execution");
+            helper.assertTrue(energy.getEnergyStorage().amount() == 100L && runtime.tickCount() == 0,
+                    "Admission checks ordinary energy without charging an extra tick");
+            var installed = runtime.ensureInstalledProgram();
+            helper.assertTrue(installed != null, "The real energy execution installs successfully");
+            for (int tick = 1; tick <= 10; tick++) {
+                long time = originalTime + tick;
+                ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(time);
+                long round = SharedIoCoordinator.get(helper.getLevel()).beginExecutionRound(time, true);
+                helper.assertTrue(installed.tryAttempt(round, time) && installed.advance(),
+                        "Each explicit recipe tick succeeds with exactly its declared energy");
+                helper.assertTrue(energy.getEnergyStorage().amount() == 100L - tick * 10L,
+                        "The actual hatch pays exactly once per recipe tick");
+            }
+            helper.assertTrue(!runtime.active() && runtime.ledger().state().outputPaid(),
+                    "Ten paid installed recipe ticks complete the execution");
+            runtime.finish();
+            helper.assertTrue(!runtime.active() && energy.getEnergyStorage().amount() == 0L,
+                    "Completion needs no extra energy payment");
+        } finally {
+            runtime.invalidate();
+            SharedIoCoordinator.get(helper.getLevel()).cancel(controller.getBlockPos());
+            controller.releaseStructureClaims();
+            ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(originalTime);
+        }
+        helper.succeed();
+    }
+
     public static void installedFluidProbabilityAttempts(GameTestHelper helper) {
         var fluid = place(helper, new BlockPos(1, 1, 1), "fluid_input_hatch", FluidInputHatchBlockEntity.class);
         var energy = place(helper, new BlockPos(2, 1, 1), "energy_input_hatch", EnergyInputHatchBlockEntity.class);
@@ -638,7 +679,7 @@ public final class RunningRecipeGameTest {
             helper.assertTrue(restored.active() && restored.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
                             && restored.ledger().state().paidAttempts() == 1
                             && restoredEnergy.getEnergyStorage().amount() == energy.getEnergyStorage().amount()
-                            && restoredEnergy.getEnergyStorage().amount() == 33,
+                            && restoredEnergy.getEnergyStorage().amount() == 40,
                     "Unsettled payment restores paused with its committed actual hatch balance");
             var paused = restored.ledger().state();
             restored.tick();
@@ -646,7 +687,7 @@ public final class RunningRecipeGameTest {
             helper.assertTrue(restored.ensureInstalledProgram() == null && restored.captureProgramCompilation() == null,
                     "Restored ERROR_PAUSED runtime cannot install or submit worker compilation");
             helper.assertTrue(restored.ledger().state().equals(paused)
-                            && restored.tickCount() == 0 && restoredEnergy.getEnergyStorage().amount() == 33,
+                            && restored.tickCount() == 0 && restoredEnergy.getEnergyStorage().amount() == 40,
                     "Restored ERROR_PAUSED runtime cannot silently resume or replay payment through either execution path");
         } finally {
             runtime.invalidate();

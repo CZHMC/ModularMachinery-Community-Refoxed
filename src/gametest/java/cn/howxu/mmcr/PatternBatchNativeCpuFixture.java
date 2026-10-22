@@ -115,8 +115,8 @@ final class PatternBatchNativeCpuFixture {
                                  long crafts, ParallelTier tier, BlockPos cpuPosition, boolean machineEnergy) {
         this.helper = helper;
         this.cpuPosition = cpuPosition;
-        // The ordinary local FE path pays one start check plus forty running ticks.
-        feBudget = machineEnergy ? Math.multiplyExact(crafts, 41L) : 0L;
+        // Ordinary FE admission only checks supply; forty actual recipe ticks pay.
+        feBudget = machineEnergy ? Math.multiplyExact(crafts, 40L) : 0L;
         if (!cpuPosition.equals(CPU)) {
             var bounds = helper.testInfo.getStructureBounds();
             BlockPos end = helper.absolutePos(cpuPosition.offset(1, 0, 0));

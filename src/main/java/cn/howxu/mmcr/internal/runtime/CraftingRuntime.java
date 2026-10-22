@@ -844,7 +844,7 @@ public final class CraftingRuntime {
         List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return null;
         PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches,
-                requestCapabilities == null ? List.of() : requestCapabilities);
+                requestCapabilities == null ? List.of() : requestCapabilities, !facets.isEmpty());
         if (!startAttemptCurrent(lifecycle, originalLedger) || !patternOwnerCurrent() || !patternSourceCurrent(sourceOwner)
                 || pendingPatternStart != null || pendingPaymentStart != null || patternStartReserved
                 || !Objects.equals(domain, controller.resourceDomain()) || !preparedStartCurrent(prepared)
@@ -1081,7 +1081,7 @@ public final class CraftingRuntime {
         for (int index = 0; index < effectiveRequirements.size(); index++) {
             if (activeRecipe.inputConsumptionPlan().consumedBatches(index) > 0) admittedInputs.add(index);
         }
-        captureInputState(effectiveRequirements, prepared.plan(), !prepared.prefetches().isEmpty(), admittedInputs);
+        captureInputState(effectiveRequirements, prepared.plan(), prepared.energyInputsExcluded(), admittedInputs);
         captureVersions(prepared.runtime());
         pendingPatternStart = null;
         pendingPatternSource = null;
@@ -1098,10 +1098,17 @@ public final class CraftingRuntime {
 
     public record PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
                                 RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
-                                List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities) {
+                                List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities,
+                                boolean energyInputsExcluded) {
         public PreparedStart {
             prefetches = List.copyOf(prefetches);
             requestCapabilities = List.copyOf(requestCapabilities);
+        }
+
+        public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
+                             RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
+                             List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities) {
+            this(recipe, runtime, catalogVersion, effective, plan, prefetches, requestCapabilities, !prefetches.isEmpty());
         }
 
         public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
@@ -1305,7 +1312,8 @@ public final class CraftingRuntime {
             }
             if (prefetches == null) return fail(missingInputStatus());
             prepared = new PreparedStart(effectiveRecipe, runtime,
-                    catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches);
+                    catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches,
+                    List.of(), !facets.isEmpty());
         } catch (RuntimeException exception) {
             if (prefetches != null) releaseUnpaidPrefetches(prefetches);
             MMCR.LOG.warn("Recipe start planning failed: recipe={} controller={}",
@@ -1357,7 +1365,7 @@ public final class CraftingRuntime {
         presentationEpoch++;
         try {
             activatePrefetches(prefetches, effectiveRequirements, activeRecipe.getParallelism());
-            captureInputState(effectiveRequirements, plan, !prefetches.isEmpty());
+            captureInputState(effectiveRequirements, plan, prepared.energyInputsExcluded());
             captureVersions(runtime);
             status = CraftingStatus.working();
             failure = null;
@@ -2523,7 +2531,19 @@ public final class CraftingRuntime {
         }
         long lifecycle = controller.lifecycleEpoch();
         RecipeCommitLedger payment = ledger;
-        if (!prepared.plan().commitInputs(transaction)) {
+        Set<Integer> continuousEnergyInputs = new HashSet<>();
+        // Ordinary energy is checked by start planning, but paid only by actual recipe ticks.
+        // Prefetch filtering changes indexes even when zero energy produces no reservation.
+        if (!prepared.energyInputsExcluded()) {
+            List<MachineRequirement> requirements = prepared.effective().requirements();
+            for (int index = 0; index < requirements.size(); index++) {
+                if (requirements.get(index) instanceof EnergyRequirement energy && energy.io() == IOType.INPUT) {
+                    continuousEnergyInputs.add(index);
+                }
+            }
+        }
+        if (!prepared.plan().checkInputs(continuousEnergyInputs, transaction)
+                || !prepared.plan().commitInputsExcept(continuousEnergyInputs, transaction)) {
             ExecutionStatus failure = prepared.plan().failure();
             return failure == null ? missingInputStatus() : failure;
         }
@@ -2549,7 +2569,7 @@ public final class CraftingRuntime {
         int planIndex = 0;
         for (int index = 0; index < prepared.effective().requirements().size(); index++) {
             MachineRequirement requirement = prepared.effective().requirements().get(index);
-            boolean prefetched = !prepared.prefetches().isEmpty() && requirement instanceof EnergyRequirement
+            boolean prefetched = prepared.energyInputsExcluded() && requirement instanceof EnergyRequirement
                     && requirement.io() == IOType.INPUT;
             boolean input = requirement.io() == IOType.INPUT && (ItemRequirement.TYPE.equals(requirement.type())
                     || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type())

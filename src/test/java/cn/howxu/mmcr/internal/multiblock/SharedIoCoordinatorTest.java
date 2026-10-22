@@ -1130,7 +1130,7 @@ class SharedIoCoordinatorTest {
         assertThat(fixture.shared().install(replacement,
                 fixture.shared().controllerPermit(fixture.controller().getBlockPos()))).isTrue();
         long afterStart = storage.amount();
-        assertThat(afterStart).isEqualTo(afterFailure - 7L);
+        assertThat(afterStart).isEqualTo(afterFailure);
         RuntimeTestFixtures.beginLevelTick(fixture.level(), true); // New round, same gameTime.
         fixture.controller().serverTick();
         fixture.shared().executeInstalled(fixture.level());

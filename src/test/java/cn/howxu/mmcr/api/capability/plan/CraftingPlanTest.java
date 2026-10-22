@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -166,6 +167,45 @@ class CraftingPlanTest {
         }
 
         assertThat(storage.amount()).isZero();
+    }
+
+    @Test
+    void excluded_inputs_and_outputs_stay_unpaid_in_caller_owned_transactions() {
+        LongValueStorage storage = new LongValueStorage(20L, 20L, null);
+        storage.setAmount(20L);
+        CapabilityOperation excluded = transaction -> {
+            storage.extract(7L, transaction);
+            return CapabilityResult.successful();
+        };
+        CapabilityOperation input = transaction -> {
+            storage.extract(3L, transaction);
+            return CapabilityResult.successful();
+        };
+        CapabilityOperation output = transaction -> {
+            storage.insert(4L, transaction);
+            return CapabilityResult.successful();
+        };
+        CraftingPlan plan = new CraftingPlan(List.of(
+                new RequirementPlan(2, 1, List.of(excluded), null),
+                new RequirementPlan(5, 1, List.of(input), null),
+                new RequirementPlan(8, 1, List.of(output), null)), 1,
+                Map.of(2, RecipeModifier.IOType.INPUT, 5, RecipeModifier.IOType.INPUT, 8, RecipeModifier.IOType.OUTPUT));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.checkInputs(Set.of(2), transaction)).isTrue();
+            assertThat(storage.amount()).isEqualTo(20L);
+            assertThat(plan.commitInputsExcept(Set.of(2), transaction)).isTrue();
+            assertThat(storage.amount()).isEqualTo(17L);
+        }
+        assertThat(storage.amount()).isEqualTo(20L);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.checkInputs(Set.of(2), transaction)).isTrue();
+            assertThat(storage.amount()).isEqualTo(20L);
+            assertThat(plan.commitInputsExcept(Set.of(2), transaction)).isTrue();
+            transaction.commit();
+        }
+        assertThat(storage.amount()).isEqualTo(17L);
     }
 
     @Test

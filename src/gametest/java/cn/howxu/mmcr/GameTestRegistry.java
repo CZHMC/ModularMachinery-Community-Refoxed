@@ -149,6 +149,7 @@ public final class GameTestRegistry {
             register(event, "startup_kubejs_registry_references", 20,
                     StartupRegistryReferenceGameTest::kubejsReferencesResolveAfterRegistryCallbacks);
         }
+        register(event, "running_energy_admission", 20, RunningRecipeGameTest::ordinaryEnergyChargesOnlyRecipeTicks);
         register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
         register(event, "running_mixed_input_rollback", 20, RunningRecipeGameTest::mixedInputCommitRollsBackAfterEnergyChanges);
         register(event, "running_retained_input_removed", 20, RunningRecipeGameTest::removedRetainedInputStopsContinuousPayment);

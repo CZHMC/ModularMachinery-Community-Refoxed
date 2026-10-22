@@ -1246,7 +1246,7 @@ class PatternStartReservationTest {
             assertThat(reservation.commit()).isTrue();
             assertThat(factory.activeRuntimes()).containsExactly(lane.runtime());
             assertThat(materials.amount(0)).isZero();
-            assertThat(fixture.energy.energyStorage().getAmountAsLong()).isZero();
+            assertThat(fixture.energy.energyStorage().getAmountAsLong()).isEqualTo(256L);
             assertThat(lane.runtime().requiresPatternRequest()).isTrue();
         }
     }
