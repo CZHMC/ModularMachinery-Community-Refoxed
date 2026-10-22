@@ -52,7 +52,7 @@ public final class BlueprintScreen extends Screen {
     private static final int MATERIAL_SCROLLBAR_LEFT_OFFSET = 4;
     private static final int MATERIAL_SCROLLBAR_TOP_OFFSET = 6;
     private static final int MATERIAL_SCROLLBAR_BOTTOM_INSET = 10;
-    private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 5;
+    private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 4;
     private static final int CANDIDATE_SCROLLBAR_TOP_OFFSET = -6;
     private static final int CANDIDATE_SCROLLBAR_BOTTOM_INSET = 4;
     private static final int CANDIDATE_COLUMNS = 4;
@@ -252,7 +252,7 @@ public final class BlueprintScreen extends Screen {
         }
         if (currentLayout != null && gridContains(currentLayout, event.x(), event.y())) return true;
         if (currentLayout != null && currentLayout.preview().contains(event.x(), event.y())) {
-            float scale = currentLayout.scale();
+            float scale = event.button() == 0 ? currentLayout.scale() : 1.0F;
             return panel.mouseDragged(previewX(event.x()), previewY(event.y()), event.button(), dragX / scale, dragY / scale);
         }
         return super.mouseDragged(event, dragX, dragY);

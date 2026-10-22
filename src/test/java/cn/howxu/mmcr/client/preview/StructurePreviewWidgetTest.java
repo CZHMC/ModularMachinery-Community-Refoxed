@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.preview.scene.PreviewSceneCamera;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -8,6 +9,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -71,8 +74,18 @@ class StructurePreviewWidgetTest {
                     .isLessThan(0.00001F);
             assertThat(widget.camera().lookAt().y).isEqualTo((float) BlockPos.ZERO.getCenter().y);
             assertThat(widget.camera().position().y).isEqualTo((float) BlockPos.ZERO.getCenter().y);
+            Vector3f initialAnchor = widget.camera().lookAt();
+            float initialDistance = widget.camera().distance();
+            widget.setViewport(new PreviewViewport(0, 0, 100, 100));
             widget.camera().orbit(0.7F, 0.4F);
+            widget.mouseClicked(20, 30, 1);
+            widget.mouseDragged(24, 35, 1, 4, 5);
+            widget.mouseReleased(24, 35, 1);
+            widget.camera().zoom(0.5F);
+            assertThat(widget.camera().lookAt()).isNotEqualTo(initialAnchor);
             widget.reset();
+            assertThat(widget.camera().lookAt()).isEqualTo(initialAnchor);
+            assertThat(widget.camera().distance()).isEqualTo(initialDistance);
             assertThat(widget.camera().position().sub(widget.camera().lookAt()).normalize().distance(front))
                     .isLessThan(0.00001F);
         }
@@ -179,6 +192,75 @@ class StructurePreviewWidgetTest {
 
         assertThat(widget.camera().yaw()).isEqualTo(beforeYaw - 0.04F);
         assertThat(widget.camera().pitch()).isEqualTo(beforePitch + 0.05F);
+    }
+
+    @Test
+    void right_drag_pan_scales_with_zoom_and_viewport_height() {
+        try (var widget = new StructurePreviewWidget(new RecordingRenderer(schemaAtLayers(0, 4)))) {
+            widget.setViewport(new PreviewViewport(0, 0, 100, 100));
+            Vector3f initialAnchor = widget.camera().lookAt();
+            widget.mouseClicked(20, 30, 1);
+            widget.mouseDragged(24, 35, 1, 4, 5);
+            widget.mouseReleased(24, 35, 1);
+            Vector3f firstOffset = widget.camera().lookAt().sub(initialAnchor);
+            assertThat(firstOffset.length()).isPositive().isLessThan(widget.camera().distance());
+
+            widget.reset();
+            widget.camera().zoom(0.5F);
+            widget.setViewport(new PreviewViewport(0, 0, 200, 200));
+            widget.mouseClicked(20, 30, 1);
+            widget.mouseDragged(24, 35, 1, 4, 5);
+
+            Vector3f secondOffset = widget.camera().lookAt().sub(initialAnchor);
+            assertThat(secondOffset.distance(firstOffset.mul(0.25F))).isLessThan(0.00001F);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    void pan_keeps_the_structure_moving_in_the_mouse_drag_direction(int button) {
+        try (var widget = new StructurePreviewWidget(new RecordingRenderer(schemaAtLayers(0, 4)))) {
+            widget.setViewport(new PreviewViewport(0, 0, 100, 100));
+            Vector3f structurePoint = widget.camera().lookAt();
+            widget.mouseClicked(20, 30, button);
+            widget.mouseDragged(24, 35, button, 4, 5);
+
+            PreviewSceneCamera scene = PreviewSceneCamera.from(widget.camera(), 100, 100);
+            Vector3f projected = scene.projection().mul(scene.view()).transformProject(new Vector3f(structurePoint));
+            assertThat(projected.x).isPositive();
+            // Projection Y points up, while mouse Y points down.
+            assertThat(projected.y).isNegative();
+
+            widget.mouseDragged(20, 30, button, -4, -5);
+            assertThat(widget.camera().lookAt().distance(structurePoint)).isLessThan(0.00001F);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    void right_and_middle_drag_pan_without_rotation_zoom_or_hit_selection(int button) {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
+        renderer.hitResult = new Object();
+        try (var widget = new StructurePreviewWidget(renderer)) {
+            widget.setViewport(new PreviewViewport(10, 20, 100, 100));
+            Vector3f initialAnchor = widget.camera().lookAt();
+            Vector3f initialDirection = widget.camera().position().sub(initialAnchor);
+            long initialRotation = widget.camera().rotationVersion();
+            float initialDistance = widget.camera().distance();
+
+            assertThat(widget.mouseClicked(20, 30, button)).isTrue();
+            assertThat(widget.mouseDragged(24, 35, button, 4, 5)).isTrue();
+            assertThat(widget.mouseReleased(24, 35, button)).isTrue();
+
+            Vector3f offset = widget.camera().lookAt().sub(initialAnchor);
+            assertThat(offset.length()).isPositive();
+            assertThat(Math.abs(offset.dot(initialDirection))).isLessThan(0.00001F);
+            assertThat(widget.camera().rotationVersion()).isEqualTo(initialRotation);
+            assertThat(widget.camera().distance()).isEqualTo(initialDistance);
+            assertThat(widget.selectedHit()).isNull();
+            assertThat(renderer.selectedHit).isNull();
+            assertThat(renderer.interactive()).isFalse();
+        }
     }
 
     @Test

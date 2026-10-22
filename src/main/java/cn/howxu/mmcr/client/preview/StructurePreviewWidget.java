@@ -118,8 +118,9 @@ public final class StructurePreviewWidget implements AutoCloseable {
         dragged |= movementX * movementX + movementY * movementY > DRAG_THRESHOLD_SQUARED;
         if (button == 0) {
             camera.orbit((float) -dragX * 0.01F, (float) dragY * 0.01F);
-        } else if (button == 2) {
-            camera.pan((float) dragX, (float) dragY);
+        } else if (button == 1 || button == 2) {
+            float panScale = camera.distance() / viewport.height();
+            camera.pan((float) -dragX * panScale, (float) -dragY * panScale);
         } else {
             return false;
         }

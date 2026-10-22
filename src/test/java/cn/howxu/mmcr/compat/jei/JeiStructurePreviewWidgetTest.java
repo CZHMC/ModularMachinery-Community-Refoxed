@@ -82,11 +82,83 @@ class JeiStructurePreviewWidgetTest {
         assertThat(preview.releases).isEqualTo(1);
     }
 
+    @ParameterizedTest
+    @CsvSource({"1", "2"})
+    void forwards_pan_buttons_but_does_not_activate_controls(int button) {
+        RecordingPreview preview = new RecordingPreview();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 168, 100);
+        InputConstants.Key mouse = InputConstants.Type.MOUSE.getOrCreate(button);
+
+        assertThat(widget.handleInput(20, 20, input(button, true))).isTrue();
+        assertThat(preview.pressedButton).isEqualTo(button);
+        assertThat(widget.handleMouseDragged(24, 25, mouse, 4, 5)).isTrue();
+        assertThat(widget.handleInput(24, 25, input(button, false))).isTrue();
+        assertThat(preview.clicks).isEqualTo(1);
+        assertThat(preview.drags).isEqualTo(1);
+        assertThat(preview.releases).isEqualTo(1);
+        assertThat(preview.lastButton).isEqualTo(button);
+
+        assertThat(widget.handleInput(52, 88, input(button, true))).isFalse();
+        assertThat(widget.handleInput(52, 88, input(button, false))).isFalse();
+        assertThat(preview.resets).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, 1", "1, 0", "2, 0"})
+    void another_button_cannot_interrupt_an_active_preview_drag(int button, int otherButton) {
+        RecordingPreview preview = new RecordingPreview();
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 168, 100);
+        InputConstants.Key mouse = InputConstants.Type.MOUSE.getOrCreate(button);
+
+        assertThat(widget.handleInput(20, 20, input(button, true))).isTrue();
+        assertThat(widget.handleInput(52, 88, input(otherButton, true))).isFalse();
+        assertThat(widget.handleInput(52, 88, input(otherButton, false))).isFalse();
+        assertThat(widget.handleInput(22, 22, input(otherButton, true))).isFalse();
+        assertThat(widget.handleInput(22, 22, input(otherButton, false))).isFalse();
+        assertThat(widget.handleMouseDragged(24, 25,
+                InputConstants.Type.MOUSE.getOrCreate(otherButton), 4, 5)).isFalse();
+        assertThat(widget.handleMouseDragged(24, 25, mouse, 4, 5)).isTrue();
+        assertThat(widget.handleInput(24, 25, input(button, false))).isTrue();
+
+        assertThat(preview.pressedButton).isEqualTo(-1);
+        assertThat(preview.clicks).isEqualTo(1);
+        assertThat(preview.drags).isEqualTo(1);
+        assertThat(preview.releases).isEqualTo(1);
+        assertThat(preview.resets).isZero();
+    }
+
     private static IJeiUserInput input(boolean simulate) {
+        return input(0, simulate);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1, 0", "1, 1", "2, 0", "0, 1"})
+    void next_press_recovers_when_jei_did_not_deliver_the_previous_release(int oldButton, int newButton) {
+        RecordingPreview preview = new RecordingPreview();
+        boolean[] physicallyHeld = {true};
+        JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview,
+                0, 0, 168, 100, button -> physicallyHeld[0]);
+
+        assertThat(widget.handleInput(20, 20, input(oldButton, true))).isTrue();
+        // JEI omits the release outside its recipe area. A repeated press of the
+        // same button also proves that the previous press has already ended.
+        physicallyHeld[0] = oldButton == newButton;
+        assertThat(widget.handleInput(20, 20, input(newButton, true))).isTrue();
+        assertThat(preview.pressedButton).isEqualTo(newButton);
+        assertThat(widget.handleMouseDragged(24, 25,
+                InputConstants.Type.MOUSE.getOrCreate(newButton), 4, 5)).isTrue();
+        assertThat(widget.handleInput(24, 25, input(newButton, false))).isTrue();
+
+        assertThat(preview.pressedButton).isEqualTo(-1);
+        assertThat(preview.clicks).isEqualTo(2);
+        assertThat(preview.releases).isEqualTo(2);
+    }
+
+    private static IJeiUserInput input(int button, boolean simulate) {
         return new IJeiUserInput() {
             @Override
             public InputConstants.Key getKey() {
-                return InputConstants.Type.MOUSE.getOrCreate(0);
+                return InputConstants.Type.MOUSE.getOrCreate(button);
             }
 
             @Override
@@ -125,6 +197,8 @@ class JeiStructurePreviewWidgetTest {
         private int highlightToggles;
         private int stageChanges;
         private int resets;
+        private int lastButton = -1;
+        private int pressedButton = -1;
 
         @Override
         public boolean hasMultipleStages() {
@@ -154,19 +228,27 @@ class JeiStructurePreviewWidgetTest {
 
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (pressedButton >= 0) return false;
+            pressedButton = button;
             clicks++;
+            lastButton = button;
             return true;
         }
 
         @Override
         public boolean mouseReleased(double mouseX, double mouseY, int button) {
+            if (pressedButton != button) return false;
+            pressedButton = -1;
             releases++;
+            lastButton = button;
             return true;
         }
 
         @Override
         public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+            if (pressedButton != button) return false;
             drags++;
+            lastButton = button;
             return true;
         }
     }

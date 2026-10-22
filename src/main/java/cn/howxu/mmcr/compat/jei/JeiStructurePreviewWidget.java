@@ -19,8 +19,10 @@ import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.util.function.IntPredicate;
 import java.util.function.LongSupplier;
 
 /**
@@ -41,26 +43,31 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final int LAYOUT_WIDTH = 168;
     private final @Nullable StructurePreviewPanel panel;
     private final @Nullable Preview testingPreview;
+    private final IntPredicate mouseButtonDown;
     private final int x;
     private final int y;
     private final int width;
     private final int height;
     private final LongSupplier clock = System::currentTimeMillis;
-    private boolean previewDragActive;
+    private int previewDragButton = -1;
     private boolean closed;
 
     public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height) {
         this.panel = new StructurePreviewPanel(machine);
         this.testingPreview = null;
+        this.mouseButtonDown = button -> GLFW.glfwGetMouseButton(
+                Minecraft.getInstance().getWindow().handle(), button) == GLFW.GLFW_PRESS;
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
     }
 
-    private JeiStructurePreviewWidget(Preview preview, int x, int y, int width, int height) {
+    private JeiStructurePreviewWidget(Preview preview, int x, int y, int width, int height,
+            IntPredicate mouseButtonDown) {
         this.panel = null;
         this.testingPreview = preview;
+        this.mouseButtonDown = mouseButtonDown;
         this.x = x;
         this.y = y;
         this.width = width;
@@ -68,7 +75,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     static JeiStructurePreviewWidget forTesting(Preview preview, int x, int y, int width, int height) {
-        return new JeiStructurePreviewWidget(preview, x, y, width, height);
+        return forTesting(preview, x, y, width, height, button -> true);
+    }
+
+    static JeiStructurePreviewWidget forTesting(Preview preview, int x, int y, int width, int height,
+            IntPredicate mouseButtonDown) {
+        return new JeiStructurePreviewWidget(preview, x, y, width, height, mouseButtonDown);
     }
 
     @Override public ScreenPosition getPosition() { return new ScreenPosition(x, y); }
@@ -158,17 +170,26 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     public boolean handleInput(double mouseX, double mouseY, IJeiUserInput input) {
         if (input.getKey().getType() != InputConstants.Type.MOUSE) return false;
         int button = input.getKey().getValue();
-        if (button != 0) return false;
+        if (button < 0 || button > 2) return false;
         if (!isReady()) return false;
-        if (input.isSimulate()) previewDragActive = false;
-        if (!input.isSimulate() && previewDragActive) {
-            previewDragActive = false;
+        if (input.isSimulate() && previewDragButton >= 0
+                && (button == previewDragButton || !mouseButtonDown.test(previewDragButton))) {
+            // JEI does not forward releases outside the recipe area. Cancel the
+            // stale press outside the viewport so recovery never selects a hit.
+            mouseReleased(-1.0D, -1.0D, previewDragButton);
+            previewDragButton = -1;
+        }
+        if (previewDragButton >= 0) {
+            if (button != previewDragButton) return false;
+            if (input.isSimulate()) return true;
+            previewDragButton = -1;
             boolean inside = insidePreview(mouseX, mouseY);
             boolean handled = mouseReleased(previewMouseX(mouseX), previewMouseY(mouseY), button);
             return inside || handled;
         }
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
+            if (button != 0) return false;
             if (input.isSimulate()) return true;
             if (control == highlightControlIndex()) togglePositionHighlights();
             else switch (control) {
@@ -179,30 +200,23 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
                 case 4 -> selectNextStage();
                 default -> { }
             }
-            previewDragActive = false;
             return true;
         }
         if (candidateAt(mouseX, mouseY) >= 0) {
-            previewDragActive = false;
-            return true;
-        }
-        if (input.isSimulate()) {
-            if (!insidePreview(mouseX, mouseY)) return false;
-            boolean handled = mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
-            previewDragActive = handled;
-            return handled;
+            return button == 0;
         }
         if (!insidePreview(mouseX, mouseY)) return false;
         boolean handled = mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button);
-        previewDragActive = handled;
+        if (handled) previewDragButton = button;
         return handled;
     }
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        return previewDragActive && controlAt(mouseX, mouseY) < 0 && candidateAt(mouseX, mouseY) < 0
+        return previewDragButton >= 0 && controlAt(mouseX, mouseY) < 0 && candidateAt(mouseX, mouseY) < 0
                 && insidePreview(mouseX, mouseY)
                 && mouseKey.getType() == InputConstants.Type.MOUSE
+                && mouseKey.getValue() == previewDragButton
                 && mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
     }
 
