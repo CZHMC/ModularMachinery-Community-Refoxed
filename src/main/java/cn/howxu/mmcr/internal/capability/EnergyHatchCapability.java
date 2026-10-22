@@ -158,7 +158,7 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         // The request carries an absolute total, not a per-parallel recipe quantity.
         CapabilityOperation operation = transaction -> {
             long moved = valueRequest.insert()
-                    ? storage.insert(valueRequest.amount(), transaction)
+                    ? storage.insertUnrestricted(valueRequest.amount(), transaction)
                     : storage.extract(valueRequest.amount(), transaction);
             return moved == valueRequest.amount()
                     ? CapabilityResult.successful() : failure(
@@ -211,7 +211,7 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
                 || !type().id().equals(capabilityId)) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        long moved = insert ? storage.insert(amount, transaction)
+        long moved = insert ? storage.insertUnrestricted(amount, transaction)
                 : storage.extract(amount, transaction);
         return moved == amount ? CapabilityResult.successful()
                 : failure(insert ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);

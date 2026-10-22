@@ -185,6 +185,45 @@ class InstalledRecipeProgramTest {
     }
 
     @Test
+    void installed_energy_output_ignores_transfer_limit_and_revalidates_capacity() {
+        LongValueStorage storage = storage(2_000_000L, 512_000L, 0L, null);
+        var runtime = runtimeWithCapabilities(List.of(new EnergyHatchCapability(storage, IOType.OUTPUT)));
+        var recipe = recipe("installed_capacity_output", 5,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 800_000L)));
+        assertThat(runtime.start(recipe, 1L).isCrafting()).isTrue();
+        var installed = runtime.ensureInstalledProgram();
+        long before = storage.amount();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(installed.executeContinuous(transaction)).isNull();
+            assertThat(storage.amount()).isEqualTo(before + 800_000L);
+        }
+        assertThat(storage.amount()).isEqualTo(before);
+        storage.setAmount(1_300_000L);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(installed.executeContinuous(transaction)).isNotNull();
+        }
+        assertThat(storage.amount()).isEqualTo(1_300_000L);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void recipe_output_above_transfer_limit_advances_in_every_work_mode(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        LongValueStorage storage = storage(4_000_000L, 0L, 0L, null);
+        var runtime = runtimeWithCapabilities(List.of(new EnergyHatchCapability(storage, IOType.OUTPUT)));
+        assertThat(runtime.start(recipe("installed_output_modes", 5,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 800_000L))), 1L).isCrafting()).isTrue();
+        var installed = runtime.ensureInstalledProgram();
+        long before = storage.amount();
+        LevelStub.setGameTime(runtime.controller().getLevel(), 1L);
+        if (mode != MachineWorkMode.SYNC) assertThat(runtime.prepareInstalledTick(1L)).isTrue();
+        assertThat(installed.tryAttempt(1L, 1L)).isTrue();
+        assertThat(installed.advance()).isTrue();
+        assertThat(storage.amount()).isEqualTo(before + 800_000L);
+        assertThat(runtime.tickCount()).isEqualTo(1);
+    }
+
+    @Test
     void closed_native_energy_path_matches_planner_with_aliases_split_ports_and_transfer_limits() {
         for (long limit : new long[] { 40L, 5L }) {
             LongValueStorage first = storage(40L, limit, 7L, null);

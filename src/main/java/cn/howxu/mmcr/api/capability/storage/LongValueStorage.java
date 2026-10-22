@@ -48,6 +48,12 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
         return insertInternal(requested, false, true, false);
     }
 
+    /** Inserts recipe output up to available capacity without applying the external transfer limit. */
+    public long insertUnrestricted(long requested, TransactionContext transaction) {
+        updateSnapshots(transaction);
+        return insertInternal(requested, false, false, false);
+    }
+
     public long extract(long requested, boolean simulate) {
         return extractInternal(requested, simulate, true, true);
     }

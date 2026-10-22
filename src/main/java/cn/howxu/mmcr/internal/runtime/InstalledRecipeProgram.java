@@ -155,8 +155,9 @@ public final class InstalledRecipeProgram {
                 int id = rule.ids()[candidate];
                 LongValueStorage storage = storages[id];
                 long available = rule.insert() ? storage.capacity() - virtualAmounts[id] : virtualAmounts[id];
-                long moved = Math.min(remaining, Math.min(Math.max(0L, available),
-                        SaturatingLong.multiply(storage.transferLimit(), program.parallelism())));
+                long transferable = rule.insert() ? available : Math.min(available,
+                        SaturatingLong.multiply(storage.transferLimit(), program.parallelism()));
+                long moved = Math.min(remaining, Math.max(0L, transferable));
                 rule.amounts()[candidate] = moved;
                 virtualAmounts[id] += rule.insert() ? moved : -moved;
                 remaining -= moved;
@@ -171,7 +172,7 @@ public final class InstalledRecipeProgram {
                 long amount = rule.amounts()[candidate];
                 if (amount == 0L) continue;
                 LongValueStorage storage = storages[rule.ids()[candidate]];
-                long moved = rule.insert() ? storage.insert(amount, transaction) : storage.extract(amount, transaction);
+                long moved = rule.insert() ? storage.insertUnrestricted(amount, transaction) : storage.extract(amount, transaction);
                 // Native hatches use one operation per candidate, even at parallelism > 1.
                 if (moved != amount) return owner.resourceCommitFailure(rule.insert(), rule.index(), amount, moved);
             }

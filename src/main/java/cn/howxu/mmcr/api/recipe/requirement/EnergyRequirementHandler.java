@@ -179,7 +179,6 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
             }
             LongValueStorage storage = energyStorage(capability);
             if (storage != null
-                    && storage.transferLimit() > 0L
                     && reservations.valueAvailable(storage, true) > 0L) return true;
         }
         return false;
@@ -202,7 +201,8 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
             }
             LongValueStorage storage = energyStorage(capability);
             if (storage == null) continue;
-            long transferable = Math.min(reservations.valueAvailable(storage, insert),
+            long availableCapacity = reservations.valueAvailable(storage, insert);
+            long transferable = insert ? availableCapacity : Math.min(availableCapacity,
                     RequirementHandlerSupport.scaled(storage.transferLimit(), batches));
             available = RequirementHandlerSupport.saturatingAdd(available, transferable);
             if (available >= required) return true;
@@ -233,7 +233,7 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
             LongValueStorage storage = energyStorage(capability);
             if (storage == null) continue;
             long available = reservations.valueAvailable(storage, insert);
-            long moved = Math.min(remaining, Math.min(available,
+            long moved = Math.min(remaining, insert ? available : Math.min(available,
                     RequirementHandlerSupport.scaled(storage.transferLimit(), batches)));
             if (moved <= 0L || !reservations.reserveValueTotal(storage, moved, insert)) continue;
             actions.add(new EnergyAction(capability, moved, false));
