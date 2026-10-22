@@ -33,6 +33,7 @@ public final class StructurePreviewPanel implements AutoCloseable {
     private int stageIndex;
     private long compileAnimationStart = -1L;
     private boolean closed;
+    private boolean positionHighlightsEnabled;
 
     public StructurePreviewPanel(Machine machine) {
         this(machine, 0);
@@ -93,6 +94,16 @@ public final class StructurePreviewPanel implements AutoCloseable {
 
     public boolean isReady() {
         return widget != null;
+    }
+
+    public boolean positionHighlightsEnabled() {
+        return positionHighlightsEnabled;
+    }
+
+    public void togglePositionHighlights() {
+        if (closed) return;
+        positionHighlightsEnabled = !positionHighlightsEnabled;
+        if (widget != null) widget.setPositionHighlightsEnabled(positionHighlightsEnabled);
     }
 
     public @Nullable StructurePreviewSchema schema() {
@@ -200,6 +211,7 @@ public final class StructurePreviewPanel implements AutoCloseable {
         schema = completed;
         materials = StructureMaterialSummary.from(completed);
         widget = new StructurePreviewWidget(new StructurePreviewRenderer(completed));
+        widget.setPositionHighlightsEnabled(positionHighlightsEnabled);
     }
 
     @Override

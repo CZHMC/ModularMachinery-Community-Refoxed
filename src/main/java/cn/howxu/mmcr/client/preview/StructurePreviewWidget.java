@@ -160,6 +160,11 @@ public final class StructurePreviewWidget implements AutoCloseable {
         renderer.setVisibility(PreviewVisibility.ALL);
     }
 
+    public void setPositionHighlightsEnabled(boolean enabled) {
+        if (closed) return;
+        renderer.setPositionHighlightsEnabled(enabled);
+    }
+
     public void reset() {
         showAllLayers();
         selectedHit = null;

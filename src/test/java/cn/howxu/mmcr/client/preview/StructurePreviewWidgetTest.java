@@ -9,7 +9,9 @@ import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.joml.Vector3f;
 
@@ -26,6 +28,33 @@ class StructurePreviewWidgetTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void highlights_forward_explicit_changes_without_reset_or_layer_controls_disabling_them() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(2, 5));
+        try (var widget = new StructurePreviewWidget(renderer)) {
+            widget.setPositionHighlightsEnabled(true);
+            widget.selectNextLayer();
+            widget.selectPreviousLayer();
+            widget.showAllLayers();
+            widget.reset();
+
+            assertThat(renderer.positionHighlightChanges).containsExactly(true);
+            widget.setPositionHighlightsEnabled(false);
+            assertThat(renderer.positionHighlightChanges).containsExactly(true, false);
+        }
+    }
+
+    @Test
+    void closed_widget_does_not_forward_highlight_changes() {
+        RecordingRenderer renderer = new RecordingRenderer(schemaAtLayers(0));
+        var widget = new StructurePreviewWidget(renderer);
+        widget.setPositionHighlightsEnabled(true);
+        widget.close();
+        widget.setPositionHighlightsEnabled(false);
+
+        assertThat(renderer.positionHighlightChanges).containsExactly(true);
     }
 
     @Test
@@ -204,6 +233,7 @@ class StructurePreviewWidgetTest {
         private int interactiveChanges;
         private Object hitResult;
         private Object selectedHit;
+        private final List<Boolean> positionHighlightChanges = new ArrayList<>();
 
         private RecordingRenderer(StructurePreviewSchema schema) {
             this.schema = schema;
@@ -217,6 +247,11 @@ class StructurePreviewWidgetTest {
         @Override
         public void setVisibility(PreviewVisibility visibility) {
             this.visibility = visibility;
+        }
+
+        @Override
+        public void setPositionHighlightsEnabled(boolean enabled) {
+            positionHighlightChanges.add(enabled);
         }
 
         @Override

@@ -8,6 +8,7 @@ package cn.howxu.mmcr.client.preview.scene;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.preview.PreviewCamera;
+import cn.howxu.mmcr.client.preview.PreviewHighlights;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
@@ -45,6 +46,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 
 /**
  * Render-thread facade for cached static preview geometry.
@@ -61,6 +63,7 @@ public final class PreviewSceneRenderer {
     private long requestedGeneration;
     private Vector3f lastEye;
     private boolean closed;
+    private boolean positionHighlightsEnabled;
     private CompletableFuture<PreviewSceneMeshCompiler.CompiledScene> fullCompilation;
     private AtomicBoolean fullCompilationCancelled;
 
@@ -85,6 +88,20 @@ public final class PreviewSceneRenderer {
         }
     }
 
+    public void setPositionHighlightsEnabled(boolean enabled) {
+        positionHighlightsEnabled = enabled;
+    }
+
+    void forEachPositionHighlight(BiConsumer<BlockPos, Integer> consumer) {
+        if (!positionHighlightsEnabled || closed) return;
+        schema.highlights().forEach((position, mask) -> {
+            BlockState state = schema.stateAt(position);
+            if (mask != 0 && state != null && !state.isAir() && visibility.isVisible(position, state)) {
+                consumer.accept(position, PreviewHighlights.color(mask));
+            }
+        });
+    }
+
     public void render(PreviewSceneRenderContext context, PreviewCamera camera, BlockHitResult hoverHit,
                        BlockHitResult selectedHit, boolean renderTranslucent, boolean renderBlockEntities) {
         assertRenderThread();
@@ -106,6 +123,7 @@ public final class PreviewSceneRenderer {
             draw(cache, ChunkSectionLayer.CUTOUT);
             if (renderTranslucent) drawTranslucent(cache);
             if (renderBlockEntities) submitBlockEntities(cache, context, sceneCamera);
+            drawPositionHighlights(context);
             drawOutlines(context, hoverHit, selectedHit);
         }
     }
@@ -267,6 +285,15 @@ public final class PreviewSceneRenderer {
             features.clearSubmitNodes();
             context.bufferSource().endBatch();
         }
+    }
+
+    private void drawPositionHighlights(PreviewSceneRenderContext context) {
+        if (context == null || !positionHighlightsEnabled) return;
+        PoseStack.Pose pose = new PoseStack().last();
+        VertexConsumer fill = context.bufferSource().getBuffer(RenderTypes.debugFilledBox());
+        forEachPositionHighlight((position, color) ->
+                drawFilledBox(fill, pose, new AABB(position).inflate(0.002D), color));
+        context.bufferSource().endBatch(RenderTypes.debugFilledBox());
     }
 
     private void drawOutlines(PreviewSceneRenderContext context, BlockHitResult hoverHit, BlockHitResult selectedHit) {

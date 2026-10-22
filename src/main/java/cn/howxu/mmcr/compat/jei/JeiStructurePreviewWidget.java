@@ -82,16 +82,21 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         panel.render(graphics, width, height, 0.0F, origin.x(), origin.y(), 0, 0);
         if (!panel.isReady()) return;
         graphics.nextStratum();
-        String[] labels = panel.hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
-        for (int index = 0; index < labels.length; index++) {
+        String[] labels = {"+", "-", "A", "R", "M"};
+        int highlightControl = highlightControlIndex();
+        for (int index = 0; index <= highlightControl; index++) {
             int controlX = UI_X_OFFSET + index * CONTROL_STEP;
             int controlY = height + CONTROL_Y_OFFSET;
-            graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, 0xFF808080);
+            int background = index == highlightControl && positionHighlightsEnabled() ? 0xFF40798B : 0xFF808080;
+            graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, background);
             graphics.pose().pushMatrix();
             graphics.pose().translate(controlX + CONTROL_SIZE / 2.0F, controlY + CONTROL_SIZE / 2.0F);
             graphics.pose().scale(CONTROL_SCALE, CONTROL_SCALE);
-            int labelWidth = Minecraft.getInstance().font.width(labels[index]);
-            graphics.text(Minecraft.getInstance().font, Component.literal(labels[index]),
+            Component label = index == highlightControl
+                    ? Component.translatable("gui.mmcr.structure_preview.highlights.short")
+                    : Component.literal(labels[index]);
+            int labelWidth = Minecraft.getInstance().font.width(label);
+            graphics.text(Minecraft.getInstance().font, label,
                     -labelWidth / 2, -Minecraft.getInstance().font.lineHeight / 2, 0xFFFFFFFF, false);
             graphics.pose().popMatrix();
         }
@@ -165,7 +170,8 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
             if (input.isSimulate()) return true;
-            switch (control) {
+            if (control == highlightControlIndex()) togglePositionHighlights();
+            else switch (control) {
                 case 0 -> selectPreviousLayer();
                 case 1 -> selectNextLayer();
                 case 2 -> showAllLayers();
@@ -233,8 +239,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         int relativeX = (int) Math.floor(mouseX - UI_X_OFFSET);
         if (relativeX < 0) return -1;
         int column = relativeX / CONTROL_STEP;
-        int controls = panel != null && panel.hasMultipleStages() ? 5 : 4;
-        return column >= 0 && column < controls
+        return column >= 0 && column <= highlightControlIndex()
                 && mouseX < UI_X_OFFSET + column * CONTROL_STEP + CONTROL_SIZE ? column : -1;
     }
 
@@ -243,6 +248,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (!isReady()) return;
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
+            if (control == highlightControlIndex()) {
+                tooltip.add(Component.translatable("gui.mmcr.structure_preview.highlights."
+                        + (positionHighlightsEnabled() ? "disable" : "enable")));
+                tooltip.add(Component.translatable("gui.mmcr.structure_preview.highlights.legend"));
+                return;
+            }
             String[] keys = {"previous_layer", "next_layer", "all_layers", "reset", "next_level"};
             tooltip.add(Component.translatable("jei.mmcr.structure_preview." + keys[control]));
             return;
@@ -308,7 +319,22 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private void selectNextStage() {
-        if (panel != null) panel.selectNextStage();
+        if (testingPreview != null) testingPreview.selectNextStage();
+        else panel.selectNextStage();
+    }
+
+    private int highlightControlIndex() {
+        boolean multipleStages = testingPreview != null ? testingPreview.hasMultipleStages() : panel.hasMultipleStages();
+        return multipleStages ? 5 : 4;
+    }
+
+    private boolean positionHighlightsEnabled() {
+        return testingPreview != null ? testingPreview.positionHighlightsEnabled() : panel.positionHighlightsEnabled();
+    }
+
+    private void togglePositionHighlights() {
+        if (testingPreview != null) testingPreview.togglePositionHighlights();
+        else panel.togglePositionHighlights();
     }
 
     private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
@@ -326,6 +352,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         default void next() { }
         default void all() { }
         default void reset() { }
+        default boolean hasMultipleStages() { return false; }
+        default void selectNextStage() { }
+        default boolean positionHighlightsEnabled() { return false; }
+        default void togglePositionHighlights() { }
     }
 
 }

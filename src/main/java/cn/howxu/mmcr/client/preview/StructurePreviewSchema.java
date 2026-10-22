@@ -24,6 +24,7 @@ public final class StructurePreviewSchema {
     private final Identifier machineId;
     private final Map<BlockPos, BlockState> states;
     private final Map<BlockPos, Identifier> levelSlots;
+    private final Map<BlockPos, Integer> highlights;
     private final Map<BlockPos, List<Candidate>> candidates;
     private final CandidateResolver candidateResolver;
     private final BlockPos min;
@@ -45,15 +46,20 @@ public final class StructurePreviewSchema {
 
     public StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
             Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates, boolean markedCandidates) {
-        this(machineId, states, levelSlots, candidates, null);
+        this(machineId, states, levelSlots, candidates, levelHighlights(levelSlots), null);
     }
 
     private StructurePreviewSchema(Identifier machineId, Map<BlockPos, BlockState> states,
             Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates,
-            CandidateResolver candidateResolver) {
+            Map<BlockPos, Integer> highlights, CandidateResolver candidateResolver) {
         this.machineId = Objects.requireNonNull(machineId, "machineId");
         this.states = copyPositions(states);
         this.levelSlots = copyPositions(levelSlots);
+        Map<BlockPos, Integer> nonzeroHighlights = new LinkedHashMap<>();
+        highlights.forEach((position, mask) -> {
+            if (mask != 0) nonzeroHighlights.put(position, mask);
+        });
+        this.highlights = copyPositions(nonzeroHighlights);
         this.candidates = new ConcurrentHashMap<>(copyCandidates(candidates));
         this.candidateResolver = candidateResolver;
         if (!this.states.keySet().containsAll(this.levelSlots.keySet())) {
@@ -111,6 +117,14 @@ public final class StructurePreviewSchema {
         return levelSlots;
     }
 
+    public Map<BlockPos, Integer> highlights() {
+        return highlights;
+    }
+
+    public int highlightAt(BlockPos position) {
+        return highlights.getOrDefault(position, 0);
+    }
+
     public List<ItemStack> candidatesAt(BlockPos position) {
         return previewCandidatesAt(position).stream().map(Candidate::stack).toList();
     }
@@ -136,8 +150,25 @@ public final class StructurePreviewSchema {
 
     static StructurePreviewSchema withCandidateResolver(Identifier machineId, Map<BlockPos, BlockState> states,
             Map<BlockPos, Identifier> levelSlots, CandidateResolver candidateResolver) {
-        return new StructurePreviewSchema(machineId, states, levelSlots, Map.of(),
+        return withCandidateResolver(machineId, states, levelSlots, levelHighlights(levelSlots), candidateResolver);
+    }
+
+    static StructurePreviewSchema withCandidateResolver(Identifier machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, Integer> highlights, CandidateResolver candidateResolver) {
+        return new StructurePreviewSchema(machineId, states, levelSlots, Map.of(), highlights,
                 Objects.requireNonNull(candidateResolver, "candidateResolver"));
+    }
+
+    static StructurePreviewSchema withHighlights(Identifier machineId, Map<BlockPos, BlockState> states,
+            Map<BlockPos, Identifier> levelSlots, Map<BlockPos, List<Candidate>> candidates,
+            Map<BlockPos, Integer> highlights) {
+        return new StructurePreviewSchema(machineId, states, levelSlots, candidates, highlights, null);
+    }
+
+    private static Map<BlockPos, Integer> levelHighlights(Map<BlockPos, Identifier> levelSlots) {
+        Map<BlockPos, Integer> highlights = new LinkedHashMap<>();
+        levelSlots.keySet().forEach(position -> highlights.put(position, PreviewHighlights.LEVEL));
+        return highlights;
     }
 
     public BlockPos min() {
