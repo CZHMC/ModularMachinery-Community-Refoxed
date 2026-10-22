@@ -54,6 +54,9 @@ public final class GameTestRegistry {
 
     public static void registerAll(RegisterGameTestsEvent event) {
         register(event, "block_map_color", 20, BlockMapColorGameTest::registeredBlocksAreVisibleMapSurfaces);
+        register(event, "structure_material_fluid_counts", 20, StructureMaterialGameTest::sourcesAndFlowsShareBuckets);
+        register(event, "structure_material_flowing_only", 20, StructureMaterialGameTest::flowingOnlyBucketsAreDisplayOnly);
+        register(event, "structure_material_bucket_demand", 20, StructureMaterialGameTest::bucketDemandIsNotStackClamped);
         register(event, "controller_placement_horizontal", 20, ControllerPlacementGameTest::horizontalPlacementFollowsEnrichmentChamber);
         register(event, "controller_placement_optional_vertical", 20, ControllerPlacementGameTest::optionalVerticalPlacementFollowsMeDrive);
         register(event, "controller_placement_required_vertical", 20, ControllerPlacementGameTest::requiredVerticalPlacementFollowsPitchSign);
@@ -141,6 +144,7 @@ public final class GameTestRegistry {
             register(event, "input_isolation_ordinary_pattern_topup", 20, InputIsolationGameTest::ordinaryPatternRequestCanTopUpAndRollback);
         }
         if (ModList.get().isLoaded("mekanism")) {
+            register(event, "structure_material_mekanism_bucket", 20, StructureMaterialGameTest::mekanismFluidUsesItsRegisteredBucket);
             register(event, "startup_mekanism_registry_references", 20,
                     StartupRegistryReferenceGameTest::mekanismExampleResolvesRegisteredContent);
             register(event, "input_isolation_chemical_shared_heat", 20, InputIsolationGameTest::chemicalIsolationStillSharesHeatAndEnergy);
